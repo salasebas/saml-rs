@@ -1,192 +1,132 @@
 # XML Signature and XML Encryption algorithms
 
-The algorithms a typed identity provider and service provider sign, verify,
-encrypt, and decrypt with. `AlgorithmPolicy` selects what is generated. It is
-not a field of `SpValidationPolicy` or `IdpValidationPolicy`, so Recommended
-does not change it. `AlgorithmPolicy::default()` is what
-`Default` and the config builders use: RSA-SHA256 with a
-SHA-256 digest, the enveloped-signature and exclusive canonicalization
-transforms, AES-256-CBC, and RSA-OAEP. `AlgorithmPolicy` does not limit what
-is verified. That set is in
-[Inbound XML signature verification](#inbound-xml-signature-verification).
-This page does not claim the IdP operational mode or the SP operational mode.
+`AlgorithmPolicy` selects the algorithms a typed `IdentityProvider` and
+`ServiceProvider` sign and encrypt with. `XmlSignatureProfile` selects the
+signature algorithms they verify, and `XmlEncryptionPolicy` bounds decryption.
+Normative text is Conformance Requirements §4, as clarified by Approved Errata
+05 E50: §4.1 and §4.2 list the algorithms a compliant implementation `MUST`
+implement, E50 calls that list the minimal set, and other algorithms `MAY` be
+used. E81 replaces the Core §5.4.1 RSA-SHA1 sentence with the same permission.
+This page claims neither operational mode, and Conformance §5 (TLS) is not on it.
 
-Normative text is Conformance Requirements §4, as clarified by Approved
-Errata 05 E50. §4.1 lists the XML Signature algorithms and §4.2 the XML
-Encryption algorithms that a compliant SAML V2.0 implementation `MUST`
-implement. E50 says that list is the minimal set, and that other XML Signature
-and XML Encryption algorithms `MAY` be used. E81 replaces the Core §5.4.1
-RSA-SHA1 sentence with the same permission and does not change §4.1.
-Conformance §5 is the TLS stack of the deployment and is not on this page.
-
-To implement an algorithm here is to sign or encrypt with it when the caller
-selects it, and to verify or decrypt it when a peer sends it. Which algorithm a
-producer selects is not stated by §4. Generating SHA-1, Triple DES, or RSA-v1.5
-only when the caller selects it is library policy. The algorithms are
-available on the RustCrypto provider with `crypto-legacy-algorithms`, which the
-default `crypto-bergshamra` feature enables. AWS-LC and FIPS have a narrower
-set. Neither build implements the full HTTP-Redirect `SigAlg` requirement of
-Bindings §3.4.4.1 because neither signs RSAwithSHA1 or DSAwithSHA1.
-RSA-v1.5 decryption is disabled by default even on a build that supports it.
-See the [provider matrix](#provider-supported-set).
-
-The signer's algorithm applies to every message it signs: the `AuthnRequest`,
-the `Response`, and logout messages. It is the XML-DSig `SignatureMethod` on
-HTTP-POST and SOAP, and the `SigAlg` on HTTP-Redirect and HTTP-POST-SimpleSign. The
-encryption algorithms apply to `EncryptedAssertion`, `EncryptedID`,
-`EncryptedAttribute`, and `NewEncryptedID`. The rows below name
-`EncryptedAssertion` for all four.
+The signature algorithm is the XML-DSig `SignatureMethod` on HTTP-POST and
+SOAP, and the `SigAlg` on HTTP-Redirect and HTTP-POST-SimpleSign. Encryption
+algorithms apply to `EncryptedAssertion`, `EncryptedID`, `EncryptedAttribute`,
+and `NewEncryptedID`. The rows name `EncryptedAssertion` for all four.
 
 ## XML Signature
 
-| Rule | Actor | Direction | Level |
+The identity provider and service provider sign and verify. Algorithms that
+the AWS-LC and FIPS builds lack are in the
+[provider matrix](#provider-supported-set).
+
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| SHA-1 digest | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. The SHA-1 signature algorithms, including `SignatureAlgorithm::HmacSha1`, select this digest. Verified under `XmlSignatureProfile::ExcludeWeakAlgorithms`, the value Recommended uses, and under `AllowWeakAlgorithms`. `StrictRsaSha2` is library hardening and rejects it |
-| RSAwithSHA1 | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1, and Bindings §3.4.4.1 signature rule 5 for the HTTP-Redirect `SigAlg`. `SignatureAlgorithm::RsaSha1` selects it. It is never the default. AWS-LC and FIPS do not sign with it. FIPS does not verify it. Neither meets the HTTP-Redirect rule |
-| DSAwithSHA1 | Identity provider and service provider | Sign and verify | Recommendation to implement in Conformance §4.1. Mandatory to implement for the HTTP-Redirect `SigAlg`: Bindings §3.4.4.1 signature rule 5. `SignatureAlgorithm::DsaSha1` selects it with a DSA signing key, and a DSA certificate in the peer's metadata verifies it. It is never the default, on the same library policy as the SHA-1 digest. RustCrypto with `crypto-legacy-algorithms` only, so the default build meets the HTTP-Redirect rule, and `crypto-aws-lc`, `crypto-fips`, and RustCrypto without `crypto-legacy-algorithms` do not |
-| HMAC-SHA1 | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `SignatureAlgorithm::HmacSha1` signs with the secret of `Credentials::with_hmac_secret`, and the signature carries no `KeyInfo`. The verifier sets the same secret with `IdpDescriptor::with_hmac_secret` or `SpDescriptor::with_hmac_secret`, next to the peer's metadata certificates. SAML metadata has no shared-secret key, so the secret is exchanged out of band. Metadata signatures are not verified with it |
-| An HMAC secret is at least 20 bytes | Identity provider and service provider | Configure signing and verification | Library policy. RFC 2104 §3 discourages a key shorter than the hash output, which is 20 bytes for SHA-1. `HmacSecret::try_new` rejects a shorter secret with `SamlError::Invalid`. It is local configuration and does not reject a message |
-| Canonical XML 1.0 without comments | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `TransformAlgorithm::CanonicalXml` puts it in `signed_reference_transforms`, for the messages in the row below. `SignedInfo` is canonicalized with exclusive canonicalization. Verification accepts it on `SignedInfo` and on a reference under `ExcludeWeakAlgorithms` and `AllowWeakAlgorithms`. `StrictRsaSha2` rejects it |
-| Enveloped-signature transform | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `TransformAlgorithm::EnvelopedSignature` is the first default transform |
-| A message carried in SOAP keeps exclusive canonicalization | Identity provider and service provider | Generate Response and logout messages | Library behaviour. `signed_reference_transforms` applies to the `AuthnRequest`, to `respond_sso` and `initiate_sso`, and to logout messages on HTTP-POST. `respond_sso_artifact`, `initiate_sso_artifact`, and logout messages over SOAP keep the enveloped-signature and exclusive canonicalization transforms. Each message is signed before it is placed in a SOAP envelope, and Canonical XML would take the envelope's namespace declarations into the digest of a verifier that checks the signature in place |
-| RSA-SHA256, RSA-SHA384, RSA-SHA512, and a backend URI | Identity provider and service provider | Sign and verify | Optional. Errata 05 E50. `SignatureAlgorithm::RsaSha256` is the default. `SignatureAlgorithm::Custom` passes a URI to the provider |
+| Sign with RSA-SHA256, a SHA-256 digest, and the enveloped-signature and exclusive canonicalization transforms | Library policy: reason not recorded. | Conformance §4.1 | `AlgorithmPolicy::default()` |
+| Generate a SHA-1 signature (RSAwithSHA1, DSAwithSHA1, HMAC-SHA1) only when the caller selects it | Library policy: reason not recorded. | Conformance §4.1 | `SignatureAlgorithm::RsaSha1`, `DsaSha1`, `HmacSha1` |
+| Sign and verify with the SHA-1 digest. The SHA-1 signature algorithms select it | Mandatory | Conformance §4.1 | `SignatureAlgorithm::RsaSha1`, `DsaSha1`, `HmacSha1` |
+| Sign and verify RSAwithSHA1. AWS-LC and FIPS do not sign with it, and FIPS does not verify it | Mandatory | Conformance §4.1 | `SignatureAlgorithm::RsaSha1` |
+| Sign and verify DSAwithSHA1 with a DSA key, and a DSA certificate in the peer's metadata. Needs RustCrypto with `crypto-legacy-algorithms` | Recommended | Conformance §4.1 | `SignatureAlgorithm::DsaSha1` |
+| Support RSAwithSHA1 and DSAwithSHA1 as the `SigAlg` on HTTP-Redirect and HTTP-POST-SimpleSign. The default build does. AWS-LC and FIPS sign neither, and RustCrypto without `crypto-legacy-algorithms` lacks DSAwithSHA1 | Mandatory | Bindings §3.4.4.1, CD-04 §2.5 | `SignatureAlgorithm::RsaSha1`, `DsaSha1` |
+| Implement HMAC-SHA1 signing and verification for messages | Mandatory | Conformance §4.1 | `SignatureAlgorithm::HmacSha1`, `Credentials::with_hmac_secret`, `IdpDescriptor::with_hmac_secret`, `SpDescriptor::with_hmac_secret` |
+| Reject an HMAC secret shorter than 20 bytes. It is configuration and does not reject a message | Library policy: RFC 2104 §3 discourages a key shorter than the hash output, which is 20 bytes for SHA-1. | RFC 2104 §3 | `HmacSecret::try_new` |
+| Sign and verify Canonical XML 1.0 without comments as a reference transform. `SignedInfo` is canonicalized with exclusive canonicalization. Verification accepts it on `SignedInfo` and on a reference under `ExcludeWeakAlgorithms` and `AllowWeakAlgorithms` | Mandatory | Conformance §4.1 | `TransformAlgorithm::CanonicalXml` in `signed_reference_transforms` |
+| Sign and verify with the enveloped-signature transform | Mandatory | Conformance §4.1 | `TransformAlgorithm::EnvelopedSignature`, the first default transform |
+| Sign `respond_sso_artifact`, `initiate_sso_artifact`, `respond_paos_sso`, and SOAP logout messages with the enveloped-signature and exclusive canonicalization transforms only | Library policy: Canonical XML would put the SOAP envelope's namespace declarations into the digest of a verifier that checks in place. | — | Always |
+| Sign with RSA-SHA256, RSA-SHA384, or RSA-SHA512 | Optional | E50 | `SignatureAlgorithm::RsaSha256` (default), `RsaSha384`, `RsaSha512` |
+| Sign with a custom URI. A detached signature accepts any URI the provider supports. An embedded signature needs a digest for the URI, which only the `SignatureAlgorithm` URIs and `signature_algorithm::RSA_SHA256_MGF1` have. Any other URI fails to sign | Optional | E50 | `SignatureAlgorithm::Custom` |
+
+Peers configure an HMAC shared secret out of band. Generated HMAC signatures
+omit `KeyInfo`. Typed metadata import verifies with pinned certificates, not
+the secret. `AlgorithmPolicy::signed_reference_transforms` applies to embedded
+`AuthnRequest` signatures, responses from `respond_sso` and `initiate_sso`, and
+HTTP-POST logout messages.
 
 ## Inbound XML signature verification
 
 A verifier accepts the `SignatureMethod` and `DigestMethod` values that the
-selected provider implements, that the peer's key can verify, and that the
+selected provider implements, that the peer's key can verify, and that
 `XmlSignatureProfile` allows. `XmlSignatureProfile` is the `xml_signatures`
-field of `SpValidationPolicy` and `IdpValidationPolicy`. Recommended uses
-`ExcludeWeakAlgorithms`, and `AllowWeakAlgorithms` relaxes it. Accepting an algorithm outside the
-Conformance §4.1 set is the Errata 05 E50 `MAY`. No profile is an OASIS
-receiver rule.
+field of `SpValidationPolicy` and `IdpValidationPolicy`, and Recommended uses
+`ExcludeWeakAlgorithms`. Accepting an algorithm outside the Conformance §4.1
+set is the E50 `MAY`. No profile is an OASIS receiver rule.
+`ExcludeWeakAlgorithms` permits the SHA-1 digest and RSAwithSHA1 when the
+provider implements them.
 
-The key is a signing certificate in the peer's metadata, or the secret set
-with `IdpDescriptor::with_hmac_secret` or `SpDescriptor::with_hmac_secret`.
-An algorithm verifies only with a key of its family: RSA for RSA and RSA-PSS,
-EC for ECDSA, Ed25519, DSA, the HMAC secret for HMAC, and an ML-DSA or SLH-DSA
-key of the same parameter set.
-
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| An embedded signature on a received `Response`, `Assertion`, or logout message is verified under `xml_signatures` | Accepting service provider | Inbound | Optional. Errata 05 E50. `AllowWeakAlgorithms` accepts the provider-supported set below. `ExcludeWeakAlgorithms` accepts that set without the [weak algorithms and keys](#weak-algorithms-and-keys). `StrictRsaSha2` is library hardening. A signature over the accepted content must use RSA-SHA256, RSA-SHA384, or RSA-SHA512, a SHA-256, SHA-384, or SHA-512 digest, exclusive canonicalization, and only the enveloped-signature and exclusive canonicalization transforms. Otherwise it is rejected with `SamlError::AlgorithmUnsupported` |
-| An embedded signature on a received `AuthnRequest` or logout message is verified under `xml_signatures` | Identity provider | Inbound | Optional. Errata 05 E50. The same profiles as the row above |
-| A detached `SigAlg` signature is verified under `xml_signatures` | Identity provider and service provider | Inbound HTTP-Redirect and HTTP-POST-SimpleSign | Optional. Errata 05 E50. `AllowWeakAlgorithms` accepts any `SigAlg` in the provider-supported set. `ExcludeWeakAlgorithms` excludes the [weak algorithms and keys](#weak-algorithms-and-keys). `StrictRsaSha2` is library hardening and accepts RSA-SHA256, RSA-SHA384, or RSA-SHA512. Another `SigAlg` is rejected with `SamlError::AlgorithmUnsupported` before the signature is verified. A verifier that selects `StrictRsaSha2` does not meet Bindings §3.4.4.1 signature rule 5, which makes DSAwithSHA1 and RSAwithSHA1 mandatory for HTTP-Redirect |
-| A signed metadata document is verified under `MetadataTrustPolicy` | Metadata consumer | Inbound typed descriptor import | Optional. Errata 05 E50, and E81 for Metadata §3.1.1. `RequireSignature` and `RequireSignatureAllowingOtherCanonicalization` accept the provider-supported set without the [weak algorithms and keys](#weak-algorithms-and-keys). `RequireSignatureAllowingWeakAlgorithms` accepts the provider-supported set. |
+| Allow additional provider-supported algorithms when verifying an embedded signature on a received `Response`, `Assertion`, or logout message (service provider), or `AuthnRequest` or logout message (identity provider). `ExcludeWeakAlgorithms` leaves out the [weak algorithms](#weak-algorithms-and-keys). `AllowWeakAlgorithms` accepts the provider-supported set | Optional | E50 | `XmlSignatureProfile::ExcludeWeakAlgorithms`, `AllowWeakAlgorithms` |
+| Allow additional provider-supported algorithms when verifying a detached `SigAlg` signature on HTTP-Redirect and HTTP-POST-SimpleSign. `ExcludeWeakAlgorithms` leaves out the weak algorithms and keys. `AllowWeakAlgorithms` accepts any `SigAlg` in the provider-supported set | Optional | E50 | `XmlSignatureProfile::ExcludeWeakAlgorithms`, `AllowWeakAlgorithms` |
+| Allow additional provider-supported algorithms when verifying a pinned metadata signature. `RequireSignature` and `RequireSignatureAllowingOtherCanonicalization` leave out the weak algorithms and keys. `RequireSignatureAllowingWeakAlgorithms` accepts the provider-supported set | Optional | E50, E81 | `MetadataTrustPolicy::RequireSignature`, `RequireSignatureAllowingOtherCanonicalization`, `RequireSignatureAllowingWeakAlgorithms` |
+| Accept an embedded signature only with RSA-SHA256, RSA-SHA384, or RSA-SHA512, a SHA-256, SHA-384, or SHA-512 digest, exclusive canonicalization, and the enveloped-signature and exclusive canonicalization transforms. This rejects the SHA-1 digest and Canonical XML 1.0 | Library policy: reason not recorded. | E50 | `XmlSignatureProfile::StrictRsaSha2` |
+| Accept a detached `SigAlg` only when it is RSA-SHA256, RSA-SHA384, or RSA-SHA512, and reject another before verifying the signature. This profile omits both SHA-1 algorithms required by those bindings | Library policy: reason not recorded. | Bindings §3.4.4.1, CD-04 §2.5 | `XmlSignatureProfile::StrictRsaSha2` |
 
 ### HMAC truncation
 
 These rules apply when an identity provider or service provider verifies an
-enveloped HMAC XML signature with a configured peer secret and a provider
-that supports the selected algorithm. They apply under every profile that
-allows the algorithm.
+enveloped HMAC XML signature with a configured peer secret, under every profile
+that allows the algorithm. Omitting `ds:HMACOutputLength` requests the full MAC.
+Detached signatures use a separate verifier and have no such parameter.
 
-| Rule | Level |
-| --- | --- |
-| An explicit `ds:HMACOutputLength` must be at least half the hash output length and at least 80 bits | Mandatory for the verifier. [XML Signature 1.1 §§4.4.2 and 6.3.1](https://www.w3.org/TR/xmldsig-core1/#sec-SignatureMethod). This requires 192 bits for HMAC-SHA384 and 256 bits for HMAC-SHA512 |
-| An explicit `ds:HMACOutputLength` must be at least 160 bits | Library policy. A lower floor would let a peer choose a shorter tag and reduce the number of bits an attacker must guess for an accepted signature |
-
-Omitting `ds:HMACOutputLength` requests the full MAC. Detached signatures
-use a separate verifier and have no `ds:HMACOutputLength` parameter.
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Reject an explicit `ds:HMACOutputLength` below half the hash output length or below 80 bits. This requires 192 bits for HMAC-SHA384 and 256 bits for HMAC-SHA512 | Mandatory | XMLDSig 1.1 §4.4.2, §6.3.1 | Always |
+| Reject an explicit `ds:HMACOutputLength` below 160 bits | Library policy: a lower floor would let a peer choose a shorter tag and reduce the number of bits an attacker must guess for an accepted signature. | XMLDSig 1.1 §6.3.1 | Always |
 
 ### Reference and coverage processing
 
-This section covers inbound embedded-signature processing in the public XML
-verification functions and the internal verifier used by the typed flows.
-It does not claim conformance with an entire SAML profile or binding.
-
-| Rule | Actor and condition | Scope and basis |
-| --- | --- | --- |
-| References in every processed signature stay within the input document | Library verifier, before resolving references or executing transforms, including optional signatures outside SAML candidate positions | Library policy. Core §5.4.2 requires a SAML signer to reference the ID of the signed assertion or protocol message. It does not require a receiver to reject every extension signature with other references. Rejecting such references before processing prevents local-file resolution by the dependency |
-| Strict-profile reference transforms are checked before processing | Library verifier using `StrictRsaSha2`, for every processed signature, including invalid and unrelated signatures | Library policy beyond Core §5.4.4's permission to reject other transforms. Other profiles keep their existing transform handling. The strict profile allows only XML-DSig enveloped-signature and exclusive canonicalization transforms |
-| Public verification success includes covered content | Library verifier, after cryptographic verification | Library API contract. Assertion-bearing protocol responses retain their existing direct-Assertion coverage and extraction rules. Other documents require root coverage. A signature over a different sibling object is insufficient |
-
-The [protocol schema](https://docs.oasis-open.org/security/saml/v2.0/saml-schema-protocol-2.0.xsd)
-places optional `ds:Signature` and `samlp:Extensions` children on
-`RequestAbstractType` and `StatusResponseType`. `ExtensionsType` permits
+This section covers inbound embedded-signature processing in the typed flows.
+It does not claim conformance with an entire SAML profile or binding. The
+protocol schema places optional `ds:Signature` and `samlp:Extensions` children
+on `RequestAbstractType` and `StatusResponseType`, and `ExtensionsType` permits
 foreign-namespace elements with lax processing. Signature placement alone
-therefore does not describe every XML-DSig signature the dependency processes.
+therefore does not describe every XML-DSig signature the verifier processes.
 
-[Core §§5.4.2–5.4.4](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)
-distinguish the signed assertion or protocol message from its XML container.
-For SAML signature verifiers, §5.4.4 requires preservation of message content
-when other transforms are accepted. The preflight restrictions above are
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Reject a reference outside the input document in every processed signature, including an optional signature outside the SAML candidate positions, before resolving references or executing transforms | Library policy: Core §5.4.2 binds a signer, not a receiver, and the dependency would resolve local files. | Core §5.4.2 | Always |
+| Check the reference transforms of each processed signature before processing, even an invalid or unrelated one, and allow only the enveloped-signature and exclusive canonicalization transforms. Other profiles keep their existing handling | Library policy: beyond Core §5.4.4's permission to reject other transforms, and the dependency executes transforms before it verifies `SignatureValue`. | Core §5.4.4 | `XmlSignatureProfile::StrictRsaSha2` |
+| Count a signature as verified only when it covers the accepted content. Assertion-bearing protocol responses keep their direct-Assertion coverage and extraction rules. Other documents require root coverage, and a signature over a different sibling object is insufficient | Library policy: a verification success is an API contract that the accepted content is covered. | — | Always |
+| Protect every HTTP-POST browser SSO assertion with a signature on the `Response` or on each individual `Assertion` | Mandatory | Profiles §4.1.4.5, E26, E93 | Always |
+| Reject a signature that authenticates the message and contains a `ds:Object` | Recommended | E91 | `XmlSignatureProfile::ExcludeWeakAlgorithms`, `StrictRsaSha2`. `AllowWeakAlgorithms` relaxes it |
+
+Core §5.4.4 requires a verifier that accepts other transforms to keep every
+part of the SAML message in the signature. The preflight restrictions are
 implementation controls, not a new receiver `MUST` inferred from signer rules.
-[Approved Errata 05](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/saml-v2.0-errata05-os.html)
-E91's Object recommendation remains enforced by the existing profiles after
-verification. E93's correction to Profiles §4.1.3.5 permits a signed Assertion
-or Response for HTTP-POST browser SSO. This change preserves that choice.
-
-The pinned `bergshamra-dsig` 0.12.0
-[`DsigContext`](https://github.com/kushaldas/bergshamra/blob/9fcc0c1e1cc0145fb0b8cf417aaa694a635f212c/crates/bergshamra-dsig/src/context.rs)
-has no option to disable relative-file references. Its
-[`verify` source](https://github.com/kushaldas/bergshamra/blob/9fcc0c1e1cc0145fb0b8cf417aaa694a635f212c/crates/bergshamra-dsig/src/verify.rs)
-resolves references and executes transforms before verifying `SignatureValue`.
-The first-signature function processes the first XML-DSig descendant in
-document order. The all-signatures function processes every XML-DSig
-descendant and turns individual processing failures into invalid results.
-Preflight uses the same namespace-aware dependency DOM and document order.
 
 ### Weak algorithms and keys
 
 `ExcludeWeakAlgorithms` and `StrictRsaSha2` exclude these from the signatures
-they cover. `AllowWeakAlgorithms` re-allows them where the
-build verifies them. Signed metadata import excludes them under
-`MetadataTrustPolicy::RequireSignature` and
-`RequireSignatureAllowingOtherCanonicalization`, and
-`RequireSignatureAllowingWeakAlgorithms` re-allows them.
+they cover, and signed metadata import excludes them under `RequireSignature`
+and `RequireSignatureAllowingOtherCanonicalization`.
+`XmlSignatureProfile::AllowWeakAlgorithms` and
+`MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms` re-allow them
+where the build verifies them. Recommended excludes them for both roles.
 
-| Excluded | Rule | Level |
-| --- | --- | --- |
-| RSA-MD5, HMAC-MD5, and the MD5 digest | A verified signature that authenticates the accepted message, a detached `SigAlg`, or a verified metadata signature that uses one is rejected with `SamlError::AlgorithmUnsupported` | Library policy, on in Recommended for both roles and in signed metadata import. No OASIS rule requires a receiver to reject them. XML Signature 1.1 §6.2 says MD5 `SHOULD NOT` be used in `DigestMethod`, a rule on use. OpenSAML excludes these three URIs in `DefaultSecurityConfigurationBootstrap.buildDefaultSignatureValidationConfiguration`, and xmlsec1 has built without MD5 by default since 1.3.0 |
-| RSA-RIPEMD160, ECDSA-RIPEMD160, HMAC-RIPEMD160, and the RIPEMD-160 digest | As above | Library policy, on in Recommended for both roles and in signed metadata import. No OASIS rule requires a receiver to reject them. The default excludes RIPEMD-160 for limited provider support. Conformance §4.1 does not require it. xmlsec1 has built without RIPEMD-160 by default since 1.3.7, and the AWS-LC and FIPS providers do not verify them. OpenSAML does not exclude them |
-| RSA modulus under 2048 bits | Skip the certificate. If no usable key remains, return `SamlError::Crypto`. Pinned metadata keys have the same floor for a separate [trust-root reason](metadata-and-replay.md#metadata-trust) | Library policy. For embedded and detached message signatures, `ExcludeWeakAlgorithms` (the default) and `StrictRsaSha2` keep RustCrypto's minimum consistent with AWS-LC and FIPS |
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Reject an embedded signature that authenticates accepted content, a detached `SigAlg`, or a verified metadata signature that uses RSA-MD5, HMAC-MD5, or the MD5 digest | Library policy: XMLDSig 1.1 §6.2 says MD5 `SHOULD NOT` be used in `DigestMethod`, a rule on use, and no OASIS rule has a receiver reject it. | XMLDSig 1.1 §6.2 | `AllowWeakAlgorithms` for messages, `RequireSignatureAllowingWeakAlgorithms` for metadata |
+| Reject the same for RSA-RIPEMD160, ECDSA-RIPEMD160, HMAC-RIPEMD160, and the RIPEMD-160 digest | Library policy: provider support is limited, and Conformance §4.1 does not require it. | Conformance §4.1 | `AllowWeakAlgorithms` for messages, `RequireSignatureAllowingWeakAlgorithms` for metadata |
+| Do not verify with an RSA key shorter than 2048 bits. Skip the certificate, so a message only that key could verify is rejected | Library policy: the identity provider and service provider authenticate current messages, and NIST SP 800-131A Rev. 2 §3 Table 2 classifies 1024-bit to 2047-bit RSA keys as legacy. | XMLDSig 1.1 §6.4.2 | `AllowWeakAlgorithms` for messages, `RequireSignatureAllowingWeakAlgorithms` for metadata |
 
-SAML leaves the receiver's RSA minimum to the implementation (Conformance §4.1,
-Errata 05 E50 and E81, and the [XML Signature schema](https://www.w3.org/TR/2002/REC-xmldsig-core-20020212/xmldsig-core-schema.xsd)).
-[XML Signature §6.4.2](https://www.w3.org/TR/xmldsig-core1/#sec-PKCS1) permits keys of
-1024 bits or less for legacy verification. The IdP and SP authenticate current
-messages, so their default excludes the 1024–2047-bit keys that
-[NIST classifies as legacy](https://doi.org/10.6028/NIST.SP.800-131Ar2) (§3, Table 2).
-
-Only `AllowWeakAlgorithms` on RustCrypto with `crypto-legacy-algorithms` accepts
-those keys. It also permits MD5, RIPEMD-160, and `ds:Object`, which can carry
-unsigned data. An invalid Response or Assertion signature still causes the SP
-to reject the browser SSO response (Profiles §4.1.4.3).
-
-SHA-1 stays accepted under `ExcludeWeakAlgorithms`: Conformance §4.1 makes the
-SHA-1 digest and RSAwithSHA1 mandatory to implement, and OpenSAML and xmlsec1
-verify them by default. `StrictRsaSha2` excludes
-SHA-1 as well. A metadata signature is checked under `MetadataTrustPolicy`, not
-`xml_signatures`.
-
-The exclusion on signed metadata is stricter than OpenSAML's default there.
-OpenSAML's `SignatureValidationFilter` passes the trust engine no
-`SignatureValidationParametersCriterion`, so the default exclusions apply to a
-metadata signature only when a deployment adds that criterion. The 2048-bit
-floor matches the Shibboleth Metadata Aggregator's `X509RSAKeyLengthValidator`,
-whose default is an error for an RSA key shorter than 2048 bits in a metadata
-certificate.
-
-`SsoSession::verified_xml_signatures` reports the `SignatureMethod` URI of each
-verified signature over the Response root or the consumed Assertion, and
-`SsoSession::binding_signature_algorithm_uri` the accepted detached
-`SigAlg`. Neither applies an allowlist.
+Pinned metadata keys have the same floor for a separate
+[trust-root reason](metadata-and-replay.md#metadata-trust). Only
+`AllowWeakAlgorithms` on RustCrypto with `crypto-legacy-algorithms` accepts
+a short key. It also permits MD5, RIPEMD-160, and `ds:Object`, which can carry
+unsigned data. An invalid Response or Assertion signature still causes the
+service provider to reject the browser SSO response (Profiles §4.1.4.3).
 
 ### Provider-supported set
 
 The default build is `crypto-bergshamra`: RustCrypto with
-`crypto-legacy-algorithms` and `crypto-post-quantum`. A row marked Legacy
-needs `crypto-legacy-algorithms`, and a row marked Post-quantum needs
-`crypto-post-quantum`. A signature with an algorithm the build does not
-verify does not verify. For a message signature, an RSA key of 1024 to 2047
-bits verifies only on RustCrypto with `crypto-legacy-algorithms`, and only
-under `AllowWeakAlgorithms`. For typed metadata import it
-verifies on that build only under
-`RequireSignatureAllowingWeakAlgorithms`. The raw metadata
-verification functions accept it there. RustCrypto without it, AWS-LC, and
-FIPS reject it. An RSA key shorter than 1024 bits verifies on no build in any
-profile.
+`crypto-legacy-algorithms` and `crypto-post-quantum`. A row marked Legacy needs
+`crypto-legacy-algorithms`, and a row marked Post-quantum needs
+`crypto-post-quantum`. A signature with an algorithm the build does not verify
+does not verify. An RSA key of 1024 to 2047 bits verifies only on RustCrypto
+with `crypto-legacy-algorithms`, for a message signature under
+`AllowWeakAlgorithms` and for typed metadata import under
+`RequireSignatureAllowingWeakAlgorithms`. An RSA key shorter than 1024 bits
+verifies on no build.
 
 | `SignatureMethod` | Default build | `crypto-aws-lc` | `crypto-fips` |
 | --- | --- | --- | --- |
@@ -215,42 +155,24 @@ profile.
 
 ## XML Encryption
 
-The SP's `RequireForEncryptedCbc` check and the IdP's unsigned requested-subject
-GCM check read the namespace-complete canonicalized wrapper sent to bergshamra.
-They use its first XML Encryption `EncryptedData` and first child XML Encryption
-`EncryptionMethod`, and Uppsala's local-name attribute lookup. Namespace
-declarations are separate from attributes. AES-192-CBC joins AES-128-CBC,
-AES-256-CBC, and Triple DES under the relying-party recommendation in
-[Approved Errata 05 E93](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/saml-v2.0-errata05-os.html).
-The actor is the relying party processing CBC-encrypted assertions or their
-encrypted children; the recommendation requires integrity protection before
-decryption. Recommended implements it for inbound browser SSO with
-`RequireForEncryptedCbc`; `AllowUnsignedEncryptedCbc` explicitly relaxes it.
-Missing methods return `Crypto` and unknown assertion data algorithms return
-`Unsupported` under `RequireForEncryptedCbc`.
+For assertion delivery, the identity provider encrypts and the service
+provider decrypts. In name identifier management, either role can encrypt
+identifiers for its peer. The decryption rules apply to every encrypted element
+an entity receives.
 
-Inbound decryption also applies the configurable library resource allowance
-`XmlEncryptionPolicy::max_decryption_work`, defaulting to
-`constants::DEFAULT_MAX_DECRYPTION_WORK` (16). Across the document, each
-`xenc:EncryptedData`, `xenc:EncryptedKey`, and `xenc11:DerivedKey` costs one
-unit per configured decryption key. Revealed encrypted content shares the
-allowance before subsequent decryption. Excess work returns
-`SamlError::LimitExceeded` with `ResourceLimit::DecryptionWork`, including for
-signed messages and explicit CBC or RSA-v1.5 relaxations. This is library
-resource policy beyond Core's encrypted-element rules and Conformance §4.2,
-not an OASIS receiver obligation. It bounds unauthenticated key resolution
-and key-rollover retries that XML byte limits alone do not bound.
-The default is not a standard-prescribed number or a CPU-time guarantee.
-XML Encryption 1.0 [§6.4](https://www.w3.org/TR/2002/REC-xmlenc-core-20021210/Overview.html#sec-Denial)
-recommends restricting total processing resources without a numeric threshold.
-Applications may raise or lower the finite allowance; zero refuses encrypted
-input. Rate and concurrency controls remain deployment responsibilities.
-
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Triple DES block encryption | Identity provider, and the service provider that decrypts | Encrypt and decrypt `EncryptedAssertion` | Mandatory to implement. Conformance §4.2. `DataEncryptionAlgorithm::TripleDesCbc` selects it. It is a CBC mode, so the Errata 05 E93 Response signature applies. Needs `crypto-legacy-algorithms`. Not on AWS-LC or FIPS |
-| AES-128 and AES-256 block encryption | Identity provider, and the service provider that decrypts | Encrypt and decrypt `EncryptedAssertion` | Mandatory to implement. Conformance §4.2. `DataEncryptionAlgorithm::Aes256Cbc` is the default. `Aes128Cbc` selects AES-128 |
-| RSA-v1.5 key transport | Identity provider, and the service provider that decrypts | Encrypt and decrypt `EncryptedAssertion` | Mandatory to implement. Conformance §4.2. `KeyEncryptionAlgorithm::Rsa15` selects it. Needs `crypto-legacy-algorithms`. Not on AWS-LC or FIPS. XML Encryption 1.1 §5.5.1 makes it optional and says its implementation is `NOT RECOMMENDED`, which supports generating it only when selected. An entity decrypts it, in any encrypted element it receives, only when `XmlEncryptionPolicy::rsa15_key_transport` is `Rsa15KeyTransportPolicy::AllowDecryption`. Without it, an `EncryptionMethod` that names RSA-v1.5 is rejected with `SamlError::Unsupported` before any key is decrypted. That refusal is library policy, an implementation-security control against Bleichenbacher's chosen-ciphertext attack, and not an OASIS rejection: SAML V2.0 cites XML Encryption 1.0, whose §5.1 requires RSA-v1.5. XML Encryption 1.1 §6.1.3 says implementations `SHOULD` restrict algorithm usage to those secure against chosen-ciphertext attacks, and OpenSAML's default decryption configuration excludes RSA-v1.5 |
-| RSA-OAEP key transport | Identity provider, and the service provider that decrypts | Encrypt and decrypt `EncryptedAssertion` | Mandatory to implement. Conformance §4.2. `KeyEncryptionAlgorithm::RsaOaepMgf1p` is the default. An entity decrypts it with the default options on RustCrypto and AWS-LC. FIPS does not use its SHA-1 MGF1 |
-| AES-128-GCM, AES-256-GCM, and a backend URI | Identity provider, and the service provider that decrypts | Encrypt and decrypt `EncryptedAssertion` | Optional. Errata 05 E50 and [XML Encryption 1.1 §5.2.4](https://www.w3.org/TR/2013/REC-xmlenc-core1-20130411/#sec-AES-GCM). `DataEncryptionAlgorithm::Aes128Gcm`, `Aes256Gcm`, and `Custom`. Both named GCM algorithms work on RustCrypto, AWS-LC, and FIPS |
-| XML Encryption 1.1 RSA-OAEP with explicit digest and MGF | Identity provider, and the service provider that decrypts | Encrypt and decrypt `EncryptedAssertion` | Optional. Errata 05 E50 and [XML Encryption 1.1 §5.5.2](https://www.w3.org/TR/2013/REC-xmlenc-core1-20130411/#sec-RSA-OAEP). `KeyEncryptionAlgorithm::RsaOaep { digest, mgf }` writes `ds:DigestMethod` and `xenc11:MGF` under the key's `EncryptionMethod`. SHA-256, SHA-384, and SHA-512 with the matching `MaskGenerationFunction` work on RustCrypto, AWS-LC, and FIPS. RustCrypto also supports independent digest and MGF hashes. With a crypto provider, both config builders reject unsupported parameters with `SamlError::Unsupported`. A build without a crypto provider accepts any algorithm policy, because it neither encrypts nor decrypts |
+| Encrypt and decrypt with AES-128 and AES-256 block encryption | Mandatory | Conformance §4.2 | `DataEncryptionAlgorithm::Aes128Cbc`, `Aes256Cbc` (default) |
+| Encrypt and decrypt with Triple DES block encryption. Needs `crypto-legacy-algorithms`. Not on AWS-LC or FIPS | Mandatory | Conformance §4.2 | `DataEncryptionAlgorithm::TripleDesCbc` |
+| Encrypt and decrypt with RSA-OAEP key transport. Decryption with the default options works on RustCrypto and AWS-LC. FIPS does not use its SHA-1 MGF1 | Mandatory | Conformance §4.2 | `KeyEncryptionAlgorithm::RsaOaepMgf1p` (default) |
+| Encrypt and decrypt with RSA-v1.5 key transport. Needs `crypto-legacy-algorithms`. Not on AWS-LC or FIPS | Mandatory | Conformance §4.2 | `KeyEncryptionAlgorithm::Rsa15` |
+| Generate Triple DES and RSA-v1.5 only when the caller selects them | Library policy: Conformance §4 does not say which algorithm a producer selects, and XML Encryption 1.1 §5.5.1 makes RSA-v1.5 optional and `NOT RECOMMENDED`. | Conformance §4.2 | `DataEncryptionAlgorithm::TripleDesCbc`, `KeyEncryptionAlgorithm::Rsa15` |
+| Decrypt RSA-v1.5 only when allowed. Otherwise reject an `EncryptionMethod` that names it before any key is decrypted | Library policy: Bleichenbacher's chosen-ciphertext attack, and no OASIS rule rejects it, because SAML V2.0 cites XML Encryption 1.0, whose §5.1 requires RSA-v1.5. | XML Encryption 1.1 §6.1.3 | `XmlEncryptionPolicy::rsa15_key_transport`, `Rsa15KeyTransportPolicy::AllowDecryption` |
+| Encrypt and decrypt with AES-128-GCM and AES-256-GCM on RustCrypto, AWS-LC, and FIPS. Forward a custom URI to the provider | Optional | E50, XML Encryption 1.1 §5.2.4 | `DataEncryptionAlgorithm::Aes128Gcm`, `Aes256Gcm`, `Custom` |
+| Write `ds:DigestMethod` and `xenc11:MGF` under the key's `EncryptionMethod`. SHA-256, SHA-384, and SHA-512 with the matching `MaskGenerationFunction` work on all providers, and RustCrypto also supports independent hashes. With a crypto provider, the config builders reject unsupported parameters | Optional | E50, XML Encryption 1.1 §5.5.2 | `KeyEncryptionAlgorithm::RsaOaep { digest, mgf }` |
+| Require a signed `Response` before the service provider processes an `EncryptedAssertion` encrypted with AES-128-CBC, AES-192-CBC, AES-256-CBC, or Triple DES, in inbound browser SSO | Recommended | Core §6.2, Profiles §4.1.3.5, §4.1.4.3, E93 | `ResponseSignaturePolicy::RequireForEncryptedCbc`. `AllowUnsignedEncryptedCbc` relaxes it |
+| Reject an `EncryptedAssertion` with a missing or unrecognized data-encryption algorithm | Library policy: the service provider cannot tell whether the ciphertext is CBC. | Core §6.2, E93 | `ResponseSignaturePolicy::RequireForEncryptedCbc` |
+| Verify a signature that covers a CBC-encrypted `EncryptedID` or `EncryptedAttribute` in an assertion before decrypting it | Recommended | Core §6.2, E93 | Always |
+| Require that covering signature for every other data-encryption algorithm too | Library policy: reason not recorded. | Core §6.2, E93 | Always |
+| Decrypt the `EncryptedID` in the requested `Subject` of an unauthenticated `AuthnRequest` only when its `EncryptedData` is AES-GCM | Library policy: an unsigned request is allowed by Profiles §4.1.4.1, and AES-GCM authenticates the ciphertext where E93 asks for integrity protection before CBC. | Profiles §4.1.4.1, E93 | Always |
+| Charge each `xenc:EncryptedData`, `xenc:EncryptedKey`, and `xenc11:DerivedKey` one unit per configured decryption key against a per-message allowance of 16 by default, shared with revealed encrypted content. Zero refuses encrypted input | Library policy: it bounds unauthenticated key resolution and key-rollover retries that XML byte limits alone do not bound. | XML Encryption 1.0 §6.4 | `XmlEncryptionPolicy::max_decryption_work` |
