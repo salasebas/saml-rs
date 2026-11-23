@@ -10,7 +10,7 @@ use crate::model::{
 };
 use std::time::SystemTime;
 
-use super::raw_mapping::{ensure_entity_id, raw_sp_descriptor, relay_state_from_input};
+use super::peer::{ensure_entity_id, relay_state_from_input, sp_engine_at};
 use super::requested_subject::decrypt_requested_subject;
 use super::response_acs::resolve_response_acs;
 use super::sso_outcome::OutcomeParts;
@@ -106,10 +106,10 @@ impl IdentityProvider {
     ) -> Result<Received<AuthnRequest>, SamlError> {
         let relay_state = relay_state_from_input(&input)?;
         let binding = SsoRequestBinding::try_from(input.binding())?;
-        let raw_sp = raw_sp_descriptor(sp, validation.now())?;
+        let peer_sp = sp_engine_at(sp, validation.now())?;
         let (encoding, request) = input.into_http_request(self.engine().setting.xml_limits)?;
         let received = self.engine().parse_login_request_at(
-            raw_sp,
+            peer_sp,
             encoding,
             &request,
             validation.now(),
@@ -354,9 +354,9 @@ impl IdentityProvider {
             }
             (None, None) => None,
         };
-        let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
+        let peer_sp = sp_engine_at(sp, SystemTime::now())?;
         let binding = options.binding;
-        let acs = resolve_response_acs(&raw_sp.metadata, request.map(Received::message), binding)?;
+        let acs = resolve_response_acs(&peer_sp.metadata, request.map(Received::message), binding)?;
         let in_response_to = request.map(|request| request.message().id().as_str());
         let overrides = LoginResponseOverrides {
             acs: Some(&acs),
@@ -378,7 +378,7 @@ impl IdentityProvider {
         match options.delivery {
             ResponseTransport::Browser => {
                 let issued = self.engine().create_login_response_with_overrides(
-                    raw_sp,
+                    peer_sp,
                     Binding::from(binding),
                     &user,
                     &LoginResponseOptions {
@@ -395,7 +395,7 @@ impl IdentityProvider {
             }
             ResponseTransport::Artifact(delivery, issued) => {
                 let rendered = self.engine().render_posted_sso_response(
-                    raw_sp,
+                    peer_sp,
                     &user,
                     in_response_to,
                     overrides,

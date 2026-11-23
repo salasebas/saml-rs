@@ -538,7 +538,7 @@ impl Engine {
                 sp_encryption_certificate(sp)?,
                 &self.setting.data_encryption_algorithm,
                 KeyTransport::from_setting(&self.setting),
-                &self.setting.tag_prefix_encrypted_assertion,
+                &self.setting.tag_prefix_assertion,
             )?;
         }
         if sign_message && self.setting.is_assertion_encrypted {

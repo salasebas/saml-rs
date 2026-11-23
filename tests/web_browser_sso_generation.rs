@@ -664,7 +664,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
     )?;
     let signed_xml = response_xml(&signed)?;
     assert!(signed_xml.contains("<ds:Signature"));
-    assert!(signed_xml.contains("EncryptedAssertion"));
+    assert!(signed_xml.contains("<saml:EncryptedAssertion "));
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,

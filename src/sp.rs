@@ -188,12 +188,7 @@ impl Engine {
             allow_create: self.setting.allow_create,
         };
         let xml = render_default_authn_request_xml(Prefixes::of(&self.setting)?, &request);
-        let relay_state = match options.relay_state {
-            Some(value) => Some(value.to_string()),
-            None => {
-                (!self.setting.relay_state.is_empty()).then(|| self.setting.relay_state.clone())
-            }
-        };
+        let relay_state = options.relay_state.map(str::to_owned);
 
         if self.metadata.authn_requests_signed() {
             return self.signed_request_context(binding, &xml, destination, relay_state, id);

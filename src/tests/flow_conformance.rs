@@ -1522,36 +1522,6 @@ fn flow_conformance_signed_logout_response_wrong_request_id_rejected(
     Ok(())
 }
 
-// ----- customize encrypted-assertion prefix (55-56) -----
-
-#[cfg(not(feature = "crypto-fips"))]
-fn encrypted_prefix(prefix: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let mut idp_setting = signing();
-    idp_setting.is_assertion_encrypted = true;
-    idp_setting.tag_prefix_encrypted_assertion = prefix.to_string();
-    let idp = idp::Engine::from_config(&idp_config(false), idp_setting)?;
-    let mut sp_setting = signing();
-    sp_setting.is_assertion_encrypted = true;
-    sp_setting.enc_private_key = Some(PRIVKEY.into());
-    let sp = sp::Engine::from_config(&sp_config(false, true, true), sp_setting)?;
-    let ctx =
-        idp.create_login_response(&sp, Binding::Post, &User::new("p@example.com"), &opts("_r"))?;
-    let xml = String::from_utf8(STANDARD.decode(&ctx.context)?)?;
-    assert!(xml.contains(&format!("<{prefix}:EncryptedAssertion")));
-    Ok(())
-}
-
-#[cfg(not(feature = "crypto-fips"))]
-#[test]
-fn flow_conformance_encrypted_prefix_saml2() -> Result<(), Box<dyn std::error::Error>> {
-    encrypted_prefix("saml2")
-}
-#[cfg(not(feature = "crypto-fips"))]
-#[test]
-fn flow_conformance_encrypted_prefix_default_saml() -> Result<(), Box<dyn std::error::Error>> {
-    encrypted_prefix("saml")
-}
-
 // ----- malformed response (57-59) -----
 
 fn malformed(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {

@@ -11,7 +11,7 @@ use std::time::SystemTime;
 
 use super::SamlError;
 
-pub(super) fn raw_idp_descriptor(
+pub(super) fn idp_engine_at(
     idp: &IdpDescriptor,
     now: SystemTime,
 ) -> Result<&idp::Engine, SamlError> {
@@ -19,37 +19,34 @@ pub(super) fn raw_idp_descriptor(
     Ok(idp.provider())
 }
 
-pub(super) fn raw_sp_descriptor(
-    sp: &SpDescriptor,
-    now: SystemTime,
-) -> Result<&sp::Engine, SamlError> {
+pub(super) fn sp_engine_at(sp: &SpDescriptor, now: SystemTime) -> Result<&sp::Engine, SamlError> {
     sp.ensure_valid_at(now)?;
     Ok(sp.provider())
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct RawPeer<'a> {
+pub(super) struct Peer<'a> {
     pub(super) entity_id: &'a EntityId,
     pub(super) metadata: &'a Metadata,
     pub(super) hmac_secret: Option<&'a HmacSecret>,
 }
 
-impl<'a> RawPeer<'a> {
+impl<'a> Peer<'a> {
     pub(super) fn from_idp(idp: &'a IdpDescriptor, now: SystemTime) -> Result<Self, SamlError> {
-        let raw = raw_idp_descriptor(idp, now)?;
+        let engine = idp_engine_at(idp, now)?;
         Ok(Self {
             entity_id: idp.entity_id(),
-            metadata: raw.metadata.as_metadata(),
-            hmac_secret: raw.setting.hmac_secret.as_ref(),
+            metadata: engine.metadata.as_metadata(),
+            hmac_secret: engine.setting.hmac_secret.as_ref(),
         })
     }
 
     pub(super) fn from_sp(sp: &'a SpDescriptor, now: SystemTime) -> Result<Self, SamlError> {
-        let raw = raw_sp_descriptor(sp, now)?;
+        let engine = sp_engine_at(sp, now)?;
         Ok(Self {
             entity_id: sp.entity_id(),
-            metadata: raw.metadata.as_metadata(),
-            hmac_secret: raw.setting.hmac_secret.as_ref(),
+            metadata: engine.metadata.as_metadata(),
+            hmac_secret: engine.setting.hmac_secret.as_ref(),
         })
     }
 }

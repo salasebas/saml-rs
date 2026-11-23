@@ -285,4 +285,5 @@ their partner only upstream, in samlify at the pinned commit:
 | --- | --- |
 | `key/sp/privkey.encrypted.pkcs8.pem` | `test/key/sp/cert.encrypted.pkcs8.cer` |
 | `key/sp/cert.cer` | `test/key/sp/privkey.pem` |
+| `key/idp/cert2.cer` | `test/key/idp/privkey2.pem` |
 | `key/idp/encryptionCert.cer` | `test/key/idp/encryptKey.pem` |
