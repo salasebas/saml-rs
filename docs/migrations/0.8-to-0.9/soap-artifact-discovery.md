@@ -224,7 +224,7 @@ To answer an `AuthnRequest` with an artifact, keep using
   cache for `resolve_artifact`, so a flood of artifacts cannot fill the cache
   that `finish_sso` uses. A full cache returns
   `SamlError::ReplayCacheUnavailable`.
-- `ReplayPolicy::Disabled` skips the check, as `allow_reuse()` did. The
+- `ReplayPolicy::NoCache` skips the check, as `allow_reuse()` did. The
   identity provider still returns the message only once.
 - The context time is the instant at which the identity provider metadata
   must be valid. Before, that was the system clock.

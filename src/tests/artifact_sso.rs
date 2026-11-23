@@ -131,7 +131,7 @@ fn build_parties(idp: IdpConfigBuilder, sp: SpConfigBuilder) -> Result<Parties, 
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn principal() -> NameId {

@@ -175,12 +175,18 @@ fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = (sp.validation(), idp.validation());
     assert_eq!(sp, &SpValidationPolicy::default());
     assert_eq!(idp, &IdpValidationPolicy::default());
-    assert_eq!(sp.assertions, AssertionSignaturePolicy::AllowUnsigned);
     assert_eq!(
-        sp.responses,
+        sp.assertion_signatures,
+        AssertionSignaturePolicy::AllowUnsigned
+    );
+    assert_eq!(
+        sp.response_signatures,
         ResponseSignaturePolicy::RequireForEncryptedCbc
     );
-    assert_eq!(sp.authn_requests, AuthnRequestSigningPolicy::DoNotSign);
+    assert_eq!(
+        sp.authn_request_signing,
+        AuthnRequestSigningPolicy::DoNotSign
+    );
     assert_eq!(
         sp.audience,
         AudienceValidationPolicy::EvaluatePresentRestrictions
@@ -191,7 +197,7 @@ fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
         XmlSignatureProfile::ExcludeWeakAlgorithms
     );
     assert_eq!(
-        idp.authn_requests,
+        idp.authn_request_signatures,
         AuthnRequestValidationPolicy::AllowUnsigned
     );
     assert_eq!(
@@ -204,21 +210,27 @@ fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn recommended_hardenings_stay_independent() {
     let mut assertion_signature = SpValidationPolicy::default();
-    assertion_signature.assertions = AssertionSignaturePolicy::RequireSigned;
+    assertion_signature.assertion_signatures = AssertionSignaturePolicy::RequireSigned;
     assert_eq!(
         assertion_signature.xml_signatures,
         XmlSignatureProfile::ExcludeWeakAlgorithms
     );
     let mut rsa_sha2 = SpValidationPolicy::default();
     rsa_sha2.xml_signatures = XmlSignatureProfile::StrictRsaSha2;
-    assert_eq!(rsa_sha2.assertions, AssertionSignaturePolicy::AllowUnsigned);
+    assert_eq!(
+        rsa_sha2.assertion_signatures,
+        AssertionSignaturePolicy::AllowUnsigned
+    );
 }
 
 #[test]
 fn field_defaults_match_the_role_policy() {
     let sp = SpValidationPolicy::default();
-    assert_eq!(AssertionSignaturePolicy::default(), sp.assertions);
-    assert_eq!(AuthnRequestSigningPolicy::default(), sp.authn_requests);
+    assert_eq!(AssertionSignaturePolicy::default(), sp.assertion_signatures);
+    assert_eq!(
+        AuthnRequestSigningPolicy::default(),
+        sp.authn_request_signing
+    );
     assert_eq!(NameIdCreationPolicy::default(), sp.name_id_creation);
 }
 
@@ -555,7 +567,7 @@ fn config_builders_reject_a_credential_that_cannot_be_used(
 fn sp_builder_requires_signing_credentials_when_authn_requests_are_signed(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut validation = SpValidationPolicy::default();
-    validation.authn_requests = AuthnRequestSigningPolicy::Sign;
+    validation.authn_request_signing = AuthnRequestSigningPolicy::Sign;
     let result = SpConfig::builder(
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,

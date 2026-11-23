@@ -177,7 +177,7 @@ fn received_by(
             "SAMLRequest",
             STANDARD.encode(xml.as_bytes()),
         )]),
-        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled),
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache),
     )?;
     Ok(received
         .message()

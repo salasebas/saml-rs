@@ -1,4 +1,4 @@
-//! `ReplayPolicy::Disabled` skips replay checks.
+//! `ReplayPolicy::NoCache` skips replay checks.
 
 use super::replay_cache::RecordingReplayCache;
 use super::sso_flow_document::set_authn_statements;
@@ -108,7 +108,7 @@ fn xml_with_time_window(
 fn context_at(now: &str) -> Result<SamlValidationContext<'static>, time::error::Parse> {
     Ok(SamlValidationContext::new(
         instant(now)?,
-        ReplayPolicy::Disabled,
+        ReplayPolicy::NoCache,
     ))
 }
 
@@ -209,7 +209,7 @@ fn typed_validation_context_expired_condition_uses_fixed_clock(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let xml = xml_with_late_subject_and_session();
     let validation =
-        SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::Disabled)
+        SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::NoCache)
             .with_clock_skew(ClockSkew::strict());
 
     match parse_response_at(&xml, &validation) {
@@ -226,7 +226,7 @@ fn typed_validation_context_expired_subject_confirmation_uses_fixed_clock(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let xml = xml_with_late_conditions_and_session();
     let validation =
-        SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::Disabled)
+        SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::NoCache)
             .with_clock_skew(ClockSkew::strict());
 
     match parse_response_at(&xml, &validation) {
@@ -243,7 +243,7 @@ fn typed_validation_context_expired_session_not_on_or_after_uses_fixed_clock(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let xml = xml_with_late_subject_and_conditions();
     let validation =
-        SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::Disabled)
+        SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::NoCache)
             .with_clock_skew(ClockSkew::strict());
 
     match parse_response_at(&xml, &validation) {
@@ -277,7 +277,7 @@ fn typed_validation_context_repeated_session_applies_skew_after_raw_minimum(
             1,
         );
     let validation =
-        SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::Disabled)
+        SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::NoCache)
             .with_clock_skew(ClockSkew::from_millis(0, 60_000));
 
     for deadline in [EARLIEST, "2024-12-31T23:59:30Z"] {
@@ -297,7 +297,7 @@ fn typed_validation_context_repeated_session_applies_skew_after_raw_minimum(
 fn typed_validation_context_not_yet_valid_condition_uses_fixed_clock(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let validation =
-        SamlValidationContext::new(instant("2014-07-17T01:01:00Z")?, ReplayPolicy::Disabled)
+        SamlValidationContext::new(instant("2014-07-17T01:01:00Z")?, ReplayPolicy::NoCache)
             .with_clock_skew(ClockSkew::strict());
 
     match parse_response_at(RESPONSE, &validation) {
@@ -317,7 +317,7 @@ fn typed_validation_context_invalid_timestamp_fails_closed_at_fixed_clock(
         "NotBefore=\"not-a-date\"",
     );
     let validation =
-        SamlValidationContext::new(instant("2014-07-17T01:02:00Z")?, ReplayPolicy::Disabled);
+        SamlValidationContext::new(instant("2014-07-17T01:02:00Z")?, ReplayPolicy::NoCache);
 
     match parse_response_at(&xml, &validation) {
         Err(SamlError::TimeWindowInvalid { field, .. }) => {
@@ -940,7 +940,7 @@ fn unevaluated_bearer_confirmation_gives_the_same_replay_outcome_under_every_pol
         "</saml:SubjectConfirmation><saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"><saml:SubjectConfirmationData NotOnOrAfter=\"2024-01-18T06:21:48\"/></saml:SubjectConfirmation>",
     );
     let mut validation =
-        SamlValidationContext::new(instant("2020-01-01T00:00:00Z")?, ReplayPolicy::Disabled)
+        SamlValidationContext::new(instant("2020-01-01T00:00:00Z")?, ReplayPolicy::NoCache)
             .with_clock_skew(ClockSkew::strict());
     let session = SsoSession::try_from_with_verified_xml_signatures(
         parse_response_at(&xml, &validation)?,
@@ -966,7 +966,7 @@ fn unevaluated_bearer_confirmation_gives_the_same_replay_outcome_under_every_pol
 }
 
 #[test]
-fn disabled_replay_accepts_the_same_session_twice() -> Result<(), Box<dyn std::error::Error>> {
+fn no_cache_accepts_the_same_session_twice() -> Result<(), Box<dyn std::error::Error>> {
     let mut flow = session_flow();
     remove_extract_keys(
         &mut flow,
@@ -974,7 +974,7 @@ fn disabled_replay_accepts_the_same_session_twice() -> Result<(), Box<dyn std::e
     );
     let session = SsoSession::try_from_with_verified_xml_signatures(flow, Vec::new(), None)?;
     let mut validation =
-        SamlValidationContext::new(instant("2026-07-04T12:05:00Z")?, ReplayPolicy::Disabled);
+        SamlValidationContext::new(instant("2026-07-04T12:05:00Z")?, ReplayPolicy::NoCache);
 
     session.check_and_store_replay(&mut validation, XmlLimits::default())?;
     session.check_and_store_replay(&mut validation, XmlLimits::default())?;

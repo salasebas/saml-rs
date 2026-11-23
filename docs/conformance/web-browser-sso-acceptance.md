@@ -118,7 +118,7 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 
 ## Identity provider
 
-`receive_sso` reads `IdpValidationPolicy.authn_requests` and
+`receive_sso` reads `IdpValidationPolicy::authn_request_signatures` and
 `IdpValidationPolicy.xml_signatures`.
 
 | Rule | Level | Section | Option |

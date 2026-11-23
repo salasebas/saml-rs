@@ -110,7 +110,7 @@ fn soap_manage_name_id_request_checks_the_unqualified_id() -> TestResult {
         &sp,
         envelope.envelope(),
         SoapChannel::mutually_authenticated_confidential(),
-        SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::Disabled),
+        SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::NoCache),
     )?;
     assert!(matches!(receipt, NameIdManagementReceipt::Request(_)));
     Ok(())
@@ -178,7 +178,7 @@ fn soap_manage_name_id_request_verifies_the_sp_signature() -> TestResult {
         &sp,
         misplaced.envelope(),
         channel,
-        SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::Disabled),
+        SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::NoCache),
     );
     assert!(
         matches!(result, Err(SamlError::ProtocolProfile(_))),

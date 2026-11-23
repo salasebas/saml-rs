@@ -26,7 +26,7 @@ const IDP_SSO_FIRST: &str = "https://idp.example.com/sso/first";
 const IDP_SSO_SECOND: &str = "https://idp.example.com/sso/second";
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn principal() -> NameId {

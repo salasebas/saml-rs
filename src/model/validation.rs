@@ -165,9 +165,9 @@ pub trait ReplayCache {
 /// `docs/conformance/metadata-and-replay.md`.
 #[non_exhaustive]
 pub enum ReplayPolicy<'a> {
-    /// Skip optional replay checks. HTTP-POST SSO responses require a cache
-    /// and return [`SamlError::ReplayCacheRequired`] with this policy.
-    Disabled,
+    /// Supply no replay cache and skip optional replay checks.
+    /// HTTP-POST SSO acceptance returns [`SamlError::ReplayCacheRequired`].
+    NoCache,
     /// Require the caller to provide replay storage.
     RequireCache(&'a mut dyn ReplayCache),
 }
@@ -175,7 +175,7 @@ pub enum ReplayPolicy<'a> {
 impl fmt::Debug for ReplayPolicy<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Disabled => f.write_str("Disabled"),
+            Self::NoCache => f.write_str("NoCache"),
             Self::RequireCache(_) => f.debug_tuple("RequireCache").finish_non_exhaustive(),
         }
     }
@@ -348,7 +348,7 @@ impl<'a> SamlValidationContext<'a> {
         binding: crate::SsoResponseBinding,
     ) -> Result<(), SamlError> {
         if binding == crate::SsoResponseBinding::Post
-            && matches!(self.replay, ReplayPolicy::Disabled)
+            && matches!(self.replay, ReplayPolicy::NoCache)
         {
             return Err(SamlError::ReplayCacheRequired);
         }
@@ -418,12 +418,12 @@ impl<'a> SamlValidationContext<'a> {
         &mut self,
         key: ReplayKey,
     ) -> Result<(), SamlError> {
-        if matches!(&self.replay, ReplayPolicy::Disabled) {
+        if matches!(&self.replay, ReplayPolicy::NoCache) {
             return Ok(());
         }
         let expires_at = self.message_replay_expires_at()?;
         match &mut self.replay {
-            ReplayPolicy::Disabled => Ok(()),
+            ReplayPolicy::NoCache => Ok(()),
             ReplayPolicy::RequireCache(cache) => cache.check_and_store(key, expires_at),
         }
     }

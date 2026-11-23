@@ -10,7 +10,7 @@ Callers using `IdpValidationPolicy::default()` need no code changes.
 
 ```diff
 -validation.authn_requests = AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent;
-+validation.authn_requests = AuthnRequestValidationPolicy::AllowUnsigned;
++validation.authn_request_signatures = AuthnRequestValidationPolicy::AllowUnsigned;
 ```
 
 For browser SSO, publish each signing key in the SP metadata you

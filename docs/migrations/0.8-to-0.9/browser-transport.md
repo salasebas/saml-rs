@@ -276,7 +276,7 @@ let session = sp.finish_sso(idp, pending, Inbound::post(fields), validation)?;
 #     validation: SamlValidationContext<'_>,
 # ) -> Result<(), SamlError> {
 let request = idp.receive_slo(sp, Inbound::soap(body, SoapChannel::unattested()), validation)?;
-# let _ = (request, ReplayPolicy::Disabled);
+# let _ = (request, ReplayPolicy::NoCache);
 # Ok(())
 # }
 ```

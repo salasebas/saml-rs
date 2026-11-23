@@ -48,7 +48,7 @@ fn idp(validator: Option<SchemaValidator>) -> Result<saml_rs::IdentityProvider, 
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn assert_rejected<T: std::fmt::Debug>(result: Result<T, SamlError>) {

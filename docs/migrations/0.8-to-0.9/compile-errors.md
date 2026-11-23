@@ -348,7 +348,7 @@ and build again:
 let base = SpConfig::builder(entity_id, acs);
 let recommended = base.clone().build()?;
 let mut signed_assertions = SpValidationPolicy::default();
-signed_assertions.assertions = AssertionSignaturePolicy::RequireSigned;
+signed_assertions.assertion_signatures = AssertionSignaturePolicy::RequireSigned;
 let strict = base.validation(signed_assertions).build()?;
 ```
 
@@ -558,7 +558,7 @@ existed rather than what it allowed.
 | `LogoutSignaturePolicy`, `LogoutPolicy`, or either role's `validation.logout` | Removed. [Authenticate browser logout messages](logout-authentication.md). |
 | `AuthnRequestSigningPolicy::DoNotSignForCompatibility` | `AuthnRequestSigningPolicy::DoNotSign` |
 | `LogoutSigning::DoNotSignForCompatibility` | Remove the signing option. Outgoing logout is signed. |
-| `ReplayPolicy::DisabledForCompatibility` | `ReplayPolicy::Disabled` |
+| `ReplayPolicy::DisabledForCompatibility` | `ReplayPolicy::NoCache` |
 | `AudienceValidationPolicy::SkipForCompatibility` | Removed. [Keep the default audience policy](sso-results-and-identities.md#check-audience-restrictions-before-accepting-a-session) |
 | `DigestAlgorithm::Sha1ForCompatibility` | `DigestAlgorithm::Sha1` |
 | `KeyEncryptionAlgorithm::Rsa15ForCompatibility` | `KeyEncryptionAlgorithm::Rsa15` |
@@ -588,7 +588,7 @@ let idp = IdpDescriptor::from_metadata_xml(
     &metadata,
     MetadataTrustPolicy::AllowUnsigned,
 )?;
-let context = SamlValidationContext::new(now, ReplayPolicy::Disabled);
+let context = SamlValidationContext::new(now, ReplayPolicy::NoCache);
 ```
 
 The command below renames the remaining variants in a Rust source tree.
@@ -602,7 +602,7 @@ s/\bAllowUnsignedVerifyIfPresent\b/AllowUnsigned/g;
 s/\bAllowUnsignedForCompatibility\b/AllowUnsigned/g;
 s/\bUnsignedForCompatibility\b/AllowUnsigned/g;
 s/\bDoNotSignForCompatibility\b/DoNotSign/g;
-s/\bDisabledForCompatibility\b/Disabled/g;
+s/\bDisabledForCompatibility\b/NoCache/g;
 s/\bSha1ForCompatibility\b/Sha1/g;
 s/\bRsa15ForCompatibility\b/Rsa15/g;
 s/\bTripleDesForCompatibility\b/TripleDesCbc/g;
@@ -898,10 +898,10 @@ from `recommended()`. The table uses the 0.9 variant names;
 
 | Policy | Field | Former `compatibility()` | Current `default()` |
 | --- | --- | --- | --- |
-| `SpValidationPolicy` | `responses` | `ResponseSignaturePolicy::AllowUnsignedEncryptedCbc` | `RequireForEncryptedCbc` |
+| `SpValidationPolicy` | `response_signatures` | `ResponseSignaturePolicy::AllowUnsignedEncryptedCbc` | `RequireForEncryptedCbc` |
 | `SpValidationPolicy` | `xml_signatures` | `XmlSignatureProfile::AllowWeakAlgorithms` | `ExcludeWeakAlgorithms` |
 | `SpValidationPolicy` | `audience` | Skipped evaluation (removed) | `EvaluatePresentRestrictions` |
-| `IdpValidationPolicy` | `authn_requests` | Skipped verification (removed) | `AllowUnsigned` |
+| `IdpValidationPolicy` | `authn_request_signatures` | Skipped verification (removed) | `AllowUnsigned` |
 | `IdpValidationPolicy` | `xml_signatures` | `XmlSignatureProfile::AllowWeakAlgorithms` | `ExcludeWeakAlgorithms` |
 
 Browser logout always requires a verified signature. See [Authenticate browser logout messages](logout-authentication.md).
@@ -921,7 +921,7 @@ let validation = SpValidationPolicy::compatibility();
 
 // Now
 let mut validation = SpValidationPolicy::default();
-validation.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
+validation.response_signatures = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
 validation.xml_signatures = XmlSignatureProfile::AllowWeakAlgorithms;
 ```
 
@@ -948,7 +948,7 @@ preset that `build()` accepted. Without a provider, `build()` returns
 `SamlError::Unsupported` for a policy that requires a signature. Under
 Recommended, set these fields before you call `build()`:
 
-- `SpValidationPolicy`: set `responses` to `AllowUnsignedEncryptedCbc`.
+- `SpValidationPolicy`: set `response_signatures` to `AllowUnsignedEncryptedCbc`.
 - `IdpValidationPolicy`: use the default policy.
 
 ## 1.27 Replace `recommended()` with `default()`

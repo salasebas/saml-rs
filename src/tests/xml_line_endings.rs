@@ -38,7 +38,7 @@ const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencryp
 const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 struct SignedExchange {
@@ -59,7 +59,7 @@ impl SignedExchange {
             .credentials(signing_credentials())
             .name_id_format(NameIdFormat::Unspecified)
             .validation(SpValidationPolicy {
-                assertions: AssertionSignaturePolicy::RequireSigned,
+                assertion_signatures: AssertionSignaturePolicy::RequireSigned,
                 audience: AudienceValidationPolicy::RequireRestriction,
                 ..SpValidationPolicy::default()
             })

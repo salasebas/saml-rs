@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ))
     };
     let mut replay_cache = saml_rs::InMemoryReplayCache::new();
-    let validation = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
+    let validation = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache);
 
     let sp = ServiceProvider::new(
         SpConfig::builder(

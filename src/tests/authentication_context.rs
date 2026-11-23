@@ -55,7 +55,7 @@ fn parties_with(
         .credentials(credentials)
         .name_id_format(NameIdFormat::Unspecified)
         .validation(SpValidationPolicy {
-            authn_requests: AuthnRequestSigningPolicy::Sign,
+            authn_request_signing: AuthnRequestSigningPolicy::Sign,
             ..SpValidationPolicy::default()
         })
         .build()?,
@@ -66,7 +66,7 @@ fn parties_with(
             .sso_endpoint(SsoEndpoint::simple_sign(SSO)?)
             .credentials(signing_credentials())
             .validation(IdpValidationPolicy {
-                authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+                authn_request_signatures: AuthnRequestValidationPolicy::RequireSigned,
                 ..IdpValidationPolicy::default()
             })
             .xml(xml)
@@ -86,7 +86,7 @@ fn parties_with(
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn principal() -> NameId {

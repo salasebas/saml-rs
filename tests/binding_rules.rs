@@ -43,20 +43,20 @@ fn credentials() -> Credentials {
 
 fn signing_sp_validation() -> SpValidationPolicy {
     let mut validation = SpValidationPolicy::default();
-    validation.assertions = AssertionSignaturePolicy::RequireSigned;
-    validation.authn_requests = AuthnRequestSigningPolicy::Sign;
+    validation.assertion_signatures = AssertionSignaturePolicy::RequireSigned;
+    validation.authn_request_signing = AuthnRequestSigningPolicy::Sign;
     validation.audience = AudienceValidationPolicy::RequireRestriction;
     validation
 }
 
 fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
     let mut validation = IdpValidationPolicy::default();
-    validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
+    validation.authn_request_signatures = AuthnRequestValidationPolicy::RequireSigned;
     validation
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn principal() -> NameId {

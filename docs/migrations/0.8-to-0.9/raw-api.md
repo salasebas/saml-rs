@@ -94,7 +94,7 @@ use saml_rs::{
 };
 
 let mut validation = SpValidationPolicy::default();
-validation.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
+validation.response_signatures = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
 validation.xml_signatures = XmlSignatureProfile::AllowWeakAlgorithms;
 validation.audience = AudienceValidationPolicy::RequireRestriction;
 ```

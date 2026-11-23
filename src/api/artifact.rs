@@ -250,7 +250,7 @@ impl ServiceProvider {
     /// [`SamlValidationContext::with_replay_retention`], which is then
     /// required. Choose a retention longer than the identity provider keeps
     /// the artifact. A later call with the same artifact fails, even when
-    /// this resolution did not complete. [`ReplayPolicy::Disabled`](crate::ReplayPolicy::Disabled)
+    /// this resolution did not complete. [`ReplayPolicy::NoCache`](crate::ReplayPolicy::NoCache)
     /// skips the check; the identity provider still returns the message only
     /// once.
     ///

@@ -29,7 +29,7 @@ const IDP_SLO_HTTPS: &str = "https://idp.example.com/slo/post";
 const IDP_SLO_HTTP: &str = "http://idp.example.com/slo/post";
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn sp(slo: &str, policy: SpValidationPolicy) -> Result<ServiceProvider, SamlError> {

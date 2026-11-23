@@ -189,7 +189,7 @@ impl IdentityProvider {
     /// #     apply: impl Fn(&saml_rs::NameIdChange) -> std::io::Result<()>,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation =
-    ///     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
+    ///     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache);
     /// let received = idp.receive_name_id_management(
     ///     sp,
     ///     request_envelope,

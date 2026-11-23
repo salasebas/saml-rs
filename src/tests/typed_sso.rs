@@ -94,8 +94,8 @@ const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pk
 
 fn signing_sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
-        assertions: AssertionSignaturePolicy::RequireSigned,
-        authn_requests: AuthnRequestSigningPolicy::Sign,
+        assertion_signatures: AssertionSignaturePolicy::RequireSigned,
+        authn_request_signing: AuthnRequestSigningPolicy::Sign,
         audience: AudienceValidationPolicy::RequireRestriction,
         ..SpValidationPolicy::default()
     }
@@ -103,7 +103,7 @@ fn signing_sp_validation() -> SpValidationPolicy {
 
 fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
     IdpValidationPolicy {
-        authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+        authn_request_signatures: AuthnRequestValidationPolicy::RequireSigned,
         ..IdpValidationPolicy::default()
     }
 }
@@ -154,7 +154,7 @@ fn sp_config_with_default_response_binding(
 
 fn response_signature_required_sp_config() -> Result<SpConfig, SamlError> {
     let validation = SpValidationPolicy {
-        responses: ResponseSignaturePolicy::RequireSigned,
+        response_signatures: ResponseSignaturePolicy::RequireSigned,
         ..signing_sp_validation()
     };
     SpConfig::builder(
@@ -169,8 +169,8 @@ fn response_signature_required_sp_config() -> Result<SpConfig, SamlError> {
 
 fn response_root_only_sp_config() -> Result<SpConfig, SamlError> {
     let validation = SpValidationPolicy {
-        assertions: AssertionSignaturePolicy::AllowUnsigned,
-        responses: ResponseSignaturePolicy::RequireSigned,
+        assertion_signatures: AssertionSignaturePolicy::AllowUnsigned,
+        response_signatures: ResponseSignaturePolicy::RequireSigned,
         ..signing_sp_validation()
     };
     SpConfig::builder(
@@ -338,7 +338,7 @@ fn principal() -> NameId {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn validation_with_cache(cache: &mut dyn ReplayCache) -> SamlValidationContext<'_> {
@@ -759,7 +759,7 @@ fn bounded_authn_request_age(
     max_age: Duration,
     skew: ClockSkew,
 ) -> SamlValidationContext<'static> {
-    SamlValidationContext::new(now, ReplayPolicy::Disabled)
+    SamlValidationContext::new(now, ReplayPolicy::NoCache)
         .with_clock_skew(skew)
         .with_authn_request_age(RequestAgePolicy::Bounded { max_age })
 }
@@ -835,7 +835,7 @@ fn assert_authn_request_age_rejected(
 fn disabled_authn_request_age_ignores_clock_skew_at_a_fixed_clock(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let now = authn_request_age_now()?;
-    let validation = SamlValidationContext::new(now, ReplayPolicy::Disabled);
+    let validation = SamlValidationContext::new(now, ReplayPolicy::NoCache);
     assert_eq!(validation.authn_request_age(), RequestAgePolicy::Disabled);
     assert_eq!(validation.clock_skew(), ClockSkew::five_minutes());
 
@@ -853,7 +853,7 @@ fn disabled_authn_request_age_ignores_clock_skew_at_a_fixed_clock(
 }
 
 fn validation_at_disabled(now: SystemTime) -> SamlValidationContext<'static> {
-    SamlValidationContext::new(now, ReplayPolicy::Disabled)
+    SamlValidationContext::new(now, ReplayPolicy::NoCache)
 }
 
 #[test]
@@ -2977,7 +2977,7 @@ fn recommended_sso_accept_rejects_response_only_signature_only_with_assertion_ha
     let exchange = recommended_post_exchange()?;
     let fields = exchange.response_fields;
     let hardening = ServiceProvider::new(sp_with_validation(SpValidationPolicy {
-        assertions: AssertionSignaturePolicy::RequireSigned,
+        assertion_signatures: AssertionSignaturePolicy::RequireSigned,
         ..recommended_sso_accept_validation()
     })?);
     match hardening.finish_sso(
@@ -3174,7 +3174,7 @@ fn recommended_sso_accept_requires_issue_instant_and_accepts_leap_seconds(
 fn cbc_relaxation_does_not_disable_other_accept_rules() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = recommended_post_exchange()?;
     let relaxed = ServiceProvider::new(sp_with_validation(SpValidationPolicy {
-        responses: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
+        response_signatures: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
         ..recommended_sso_accept_validation()
     })?);
     let unsigned =

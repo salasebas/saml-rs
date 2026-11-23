@@ -53,15 +53,15 @@ const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn signing_sp_validation() -> SpValidationPolicy {
     let mut validation = SpValidationPolicy::default();
-    validation.assertions = AssertionSignaturePolicy::RequireSigned;
-    validation.authn_requests = AuthnRequestSigningPolicy::Sign;
+    validation.assertion_signatures = AssertionSignaturePolicy::RequireSigned;
+    validation.authn_request_signing = AuthnRequestSigningPolicy::Sign;
     validation.audience = AudienceValidationPolicy::RequireRestriction;
     validation
 }
 
 fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
     let mut validation = IdpValidationPolicy::default();
-    validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
+    validation.authn_request_signatures = AuthnRequestValidationPolicy::RequireSigned;
     validation
 }
 
@@ -77,7 +77,7 @@ fn principal() -> NameId {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn sp_with(validation: SpValidationPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
@@ -638,9 +638,9 @@ fn typed_transient_name_id_omits_allow_create() -> Result<(), Box<dyn std::error
 fn typed_authn_request_signing_stays_optional_and_does_not_reject_unsigned_requests(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut signed_sp_policy = SpValidationPolicy::default();
-    signed_sp_policy.authn_requests = AuthnRequestSigningPolicy::Sign;
+    signed_sp_policy.authn_request_signing = AuthnRequestSigningPolicy::Sign;
     let mut requiring_idp_policy = IdpValidationPolicy::default();
-    requiring_idp_policy.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
+    requiring_idp_policy.authn_request_signatures = AuthnRequestValidationPolicy::RequireSigned;
     let sp = sp_with(signed_sp_policy)?;
     let idp = idp_with(requiring_idp_policy, false)?;
     assert!(idp
@@ -676,7 +676,7 @@ fn typed_authn_request_signing_stays_optional_and_does_not_reject_unsigned_reque
 fn typed_signing_sp_starts_sso_against_an_idp_that_does_not_require_signed_requests(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut sp_validation = SpValidationPolicy::default();
-    sp_validation.authn_requests = AuthnRequestSigningPolicy::Sign;
+    sp_validation.authn_request_signing = AuthnRequestSigningPolicy::Sign;
     let sp = sp_with(sp_validation)?;
     let idp = idp_with(IdpValidationPolicy::default(), false)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -766,7 +766,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
     }
 
     let mut unsigned_cbc = SpValidationPolicy::default();
-    unsigned_cbc.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
+    unsigned_cbc.response_signatures = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
     let permissive = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,

@@ -27,7 +27,7 @@ const IDP_SLO_REQUEST: &str = "https://idp.example.com/slo/request";
 const IDP_SLO_RESPONSE: &str = "https://idp.example.com/slo/response";
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn sp(validation_policy: SpValidationPolicy) -> Result<ServiceProvider, SamlError> {

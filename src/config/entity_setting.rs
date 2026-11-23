@@ -22,12 +22,13 @@ impl SpConfigBuilder {
         );
         let validation = &self.validation;
         setting.allow_create = name_id_creation_allowed(validation.name_id_creation);
-        setting.want_assertions_signed = assertion_signature_required(validation.assertions);
+        setting.want_assertions_signed =
+            assertion_signature_required(validation.assertion_signatures);
         setting.require_audience_restriction = audience_restriction_required(validation.audience);
-        setting.want_message_signed = response_signature_required(validation.responses);
+        setting.want_message_signed = response_signature_required(validation.response_signatures);
         setting.xml_signatures = validation.xml_signatures;
         setting.want_encrypted_cbc_response_signed =
-            encrypted_cbc_response_signature_required(validation.responses);
+            encrypted_cbc_response_signature_required(validation.response_signatures);
         setting
     }
 }

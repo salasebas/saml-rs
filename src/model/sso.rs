@@ -351,7 +351,7 @@ impl SsoSession {
         let validation_now = validation.now_offset()?;
         let not_on_or_after_skew_ms = validation.clock_skew().not_on_or_after_millis();
         match validation.replay_policy() {
-            ReplayPolicy::Disabled => Ok(()),
+            ReplayPolicy::NoCache => Ok(()),
             ReplayPolicy::RequireCache(cache) => {
                 let replays = assertion_replays(&self.raw_flow.saml_content, limits)?;
                 let bearer_expires = self.bearer_subject_confirmation_expires_at(limits)?;

@@ -66,12 +66,12 @@ fn xml(encryption: XmlEncryptionPolicy) -> XmlPolicy {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
-        assertions: AssertionSignaturePolicy::RequireSigned,
+        assertion_signatures: AssertionSignaturePolicy::RequireSigned,
         audience: AudienceValidationPolicy::RequireRestriction,
         ..SpValidationPolicy::default()
     }
@@ -800,7 +800,7 @@ fn encrypted_id_outside_the_signed_assertion_is_not_decrypted(
     let sp = sp_with(
         encryption,
         SpValidationPolicy {
-            responses: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
+            response_signatures: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
             ..sp_validation()
         },
     )?;

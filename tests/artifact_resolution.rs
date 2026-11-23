@@ -155,7 +155,7 @@ fn single_use(cache: &mut InMemoryReplayCache) -> SamlValidationContext<'_> {
 }
 
 fn without_replay_cache() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn header_pairs(headers: &[HttpHeader]) -> Vec<(&str, &str)> {

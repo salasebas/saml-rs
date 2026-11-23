@@ -39,8 +39,8 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
         )),
     )
     .validation(SpValidationPolicy {
-        assertions: AssertionSignaturePolicy::RequireSigned,
-        responses: ResponseSignaturePolicy::RequireSigned,
+        assertion_signatures: AssertionSignaturePolicy::RequireSigned,
+        response_signatures: ResponseSignaturePolicy::RequireSigned,
         ..SpValidationPolicy::default()
     })
     .xml(XmlPolicy {

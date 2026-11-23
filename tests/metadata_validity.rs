@@ -166,7 +166,7 @@ fn receive_sso_compares_valid_until_with_the_context_clock(
     let sp = sp(Some(MetadataLifetime::ValidUntil(valid_until)))?;
     let idp = idp(None)?;
     let descriptor = sp_descriptor(&sp)?;
-    let context = |now| SamlValidationContext::new(now, ReplayPolicy::Disabled);
+    let context = |now| SamlValidationContext::new(now, ReplayPolicy::NoCache);
 
     idp.receive_sso(
         &descriptor,
@@ -198,7 +198,7 @@ fn resolve_artifact_compares_valid_until_with_the_context_clock(
         &mut issued,
     )?;
     let channel = SoapChannel::mutually_authenticated_confidential();
-    let context = |now| SamlValidationContext::new(now, ReplayPolicy::Disabled);
+    let context = |now| SamlValidationContext::new(now, ReplayPolicy::NoCache);
 
     sp.resolve_artifact(
         &descriptor,
@@ -223,7 +223,7 @@ fn soap_artifact_and_name_id_flows_refuse_expired_metadata(
     let current_sp = soap_name_id_sp_descriptor(&sp)?;
     let current_idp = idp_descriptor(&idp)?;
     let channel = SoapChannel::mutually_authenticated_confidential();
-    let now = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
+    let now = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache);
     let mut issued = IssuedArtifacts::expire_after(Duration::from_secs(60));
     let artifact = idp.issue_artifact(&current_sp, &artifact_message(), 0, &mut issued)?;
     let resolve_envelope = sp
@@ -293,7 +293,7 @@ fn an_elapsed_cache_duration_leaves_metadata_usable() -> Result<(), Box<dyn std:
     idp.receive_sso(
         &sp_descriptor(&sp)?,
         posted_authn_request(&sp, &idp)?,
-        SamlValidationContext::new(a_day_later, ReplayPolicy::Disabled),
+        SamlValidationContext::new(a_day_later, ReplayPolicy::NoCache),
     )?;
     Ok(())
 }
@@ -369,7 +369,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
     let (expired_sp, expired_idp) = browser_facades(at(Y2001))?;
     let expired_sp = sp_descriptor(&expired_sp)?;
     let expired_idp = idp_descriptor(&expired_idp)?;
-    let now = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
+    let now = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache);
     let name_id = NameId::new("alice").with_format(NameIdFormat::EmailAddress);
     let subject =
         LogoutSubject::new(name_id.clone()).with_session_index(SessionIndex::try_new("_session")?);
@@ -484,7 +484,7 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
         let sp_peer = sp_descriptor(&sp)?;
         let idp_peer = idp_descriptor(&idp)?;
         for now in [valid_until - Duration::from_secs(1), valid_until] {
-            let validation = || SamlValidationContext::new(now, ReplayPolicy::Disabled);
+            let validation = || SamlValidationContext::new(now, ReplayPolicy::NoCache);
             let received_slo = [
                 (
                     "SP receive_slo",

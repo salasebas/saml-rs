@@ -141,7 +141,7 @@ fn idp_descriptor(idp: &saml_rs::IdentityProvider) -> Result<IdpDescriptor, Saml
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn alice() -> NameId {

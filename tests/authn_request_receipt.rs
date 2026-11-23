@@ -41,7 +41,7 @@ const AFFILIATION: &str = "https://affiliation.example.com";
 const DECLARATION: &str = "https://idp.example.com/authn-context/hardware-token";
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
