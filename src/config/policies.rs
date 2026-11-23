@@ -630,6 +630,10 @@ pub struct TemplatePolicy {
     /// `Format` sent for it. An attribute whose complete value is one of these
     /// placeholders is omitted when there is no value for it.
     ///
+    /// The template must be well-formed XML before its placeholders are
+    /// filled. Creating a logout request returns `SamlError::Xml` when the
+    /// template's tags or attributes cannot be read.
+    ///
     /// Both roles reject a template whose `NameID` attributes differ from the subject.
     pub logout_request_template: Option<String>,
     /// Logout response template.
@@ -640,6 +644,10 @@ pub struct TemplatePolicy {
     /// before signing so the library owns signature construction. When
     /// `InResponseTo` is `None`, an attribute whose complete value is the
     /// `{InResponseTo}` placeholder is omitted.
+    ///
+    /// The template must be well-formed XML before its placeholders are
+    /// filled. Creating a logout response returns `SamlError::Xml` when the
+    /// template's tags or attributes cannot be read.
     pub logout_response_template: Option<String>,
     /// Embedded-signature placement and prefix.
     ///

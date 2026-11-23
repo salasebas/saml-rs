@@ -6,8 +6,11 @@
 //! become signed SAML markup. Text inserted for a value is not scanned for
 //! further placeholders.
 
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::Reader;
+
 use crate::binding::xml_escape;
-use crate::error::SamlError;
+use crate::error::{xml_err, SamlError};
 #[cfg(test)]
 use crate::util::camel_case;
 use crate::xml::name::validate_namespace_prefix;
@@ -95,23 +98,30 @@ pub(crate) fn validate_tag_prefixes(
 /// Inserted text is not scanned for `{key}` tokens. `None` removes attributes
 /// whose complete value is the placeholder, removes elements whose complete
 /// body is the placeholder, and renders any remaining occurrences as an empty
-/// string. Those removals read `raw_xml` as written, before any value is
-/// inserted.
-pub fn replace_tags_by_optional_value(raw_xml: &str, tags: &[(&str, Option<String>)]) -> String {
-    let mut xml = raw_xml.to_string();
-    for (index, (key, value)) in tags.iter().enumerate() {
-        let first_for_key = !tags[..index].iter().any(|(earlier, _)| earlier == key);
-        if value.is_none() && first_for_key {
-            let needle = format!("{{{key}}}");
-            xml = remove_optional_attributes(&xml, &needle);
-            xml = remove_optional_elements(&xml, &needle);
-        }
-    }
-    substitute_placeholders(&xml, |key| {
+/// string. Those removals read the markup of `raw_xml` as written, before any
+/// value is inserted. The first entry for a key wins.
+///
+/// Returns [`SamlError::Xml`] when the tags or attributes of `raw_xml` cannot
+/// be read.
+pub fn replace_tags_by_optional_value(
+    raw_xml: &str,
+    tags: &[(&str, Option<String>)],
+) -> Result<String, SamlError> {
+    let value_of = |key: &str| {
         tags.iter()
             .find(|(tag, _)| *tag == key)
-            .map(|(_, value)| value.as_deref().unwrap_or_default())
-    })
+            .map(|(_, value)| value.as_deref())
+    };
+    let absent = |raw: &str| {
+        raw.strip_prefix('{')
+            .and_then(|rest| rest.strip_suffix('}'))
+            .and_then(value_of)
+            == Some(None)
+    };
+    let xml = omit_absent_markup(raw_xml, absent)?;
+    Ok(substitute_placeholders(&xml, |key| {
+        value_of(key).map(Option::unwrap_or_default)
+    }))
 }
 
 fn substitute_placeholders<'v>(raw_xml: &str, lookup: impl Fn(&str) -> Option<&'v str>) -> String {
@@ -138,125 +148,119 @@ fn substitute_placeholders<'v>(raw_xml: &str, lookup: impl Fn(&str) -> Option<&'
     result
 }
 
-fn remove_optional_attributes(raw_xml: &str, needle: &str) -> String {
-    remove_optional_ranges(raw_xml, needle, optional_attribute_range)
+/// An element read so far as its start tag and at most one text node. Each
+/// variant holds the output length before the start tag.
+#[derive(Clone, Copy)]
+enum OptionalElement {
+    StartTag(usize),
+    AbsentBody(usize),
 }
 
-fn remove_optional_elements(raw_xml: &str, needle: &str) -> String {
-    remove_optional_ranges(raw_xml, needle, optional_element_range)
-}
-
-fn remove_optional_ranges(
-    raw_xml: &str,
-    needle: &str,
-    range_for_match: fn(&str, usize, usize) -> Option<(usize, usize)>,
-) -> String {
-    let mut result = String::with_capacity(raw_xml.len());
-    let mut cursor = 0;
-    while let Some(relative_pos) = raw_xml[cursor..].find(needle) {
-        let pos = cursor + relative_pos;
-        if let Some((start, end)) = range_for_match(raw_xml, pos, needle.len()) {
-            if start >= cursor {
-                result.push_str(&raw_xml[cursor..start]);
-                cursor = end;
-                continue;
-            }
+/// `raw_xml` without the attributes whose raw value is `absent`, and without
+/// the elements whose only content is one `absent` text node.
+fn omit_absent_markup(raw_xml: &str, absent: impl Fn(&str) -> bool) -> Result<String, SamlError> {
+    let mut output = String::with_capacity(raw_xml.len());
+    // quick-xml skips one leading byte order mark and counts its positions
+    // from the byte after it.
+    let markup = match raw_xml.strip_prefix('\u{feff}') {
+        Some(markup) => {
+            output.push('\u{feff}');
+            markup
         }
-        let next = pos + needle.len();
-        result.push_str(&raw_xml[cursor..next]);
-        cursor = next;
+        None => raw_xml,
+    };
+    let mut reader = Reader::from_str(raw_xml);
+    let mut element = None;
+    loop {
+        let start = position(&reader)?;
+        let event = reader.read_event().map_err(xml_err)?;
+        let source = &markup[start..position(&reader)?];
+        element = match event {
+            Event::Eof => return Ok(output),
+            Event::Start(tag) => {
+                let before = output.len();
+                push_tag(&mut output, &tag, source, ">", &absent)?;
+                Some(OptionalElement::StartTag(before))
+            }
+            Event::Empty(tag) => {
+                push_tag(&mut output, &tag, source, "/>", &absent)?;
+                None
+            }
+            Event::Text(_) => {
+                output.push_str(source);
+                match element {
+                    Some(OptionalElement::StartTag(before)) if absent(source) => {
+                        Some(OptionalElement::AbsentBody(before))
+                    }
+                    Some(OptionalElement::StartTag(_) | OptionalElement::AbsentBody(_)) | None => {
+                        None
+                    }
+                }
+            }
+            Event::End(_) => {
+                match element {
+                    Some(OptionalElement::AbsentBody(before)) => output.truncate(before),
+                    Some(OptionalElement::StartTag(_)) | None => output.push_str(source),
+                }
+                None
+            }
+            Event::CData(_)
+            | Event::Comment(_)
+            | Event::Decl(_)
+            | Event::PI(_)
+            | Event::DocType(_)
+            | Event::GeneralRef(_) => {
+                output.push_str(source);
+                None
+            }
+        };
     }
-    result.push_str(&raw_xml[cursor..]);
-    result
 }
 
-fn optional_attribute_range(
-    raw_xml: &str,
-    needle_start: usize,
-    needle_len: usize,
-) -> Option<(usize, usize)> {
-    let bytes = raw_xml.as_bytes();
-    let needle_end = needle_start + needle_len;
-    if needle_start == 0 || needle_end >= bytes.len() {
-        return None;
-    }
-
-    let quote = bytes[needle_start - 1];
-    if !matches!(quote, b'"' | b'\'') || bytes[needle_end] != quote {
-        return None;
-    }
-
-    let mut cursor = needle_start - 1;
-    while cursor > 0 && bytes[cursor - 1].is_ascii_whitespace() {
-        cursor -= 1;
-    }
-    if cursor == 0 || bytes[cursor - 1] != b'=' {
-        return None;
-    }
-
-    let mut name_end = cursor - 1;
-    while name_end > 0 && bytes[name_end - 1].is_ascii_whitespace() {
-        name_end -= 1;
-    }
-
-    let mut name_start = name_end;
-    while name_start > 0 && is_attribute_name_byte(bytes[name_start - 1]) {
-        name_start -= 1;
-    }
-    if name_start == name_end {
-        return None;
-    }
-
-    let mut remove_start = name_start;
-    while remove_start > 0 && bytes[remove_start - 1].is_ascii_whitespace() {
-        remove_start -= 1;
-    }
-
-    Some((remove_start, needle_end + 1))
+fn position(reader: &Reader<&[u8]>) -> Result<usize, SamlError> {
+    usize::try_from(reader.buffer_position()).map_err(xml_err)
 }
 
-fn is_attribute_name_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || matches!(byte, b':' | b'_' | b'-' | b'.')
-}
-
-fn optional_element_range(
-    raw_xml: &str,
-    needle_start: usize,
-    needle_len: usize,
-) -> Option<(usize, usize)> {
-    let bytes = raw_xml.as_bytes();
-    let needle_end = needle_start + needle_len;
-    if needle_start == 0
-        || needle_end >= bytes.len()
-        || bytes[needle_start - 1] != b'>'
-        || bytes[needle_end] != b'<'
+/// Write `tag`, read from `source`, without its `absent` attributes, closing
+/// it with `close`.
+fn push_tag(
+    output: &mut String,
+    tag: &BytesStart<'_>,
+    source: &str,
+    close: &str,
+    absent: impl Fn(&str) -> bool,
+) -> Result<(), SamlError> {
+    let attributes = tag
+        .attributes()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(xml_err)?;
+    if !attributes.iter().any(|attribute| absent(&attribute.value)) {
+        output.push_str(source);
+        return Ok(());
+    }
+    output.push('<');
+    output.push_str(tag.name().into_inner());
+    for attribute in attributes
+        .iter()
+        .filter(|attribute| !absent(&attribute.value))
     {
-        return None;
+        // quick-xml does not report the quote of a value. A raw XML attribute
+        // value contains at most one kind of quote, the one that did not
+        // delimit it.
+        let quote = if attribute.value.contains('"') {
+            '\''
+        } else {
+            '"'
+        };
+        output.push(' ');
+        output.push_str(attribute.key.into_inner());
+        output.push('=');
+        output.push(quote);
+        output.push_str(&attribute.value);
+        output.push(quote);
     }
-
-    let open_start = raw_xml[..needle_start - 1].rfind('<')?;
-    let name_start = open_start + 1;
-    let first_name_byte = *bytes.get(name_start)?;
-    if matches!(first_name_byte, b'/' | b'!' | b'?') {
-        return None;
-    }
-
-    let mut name_end = name_start;
-    while name_end < bytes.len()
-        && !bytes[name_end].is_ascii_whitespace()
-        && !matches!(bytes[name_end], b'/' | b'>')
-    {
-        name_end += 1;
-    }
-    if name_start == name_end {
-        return None;
-    }
-
-    let element_name = &raw_xml[name_start..name_end];
-    let close_tag = format!("</{element_name}>");
-    raw_xml[needle_end..]
-        .starts_with(&close_tag)
-        .then_some((open_start, needle_end + close_tag.len()))
+    output.push_str(close);
+    Ok(())
 }
 
 /// A single `<Attribute>` to render in a login response.
@@ -331,66 +335,63 @@ mod tests {
     use super::*;
 
     #[test]
-    fn replacement_values_are_escaped_in_attributes_and_element_text() {
+    fn replacement_values_are_escaped_in_attributes_and_element_text(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let rendered = replace_tags_by_optional_value(
             "<a X=\"{V}\">{T}</a>",
             &[
                 ("V", Some("a\"b&c<d".to_string())),
                 ("T", Some("<raw>&amp;".to_string())),
             ],
-        );
+        )?;
         assert_eq!(
             rendered,
             "<a X=\"a&quot;b&amp;c&lt;d\">&lt;raw&gt;&amp;amp;</a>"
         );
+        Ok(())
     }
 
     #[test]
-    fn optional_replacement_values_are_escaped_in_attributes_and_element_text() {
-        let rendered = replace_tags_by_optional_value(
-            "<a X=\"{V}\">{T}</a>",
-            &[
-                ("V", Some("a\"b&c<d".to_string())),
-                ("T", Some("<raw>&amp;".to_string())),
-            ],
-        );
-        assert_eq!(
-            rendered,
-            "<a X=\"a&quot;b&amp;c&lt;d\">&lt;raw&gt;&amp;amp;</a>"
-        );
-    }
-
-    #[test]
-    fn optional_none_removes_placeholder_attribute_but_keeps_visible_text() {
+    fn optional_none_removes_placeholder_attribute_but_keeps_visible_text(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let rendered =
-            replace_tags_by_optional_value("<a id=\"{Id}\">visible</a>", &[("Id", None)]);
+            replace_tags_by_optional_value("<a id=\"{Id}\">visible</a>", &[("Id", None)])?;
         assert_eq!(rendered, "<a>visible</a>");
+        Ok(())
     }
 
     #[test]
-    fn optional_none_removes_element_when_placeholder_is_only_body() {
-        let rendered =
-            replace_tags_by_optional_value("<root><a>{Body}</a><b>x</b></root>", &[("Body", None)]);
+    fn optional_none_removes_element_when_placeholder_is_only_body(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let rendered = replace_tags_by_optional_value(
+            "<root><a>{Body}</a><b>x</b></root>",
+            &[("Body", None)],
+        )?;
         assert_eq!(rendered, "<root><b>x</b></root>");
+        Ok(())
     }
 
     #[test]
-    fn optional_none_in_mixed_text_becomes_empty_string() {
-        let rendered = replace_tags_by_optional_value("<a>Hello {Name}</a>", &[("Name", None)]);
+    fn optional_none_in_mixed_text_becomes_empty_string() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let rendered = replace_tags_by_optional_value("<a>Hello {Name}</a>", &[("Name", None)])?;
         assert_eq!(rendered, "<a>Hello </a>");
+        Ok(())
     }
 
     #[test]
-    fn optional_empty_string_keeps_empty_attribute_value() {
+    fn optional_empty_string_keeps_empty_attribute_value() -> Result<(), Box<dyn std::error::Error>>
+    {
         let rendered = replace_tags_by_optional_value(
             "<a id=\"{Id}\">visible</a>",
             &[("Id", Some(String::new()))],
-        );
+        )?;
         assert_eq!(rendered, "<a id=\"\">visible</a>");
+        Ok(())
     }
 
     #[test]
-    fn renders_full_authn_request() {
+    fn renders_full_authn_request() -> Result<(), Box<dyn std::error::Error>> {
         let xml = replace_tags_by_optional_value(
             LOGIN_REQUEST_TEMPLATE,
             &[
@@ -420,7 +421,7 @@ mod tests {
                 ),
                 ("AllowCreate", Some("true".to_string())),
             ],
-        );
+        )?;
         assert!(xml.starts_with("<samlp:AuthnRequest"));
         assert!(xml.contains("ID=\"_abc\""));
         assert!(xml.contains("Destination=\"https://idp.example.com/sso\""));
@@ -428,6 +429,7 @@ mod tests {
         assert!(xml.contains("<saml:Issuer>https://sp.example.com/metadata</saml:Issuer>"));
         assert!(!xml.contains("AssertionConsumerServiceIndex="));
         assert!(!xml.contains('{'));
+        Ok(())
     }
 
     #[test]
@@ -466,7 +468,8 @@ mod tests {
     }
 
     #[test]
-    fn inserted_values_are_not_scanned_for_later_placeholders() {
+    fn inserted_values_are_not_scanned_for_later_placeholders(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let rendered = replace_tags_by_optional_value(
             "<n>{NameID}</n><a>{attrRole}</a><m>{attrMail}</m><r>{InResponseTo}</r>",
             &[
@@ -475,27 +478,31 @@ mod tests {
                 ("attrMail", Some("user".to_string())),
                 ("InResponseTo", Some("_req".to_string())),
             ],
-        );
+        )?;
         assert_eq!(
             rendered,
             "<n>a&lt;b&gt;{InResponseTo}</n><a>admin-{attrMail}</a><m>user</m><r>_req</r>"
         );
+        Ok(())
     }
 
     #[test]
-    fn optional_inserted_values_are_not_scanned_for_later_placeholders() {
+    fn optional_inserted_values_are_not_scanned_for_later_placeholders(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let rendered = replace_tags_by_optional_value(
             "<root><n>{NameID}</n><s>{SessionIndex}</s></root>",
             &[
                 ("NameID", Some("{SessionIndex}".to_string())),
                 ("SessionIndex", Some("abc".to_string())),
             ],
-        );
+        )?;
         assert_eq!(rendered, "<root><n>{SessionIndex}</n><s>abc</s></root>");
+        Ok(())
     }
 
     #[test]
-    fn logout_request_name_id_values_are_not_scanned_for_later_qualifiers() {
+    fn logout_request_name_id_values_are_not_scanned_for_later_qualifiers(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let rendered = replace_tags_by_optional_value(
             concat!(
                 r#"<LogoutRequest NotOnOrAfter="{NotOnOrAfter}">"#,
@@ -519,7 +526,7 @@ mod tests {
                 ("SessionIndex", Some("idx-1".to_string())),
                 ("NotOnOrAfter", Some("2020-01-01T00:00:00Z".to_string())),
             ],
-        );
+        )?;
         assert_eq!(
             rendered,
             concat!(
@@ -530,22 +537,25 @@ mod tests {
                 "</LogoutRequest>",
             )
         );
+        Ok(())
     }
 
     #[test]
-    fn optional_none_still_drops_an_element_after_a_value_containing_its_placeholder() {
+    fn optional_none_still_drops_an_element_after_a_value_containing_its_placeholder(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let rendered = replace_tags_by_optional_value(
             "<root><n>{NameID}</n><s>{SessionIndex}</s></root>",
             &[
                 ("NameID", Some("{SessionIndex}".to_string())),
                 ("SessionIndex", None),
             ],
-        );
+        )?;
         assert_eq!(rendered, "<root><n>{SessionIndex}</n></root>");
+        Ok(())
     }
 
     #[test]
-    fn optional_first_entry_for_a_repeated_key_wins() {
+    fn optional_first_entry_for_a_repeated_key_wins() -> Result<(), Box<dyn std::error::Error>> {
         let rendered = replace_tags_by_optional_value(
             "<a x=\"{K}\"/><b y=\"{L}\"/>",
             &[
@@ -554,7 +564,62 @@ mod tests {
                 ("L", None),
                 ("L", Some("w".to_string())),
             ],
-        );
+        )?;
         assert_eq!(rendered, "<a x=\"v\"/><b/>");
+        Ok(())
+    }
+
+    #[test]
+    fn optional_none_keeps_attribute_syntax_inside_another_attribute_value(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let rendered = replace_tags_by_optional_value(r#"<a title='x="{Id}"'/>"#, &[("Id", None)])?;
+        assert_eq!(rendered, r#"<a title='x=""'/>"#);
+        Ok(())
+    }
+
+    #[test]
+    fn optional_none_keeps_attribute_syntax_in_element_text(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let rendered = replace_tags_by_optional_value(r#"<p>x="{Id}"</p>"#, &[("Id", None)])?;
+        assert_eq!(rendered, r#"<p>x=""</p>"#);
+        Ok(())
+    }
+
+    #[test]
+    fn optional_none_keeps_an_element_whose_body_also_holds_a_comment(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let rendered = replace_tags_by_optional_value("<b><!-- <b> -->{X}</b>", &[("X", None)])?;
+        assert_eq!(rendered, "<b><!-- <b> --></b>");
+        Ok(())
+    }
+
+    #[test]
+    fn optional_none_keeps_the_quotes_of_the_remaining_attributes(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let rendered =
+            replace_tags_by_optional_value(r#"<a x='say "hi"' y="{Y}"/>"#, &[("Y", None)])?;
+        assert_eq!(rendered, r#"<a x='say "hi"'/>"#);
+        Ok(())
+    }
+
+    #[test]
+    fn optional_none_reads_the_markup_after_a_byte_order_mark(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let rendered =
+            replace_tags_by_optional_value("\u{feff}<a x=\"{X}\">v</a>", &[("X", None)])?;
+        assert_eq!(rendered, "\u{feff}<a>v</a>");
+        let rendered =
+            replace_tags_by_optional_value("\u{feff}\u{feff}<a x=\"{X}\">v</a>", &[("X", None)])?;
+        assert_eq!(rendered, "\u{feff}\u{feff}<a>v</a>");
+        Ok(())
+    }
+
+    #[test]
+    fn template_that_is_not_well_formed_is_an_xml_error() {
+        let rendered = replace_tags_by_optional_value("<a {X}/>", &[("X", None)]);
+        assert!(
+            matches!(rendered, Err(SamlError::Xml { .. })),
+            "{rendered:?}"
+        );
     }
 }

@@ -136,7 +136,7 @@ pub(crate) trait IdpMessages {
         &self,
         sp: &sp::Engine,
         binding: Binding,
-        render: &dyn Fn(&str) -> (String, String),
+        render: &dyn Fn(&str) -> RenderedLoginResponse,
     ) -> Result<BindingContext, SamlError>;
 
     /// `<AuthnRequest>` from `sp`.
@@ -171,13 +171,13 @@ impl IdpMessages for idp::Engine {
         &self,
         sp: &sp::Engine,
         binding: Binding,
-        render: &dyn Fn(&str) -> (String, String),
+        render: &dyn Fn(&str) -> RenderedLoginResponse,
     ) -> Result<BindingContext, SamlError> {
         let acs = sp
             .metadata
             .assertion_consumer_location(binding)
             .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
-        let (id, xml) = render(LOGIN_RESPONSE_TEMPLATE);
+        let (id, xml) = render(LOGIN_RESPONSE_TEMPLATE)?;
         let signed = self.finalize_login_response(
             sp,
             binding,
@@ -380,13 +380,16 @@ pub(crate) fn parse_logout_response(
     )
 }
 
+/// The ID and XML of a login `<Response>` written from the response template.
+pub(crate) type RenderedLoginResponse = Result<(String, String), SamlError>;
+
 /// Run the receive flow that `opts` describes against `request`.
 pub(crate) fn flow(opts: &FlowOptions<'_>, request: &HttpRequest) -> Result<FlowResult, SamlError> {
     Ok(flow_with_authentication(opts, request)?.0)
 }
 
 /// `raw_xml` with each `{key}` placeholder of `tags` filled.
-pub(crate) fn fill_template(raw_xml: &str, tags: &[(&str, String)]) -> String {
+pub(crate) fn fill_template(raw_xml: &str, tags: &[(&str, String)]) -> Result<String, SamlError> {
     let tags: Vec<(&str, Option<String>)> = tags
         .iter()
         .map(|(key, value)| (*key, Some(value.clone())))

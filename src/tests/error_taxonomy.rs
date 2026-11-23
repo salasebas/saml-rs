@@ -88,7 +88,7 @@ fn unsigned_response_template() -> String {
     LOGIN_RESPONSE_TEMPLATE.replacen("{AttributeStatement}", "", 1)
 }
 
-fn response_xml(template: &str, shape: &ResponseShape) -> String {
+fn response_xml(template: &str, shape: &ResponseShape) -> Result<String, SamlError> {
     let id = "_response_taxonomy".to_string();
     let issue_instant = iso8601_offset(-60);
     let prepared = template.replacen(
@@ -141,7 +141,7 @@ fn signed_response(shape: &ResponseShape) -> Result<String, SamlError> {
     let sp = sp()?;
     let custom = |template: &str| {
         let id = "_response_taxonomy".to_string();
-        (id, response_xml(template, shape))
+        Ok((id, response_xml(template, shape)?))
     };
     Ok(idp
         .create_rendered_login_response(&sp, Binding::Post, &custom)?
@@ -246,7 +246,7 @@ fn error_taxonomy_bad_in_response_to_returns_in_response_to_mismatch(
 #[test]
 fn error_taxonomy_unsigned_post_response_returns_signature_missing(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let response = response_xml(&unsigned_response_template(), &ResponseShape::default());
+    let response = response_xml(&unsigned_response_template(), &ResponseShape::default())?;
 
     match parse_raw_response(response, "_request123") {
         Err(SamlError::SignatureMissing) => Ok(()),

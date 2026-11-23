@@ -744,7 +744,7 @@ fn accept_peer_response(
         .map(NameIdFormat::as_uri)
         .ok_or("peer NameID needs a format")?
         .to_string();
-    let fill = |template: &str| {
+    let fill = |template: &str| -> Result<(String, String), SamlError> {
         let id = "_peer-response".to_string();
         let now = iso8601_offset(-60);
         let later = iso8601_offset(300);
@@ -770,8 +770,8 @@ fn accept_peer_response(
                 ("InResponseTo", request_id.clone()),
                 ("AuthnStatement", String::new()),
             ],
-        );
-        (id, xml.replacen("{AttributeStatement}", statement, 1))
+        )?;
+        Ok((id, xml.replacen("{AttributeStatement}", statement, 1)))
     };
     let context = idp
         .engine()
