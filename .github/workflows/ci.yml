@@ -57,7 +57,7 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # zizmor: ignore[ref-version-mismatch]
-      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+      - uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
         with:
           tool: nextest
       - run: cargo check -p saml-rs --no-default-features
@@ -104,7 +104,7 @@ jobs:
           go-version: stable
       # Keep the workspace's existing immutable v2 cache pin.
       - uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # zizmor: ignore[ref-version-mismatch]
-      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+      - uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
         with:
           tool: nextest
       - run: cargo check --workspace --locked --no-default-features --features "$CRYPTO_PROVIDER_FEATURES"
@@ -133,7 +133,7 @@ jobs:
           rustc --version
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUSTUP_TOOLCHAIN"
       - uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # zizmor: ignore[ref-version-mismatch]
-      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+      - uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
         with:
           tool: nextest,cargo-hack
       - name: Resolve MSRV-compatible dependencies
@@ -181,7 +181,7 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # zizmor: ignore[ref-version-mismatch]
-      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+      - uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
         with:
           tool: nextest
       - run: cargo nextest run -p ${{ matrix.package }}
@@ -210,7 +210,7 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # zizmor: ignore[ref-version-mismatch]
-      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+      - uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
         with:
           tool: nextest
       - run: cargo nextest run -p ${{ matrix.package }}
@@ -255,7 +255,7 @@ jobs:
         with:
           go-version: stable
       - uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # zizmor: ignore[ref-version-mismatch]
-      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+      - uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
         with:
           tool: cargo-llvm-cov,nextest
       - run: cargo llvm-cov nextest --workspace --locked --no-default-features --features "$COVERAGE_FEATURES" --lcov --output-path lcov.info
