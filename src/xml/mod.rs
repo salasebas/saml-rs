@@ -14,7 +14,8 @@ pub(crate) mod signature_placement;
 pub(crate) mod write;
 
 pub(crate) use date_time::{
-    parse_generated_saml_utc_date_time, parse_saml_utc_date_time, parse_timezoned_date_time,
+    parse_generated_saml_utc_date_time, parse_saml_utc_date_time, parse_saml_utc_instant,
+    parse_timezoned_date_time,
 };
 pub use dom::XmlLimits;
 #[cfg(test)]

@@ -1,7 +1,8 @@
 use super::authn_details::{AuthnContext, StatementChildren, SubjectLocality};
 use super::identifiers::{SamlInstant, SessionIndex};
 use crate::error::{SamlError, TimeWindowField};
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use crate::xml::parse_saml_utc_instant;
+use time::OffsetDateTime;
 
 /// One `<AuthnStatement>` of an accepted assertion.
 ///
@@ -24,8 +25,8 @@ pub(crate) fn earliest_authn_session_expiration<'a>(
 ) -> Result<Option<OffsetDateTime>, SamlError> {
     let mut earliest = None;
     for value in values {
-        let candidate = OffsetDateTime::parse(value, &Rfc3339)
-            .map_err(|_| SamlError::TimeWindowInvalid { field: error_field })?;
+        let candidate = parse_saml_utc_instant(value)
+            .ok_or(SamlError::TimeWindowInvalid { field: error_field })?;
         if earliest.is_none_or(|current| candidate < current) {
             earliest = Some(candidate);
         }
@@ -77,6 +78,9 @@ impl AuthnStatement {
 
     /// `SessionNotOnOrAfter`, when present: the instant after which the
     /// identity provider asks the service provider to end this session.
+    ///
+    /// An accepted value is a UTC `xs:dateTime` ending in `Z`, normalized
+    /// according to XML Schema whitespace rules.
     ///
     /// The assertion's `Conditions@NotOnOrAfter` is
     /// [`crate::SsoSession::not_on_or_after`].

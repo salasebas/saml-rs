@@ -8,7 +8,7 @@ use super::identifiers::{MessageId, SamlInstant, SessionIndex};
 use super::subject::{NameIdPolicy, SubjectConfirmation};
 use crate::config::{EntityId, NameIdFormat};
 use crate::constants::attribute_name_format;
-use crate::error::SamlError;
+use crate::error::{SamlError, TimeWindowField};
 use crate::util::Value;
 use crate::validator::conditions_time_window;
 use crate::xml::fields::{attribute, authn_request, authn_statement, login_response};
@@ -67,16 +67,21 @@ pub(super) fn optional_u16(extract: &Value, path: &str) -> Result<Option<u16>, S
         .transpose()
 }
 
+/// A time bound that passed the time-window check, with XML Schema whitespace
+/// collapsed.
+fn checked_time_bound(value: &str, field: TimeWindowField) -> Result<SamlInstant, SamlError> {
+    let value = parse_saml_utc_date_time(value).ok_or(SamlError::TimeWindowInvalid { field })?;
+    SamlInstant::try_new(value)
+}
+
 pub(super) fn conditions_instants(
     extract: &Value,
 ) -> Result<(Option<SamlInstant>, Option<SamlInstant>), SamlError> {
     let window = conditions_time_window(extract)?;
+    let bound = |value| checked_time_bound(value, TimeWindowField::Conditions);
     Ok((
-        window.not_before.map(SamlInstant::try_new).transpose()?,
-        window
-            .not_on_or_after
-            .map(SamlInstant::try_new)
-            .transpose()?,
+        window.not_before.map(bound).transpose()?,
+        window.not_on_or_after.map(bound).transpose()?,
     ))
 }
 
@@ -254,7 +259,7 @@ pub(super) fn authn_statements_from_extract(
             )?;
             let not_on_or_after =
                 optional_authn_statement_str(statement, authn_statement::SESSION_NOT_ON_OR_AFTER)?
-                    .map(SamlInstant::try_new)
+                    .map(|value| checked_time_bound(value, TimeWindowField::SessionNotOnOrAfter))
                     .transpose()?;
             Ok(AuthnStatement::new(
                 session_index,

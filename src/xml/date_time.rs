@@ -1,3 +1,5 @@
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+
 fn parse_two_ascii_digits(value: &[u8], offset: usize) -> Option<u8> {
     let tens = value.get(offset)?.checked_sub(b'0')?;
     let ones = value.get(offset + 1)?.checked_sub(b'0')?;
@@ -46,6 +48,12 @@ fn is_xml_schema_whitespace(value: char) -> bool {
 /// Parse the SAML UTC subset of `xs:dateTime` and return its collapsed value.
 pub(crate) fn parse_saml_utc_date_time(value: &str) -> Option<&str> {
     parse_saml_utc_date_time_with_seconds(value).map(|(normalized, _)| normalized)
+}
+
+/// The instant of a SAML UTC `xs:dateTime`, when `time`'s RFC 3339 parser
+/// can represent it.
+pub(crate) fn parse_saml_utc_instant(value: &str) -> Option<OffsetDateTime> {
+    OffsetDateTime::parse(parse_saml_utc_date_time(value)?, &Rfc3339).ok()
 }
 
 /// Parse a UTC `xs:dateTime` that a SAML producer is allowed to generate.

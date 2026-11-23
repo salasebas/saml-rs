@@ -18,8 +18,8 @@ use crate::config::{EntityId, NameIdFormat};
 use crate::error::{SamlError, TimeWindowField};
 use crate::flow::FlowResult;
 use crate::xml::fields::{login_response, name_id, response};
-use crate::xml::{dom, XmlLimits};
-use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
+use crate::xml::{dom, parse_saml_utc_instant, XmlLimits};
+use time::{Duration, OffsetDateTime};
 
 const REPLAY_EXPIRATION_FIELD: TimeWindowField = TimeWindowField::ReplayExpiration;
 
@@ -188,13 +188,18 @@ impl SsoSession {
     }
 
     /// The `NotBefore` of the assertion `Conditions`, when present.
+    ///
+    /// An accepted value is a UTC `xs:dateTime` ending in `Z`, normalized
+    /// according to XML Schema whitespace rules.
     pub fn not_before(&self) -> Option<&SamlInstant> {
         self.not_before.as_ref()
     }
 
     /// The `NotOnOrAfter` of the assertion `Conditions`, when present.
     ///
-    /// The `SessionNotOnOrAfter` of a statement is
+    /// An accepted value is a UTC `xs:dateTime` ending in `Z`, normalized
+    /// according to XML Schema whitespace rules. The `SessionNotOnOrAfter` of
+    /// a statement is
     /// [`AuthnStatement::session_not_on_or_after`].
     pub fn not_on_or_after(&self) -> Option<&SamlInstant> {
         self.not_on_or_after.as_ref()
@@ -397,7 +402,7 @@ fn replay_deadline(
 }
 
 fn parse_replay_expiration(value: &str) -> Result<OffsetDateTime, SamlError> {
-    OffsetDateTime::parse(value, &Rfc3339).map_err(|_| SamlError::TimeWindowInvalid {
+    parse_saml_utc_instant(value).ok_or(SamlError::TimeWindowInvalid {
         field: REPLAY_EXPIRATION_FIELD,
     })
 }

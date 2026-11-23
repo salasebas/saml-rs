@@ -4,13 +4,9 @@ use crate::constants::ParserType;
 use crate::error::{SamlError, TimeWindowField};
 use crate::model::{ClockSkew, Status};
 use crate::util::Value;
-use crate::xml::{extract_with_limits, fields, parse_saml_utc_date_time, XmlLimits};
+use crate::xml::{extract_with_limits, fields, parse_saml_utc_instant, XmlLimits};
 use std::time::SystemTime;
-use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
-
-fn parse(ts: &str) -> Option<OffsetDateTime> {
-    OffsetDateTime::parse(ts, &Rfc3339).ok()
-}
+use time::{Duration, OffsetDateTime};
 
 pub(crate) fn offset_datetime_from_system_time(
     instant: SystemTime,
@@ -41,13 +37,9 @@ pub(crate) fn logout_request_not_on_or_after_deadline(
     let Some(value) = extracted.get_str(fields::request::NOT_ON_OR_AFTER) else {
         return Ok(None);
     };
-    let normalized = parse_saml_utc_date_time(value).ok_or(SamlError::TimeWindowInvalid {
+    let deadline = parse_saml_utc_instant(value).ok_or(SamlError::TimeWindowInvalid {
         field: TimeWindowField::LogoutRequestNotOnOrAfter,
     })?;
-    let deadline =
-        OffsetDateTime::parse(normalized, &Rfc3339).map_err(|_| SamlError::TimeWindowInvalid {
-            field: TimeWindowField::LogoutRequestNotOnOrAfter,
-        })?;
     let effective_deadline = effective_not_on_or_after(deadline, not_on_or_after_skew_ms)?;
     if now >= effective_deadline {
         return Err(SamlError::TimeWindowInvalid {
@@ -81,35 +73,23 @@ impl TimeWindow<'_> {
     ///
     /// The `NotBefore` skew and the `NotOnOrAfter` skew are added to their
     /// bounds. When neither bound is present the window contains every
-    /// instant. A present-but-unparseable timestamp fails closed (mirrors JS
-    /// `Invalid Date`). A `NotOnOrAfter` bound whose skew passes the maximum
-    /// supported instant is treated as not expired, and one whose skew passes
-    /// the minimum supported instant is treated as expired. A `NotBefore` bound
-    /// that cannot be shifted inside the supported range fails closed.
+    /// instant. A present bound that is not a SAML UTC `xs:dateTime` ending in
+    /// `Z`, or that `time` cannot represent, fails closed. A `NotOnOrAfter`
+    /// bound whose skew passes the maximum supported instant is treated as not
+    /// expired, and one whose skew passes the minimum supported instant is
+    /// treated as expired. A `NotBefore` bound that cannot be shifted inside
+    /// the supported range fails closed.
     pub(crate) fn contains(self, now: OffsetDateTime, skew: ClockSkew) -> bool {
-        let not_before_ms = skew.not_before_millis();
-        let not_on_or_after_ms = skew.not_on_or_after_millis();
-
-        match (self.not_before, self.not_on_or_after) {
-            (None, None) => true,
-            (Some(not_before), None) => match parse(not_before) {
-                Some(bound) => not_before_has_elapsed(bound, not_before_ms, now),
-                None => false,
-            },
-            (None, Some(not_on_or_after)) => match parse(not_on_or_after) {
-                Some(bound) => not_on_or_after_is_open(bound, not_on_or_after_ms, now),
-                None => false,
-            },
-            (Some(not_before), Some(not_on_or_after)) => {
-                match (parse(not_before), parse(not_on_or_after)) {
-                    (Some(not_before), Some(not_on_or_after)) => {
-                        not_before_has_elapsed(not_before, not_before_ms, now)
-                            && not_on_or_after_is_open(not_on_or_after, not_on_or_after_ms, now)
-                    }
-                    _ => false,
-                }
-            }
-        }
+        let not_before_has_passed = self.not_before.is_none_or(|value| {
+            parse_saml_utc_instant(value)
+                .is_some_and(|bound| not_before_has_elapsed(bound, skew.not_before_millis(), now))
+        });
+        let not_on_or_after_is_ahead = self.not_on_or_after.is_none_or(|value| {
+            parse_saml_utc_instant(value).is_some_and(|bound| {
+                not_on_or_after_is_open(bound, skew.not_on_or_after_millis(), now)
+            })
+        });
+        not_before_has_passed && not_on_or_after_is_ahead
     }
 }
 
@@ -185,6 +165,7 @@ mod tests {
     use super::*;
     use crate::model::{SubordinateStatusCode, TopLevelStatusCode};
     use std::time::Duration as StdDuration;
+    use time::format_description::well_known::Rfc3339;
 
     const RESPONSE: &str = include_str!("../tests/fixtures/misc/response.xml");
     const FAILED: &str = include_str!("../tests/fixtures/misc/failed_response.xml");
