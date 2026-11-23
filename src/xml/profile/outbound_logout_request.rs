@@ -226,50 +226,14 @@ fn validate_name_id(
     }
 }
 
-fn validate_start(
+fn validate_root_child(
     reader: &NsReader<&[u8]>,
     element: &BytesStart<'_>,
     element_namespace: NamespaceKind,
-    stack: &mut [Element],
     expectation: &OutboundLogoutRequestExpectation<'_>,
     validation: OutboundLogoutRequestValidation,
     state: &mut State,
 ) -> Result<Element, SamlError> {
-    let Some(parent) = stack.last_mut() else {
-        validate_root(reader, element, element_namespace, expectation)?;
-        return Ok(Element::Root);
-    };
-    if matches!(parent, Element::Signature | Element::SignatureContent) {
-        return Ok(Element::SignatureContent);
-    }
-    match parent {
-        Element::Extensions { child_seen } => {
-            // Core 2.0 §3.2.2 narrows the protocol schema's ##other wildcard:
-            // direct extension elements must use a namespace not defined by SAML.
-            if !matches!(
-                element_namespace,
-                NamespaceKind::Dsig | NamespaceKind::XmlEncryption | NamespaceKind::Other
-            ) {
-                return Err(profile_error(
-                    "Extensions direct children must use a namespace not defined by SAML",
-                ));
-            }
-            *child_seen = true;
-            return Ok(Element::ExtensionContent);
-        }
-        Element::ExtensionContent => return Ok(Element::ExtensionContent),
-        Element::Root => {}
-        Element::Issuer | Element::NameId | Element::SessionIndex => {
-            return Err(profile_error(
-                "LogoutRequest Issuer, NameID, and SessionIndex must not contain child elements",
-            ));
-        }
-        Element::Signature | Element::SignatureContent => return Ok(Element::SignatureContent),
-        Element::EncryptedId | Element::EncryptedIdContent => {
-            return Ok(Element::EncryptedIdContent)
-        }
-    }
-
     match (
         element.local_name().into_inner().as_bytes(),
         element_namespace,
@@ -338,6 +302,51 @@ fn validate_start(
         _ => Err(profile_error(
             "LogoutRequest children must be Issuer, optional library-owned Signature, optional Extensions, NameID or the selected EncryptedID, and SessionIndex values in schema order",
         )),
+    }
+}
+
+fn validate_start(
+    reader: &NsReader<&[u8]>,
+    element: &BytesStart<'_>,
+    element_namespace: NamespaceKind,
+    stack: &mut [Element],
+    expectation: &OutboundLogoutRequestExpectation<'_>,
+    validation: OutboundLogoutRequestValidation,
+    state: &mut State,
+) -> Result<Element, SamlError> {
+    let Some(parent) = stack.last_mut() else {
+        validate_root(reader, element, element_namespace, expectation)?;
+        return Ok(Element::Root);
+    };
+    match parent {
+        Element::Root => validate_root_child(
+            reader,
+            element,
+            element_namespace,
+            expectation,
+            validation,
+            state,
+        ),
+        Element::Extensions { child_seen } => {
+            // Core 2.0 §3.2.2 narrows the protocol schema's ##other wildcard:
+            // direct extension elements must use a namespace not defined by SAML.
+            if !matches!(
+                element_namespace,
+                NamespaceKind::Dsig | NamespaceKind::XmlEncryption | NamespaceKind::Other
+            ) {
+                return Err(profile_error(
+                    "Extensions direct children must use a namespace not defined by SAML",
+                ));
+            }
+            *child_seen = true;
+            Ok(Element::ExtensionContent)
+        }
+        Element::ExtensionContent => Ok(Element::ExtensionContent),
+        Element::Issuer | Element::NameId | Element::SessionIndex => Err(profile_error(
+            "LogoutRequest Issuer, NameID, and SessionIndex must not contain child elements",
+        )),
+        Element::Signature | Element::SignatureContent => Ok(Element::SignatureContent),
+        Element::EncryptedId | Element::EncryptedIdContent => Ok(Element::EncryptedIdContent),
     }
 }
 
