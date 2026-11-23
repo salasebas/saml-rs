@@ -50,10 +50,10 @@ fn default_limits_are_the_documented_values() {
         XmlLimits {
             max_bytes: 1_048_576,
             max_depth: 1_024,
-            max_nodes: 50_000,
+            max_elements: 50_000,
             max_attributes_per_element: 64,
             max_attribute_value_bytes: 16_384,
-            max_text_bytes: 1_048_576,
+            max_element_text_bytes: 1_048_576,
         }
     );
     assert_eq!(

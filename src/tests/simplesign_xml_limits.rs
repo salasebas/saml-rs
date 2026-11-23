@@ -44,7 +44,7 @@ fn raised_xml_policy() -> XmlPolicy {
     XmlPolicy {
         limits: XmlLimits {
             max_bytes: CONFIGURED_MAX_BYTES,
-            max_text_bytes: CONFIGURED_MAX_BYTES,
+            max_element_text_bytes: CONFIGURED_MAX_BYTES,
             ..XmlLimits::default()
         },
         ..XmlPolicy::default()
