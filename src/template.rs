@@ -159,13 +159,22 @@ enum OptionalElement {
 /// `raw_xml` without the attributes whose raw value is `absent`, and without
 /// the elements whose only content is one `absent` text node.
 fn omit_absent_markup(raw_xml: &str, absent: impl Fn(&str) -> bool) -> Result<String, SamlError> {
-    let mut reader = Reader::from_str(raw_xml);
     let mut output = String::with_capacity(raw_xml.len());
+    // quick-xml skips a leading byte order mark and leaves it out of its
+    // positions.
+    let markup = match raw_xml.strip_prefix('\u{feff}') {
+        Some(markup) => {
+            output.push('\u{feff}');
+            markup
+        }
+        None => raw_xml,
+    };
+    let mut reader = Reader::from_str(markup);
     let mut element = None;
     loop {
         let start = position(&reader)?;
         let event = reader.read_event().map_err(xml_err)?;
-        let source = &raw_xml[start..position(&reader)?];
+        let source = &markup[start..position(&reader)?];
         element = match event {
             Event::Eof => return Ok(output),
             Event::Start(tag) => {
@@ -327,23 +336,6 @@ mod tests {
 
     #[test]
     fn replacement_values_are_escaped_in_attributes_and_element_text(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let rendered = replace_tags_by_optional_value(
-            "<a X=\"{V}\">{T}</a>",
-            &[
-                ("V", Some("a\"b&c<d".to_string())),
-                ("T", Some("<raw>&amp;".to_string())),
-            ],
-        )?;
-        assert_eq!(
-            rendered,
-            "<a X=\"a&quot;b&amp;c&lt;d\">&lt;raw&gt;&amp;amp;</a>"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn optional_replacement_values_are_escaped_in_attributes_and_element_text(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let rendered = replace_tags_by_optional_value(
             "<a X=\"{V}\">{T}</a>",
@@ -607,6 +599,15 @@ mod tests {
         let rendered =
             replace_tags_by_optional_value(r#"<a x='say "hi"' y="{Y}"/>"#, &[("Y", None)])?;
         assert_eq!(rendered, r#"<a x='say "hi"'/>"#);
+        Ok(())
+    }
+
+    #[test]
+    fn optional_none_reads_the_markup_after_a_byte_order_mark(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let rendered =
+            replace_tags_by_optional_value("\u{feff}<a x=\"{X}\">v</a>", &[("X", None)])?;
+        assert_eq!(rendered, "\u{feff}<a>v</a>");
         Ok(())
     }
 

@@ -499,9 +499,9 @@ was absent.
 **Now:** the library parses the template's tags and attributes before it fills
 the placeholders. It omits an attribute only when the attribute's whole value
 is the placeholder, and an element only when the placeholder is its only
-content. Other text stays as written. A template whose tags or attributes are
-not well-formed XML returns `SamlError::Xml`, even when the filled template
-would have been well-formed. A bare placeholder in a start tag and a repeated
+content. Other text stays as written. A template whose tags or attributes
+cannot be read returns `SamlError::Xml`, even when the filled template would
+have been well-formed. A bare placeholder in a start tag and a repeated
 attribute are two such cases. When the library omits an attribute, it
 rewrites that start tag with one space before each remaining attribute. Each
 value keeps double quotes unless it contains one, and then takes single quotes.
