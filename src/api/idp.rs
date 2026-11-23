@@ -344,10 +344,6 @@ impl IdentityProvider {
             (None, None) => None,
         };
         let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
-        let transformation_algorithms = match &options.delivery {
-            ResponseTransport::Browser => Some(idp_setting.transformation_algorithms.as_slice()),
-            ResponseTransport::Artifact(..) => None,
-        };
         let binding = options.binding;
         let acs = resolve_response_acs(
             &raw_sp.metadata,
@@ -370,9 +366,9 @@ impl IdentityProvider {
                 .and_then(|request| request.message().name_id_policy()),
             requested_subject: request.and_then(|request| request.message().requested_subject()),
             want_message_signed: Some(sign_response),
-            transformation_algorithms,
+            transformation_algorithms: None,
         };
-        let (delivery, issued) = match options.delivery {
+        match options.delivery {
             ResponseTransport::Browser => {
                 let issued = self.engine().create_login_response_with_overrides(
                     raw_sp,
@@ -382,34 +378,41 @@ impl IdentityProvider {
                         in_response_to,
                         relay_state: relay_state.as_ref().map(RelayState::as_str),
                     },
+                    LoginResponseOverrides {
+                        transformation_algorithms: Some(&idp_setting.transformation_algorithms),
+                        ..overrides
+                    },
+                )?;
+                Outbound::<SsoResponse>::echoing_received_relay_state(issued.context)
+                    .map(|outbound| outbound.with_session_index(issued.session_index))
+            }
+            ResponseTransport::Artifact(delivery, issued) => {
+                let rendered = self.engine().render_posted_sso_response(
+                    raw_sp,
+                    &user,
+                    in_response_to,
                     overrides,
                 )?;
-                return Outbound::<SsoResponse>::echoing_received_relay_state(issued.context)
-                    .map(|outbound| outbound.with_session_index(issued.session_index));
+                let artifact = artifact::issue_sso_response(
+                    &self.engine().metadata,
+                    sp,
+                    &rendered.xml,
+                    delivery.endpoint_index(),
+                    issued,
+                )?;
+                Outbound::<SsoResponse>::artifact(
+                    rendered.id,
+                    relay_state,
+                    &acs,
+                    &artifact,
+                    delivery.encoding(),
+                )
+                .map(|outbound| outbound.with_session_index(rendered.session_index))
+                .inspect_err(|_| {
+                    issued.remove(&artifact);
+                })
             }
-            ResponseTransport::Artifact(delivery, issued) => (delivery, issued),
-        };
-        let rendered =
-            self.engine()
-                .render_posted_sso_response(raw_sp, &user, in_response_to, overrides)?;
-        let artifact = artifact::issue_sso_response(
-            &self.engine().metadata,
-            sp,
-            &rendered.xml,
-            delivery.endpoint_index(),
-            issued,
-        )?;
-        Outbound::<SsoResponse>::artifact(
-            rendered.id,
-            relay_state,
-            &acs,
-            &artifact,
-            delivery.encoding(),
-        )
-        .map(|outbound| outbound.with_session_index(rendered.session_index))
-        .inspect_err(|_| {
-            issued.remove(&artifact);
-        })
+        }
     }
 
     /// Build the `_saml_idp` cookie that remembers this identity provider.
