@@ -40,11 +40,6 @@ impl LogoutUser {
     }
 }
 
-fn clock_skew(setting: &EntitySetting) -> ClockSkew {
-    let (not_before_ms, not_on_or_after_ms) = setting.clock_drifts;
-    ClockSkew::from_millis(not_before_ms, not_on_or_after_ms)
-}
-
 /// Service provider messages without the typed facade.
 pub(crate) trait SpMessages {
     /// `<AuthnRequest>` to `idp` over `binding`.
@@ -96,7 +91,7 @@ impl SpMessages for sp::Engine {
                 binding,
                 request,
                 request_id,
-                LoginResponseParseOptions::at(SystemTime::now(), clock_skew(&self.setting)),
+                LoginResponseParseOptions::at(SystemTime::now(), ClockSkew::strict()),
             )?
             .into_parts()
             .0)
@@ -113,7 +108,7 @@ impl SpMessages for sp::Engine {
                 idp,
                 binding,
                 request,
-                LoginResponseParseOptions::at(SystemTime::now(), clock_skew(&self.setting)),
+                LoginResponseParseOptions::at(SystemTime::now(), ClockSkew::strict()),
             )?
             .into_parts()
             .0)
@@ -207,13 +202,7 @@ impl IdpMessages for idp::Engine {
         request: &HttpRequest,
     ) -> Result<FlowResult, SamlError> {
         Ok(self
-            .parse_login_request_at(
-                sp,
-                binding,
-                request,
-                SystemTime::now(),
-                clock_skew(&self.setting),
-            )?
+            .parse_login_request_at(sp, binding, request, SystemTime::now(), ClockSkew::strict())?
             .into_flow_result())
     }
 }
@@ -359,7 +348,7 @@ pub(crate) fn parse_logout_request(
         from_meta,
         LogoutReceipt::browser(binding),
         request,
-        LogoutFlowValidation::typed(None, SystemTime::now(), clock_skew(self_setting), None),
+        LogoutFlowValidation::typed(None, SystemTime::now(), ClockSkew::strict(), None),
     )
 }
 
@@ -378,7 +367,7 @@ pub(crate) fn parse_logout_response(
         LogoutReceipt::browser(binding),
         request,
         request_id,
-        LogoutFlowValidation::typed(None, SystemTime::now(), clock_skew(self_setting), None),
+        LogoutFlowValidation::typed(None, SystemTime::now(), ClockSkew::strict(), None),
     )
 }
 

@@ -1,9 +1,10 @@
 # IdP fixture keys
 
-Test-only keys for the IdP and rolling-certificate fixtures. They are not
-deployment credentials.
+Test-only IdP keys and certificates.
 
 | Private key | Certificate |
 | --- | --- |
 | `provider_matrix_privkey.pkcs8.pem` | `cert.cer` |
-| `privkey2.pem` | `cert2.cer` |
+
+`cert2.cer` is the second signing certificate in
+`idp_with_multiple_signing_and_encryption_certificates`.

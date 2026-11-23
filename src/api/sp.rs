@@ -12,8 +12,8 @@ use crate::sp::{self, AuthnRequestPreferences, LoginRequestOptions, LoginRespons
 use crate::xml::XmlLimits;
 use std::time::SystemTime;
 
-use super::raw_mapping::{
-    ensure_entity_id, ensure_relay_state, ensure_sso_response_binding, raw_idp_descriptor,
+use super::peer::{
+    ensure_entity_id, ensure_relay_state, ensure_sso_response_binding, idp_engine_at,
     relay_state_from_input, selected_acs,
 };
 use super::{ForceAuthn, SamlError, StartSso};
@@ -184,7 +184,7 @@ impl ServiceProvider {
         if let Some(relay_state) = &options.relay_state {
             relay_state.ensure_sendable()?;
         }
-        let raw_idp = raw_idp_descriptor(idp, SystemTime::now())?;
+        let peer_idp = idp_engine_at(idp, SystemTime::now())?;
         let acs = selected_acs(self.engine(), options.response_binding, options.acs_index)?;
         let response_binding = acs.binding();
         let raw_options = LoginRequestOptions {
@@ -194,7 +194,7 @@ impl ServiceProvider {
             response_binding: Some(Binding::from(response_binding)),
         };
         let context = self.engine().create_typed_login_request(
-            raw_idp,
+            peer_idp,
             Binding::from(options.binding),
             &raw_options,
             &AuthnRequestPreferences {
@@ -404,10 +404,10 @@ impl ServiceProvider {
         ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
         ensure_sso_response_binding(input.binding(), pending.acs().binding())?;
         let relay_state = relay_state_from_input(&input)?;
-        let raw_idp = raw_idp_descriptor(idp, validation.now())?;
+        let peer_idp = idp_engine_at(idp, validation.now())?;
         let parse = ResponseParseInput::try_new(idp, input, self.engine().setting.xml_limits)?;
         let flow = self.engine().parse_login_response_with_request_id_at(
-            raw_idp,
+            peer_idp,
             parse.binding,
             &parse.request,
             pending.request_id().as_str(),
@@ -426,7 +426,7 @@ impl ServiceProvider {
     ) -> Result<SsoSession, SamlError> {
         let relay_state = relay_state_from_input(&input)?;
         let binding = SsoResponseBinding::try_from(input.binding())?;
-        let raw_idp = raw_idp_descriptor(idp, validation.now())?;
+        let peer_idp = idp_engine_at(idp, validation.now())?;
         let metadata = &self.engine().metadata;
         let expected_recipient = match validation.recipient_endpoint() {
             Some(_) => validation.resolve_recipient_endpoint(
@@ -438,7 +438,7 @@ impl ServiceProvider {
         };
         let parse = ResponseParseInput::try_new(idp, input, self.engine().setting.xml_limits)?;
         let flow = self.engine().parse_unsolicited_login_response_at(
-            raw_idp,
+            peer_idp,
             parse.binding,
             &parse.request,
             parse.options(validation, &expected_recipient),

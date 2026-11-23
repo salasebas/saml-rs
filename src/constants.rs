@@ -43,7 +43,7 @@ impl Binding {
         }
     }
 
-    /// Short keyword (`wording.binding`).
+    /// Short binding keyword.
     pub fn short_name(self) -> &'static str {
         match self {
             Binding::Redirect => "redirect",
@@ -81,7 +81,7 @@ impl Binding {
     }
 }
 
-/// Top-level XML namespace URNs (`namespace.names`).
+/// XML namespace URIs used in SAML documents.
 pub mod namespace {
     /// SAML 2.0 protocol namespace.
     pub const PROTOCOL: &str = "urn:oasis:names:tc:SAML:2.0:protocol";
@@ -93,7 +93,7 @@ pub mod namespace {
     pub const DSIG: &str = "http://www.w3.org/2000/09/xmldsig#";
 }
 
-/// NameID formats (`namespace.format`).
+/// SAML NameID format URIs.
 pub mod name_id_format {
     /// Email address format.
     pub const EMAIL_ADDRESS: &str = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
@@ -153,7 +153,7 @@ pub mod attribute_name {
     pub const PAIRWISE_ID: &str = "urn:oasis:names:tc:SAML:attribute:pairwise-id";
 }
 
-/// AuthnContext class references (`namespace.authnContextClassRef`).
+/// SAML authentication context class reference URIs.
 pub mod authn_context_class_ref {
     /// Unspecified class.
     pub const UNSPECIFIED: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified";
@@ -222,7 +222,7 @@ pub mod status_code {
     pub const UNSUPPORTED_BINDING: &str = "urn:oasis:names:tc:SAML:2.0:status:UnsupportedBinding";
 }
 
-/// XML signature algorithm URIs (`algorithms.signature`).
+/// XML signature algorithm URIs.
 pub mod signature_algorithm {
     /// RSA-SHA1.
     pub const RSA_SHA1: &str = "http://www.w3.org/2000/09/xmldsig#rsa-sha1";
@@ -240,7 +240,7 @@ pub mod signature_algorithm {
     pub const RSA_SHA512: &str = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512";
 }
 
-/// XML digest algorithm URIs (`algorithms.digest`).
+/// XML digest algorithm URIs.
 pub mod digest_algorithm {
     /// SHA1 digest.
     pub const SHA1: &str = "http://www.w3.org/2000/09/xmldsig#sha1";
@@ -252,7 +252,7 @@ pub mod digest_algorithm {
     pub const SHA512: &str = "http://www.w3.org/2001/04/xmlenc#sha512";
 }
 
-/// Map a signature algorithm URI to its digest algorithm URI (`getDigestMethod`).
+/// Map a signature algorithm URI to its digest algorithm URI.
 pub fn digest_for_signature(sig_alg: &str) -> Option<&'static str> {
     match sig_alg {
         signature_algorithm::RSA_SHA1
@@ -266,7 +266,7 @@ pub fn digest_for_signature(sig_alg: &str) -> Option<&'static str> {
     }
 }
 
-/// XML encryption data algorithm URIs (`algorithms.encryption.data`).
+/// XML data encryption algorithm URIs.
 pub mod data_encryption_algorithm {
     /// AES-128-CBC.
     pub const AES_128: &str = "http://www.w3.org/2001/04/xmlenc#aes128-cbc";
@@ -302,7 +302,7 @@ pub(crate) fn is_xml_encryption_cbc_algorithm(algorithm: &str) -> bool {
     )
 }
 
-/// XML key encryption algorithm URIs (`algorithms.encryption.key`).
+/// XML key encryption algorithm URIs.
 pub mod key_encryption_algorithm {
     /// RSA-OAEP-MGF1P.
     pub const RSA_OAEP_MGF1P: &str = "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p";
@@ -324,7 +324,7 @@ pub mod transform_algorithm {
     pub const EXC_C14N_WITH_COMMENTS: &str = "http://www.w3.org/2001/10/xml-exc-c14n#WithComments";
 }
 
-/// Query/form parameter names (`wording.urlParams`).
+/// SAML query and form parameter names.
 pub(crate) mod url_params {
     /// `SAMLRequest` parameter.
     pub const SAML_REQUEST: &str = "SAMLRequest";
@@ -340,7 +340,7 @@ pub(crate) mod url_params {
     pub const SAML_ART: &str = "SAMLart";
 }
 
-/// Certificate use keyword (`wording.certUse`).
+/// Certificate use in SAML metadata.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CertUse {
     /// Signing certificate.
@@ -359,7 +359,7 @@ impl CertUse {
     }
 }
 
-/// SAML message parser type (`ParserType`).
+/// SAML message type used when parsing a binding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ParserType {
@@ -378,8 +378,7 @@ pub enum ParserType {
 }
 
 impl ParserType {
-    /// Query parameter direction (`getQueryParamByType`): request types map to
-    /// `SAMLRequest`, response types to `SAMLResponse`.
+    /// Return `SAMLRequest` for requests and `SAMLResponse` for responses.
     pub fn query_param(self) -> &'static str {
         match self {
             ParserType::SamlRequest

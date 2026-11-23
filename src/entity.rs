@@ -39,8 +39,6 @@ pub struct EntitySetting {
     /// Maximum estimated decryption work per inbound message. Defaults to 16.
     /// See [`crate::config::XmlEncryptionPolicy::max_decryption_work`].
     pub max_decryption_work: usize,
-    /// Default RelayState.
-    pub relay_state: String,
     /// SP: signs its AuthnRequests.
     pub authn_requests_signed: bool,
     /// SP: requires signed assertions.
@@ -80,8 +78,6 @@ pub struct EntitySetting {
     pub enc_private_key_pass: Option<String>,
     /// More decryption keys, tried in order after `enc_private_key`.
     pub additional_decryption_keys: Vec<X509Credential>,
-    /// Clock drift tolerance `(not_before_ms, not_on_or_after_ms)`.
-    pub clock_drifts: (i64, i64),
     /// Maximum decoded compressed and inflated raw-DEFLATE bytes accepted for
     /// HTTP-Redirect input.
     ///
@@ -104,8 +100,6 @@ pub struct EntitySetting {
     /// must differ
     /// from `tag_prefix_protocol`.
     pub tag_prefix_assertion: String,
-    /// IdP: tag prefix for the `<EncryptedAssertion>` element (default `saml`).
-    pub tag_prefix_encrypted_assertion: String,
     /// Custom `<LogoutRequest>` template (`None` uses the default).
     ///
     /// Typed Session Authority generation requires a complete unqualified
@@ -161,7 +155,6 @@ impl fmt::Debug for EntitySetting {
                 "allow_rsa15_key_transport_decryption",
                 &self.allow_rsa15_key_transport_decryption,
             )
-            .field("relay_state", &self.relay_state)
             .field("max_decryption_work", &self.max_decryption_work)
             .field("authn_requests_signed", &self.authn_requests_signed)
             .field("want_assertions_signed", &self.want_assertions_signed)
@@ -194,7 +187,6 @@ impl fmt::Debug for EntitySetting {
                 "additional_decryption_keys",
                 &self.additional_decryption_keys,
             )
-            .field("clock_drifts", &self.clock_drifts)
             .field(
                 "redirect_inflate_max_bytes",
                 &self.redirect_inflate_max_bytes,
@@ -203,10 +195,6 @@ impl fmt::Debug for EntitySetting {
             .field("schema_validator", &self.schema_validator)
             .field("tag_prefix_protocol", &self.tag_prefix_protocol)
             .field("tag_prefix_assertion", &self.tag_prefix_assertion)
-            .field(
-                "tag_prefix_encrypted_assertion",
-                &self.tag_prefix_encrypted_assertion,
-            )
             .field("logout_request_template", &self.logout_request_template)
             .field("logout_response_template", &self.logout_response_template)
             .field("signature_config", &self.signature_config)
@@ -282,7 +270,6 @@ impl Default for EntitySetting {
             assertion_element_encryption: AssertionElementEncryption::default(),
             allow_rsa15_key_transport_decryption: false,
             max_decryption_work: crate::constants::DEFAULT_MAX_DECRYPTION_WORK,
-            relay_state: String::new(),
             authn_requests_signed: false,
             want_assertions_signed: false,
             require_audience_restriction: true,
@@ -299,13 +286,11 @@ impl Default for EntitySetting {
             enc_private_key: None,
             enc_private_key_pass: None,
             additional_decryption_keys: Vec::new(),
-            clock_drifts: (0, 0),
             redirect_inflate_max_bytes: MAX_DEFLATE_RAW_DECODE_BYTES,
             xml_limits: XmlLimits::default(),
             schema_validator: None,
             tag_prefix_protocol: "samlp".to_string(),
             tag_prefix_assertion: "saml".to_string(),
-            tag_prefix_encrypted_assertion: "saml".to_string(),
             logout_request_template: None,
             logout_response_template: None,
             signature_config: None,

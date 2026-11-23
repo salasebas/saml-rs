@@ -113,7 +113,7 @@ mod artifact;
 mod idp;
 mod name_id_management;
 mod options;
-mod raw_mapping;
+mod peer;
 mod requested_subject;
 mod response_acs;
 mod slo;

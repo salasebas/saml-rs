@@ -296,13 +296,9 @@ fn post_and_simplesign_per_request_relay_state_appear_in_context(
 }
 
 #[test]
-fn per_request_relay_state_overrides_entity_state_without_leaking(
+fn per_request_relay_state_preserves_empty_and_absent_values(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let setting = EntitySetting {
-        relay_state: "entity state".into(),
-        ..EntitySetting::default()
-    };
-    let sp = unsigned_sp_with_setting(setting)?;
+    let sp = unsigned_sp()?;
     let idp = unsigned_idp()?;
 
     let first = sp.create_login_request(
@@ -329,11 +325,8 @@ fn per_request_relay_state_overrides_entity_state_without_leaking(
         redirect_relay_state(&first.context)?.as_deref(),
         Some("request state")
     );
-    assert_eq!(second.relay_state.as_deref(), Some("entity state"));
-    assert_eq!(
-        redirect_relay_state(&second.context)?.as_deref(),
-        Some("entity state")
-    );
+    assert_eq!(second.relay_state, None);
+    assert_eq!(redirect_relay_state(&second.context)?, None);
     assert_eq!(third.relay_state.as_deref(), Some(""));
     assert_eq!(redirect_relay_state(&third.context)?.as_deref(), Some(""));
     Ok(())

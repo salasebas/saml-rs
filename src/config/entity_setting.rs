@@ -101,7 +101,6 @@ fn common_setting(
         schema_validator: xml.schema_validator,
         tag_prefix_protocol: templates.tag_prefix_protocol.clone(),
         tag_prefix_assertion: templates.tag_prefix_assertion.clone(),
-        tag_prefix_encrypted_assertion: templates.tag_prefix_assertion.clone(),
         logout_request_template: templates.logout_request_template.clone(),
         logout_response_template: templates.logout_response_template.clone(),
         signature_config: templates.signature_config.clone(),

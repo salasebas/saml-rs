@@ -16,8 +16,8 @@ use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
 
 use super::options::PeerEndpointTransport;
-use super::raw_mapping::{
-    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, RawPeer,
+use super::peer::{
+    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, Peer,
 };
 use super::{IdentityProvider, RespondSlo, SamlError, ServiceProvider, StartSlo};
 
@@ -58,7 +58,7 @@ impl ServiceProvider {
         subject: LogoutSubject,
         options: StartSlo,
     ) -> Result<Started<LogoutRequest>, SamlError> {
-        let peer = RawPeer::from_idp(idp, SystemTime::now())?;
+        let peer = Peer::from_idp(idp, SystemTime::now())?;
         start_slo_impl(
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
@@ -104,7 +104,7 @@ impl ServiceProvider {
         input: Inbound<LogoutRequest>,
         validation: SamlValidationContext<'_>,
     ) -> Result<Received<LogoutRequest>, SamlError> {
-        let peer = RawPeer::from_idp(idp, validation.now())?;
+        let peer = Peer::from_idp(idp, validation.now())?;
         receive_slo_impl(
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
@@ -143,7 +143,7 @@ impl ServiceProvider {
         status: &Status,
         options: RespondSlo,
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
-        let peer = RawPeer::from_idp(idp, SystemTime::now())?;
+        let peer = Peer::from_idp(idp, SystemTime::now())?;
         respond_slo_impl(
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
@@ -170,7 +170,7 @@ impl ServiceProvider {
         refusal: &RefusedLogoutRequest,
         options: RespondSlo,
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
-        let peer = RawPeer::from_idp(idp, SystemTime::now())?;
+        let peer = Peer::from_idp(idp, SystemTime::now())?;
         respond_slo_impl(
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
@@ -239,7 +239,7 @@ impl ServiceProvider {
         input: Inbound<LogoutResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<LogoutCompleted, SamlError> {
-        let peer = RawPeer::from_idp(idp, validation.now())?;
+        let peer = Peer::from_idp(idp, validation.now())?;
         finish_slo_impl(
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
@@ -302,7 +302,7 @@ impl IdentityProvider {
         subject: LogoutSubject,
         options: StartSlo,
     ) -> Result<Started<LogoutRequest>, SamlError> {
-        let peer = RawPeer::from_sp(sp, SystemTime::now())?;
+        let peer = Peer::from_sp(sp, SystemTime::now())?;
         start_slo_impl(
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
@@ -370,7 +370,7 @@ impl IdentityProvider {
         input: Inbound<LogoutRequest>,
         validation: SamlValidationContext<'_>,
     ) -> Result<Received<LogoutRequest>, SamlError> {
-        let peer = RawPeer::from_sp(sp, validation.now())?;
+        let peer = Peer::from_sp(sp, validation.now())?;
         receive_slo_impl(
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
@@ -423,7 +423,7 @@ impl IdentityProvider {
         status: &Status,
         options: RespondSlo,
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
-        let peer = RawPeer::from_sp(sp, SystemTime::now())?;
+        let peer = Peer::from_sp(sp, SystemTime::now())?;
         respond_slo_impl(
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
@@ -449,7 +449,7 @@ impl IdentityProvider {
         refusal: &RefusedLogoutRequest,
         options: RespondSlo,
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
-        let peer = RawPeer::from_sp(sp, SystemTime::now())?;
+        let peer = Peer::from_sp(sp, SystemTime::now())?;
         respond_slo_impl(
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
@@ -518,7 +518,7 @@ impl IdentityProvider {
         input: Inbound<LogoutResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<LogoutCompleted, SamlError> {
-        let peer = RawPeer::from_sp(sp, validation.now())?;
+        let peer = Peer::from_sp(sp, validation.now())?;
         finish_slo_impl(
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
@@ -539,7 +539,7 @@ enum StartSloRole {
 fn start_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
-    peer: RawPeer<'_>,
+    peer: Peer<'_>,
     subject: LogoutSubject,
     options: StartSlo,
     role: StartSloRole,
@@ -619,7 +619,7 @@ fn start_slo_impl(
 fn receive_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
-    peer: RawPeer<'_>,
+    peer: Peer<'_>,
     input: Inbound<LogoutRequest>,
     mut validation: SamlValidationContext<'_>,
 ) -> Result<Received<LogoutRequest>, SamlError> {
@@ -678,7 +678,7 @@ enum LogoutResponseTo<'a> {
 fn respond_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
-    peer: RawPeer<'_>,
+    peer: Peer<'_>,
     response_to: LogoutResponseTo<'_>,
     options: RespondSlo,
     transport: LogoutResponseTransport,
@@ -727,7 +727,7 @@ fn respond_slo_impl(
 fn finish_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
-    peer: RawPeer<'_>,
+    peer: Peer<'_>,
     pending: &PendingLogoutRequest,
     input: Inbound<LogoutResponse>,
     mut validation: SamlValidationContext<'_>,

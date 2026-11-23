@@ -20,8 +20,8 @@ use crate::name_id_management::{
 use std::time::SystemTime;
 
 use super::super::options::PeerEndpointTransport;
-use super::super::raw_mapping::{
-    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, RawPeer,
+use super::super::peer::{
+    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, Peer,
 };
 use super::super::{
     IdentityProvider, ReceiveNameIdManagement, RespondNameIdManagement, SamlError, ServiceProvider,
@@ -91,7 +91,7 @@ impl ServiceProvider {
         change: &NameIdChange,
         options: StartNameIdManagement,
     ) -> Result<Started<ManageNameIdRequest>, SamlError> {
-        let peer = RawPeer::from_idp(idp, SystemTime::now())?;
+        let peer = Peer::from_idp(idp, SystemTime::now())?;
         start(self.local(), peer, name_id, change, options)
     }
 
@@ -133,7 +133,7 @@ impl ServiceProvider {
         options: ReceiveNameIdManagement,
         validation: SamlValidationContext<'_>,
     ) -> Result<NameIdManagementRedirectReceipt, SamlError> {
-        let peer = RawPeer::from_idp(idp, validation.now())?;
+        let peer = Peer::from_idp(idp, validation.now())?;
         receive(self.local(), peer, input, options, validation)
     }
 
@@ -161,7 +161,7 @@ impl ServiceProvider {
         status: &Status,
         options: RespondNameIdManagement,
     ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
-        let peer = RawPeer::from_idp(idp, SystemTime::now())?;
+        let peer = Peer::from_idp(idp, SystemTime::now())?;
         respond(self.local(), peer, request, status, options)
     }
 
@@ -191,7 +191,7 @@ impl ServiceProvider {
         input: Inbound<ManageNameIdResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<Option<RelayState>, SamlError> {
-        let peer = RawPeer::from_idp(idp, validation.now())?;
+        let peer = Peer::from_idp(idp, validation.now())?;
         finish(self.local(), peer, pending, input, validation)
     }
 
@@ -264,7 +264,7 @@ impl IdentityProvider {
         change: &NameIdChange,
         options: StartNameIdManagement,
     ) -> Result<Started<ManageNameIdRequest>, SamlError> {
-        let peer = RawPeer::from_sp(sp, SystemTime::now())?;
+        let peer = Peer::from_sp(sp, SystemTime::now())?;
         start(self.local(), peer, name_id, change, options)
     }
 
@@ -341,7 +341,7 @@ impl IdentityProvider {
         options: ReceiveNameIdManagement,
         validation: SamlValidationContext<'_>,
     ) -> Result<NameIdManagementRedirectReceipt, SamlError> {
-        let peer = RawPeer::from_sp(sp, validation.now())?;
+        let peer = Peer::from_sp(sp, validation.now())?;
         receive(self.local(), peer, input, options, validation)
     }
 
@@ -366,7 +366,7 @@ impl IdentityProvider {
         status: &Status,
         options: RespondNameIdManagement,
     ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
-        let peer = RawPeer::from_sp(sp, SystemTime::now())?;
+        let peer = Peer::from_sp(sp, SystemTime::now())?;
         respond(self.local(), peer, request, status, options)
     }
 
@@ -389,7 +389,7 @@ impl IdentityProvider {
         input: Inbound<ManageNameIdResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<Option<RelayState>, SamlError> {
-        let peer = RawPeer::from_sp(sp, validation.now())?;
+        let peer = Peer::from_sp(sp, validation.now())?;
         finish(self.local(), peer, pending, input, validation)
     }
 
@@ -422,7 +422,7 @@ impl Local<'_> {
 
 fn start(
     local: Local<'_>,
-    peer: RawPeer<'_>,
+    peer: Peer<'_>,
     name_id: &NameId,
     change: &NameIdChange,
     options: StartNameIdManagement,
@@ -467,7 +467,7 @@ fn start(
 
 fn receive(
     local: Local<'_>,
-    peer: RawPeer<'_>,
+    peer: Peer<'_>,
     input: Inbound<ManageNameIdRequest>,
     options: ReceiveNameIdManagement,
     validation: SamlValidationContext<'_>,
@@ -508,7 +508,7 @@ fn receive(
 
 fn refuse(
     local: Local<'_>,
-    peer: &RawPeer<'_>,
+    peer: &Peer<'_>,
     in_response_to: &MessageId,
     relay_state: Option<&str>,
     refusal: Refusal,
@@ -529,7 +529,7 @@ fn refuse(
 
 fn respond(
     local: Local<'_>,
-    peer: RawPeer<'_>,
+    peer: Peer<'_>,
     request: &Received<ManageNameIdRequest>,
     status: &Status,
     options: RespondNameIdManagement,
@@ -547,7 +547,7 @@ fn respond(
 
 fn response_outbound(
     local: Local<'_>,
-    peer: &RawPeer<'_>,
+    peer: &Peer<'_>,
     in_response_to: &str,
     status: &Status,
     relay_state: Option<&str>,
@@ -571,7 +571,7 @@ fn response_outbound(
 
 fn finish(
     local: Local<'_>,
-    peer: RawPeer<'_>,
+    peer: Peer<'_>,
     pending: &PendingManageNameIdRequest,
     input: Inbound<ManageNameIdResponse>,
     mut validation: SamlValidationContext<'_>,
@@ -623,7 +623,7 @@ fn ensure_management_transport(
     }
 }
 
-fn peer_location(peer: &RawPeer<'_>, direction: EndpointDirection) -> Result<String, SamlError> {
+fn peer_location(peer: &Peer<'_>, direction: EndpointDirection) -> Result<String, SamlError> {
     peer.metadata
         .manage_name_id_service_locations(
             Binding::from(NameIdManagementBinding::Redirect),
