@@ -172,24 +172,12 @@ impl Engine {
         let fallback_status = Status::success();
         let status = rendering.status.unwrap_or(&fallback_status);
         if status.top_level() != TopLevelStatusCode::Success {
-            let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
-            let id = generate_id();
-            let issuer = self.entity_id();
-            let xml = render_error_login_response(&ErrorLoginResponseXml {
-                protocol_prefix: &self.setting.tag_prefix_protocol,
-                assertion_prefix: &self.setting.tag_prefix_assertion,
-                response_id: &id,
-                issue_instant: &window.issue_instant,
-                destination: acs,
-                issuer: &issuer,
-                status,
+            return self.render_error_response(
+                acs,
                 in_response_to,
-            })?;
-            return Ok(RenderedLoginResponse {
-                id,
-                xml,
-                session_index: None,
-            });
+                status,
+                rendering.issuance_lifetime,
+            );
         }
         let qualifiers = rendering.name_id_qualifiers;
         let name_id_format = rendering
@@ -201,24 +189,7 @@ impl Engine {
             .authn_context
             .cloned()
             .unwrap_or_else(AuthnContextReference::unspecified_class);
-        if let Some(requested) = rendering.requested_authn_context {
-            requested.ensure_met_by(&authn_context)?;
-        }
-        if let Some(policy) = rendering.requested_name_id_policy {
-            policy.ensure_met_by(
-                name_id_format,
-                qualifiers.sp_name_qualifier,
-                self.setting.assertion_element_encryption.identifiers,
-            )?;
-        }
-        if let Some(requested) = rendering.requested_subject {
-            requested.ensure_strongly_matched_by(
-                &user.name_id,
-                name_id_format,
-                qualifiers,
-                rendering.requested_name_id_policy,
-            )?;
-        }
+        self.ensure_request_met(&rendering, &user.name_id, name_id_format, &authn_context)?;
         let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
         let authn_instant = match rendering.authn_instant {
             Some(authenticated) => written_authn_instant(authenticated, &window)?,
@@ -272,6 +243,62 @@ impl Engine {
             xml,
             session_index,
         })
+    }
+
+    fn render_error_response(
+        &self,
+        acs: &str,
+        in_response_to: Option<&str>,
+        status: &Status,
+        issuance_lifetime: time::Duration,
+    ) -> Result<RenderedLoginResponse, SamlError> {
+        let window = capture_idp_issuance_window(issuance_lifetime)?;
+        let id = generate_id();
+        let issuer = self.entity_id();
+        let xml = render_error_login_response(&ErrorLoginResponseXml {
+            protocol_prefix: &self.setting.tag_prefix_protocol,
+            assertion_prefix: &self.setting.tag_prefix_assertion,
+            response_id: &id,
+            issue_instant: &window.issue_instant,
+            destination: acs,
+            issuer: &issuer,
+            status,
+            in_response_to,
+        })?;
+        Ok(RenderedLoginResponse {
+            id,
+            xml,
+            session_index: None,
+        })
+    }
+
+    fn ensure_request_met(
+        &self,
+        rendering: &LoginResponseRendering<'_>,
+        name_id: &str,
+        name_id_format: Option<&str>,
+        authn_context: &AuthnContextReference,
+    ) -> Result<(), SamlError> {
+        let qualifiers = rendering.name_id_qualifiers;
+        if let Some(requested) = rendering.requested_authn_context {
+            requested.ensure_met_by(authn_context)?;
+        }
+        if let Some(policy) = rendering.requested_name_id_policy {
+            policy.ensure_met_by(
+                name_id_format,
+                qualifiers.sp_name_qualifier,
+                self.setting.assertion_element_encryption.identifiers,
+            )?;
+        }
+        if let Some(requested) = rendering.requested_subject {
+            requested.ensure_strongly_matched_by(
+                name_id,
+                name_id_format,
+                qualifiers,
+                rendering.requested_name_id_policy,
+            )?;
+        }
+        Ok(())
     }
 
     pub(crate) fn create_login_response_with_overrides(

@@ -6,10 +6,11 @@ This map lists the behaviour whose file name does not give it away.
 | --- | --- |
 | Shared processing of a received browser message: decode, verify, extract, and validate | `src/flow.rs` |
 | Detached HTTP-Redirect and SimpleSign signature checks | `src/flow/detached.rs` |
+| Embedded XML signature checks, and the order in which encrypted assertions are decrypted and verified | `src/flow/embedded.rs` |
 | Checks on a login `Response` with an error status, before its status is reported | `src/flow/error_response.rs` |
 | `Issuer` of a login `Response` | `src/flow/response_issuer.rs` |
 | Assertion conditions, audience, and bearer confirmation of an accepted response | `src/assertion_acceptance.rs` |
-| SP processing of each encrypted assertion, subject identifier, and attribute in a login response | `src/flow.rs`, `src/encrypted_elements.rs` |
+| SP processing of each encrypted assertion, subject identifier, and attribute in a login response | `src/flow.rs`, `src/flow/embedded.rs`, `src/encrypted_elements.rs` |
 | SP or IdP decryption of the principal identifier in an authenticated logout request | `src/logout/encrypted_id.rs` |
 | Protocol responses that take the wrapping and coverage checks | `src/crypto/response_root.rs` |
 | Algorithms and RSA key sizes each `XmlSignatureProfile` accepts | `src/crypto/signature_profile.rs` |
@@ -20,8 +21,8 @@ This map lists the behaviour whose file name does not give it away.
 | Typed config to the metadata generator input and the internal provider | `src/config/provider.rs` |
 | `EncryptedID` in the requested `Subject` of a received `AuthnRequest` | `src/api/requested_subject.rs` |
 
-`src/idp.rs`, `src/flow.rs`, `src/crypto/verify.rs`, and `src/sp.rs` are the
-largest files. Put a new behaviour in a focused module instead of growing them.
+`src/metadata/mod.rs`, `src/xml/dom.rs`, `src/idp.rs`, and `src/xml/profile.rs`
+are the largest files. Put a new behaviour in a focused module instead of growing them.
 
 The compatibility crates `opensaml`, `samlify`, and `samlet` are in
 `crates/<name>` and re-export `saml-rs`.

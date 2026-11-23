@@ -149,24 +149,21 @@ pub(crate) fn encrypted_assertion_key<'a>(
     }
 }
 
-/// `xml`, whose detached signature verified, with each `<EncryptedAssertion>`
-/// decrypted for a typed service provider, and the decrypted assertions.
-/// Returns `None` when no key applies.
+/// `xml` with each `<EncryptedAssertion>` decrypted with `key_pem` or the
+/// additional keys, checked against the schema and the protocol profile, and
+/// the decrypted assertions.
 #[cfg(crypto)]
-pub(crate) fn decrypt_detached_signed_assertions(
+pub(crate) fn decrypt_assertions(
     xml: &str,
-    root: &crate::xml::dom::Node,
+    key_pem: &str,
     parser_type: ParserType,
     opts: &FlowOptions<'_>,
-) -> Result<Option<(String, Vec<String>)>, SamlError> {
+) -> Result<(String, Vec<String>), SamlError> {
     use crate::crypto::{
         enc::{decrypt_assertions_with_limits, AssertionDecryptionOptions},
         keys::load_decryption_keys,
     };
 
-    let Some(key_pem) = encrypted_assertion_key(root, parser_type, opts) else {
-        return Ok(None);
-    };
     let (content, assertions) = decrypt_assertions_with_limits(
         xml,
         &load_decryption_keys(key_pem, opts.decrypt_key_pass, opts.additional_decrypt_keys)?,
@@ -178,7 +175,23 @@ pub(crate) fn decrypt_detached_signed_assertions(
     )?;
     crate::schema::document(&content, opts.xml_limits, opts.schema_validator)?;
     crate::xml::validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
-    Ok(Some((content, assertions)))
+    Ok((content, assertions))
+}
+
+/// `xml`, whose detached signature verified, with each `<EncryptedAssertion>`
+/// decrypted for a typed service provider, and the decrypted assertions.
+/// Returns `None` when no key applies.
+#[cfg(crypto)]
+pub(crate) fn decrypt_detached_signed_assertions(
+    xml: &str,
+    root: &crate::xml::dom::Node,
+    parser_type: ParserType,
+    opts: &FlowOptions<'_>,
+) -> Result<Option<(String, Vec<String>)>, SamlError> {
+    let Some(key_pem) = encrypted_assertion_key(root, parser_type, opts) else {
+        return Ok(None);
+    };
+    decrypt_assertions(xml, key_pem, parser_type, opts).map(Some)
 }
 
 #[cfg(not(crypto))]
