@@ -58,6 +58,13 @@ HTTP-POST-SimpleSign, and SOAP. The request signature covers the attribute.
 | Write a caller-supplied `Reason` and omit it when unset | Optional | Core §3.7.1, §3.7.3 | `StartSlo::reason` |
 | Require an absolute URI reference for a typed `Reason`, using the same `anyURI` whitespace and syntax rules as [identifier formats](identifiers.md#name-identifier-formats) | Mandatory | Core §1.3.2, §3.7.1, E10 | `StartSlo::reason` |
 
+`receive_slo` on both roles exposes the peer's `Reason` on HTTP-Redirect,
+HTTP-POST, HTTP-POST-SimpleSign, and SOAP after authenticating the request.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Return the unqualified `Reason` as a parsed `xs:string`, preserving whitespace and distinguishing an empty value from absence. Treat the value as information from the peer | Optional | Core §3.7.1, §3.7.3, E10, `LogoutRequestType` | `LogoutRequest::reason` |
+
 ## Peer endpoints
 
 | Rule | Level | Section | Option |
@@ -190,7 +197,6 @@ Typed logout send and receive use HTTP-Redirect, HTTP-POST, and HTTP-POST-Simple
 - Propagating logout to other participants. Each call addresses one peer. After a synchronous participant request, the IdP should use a synchronous binding for required propagation. Recommended, Core §3.7.3.2, Profiles §4.4.3.1.
 - Session invalidation and session tracking. The caller owns them. Mandatory for the participant, Core §3.7.3.1.
 - Setting `NotOnOrAfter` at or after the latest assertion `NotOnOrAfter`. Recommended, Core §3.7.3.2. Typed `start_slo` receives no assertion, and [ADR 0001](https://samlrs.vercel.app/explanation/logout-expiration/) records the choice.
-- Reading `Reason` from a received request. Core §3.7.1 and E10 specify its form for producers.
 - Adding `RelayState` in `respond_slo` when the request carried none. Optional for the responder, Bindings §3.4.3, §3.5.3, CD-04 §2.3.
 - An `https` check on a session authority's `LogoutRequest`. Profiles §4.4.3.3 does not repeat the §4.4.3.1 recommendation.
 - TLS and HTTP authentication of the SOAP exchange. Deployment duty, Conformance Requirements §3.5. `allow_http` has no effect on SOAP.

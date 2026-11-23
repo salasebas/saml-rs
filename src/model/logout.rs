@@ -103,6 +103,7 @@ pub struct LogoutRequest {
     issue_instant: SamlInstant,
     not_on_or_after: Option<SamlInstant>,
     issuer: EntityId,
+    reason: Option<String>,
     name_id: Option<NameId>,
     session_indexes: Vec<SessionIndex>,
     destination: Option<EndpointUrl>,
@@ -128,6 +129,14 @@ impl LogoutRequest {
     /// LogoutRequest issuer.
     pub fn issuer(&self) -> &EntityId {
         &self.issuer
+    }
+
+    /// The optional unqualified `Reason` attribute supplied by the peer.
+    ///
+    /// Returns the parsed XML string, including an empty value or surrounding
+    /// whitespace when present. Treat it as information from the peer.
+    pub fn reason(&self) -> Option<&str> {
+        self.reason.as_deref()
     }
 
     /// The plaintext or decrypted `NameID`.
@@ -156,7 +165,10 @@ impl LogoutRequest {
 }
 
 impl LogoutRequest {
-    pub(crate) fn from_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
+    pub(crate) fn from_flow(
+        raw_flow: FlowResult,
+        reason: Option<String>,
+    ) -> Result<Self, SamlError> {
         let id = MessageId::try_new(required_str(&raw_flow.extract, request::ID)?)?;
         let issue_instant = required_saml_utc_instant(
             raw_flow.extract.get_str(request::ISSUE_INSTANT),
@@ -181,6 +193,7 @@ impl LogoutRequest {
             issue_instant,
             not_on_or_after,
             issuer,
+            reason,
             name_id,
             session_indexes,
             destination,

@@ -319,11 +319,13 @@ fn receive(
 #[test]
 fn encrypted_id_round_trips_on_every_binding_in_both_directions(
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let reason = "urn:oasis:names:tc:SAML:2.0:logout:admin";
     let parties = parties()?;
     for initiator in INITIATORS {
         for binding in BINDINGS {
             let options = start_options(binding)?
-                .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
+                .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers)
+                .reason(reason);
             let sent = start(&parties, initiator, options)?;
 
             let xml = request_xml(&sent.outbound)?;
@@ -335,6 +337,7 @@ fn encrypted_id_round_trips_on_every_binding_in_both_directions(
             assert!(!xml.contains(PRINCIPAL), "{initiator:?} {binding:?}");
 
             let received = receive(&parties, initiator, request_input(&sent.outbound, binding)?)?;
+            assert_eq!(received.message().reason(), Some(reason));
             assert_eq!(
                 received.message().name_id(),
                 Some(&principal()),

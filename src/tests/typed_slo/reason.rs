@@ -26,16 +26,18 @@ fn typed_slo_writes_reason_in_signed_requests_for_both_roles(
             let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
             assert_eq!(document.root.attr("Reason"), Some(expected), "{binding:?}");
         }
-        idp.receive_slo(
+        let received_by_idp = idp.receive_slo(
             &sp_descriptor,
             logout_request_input(&from_sp.outbound, binding)?,
             validation(),
         )?;
-        sp.receive_slo(
+        let received_by_sp = sp.receive_slo(
             &idp_descriptor,
             logout_request_input(&from_idp.outbound, binding)?,
             validation(),
         )?;
+        assert_eq!(received_by_idp.message().reason(), Some(USER_REASON));
+        assert_eq!(received_by_sp.message().reason(), Some(REASON));
     }
     Ok(())
 }
@@ -74,6 +76,43 @@ fn typed_slo_omits_reason_by_default_and_collapses_supplied_whitespace(
         let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
         let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
         assert_eq!(document.root.attr("Reason"), expected);
+    }
+    Ok(())
+}
+
+#[test]
+fn typed_slo_reads_the_optional_unqualified_reason_as_an_xml_string(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let binding = LogoutBinding::Redirect;
+    let role = LocalSloRole::Sp;
+    let xml = logout_request_xml(
+        "_reason",
+        sender_entity_id(role),
+        Some(role.endpoint(binding)),
+    );
+
+    for (attributes, expected) in [
+        (
+            r#" Reason="  &#x9;urn:example:logout  ""#,
+            Some("  \turn:example:logout  "),
+        ),
+        ("", None),
+        (r#" Reason="""#, Some("")),
+        (
+            r#" xmlns:peer="urn:example:peer" peer:Reason="ignored""#,
+            None,
+        ),
+    ] {
+        let xml = xml.replacen("Version=", &format!("{attributes} Version="), 1);
+        let received = receive_crafted_logout_request(
+            &xml,
+            binding,
+            role,
+            RequestProtection::Signed,
+            validation(),
+        )?;
+
+        assert_eq!(received.message().reason(), expected, "{attributes}");
     }
     Ok(())
 }
