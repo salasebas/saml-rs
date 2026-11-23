@@ -20,6 +20,20 @@
 | Send the user agent to an `https` `SingleLogoutService`. A recipient does not reject an `http` `Destination` | Recommended | Profiles §4.4.3.1 | `StartSlo::allow_http` |
 | Omit `NotOnOrAfter` in session participant requests | Optional | Core §3.7.1, §3.7.3.2 | Always |
 
+### Asynchronous Single Logout
+
+`ServiceProvider::start_async_slo` implements the request initiator role of
+the [Asynchronous Single Logout Profile Extension](https://docs.oasis-open.org/security/saml/Post2.0/saml-async-slo/v1.0/saml-async-slo-v1.0.html)
+for HTTP-Redirect and HTTP-POST. The participant rules above also apply.
+Under §2.2, the IdP gives the user the outcome and sends no `LogoutResponse`
+to the initiator.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Include an empty `aslo:Asynchronous` in `samlp:Extensions` after the issuer and any embedded signature, before the principal identifier | Mandatory | Async SLO §2.1, `RequestAbstractType`, `LogoutRequestType` | `start_async_slo` |
+| Cover the extension with the query signature on Redirect and the embedded signature on POST | Mandatory | Profiles §4.4.4.1, Bindings §3.4.4.1, §3.5.5.2 | Always |
+| Use an explicit call for an IdP endpoint that the application knows supports asynchronous logout | Library policy: support can be configured out of band because publishing it in metadata is optional. | Async SLO §2.3 | `start_async_slo` |
+
 ## LogoutRequest from a session authority
 
 `IdentityProvider::start_slo` is this actor.
@@ -157,7 +171,7 @@ Typed logout send and receive use HTTP-Redirect, HTTP-POST, and HTTP-POST-Simple
 
 ## Outside this flow
 
-- Setting `Consent` or `Extensions` on outbound logout messages, or `StatusDetail` on outbound responses. Optional, `RequestAbstractType`, `StatusResponseType`, `StatusType`.
+- Setting `Consent` or caller-defined extensions on outbound logout messages, or `StatusDetail` on outbound responses. Optional, `RequestAbstractType`, `StatusResponseType`, `StatusType`.
 - Propagating logout to other participants. Each call addresses one peer. After a synchronous participant request, the IdP should use a synchronous binding for required propagation. Recommended, Core §3.7.3.2, Profiles §4.4.3.1.
 - Session invalidation and session tracking. The caller owns them. Mandatory for the participant, Core §3.7.3.1.
 - Setting `NotOnOrAfter` at or after the latest assertion `NotOnOrAfter`. Recommended, Core §3.7.3.2. Typed `start_slo` receives no assertion, and [ADR 0001](https://samlrs.vercel.app/explanation/logout-expiration/) records the choice.

@@ -41,6 +41,7 @@ pub(crate) struct LogoutRequestInput<'a> {
     pub(crate) issue_instant: &'a str,
     pub(crate) not_on_or_after: Option<&'a str>,
     pub(crate) reason: Option<&'a str>,
+    pub(crate) asynchronous: bool,
     pub(crate) validation: LogoutRequestValidation,
     /// `EncryptIdentifiers` sends the `<NameID>` as an `<EncryptedID>` for the
     /// peer's encryption key.
@@ -61,6 +62,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
         issue_instant,
         not_on_or_after,
         reason,
+        asynchronous,
         validation,
         name_id_encryption,
     } = input;
@@ -95,6 +97,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
             issue_instant,
             not_on_or_after,
             reason,
+            asynchronous,
         },
         subject,
         name_id_format,

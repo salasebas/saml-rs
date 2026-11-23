@@ -10,7 +10,7 @@ mod tests;
 
 pub(crate) use creation::{
     create_logout_request_for_subject_inner, create_logout_response_inner, reject_soap_relay_state,
-    LogoutRequestInput, LogoutRequestValidation, LogoutResponseInput,
+    CreatedLogoutRequest, LogoutRequestInput, LogoutRequestValidation, LogoutResponseInput,
 };
 pub(crate) use encrypted_id::decrypt_encrypted_id;
 pub(crate) use parsing::{
