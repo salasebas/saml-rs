@@ -1,7 +1,7 @@
 #[cfg(crypto)]
 use crate::binding::encode_base64;
 use crate::constants::{Binding, ParserType};
-use crate::entity::{BindingContext, EntitySetting};
+use crate::entity::{BindingContext, EntitySetting, SignatureConfig};
 use crate::error::SamlError;
 
 pub(crate) struct SignedMessage {
@@ -42,53 +42,36 @@ pub(crate) fn sign_message(
     parser_type: ParserType,
 ) -> Result<SignedMessage, SamlError> {
     use crate::binding::sign_detached_message;
-    use crate::constants::transform_algorithm;
     use crate::crypto::SigningCredential;
 
-    if matches!(binding, Binding::Artifact) {
-        return Err(SamlError::UnsupportedBinding {
-            binding: Binding::Artifact,
-        });
-    }
-
     let sig_alg = &setting.request_signature_algorithm;
-    let credential = SigningCredential::from_setting(setting)?;
-    let embedded_signature = |transforms: &[String]| {
-        credential.sign_xml(
-            xml,
-            true,
-            sig_alg,
-            transforms,
-            setting.signature_config.as_ref(),
-        )
-    };
     let (content, signature, sig_alg) = match binding {
         Binding::Redirect | Binding::SimpleSign => sign_detached_message(
-            &credential,
+            &SigningCredential::from_setting(setting)?,
             binding,
             xml,
             destination,
             relay,
             parser_type,
             sig_alg,
+        )?,
+        Binding::Post => {
+            let signed = SigningCredential::from_setting(setting)?.sign_xml(
+                xml,
+                true,
+                sig_alg,
+                &setting.transformation_algorithms,
+                setting.signature_config.as_ref(),
+            )?;
+            (encode_base64(signed.as_bytes()), None, None)
+        }
+        Binding::Soap => (
+            sign_soap_message(setting, xml, setting.signature_config.as_ref())?,
+            None,
+            None,
         ),
-        Binding::Post => Ok((
-            encode_base64(embedded_signature(&setting.transformation_algorithms)?.as_bytes()),
-            None,
-            None,
-        )),
-        Binding::Soap => Ok((
-            embedded_signature(&[
-                transform_algorithm::ENVELOPED_SIGNATURE.to_string(),
-                transform_algorithm::EXC_C14N.to_string(),
-            ])?,
-            None,
-            None,
-        )),
-        Binding::Artifact => Err(SamlError::UnsupportedBinding {
-            binding: Binding::Artifact,
-        }),
-    }?;
+        Binding::Artifact => return Err(SamlError::UnsupportedBinding { binding }),
+    };
     Ok(SignedMessage {
         content,
         signature,
@@ -96,6 +79,38 @@ pub(crate) fn sign_message(
         binding,
         parser_type,
     })
+}
+
+#[cfg(crypto)]
+pub(crate) fn sign_soap_message(
+    setting: &EntitySetting,
+    xml: &str,
+    config: Option<&SignatureConfig>,
+) -> Result<String, SamlError> {
+    use crate::constants::transform_algorithm;
+    use crate::crypto::SigningCredential;
+
+    SigningCredential::from_setting(setting)?.sign_xml(
+        xml,
+        true,
+        &setting.request_signature_algorithm,
+        &[
+            transform_algorithm::ENVELOPED_SIGNATURE.to_string(),
+            transform_algorithm::EXC_C14N.to_string(),
+        ],
+        config,
+    )
+}
+
+#[cfg(not(crypto))]
+pub(crate) fn sign_soap_message(
+    _setting: &EntitySetting,
+    _xml: &str,
+    _config: Option<&SignatureConfig>,
+) -> Result<String, SamlError> {
+    Err(SamlError::Unsupported(
+        "signing SOAP messages requires a crypto provider feature".into(),
+    ))
 }
 
 #[cfg(not(crypto))]

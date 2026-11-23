@@ -2,8 +2,9 @@ use bergshamra::core::algorithm::HMAC_SHA256;
 use bergshamra::{DsigContext, Key, KeysManager};
 use saml_rs::crypto::keys::load_hmac_secret;
 use saml_rs::{
-    CertificatePem, Credentials, HmacSecret, IdpValidationPolicy, PrivateKeyPem, SoapBodyElement,
-    SoapResponse, SpValidationPolicy, X509Credential, XmlSignatureProfile,
+    CertificatePem, Credentials, HmacSecret, IdpValidationPolicy, InMemoryReplayCache,
+    PrivateKeyPem, SignatureConfig, SoapBodyElement, SoapResponse, SpValidationPolicy,
+    TemplatePolicy, X509Credential, XmlSignatureProfile,
 };
 
 use super::*;
@@ -76,6 +77,101 @@ fn sign_in_envelope(
     let mut keys = KeysManager::new();
     keys.add_key(key);
     Ok(bergshamra::sign(&DsigContext::new(keys), &envelope)?)
+}
+
+#[test]
+fn signed_artifact_resolve_completes_the_protected_soap_exchange() -> TestResult {
+    let (idp, sp) = artifact_config_builders(
+        AcsEndpoint::post(SP_ACS_POST)?,
+        AcsEndpoint::artifact(SP_ACS_ARTIFACT)?.with_default(),
+    )?;
+    let templates = TemplatePolicy {
+        signature_config: Some(SignatureConfig {
+            prefix: "sig".into(),
+            reference: Some("/*[local-name(.)='AuthnRequest']/*[local-name(.)='Issuer']".into()),
+            ..SignatureConfig::default()
+        }),
+        ..TemplatePolicy::default()
+    };
+    let parties = build_parties(
+        idp.credentials(signing_credentials()),
+        sp.credentials(signing_credentials()).templates(templates),
+    )?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let outbound = parties.idp.initiate_sso_artifact(
+        &parties.sp_metadata,
+        SsoAssertion::new(principal()),
+        RespondSso::artifact(ArtifactDelivery::redirect(0)),
+        &mut issued,
+    )?;
+    let delivered = delivered_by(&outbound)?;
+    let artifact = delivered.artifact();
+    let channel = confidential();
+    let unsigned =
+        parties
+            .sp
+            .resolve_artifact(&parties.idp_metadata, artifact, channel, validation())?;
+    assert!(!unsigned.request().envelope().contains("Signature"));
+
+    let unprotected = parties.sp.resolve_artifact_with_signed_request(
+        &parties.idp_metadata,
+        artifact,
+        SoapChannel::unattested(),
+        validation(),
+    );
+    assert!(
+        matches!(unprotected, Err(SamlError::SoapChannelProtection)),
+        "{unprotected:?}"
+    );
+
+    let mut used = InMemoryReplayCache::new();
+    let resolution = parties.sp.resolve_artifact_with_signed_request(
+        &parties.idp_metadata,
+        artifact,
+        channel,
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut used))
+            .with_replay_retention(Duration::from_secs(120)),
+    )?;
+    let request = resolution.request();
+    assert_eq!(request.endpoint().as_str(), RESOLUTION_URL);
+    let body = SoapBodyElement::from_envelope(request.envelope())?;
+    let document = roxmltree::Document::parse(body.xml())?;
+    let children: Vec<_> = document
+        .root_element()
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .map(|child| child.tag_name().name())
+        .collect();
+    assert_eq!(children, ["Issuer", "Signature", "Artifact"]);
+    assert!(body.xml().contains("<sig:Signature "));
+
+    let repeated = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        artifact,
+        channel,
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut used))
+            .with_replay_retention(Duration::from_secs(120)),
+    );
+    assert!(
+        matches!(repeated, Err(SamlError::ReplayDetected { .. })),
+        "{repeated:?}"
+    );
+
+    let answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        request.envelope(),
+        &mut issued,
+        channel,
+    )?;
+    assert_eq!(answer.release(), ArtifactRelease::Returned);
+    let resolved = resolution.finish(answer.response().envelope())?;
+    let session = parties.sp.accept_unsolicited_sso(
+        &parties.idp_metadata,
+        Inbound::artifact(delivered, resolved),
+        validation(),
+    )?;
+    assert_eq!(session.name_id().value(), USER);
+    Ok(())
 }
 
 #[test]

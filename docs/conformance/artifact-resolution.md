@@ -1,6 +1,6 @@
 # Artifact resolution over SOAP
 
-`IdentityProvider::issue_artifact`, `IdentityProvider::answer_artifact_resolve`, `ServiceProvider::resolve_artifact`, and `ArtifactResolution::finish` implement artifact resolution. `finish` reads the protocol message from the SOAP response and does not accept a Web SSO session.
+`IdentityProvider::issue_artifact` and `IdentityProvider::answer_artifact_resolve` are the issuer APIs. The service provider prepares a request with `resolve_artifact` or `resolve_artifact_with_signed_request`. `ArtifactResolution::finish` reads the protocol message from the SOAP response. The Web SSO API accepts the session.
 Normative text is SAML Core, Bindings, Profiles, and Metadata 2.0 as corrected by Approved Errata 05, plus SOAP 1.1 and WS-I Basic Profile 1.1 for the shared [SOAP envelope rules](#soap-envelope-rules).
 The deployment POSTs the envelope. TLS, HTTP authentication, and the HTTP 500 SOAP fault stay there, and `SoapChannel` records the protection it provided (Conformance Requirements §3.5 and §5).
 Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browser-sso-artifact.md).
@@ -26,7 +26,7 @@ Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browse
 
 ## ArtifactResolve
 
-`ServiceProvider::resolve_artifact` is the requester. `IdentityProvider::answer_artifact_resolve` applies the two rejection rows.
+`ServiceProvider::resolve_artifact` and `ServiceProvider::resolve_artifact_with_signed_request` are the requester APIs. `IdentityProvider::answer_artifact_resolve` applies the two rejection rows.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
@@ -39,6 +39,8 @@ Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browse
 | Reject a request missing `samlp:Artifact` or containing a second direct child named `Artifact` in any namespace | Mandatory | `ArtifactResolveType` | Always |
 | Reject an `ArtifactResolve` with a second `Issuer` | Mandatory | `RequestAbstractType` | Always |
 | Authenticate to the responder and protect integrity | Recommended | Profiles §5.3.1, §5.4.1 | Always |
+| Sign the outbound SOAP body message with the SP signing credential | Optional | Core §3.5.1, Profiles §5.3.1, §5.4.1 | `ServiceProvider::resolve_artifact_with_signed_request` with a crypto provider |
+| When signing, place the enveloped signature after `Issuer` and reference the `ArtifactResolve` ID | Mandatory | `RequestAbstractType`, `ArtifactResolveType`, Core §5.4.1, §5.4.2 | When signing |
 | Require a confidential dereference for every artifact | Library policy: the artifact does not say which message it refers to, so the requester learns that only after the message has crossed the channel, and a Web SSO `<Response>` requires confidentiality. | Profiles §5.3.1, §5.4.1, §4.1.4.4 | Always |
 
 ## ArtifactResponse
@@ -74,7 +76,7 @@ Profiles §4.1.4.4 governs a Web Browser SSO `<Response>` delivered by artifact.
 
 ## Service provider acceptance
 
-`ArtifactResolution::finish` and `ServiceProvider::resolve_artifact` are the requester.
+`ArtifactResolution::finish` processes the response on the service provider.
 
 Both parties read `Issuer` as described in [entity identifiers](identifiers.md#entity-identifiers).
 The requester reads the [status codes](web-browser-sso-acceptance.md#status-codes)
@@ -136,6 +138,6 @@ their protocol flow.
 
 - Browser delivery of an artifact: [HTTP-Artifact response](web-browser-sso-artifact.md).
 - `AuthnRequest` over HTTP-Artifact. Optional, Bindings §3.6.
-- Signing outbound `ArtifactResolve` or `ArtifactResponse`. Optional, Profiles §5.3.1, §5.3.2.
+- Signing outbound `ArtifactResponse`. Optional, Profiles §5.3.2.
 - The assertion query/request profile over SOAP. Requirements vary by query and operational mode. Profiles §6, Conformance §3.2 Table 4.
 - The IdP operational mode and the SP operational mode: [IdP and SP operational modes](idp-sp-operational-modes.md).

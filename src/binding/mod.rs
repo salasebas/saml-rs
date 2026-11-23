@@ -26,5 +26,5 @@ pub(crate) use redirect::append_signature;
 pub(crate) use redirect::build_redirect_octet;
 pub(crate) use redirect::build_redirect_url;
 pub(crate) use redirect::{append_redirect_query, redirect_binding_query};
-pub(crate) use signed_message::sign_message;
+pub(crate) use signed_message::{sign_message, sign_soap_message};
 pub(crate) use simplesign::build_simplesign_octet;
