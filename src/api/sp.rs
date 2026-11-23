@@ -167,7 +167,7 @@ impl ServiceProvider {
     /// let idp = IdpDescriptor::from_metadata_xml(
     ///     EntityId::try_new("https://idp.example.com/metadata")?,
     ///     idp.metadata_xml(),
-    ///     MetadataTrustPolicy::AllowUnsigned,
+    ///     MetadataTrustPolicy::Unverified,
     /// )?;
     /// let relay_state = RelayState::try_new("state")?;
     /// let started = sp.start_sso(&idp, StartSso::redirect().relay_state(relay_state))?;

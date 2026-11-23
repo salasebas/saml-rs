@@ -58,7 +58,7 @@ provider implements them.
 | --- | --- | --- | --- |
 | Allow additional provider-supported algorithms when verifying an embedded signature on a received `Response`, `Assertion`, or logout message (service provider), or `AuthnRequest` or logout message (identity provider). `ExcludeWeakAlgorithms` leaves out the [weak algorithms](#weak-algorithms-and-keys). `AllowWeakAlgorithms` accepts the provider-supported set | Optional | E50 | `XmlSignatureProfile::ExcludeWeakAlgorithms`, `AllowWeakAlgorithms` |
 | Allow additional provider-supported algorithms when verifying a detached `SigAlg` signature on HTTP-Redirect and HTTP-POST-SimpleSign. `ExcludeWeakAlgorithms` leaves out the weak algorithms and keys. `AllowWeakAlgorithms` accepts any `SigAlg` in the provider-supported set | Optional | E50 | `XmlSignatureProfile::ExcludeWeakAlgorithms`, `AllowWeakAlgorithms` |
-| Allow additional provider-supported algorithms when verifying a pinned metadata signature. `RequireSignature` and `RequireSignatureAllowingOtherCanonicalization` leave out the weak algorithms and keys. `RequireSignatureAllowingWeakAlgorithms` accepts the provider-supported set | Optional | E50, E81 | `MetadataTrustPolicy::RequireSignature`, `RequireSignatureAllowingOtherCanonicalization`, `RequireSignatureAllowingWeakAlgorithms` |
+| Allow additional provider-supported algorithms when verifying a pinned metadata signature. `RequireSignature` and `RequireSignatureAllowingInclusiveCanonicalization` leave out the weak algorithms and keys. `RequireSignatureAllowingWeakAlgorithms` accepts the provider-supported set | Optional | E50, E81 | `MetadataTrustPolicy::RequireSignature`, `RequireSignatureAllowingInclusiveCanonicalization`, `RequireSignatureAllowingWeakAlgorithms` |
 | Accept an embedded signature only with RSA-SHA256, RSA-SHA384, or RSA-SHA512, a SHA-256, SHA-384, or SHA-512 digest, exclusive canonicalization, and the enveloped-signature and exclusive canonicalization transforms. This rejects the SHA-1 digest and Canonical XML 1.0 | Library policy: reason not recorded. | E50 | `XmlSignatureProfile::StrictRsaSha2` |
 | Accept a detached `SigAlg` only when it is RSA-SHA256, RSA-SHA384, or RSA-SHA512, and reject another before verifying the signature. This profile omits both SHA-1 algorithms required by those bindings | Library policy: reason not recorded. | Bindings §3.4.4.1, CD-04 §2.5 | `XmlSignatureProfile::StrictRsaSha2` |
 
@@ -99,7 +99,7 @@ implementation controls, not a new receiver `MUST` inferred from signer rules.
 
 `ExcludeWeakAlgorithms` and `StrictRsaSha2` exclude these from the signatures
 they cover, and signed metadata import excludes them under `RequireSignature`
-and `RequireSignatureAllowingOtherCanonicalization`.
+and `RequireSignatureAllowingInclusiveCanonicalization`.
 `XmlSignatureProfile::AllowWeakAlgorithms` and
 `MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms` re-allow them
 where the build verifies them. Recommended excludes them for both roles.

@@ -388,7 +388,7 @@ impl IdpDescriptor {
         xml: &str,
         trust: MetadataTrustPolicy<'_>,
     ) -> Result<Self, SamlError> {
-        Self::from_metadata_xml_with_policy(
+        Self::from_metadata_xml_with_xml_policy(
             expected_entity_id,
             xml,
             trust,
@@ -396,7 +396,8 @@ impl IdpDescriptor {
         )
     }
 
-    /// Parse peer metadata with explicit XML limits and an optional schema validator.
+    /// Parse peer metadata with an explicit trust policy and XML policy.
+    /// The XML policy supplies parsing limits and an optional schema validator.
     /// The same limits apply during signature verification.
     ///
     /// Encryption and Redirect limits in the policy do not affect metadata.
@@ -405,7 +406,7 @@ impl IdpDescriptor {
     ///
     /// Returns [`SamlError`] for malformed or rejected XML, an unexpected entity
     /// ID, invalid metadata, or an unsatisfied trust policy.
-    pub fn from_metadata_xml_with_policy(
+    pub fn from_metadata_xml_with_xml_policy(
         expected_entity_id: EntityId,
         xml: &str,
         trust: MetadataTrustPolicy<'_>,
@@ -524,7 +525,7 @@ impl IdpDescriptor {
     /// Signed metadata root when the metadata signature verified with a
     /// caller-pinned certificate, including a covering `<EntitiesDescriptor>`.
     ///
-    /// `None` under [`MetadataTrustPolicy::AllowUnsigned`], even when the
+    /// `None` under [`MetadataTrustPolicy::Unverified`], even when the
     /// document carries a signature. It reports verification at import and
     /// does not check metadata expiration.
     pub fn signed_metadata_xml(&self) -> Option<&str> {
@@ -577,7 +578,7 @@ impl SpDescriptor {
         xml: &str,
         trust: MetadataTrustPolicy<'_>,
     ) -> Result<Self, SamlError> {
-        Self::from_metadata_xml_with_policy(
+        Self::from_metadata_xml_with_xml_policy(
             expected_entity_id,
             xml,
             trust,
@@ -585,7 +586,8 @@ impl SpDescriptor {
         )
     }
 
-    /// Parse peer metadata with explicit XML limits and an optional schema validator.
+    /// Parse peer metadata with an explicit trust policy and XML policy.
+    /// The XML policy supplies parsing limits and an optional schema validator.
     /// The same limits apply during signature verification.
     ///
     /// Encryption and Redirect limits in the policy do not affect metadata.
@@ -594,7 +596,7 @@ impl SpDescriptor {
     ///
     /// Returns [`SamlError`] for malformed or rejected XML, an unexpected entity
     /// ID, invalid metadata, or an unsatisfied trust policy.
-    pub fn from_metadata_xml_with_policy(
+    pub fn from_metadata_xml_with_xml_policy(
         expected_entity_id: EntityId,
         xml: &str,
         trust: MetadataTrustPolicy<'_>,
@@ -715,7 +717,7 @@ impl SpDescriptor {
     /// Signed metadata root when the metadata signature verified with a
     /// caller-pinned certificate, including a covering `<EntitiesDescriptor>`.
     ///
-    /// `None` under [`MetadataTrustPolicy::AllowUnsigned`], even when the
+    /// `None` under [`MetadataTrustPolicy::Unverified`], even when the
     /// document carries a signature. It reports verification at import and
     /// does not check metadata expiration.
     pub fn signed_metadata_xml(&self) -> Option<&str> {

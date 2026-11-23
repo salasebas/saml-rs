@@ -186,12 +186,12 @@ impl IdentityProvider {
     /// let sp_descriptor = SpDescriptor::from_metadata_xml(
     ///     EntityId::try_new("https://sp.example.com/metadata")?,
     ///     sp.metadata_xml(),
-    ///     MetadataTrustPolicy::AllowUnsigned,
+    ///     MetadataTrustPolicy::Unverified,
     /// )?;
     /// let idp_descriptor = IdpDescriptor::from_metadata_xml(
     ///     EntityId::try_new("https://idp.example.com/metadata")?,
     ///     idp.metadata_xml(),
-    ///     MetadataTrustPolicy::AllowUnsigned,
+    ///     MetadataTrustPolicy::Unverified,
     /// )?;
     /// let message = r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">artifact-message</samlp:LogoutRequest>"#;
     /// let mut issued = IssuedArtifacts::expire_after(Duration::from_secs(60));

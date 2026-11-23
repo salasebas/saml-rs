@@ -119,7 +119,7 @@ pub enum OutboundDelivery<'a> {
 /// # let idp = IdpDescriptor::from_metadata_xml(
 /// #     EntityId::try_new("https://idp.example.com/metadata")?,
 /// #     idp.metadata_xml(),
-/// #     MetadataTrustPolicy::AllowUnsigned,
+/// #     MetadataTrustPolicy::Unverified,
 /// # )?;
 /// let redirect: Outbound<AuthnRequest> = sp.start_sso(&idp, StartSso::redirect())?.outbound;
 /// assert!(redirect.redirect_url()?.contains("SAMLRequest="));

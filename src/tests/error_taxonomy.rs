@@ -421,7 +421,7 @@ fn error_taxonomy_malformed_xml_keeps_the_parser_error_as_its_source(
     let error = match saml_rs::IdpDescriptor::from_metadata_xml(
         saml_rs::EntityId::try_new("https://idp.example.com/metadata")?,
         "<md:EntityDescriptor xmlns:md=\"urn:oasis:names:tc:SAML:2.0:metadata\"></md:Other>",
-        saml_rs::MetadataTrustPolicy::AllowUnsigned,
+        saml_rs::MetadataTrustPolicy::Unverified,
     ) {
         Err(error) => error,
         Ok(_) => return Err("malformed metadata was accepted".into()),

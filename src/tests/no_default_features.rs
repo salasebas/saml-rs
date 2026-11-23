@@ -114,12 +114,12 @@ fn typed_protocol_facades() -> Result<
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     Ok((sp, idp, sp_descriptor, idp_descriptor))
 }
@@ -156,7 +156,7 @@ fn typed_metadata_descriptors_parse_unsigned_metadata_without_default_crypto(
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &idp_metadata_xml,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     assert_eq!(
         idp_descriptor.entity_id().as_str(),
@@ -167,7 +167,7 @@ fn typed_metadata_descriptors_parse_unsigned_metadata_without_default_crypto(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,
         &sp_metadata_xml,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     assert_eq!(
         sp_descriptor.entity_id().as_str(),

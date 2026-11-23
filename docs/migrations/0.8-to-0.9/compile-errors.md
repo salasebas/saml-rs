@@ -545,13 +545,13 @@ a pattern, after a glob import such as `use saml_rs::ReplayPolicy::*;`, still
 compiles as a binding that matches every value, so search for the old names
 too.
 
-**Before:** a relaxed option ended in `ForCompatibility`, which said why it
-existed rather than what it allowed.
-**Now:** a relaxed option is named after what it allows.
+The new policy names describe what each option allows. Several previous names
+used the `ForCompatibility` suffix.
 
 | 0.8 | 0.9 |
 | --- | --- |
-| `MetadataTrustPolicy::UnsignedForCompatibility` | `MetadataTrustPolicy::AllowUnsigned` |
+| `MetadataTrustPolicy::UnsignedForCompatibility` | `MetadataTrustPolicy::Unverified` |
+| `MetadataTrustPolicy::RequireSignatureAllowingOtherCanonicalization` | `MetadataTrustPolicy::RequireSignatureAllowingInclusiveCanonicalization` |
 | `MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithmsForCompatibility` | `MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms` |
 | `XmlSignatureProfile::AllowProviderSupportedForCompatibility` | `XmlSignatureProfile::AllowWeakAlgorithms` |
 | `AssertionSignaturePolicy::AllowUnsignedForCompatibility` | `AssertionSignaturePolicy::AllowUnsigned` |
@@ -587,7 +587,7 @@ let context = SamlValidationContext::new(now, ReplayPolicy::DisabledForCompatibi
 let idp = IdpDescriptor::from_metadata_xml(
     entity_id,
     &metadata,
-    MetadataTrustPolicy::AllowUnsigned,
+    MetadataTrustPolicy::Unverified,
 )?;
 let context = SamlValidationContext::new(now, ReplayPolicy::NoCache);
 ```
@@ -596,12 +596,13 @@ The command below renames the remaining variants in a Rust source tree.
 Run the substitutions in this order so that `AllowUnsignedForCompatibility` is not renamed twice:
 
 ```bash
-rg -l 'ForCompatibility|AllowUnsignedVerifyIfPresent|Aes128\b|Aes256\b|TripleDes\b' --type rust | xargs perl -pi -e '
+rg -l 'ForCompatibility|RequireSignatureAllowingOtherCanonicalization|AllowUnsignedVerifyIfPresent|Aes128\b|Aes256\b|TripleDes\b' --type rust | xargs perl -pi -e '
 s/\bRequireSignatureAllowingWeakAlgorithmsForCompatibility\b/RequireSignatureAllowingWeakAlgorithms/g;
+s/\bRequireSignatureAllowingOtherCanonicalization\b/RequireSignatureAllowingInclusiveCanonicalization/g;
 s/\bAllowProviderSupportedForCompatibility\b/AllowWeakAlgorithms/g;
 s/\bAllowUnsignedVerifyIfPresent\b/AllowUnsigned/g;
 s/\bAllowUnsignedForCompatibility\b/AllowUnsigned/g;
-s/\bUnsignedForCompatibility\b/AllowUnsigned/g;
+s/\bUnsignedForCompatibility\b/Unverified/g;
 s/\bDoNotSignForCompatibility\b/DoNotSign/g;
 s/\bDisabledForCompatibility\b/NoCache/g;
 s/\bSha1ForCompatibility\b/Sha1/g;

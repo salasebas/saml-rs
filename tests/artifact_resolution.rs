@@ -100,17 +100,17 @@ fn parties_with_templates(
     let idp_metadata = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let sp_metadata = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let other_metadata = SpDescriptor::from_metadata_xml(
         EntityId::try_new(OTHER_ENTITY_ID)?,
         other.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     Ok(Parties {
         idp,
@@ -481,7 +481,7 @@ fn identity_provider_metadata_publishes_the_soap_resolution_service(
     let peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         parties.sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let missing = without.issue_artifact(&peer, &web_sso_response(), 0, &mut issued);
@@ -831,7 +831,7 @@ fn a_missing_or_non_soap_resolution_service_is_not_used() -> Result<(), Box<dyn 
     let peer = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &posted,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let unsupported =
         parties
@@ -1156,7 +1156,7 @@ fn a_non_http_resolution_location_does_not_consume_single_use(
     let peer = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &posted,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let channel = confidential();
     let mut uses = InMemoryReplayCache::new();

@@ -105,7 +105,7 @@ fn service_provider(
     Ok(SpDescriptor::from_metadata_xml(
         EntityId::try_new(entity_id)?,
         &metadata,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?)
 }
 
@@ -660,7 +660,7 @@ fn a_service_provider_without_a_soap_service_is_not_sent_a_request() -> TestResu
         &service_provider(SP_ENTITY_ID, &[])?
             .metadata_xml()
             .replacen("<SPSSODescriptor", &identity_role, 1),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let started = idp.start_name_id_management(
         &dual_role,

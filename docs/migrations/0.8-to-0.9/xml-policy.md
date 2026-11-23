@@ -39,7 +39,7 @@ Metadata is imported before a local role receives a peer descriptor. Pass the
 policy when importing it:
 
 ```rust
-let idp = IdpDescriptor::from_metadata_xml_with_policy(
+let idp = IdpDescriptor::from_metadata_xml_with_xml_policy(
     expected_idp_entity_id,
     metadata_xml,
     trust,

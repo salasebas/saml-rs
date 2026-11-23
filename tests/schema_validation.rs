@@ -63,27 +63,27 @@ fn configured_schema_validator_rejects_typed_peer_metadata(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp()?;
     let idp = idp(Some(reject_xml))?;
-    assert_rejected(IdpDescriptor::from_metadata_xml_with_policy(
+    assert_rejected(IdpDescriptor::from_metadata_xml_with_xml_policy(
         EntityId::try_new(IDP)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
         &policy(Some(reject_xml)),
     ));
-    assert_rejected(SpDescriptor::from_metadata_xml_with_policy(
+    assert_rejected(SpDescriptor::from_metadata_xml_with_xml_policy(
         EntityId::try_new(SP)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
         &policy(Some(reject_xml)),
     ));
     IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     Ok(())
 }
@@ -96,12 +96,12 @@ fn typed_schema_policy_is_isolated_and_can_be_disabled() -> Result<(), Box<dyn s
     let peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let destination = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP)?,
         accepting.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let started = sp.start_sso(&destination, StartSso::post())?;
     let fields: Vec<FormField> = started.outbound.post_form()?.fields().to_vec();

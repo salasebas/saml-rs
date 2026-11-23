@@ -323,12 +323,12 @@ fn descriptors(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     Ok((sp_descriptor, idp_descriptor))
 }
@@ -501,12 +501,12 @@ fn typed_builder_authn_request_escapes_hostile_values_for_all_bindings(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(HOSTILE_SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     for start in [
@@ -636,7 +636,7 @@ fn typed_facade_honors_custom_acs_index_from_metadata() -> Result<(), Box<dyn st
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     let started = sp.start_sso(&idp_descriptor, StartSso::post().acs_index(7))?;
@@ -1628,12 +1628,12 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
     let peer_idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(PEER_IDP_ENTITY_ID)?,
         &peer_idp_metadata,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let peer_sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(PEER_SP_ENTITY_ID)?,
         &peer_sp_metadata,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let signing_setting = EntitySetting {
         private_key: Some(PRIVKEY.to_string()),
@@ -1711,7 +1711,7 @@ fn typed_facade_rejects_pending_peer_mismatch() -> Result<(), Box<dyn std::error
     let other_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://other-idp.example.com/metadata")?,
         other_idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     match exchange.sp.finish_sso(
@@ -1748,7 +1748,7 @@ fn typed_facade_rejects_response_with_wrong_sp_descriptor() -> Result<(), Box<dy
     let other_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://other-sp.example.com/metadata")?,
         other_sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     match exchange.idp.respond_sso(
@@ -2841,7 +2841,7 @@ fn recommended_sso_trusts_signed_metadata_only_with_pinned_certificates(
     let unverified = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &signed,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     assert!(!unverified.signed_metadata_xml().is_some());
     Ok(())
@@ -3507,7 +3507,7 @@ fn typed_facade_accepts_metadata_and_response_that_start_with_a_byte_order_mark(
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &format!("\u{feff}{}", exchange.idp.metadata_xml()),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let xml = format!(
         "\u{feff}{}",

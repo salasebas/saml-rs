@@ -118,6 +118,11 @@ let idp = IdpDescriptor::from_metadata_xml(
 let signed_descriptor = idp.signed_metadata_xml();
 ```
 
+Replace `MetadataTrustPolicy::UnsignedForCompatibility` with
+`MetadataTrustPolicy::Unverified` when your application establishes the
+document's origin and integrity. This option skips signature verification
+even when the document carries a signature.
+
 The import enforces these signature rules:
 
 - The document holds exactly one signature, directly under the metadata
@@ -125,8 +130,10 @@ The import enforces these signature rules:
   the enveloped-signature transform. Any other shape, such as `URI=""` or a
   reference to a child element, returns `SamlError::SignedReferenceMismatch`.
 - `RequireSignature` accepts only the enveloped-signature and exclusive
-  canonicalization transforms. For inclusive canonicalization, use
-  `RequireSignatureAllowingOtherCanonicalization`.
+  canonicalization transforms. Replace
+  `RequireSignatureAllowingOtherCanonicalization` with
+  `RequireSignatureAllowingInclusiveCanonicalization` to also accept inclusive
+  Canonical XML 1.0 and 1.1 transforms, with or without comments.
 - On a build that verifies MD5 or RIPEMD-160, `RequireSignature` rejects
   them with `SamlError::AlgorithmUnsupported`. It does not verify with an RSA
   key shorter than 2048 bits. Until the publisher signs with stronger
@@ -134,7 +141,7 @@ The import enforces these signature rules:
   them where the crypto provider verifies them. See the
   [metadata trust](../../conformance/metadata-and-replay.md#metadata-trust) rows.
 - `from_metadata_xml` parses with the default `XmlLimits`. Use
-  `from_metadata_xml_with_policy` to supply limits for parsing and signature
+  `from_metadata_xml_with_xml_policy` to supply limits for parsing and signature
   verification, and to configure an optional schema validator.
 
 ## 8. Remove metadata element orders

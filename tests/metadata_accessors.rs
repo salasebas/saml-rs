@@ -59,12 +59,12 @@ fn peer_endpoints_keep_their_role_direction_and_indexed_default(
     let idp = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://peer.example.com")?,
         XML,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let sp = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://peer.example.com")?,
         XML,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     assert_eq!(idp.name_id_formats(), [NameIdFormat::Persistent]);
     assert_eq!(sp.name_id_formats(), [NameIdFormat::Transient]);
@@ -119,12 +119,12 @@ fn endpoint_access_validates_selected_urls_without_rejecting_metadata_on_import(
     let idp = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://peer.example.com")?,
         &xml,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let sp = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://peer.example.com")?,
         &xml,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     for (selected, element) in [
         (
