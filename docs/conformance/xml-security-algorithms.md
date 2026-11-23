@@ -34,7 +34,8 @@ the AWS-LC and FIPS builds lack are in the
 | Sign and verify with the enveloped-signature transform | Mandatory | Conformance §4.1 | `TransformAlgorithm::EnvelopedSignature`, the first default transform |
 | Sign `respond_sso_artifact`, `initiate_sso_artifact`, and SOAP logout messages with the enveloped-signature and exclusive canonicalization transforms only | Library policy: Canonical XML would put the SOAP envelope's namespace declarations into the digest of a verifier that checks in place. | — | Always |
 | Sign with RSA-SHA256, RSA-SHA384, or RSA-SHA512 | Optional | E50 | `SignatureAlgorithm::RsaSha256` (default), `RsaSha384`, `RsaSha512` |
-| Sign with a custom URI. A detached signature accepts any URI the provider supports. An embedded signature needs a digest for the URI, which only the `SignatureAlgorithm` URIs and `signature_algorithm::RSA_SHA256_MGF1` have. Any other URI fails to sign | Optional | E50 | `SignatureAlgorithm::Custom` |
+| Sign embedded and detached messages with a custom signature URI the provider supports | Optional | E50, E81 | `SignatureAlgorithm::Custom` |
+| Use SHA-256 for the reference digest of an embedded signature outside the built-in digest mapping | Library policy: SHA-256 is the existing reference digest default and works independently of the signature method. | XMLDSig §4.4.2, §4.4.3.5 | `SignatureAlgorithm::Custom` |
 
 Peers configure an HMAC shared secret out of band. Generated HMAC signatures
 omit `KeyInfo`. Typed metadata import verifies with pinned certificates, not

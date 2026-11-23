@@ -5,7 +5,7 @@ use super::keys::{load_certificate, load_hmac_secret, read_private_key};
 use super::signature_profile::check_verification_key;
 use crate::binding::{encode_base64, xml_escape};
 use crate::config::{HmacSecret, XmlSignatureProfile};
-use crate::constants::{digest_for_signature, namespace, transform_algorithm};
+use crate::constants::{digest_algorithm, digest_for_signature, namespace, transform_algorithm};
 use crate::entity::{EntitySetting, SignatureAction, SignatureConfig};
 use crate::error::{crypto_err, xml_err, SamlError};
 use crate::util::normalize_cert_string;
@@ -157,8 +157,7 @@ fn embed_signature(
         .attr("ID")
         .or_else(|| target.attr("AssertionID"))
         .ok_or_else(|| SamlError::Invalid("signing target has no ID".into()))?;
-    let digest = digest_for_signature(sig_alg)
-        .ok_or_else(|| SamlError::crypto(format!("unknown signature algorithm: {sig_alg}")))?;
+    let digest = digest_for_signature(sig_alg).unwrap_or(digest_algorithm::SHA256);
 
     let prefix = config.map(|c| c.prefix.as_str()).unwrap_or("ds");
     validate_namespace_prefix("SignatureConfig.prefix XML prefix", prefix)?;

@@ -515,7 +515,6 @@ impl IdpDescriptor {
 
     /// Verify this identity provider's HMAC signatures with `secret`.
     ///
-    /// Use it when the peer signs with [`crate::SignatureAlgorithm::HmacSha1`].
     /// Its metadata certificates still verify its other signatures.
     pub fn with_hmac_secret(mut self, secret: HmacSecret) -> Self {
         self.provider.setting.hmac_secret = Some(secret);
@@ -707,7 +706,6 @@ impl SpDescriptor {
 
     /// Verify this service provider's HMAC signatures with `secret`.
     ///
-    /// Use it when the peer signs with [`crate::SignatureAlgorithm::HmacSha1`].
     /// Its metadata certificates still verify its other signatures.
     pub fn with_hmac_secret(mut self, secret: HmacSecret) -> Self {
         self.provider.setting.hmac_secret = Some(secret);

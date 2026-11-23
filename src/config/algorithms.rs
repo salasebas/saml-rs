@@ -8,11 +8,10 @@ use crate::constants::{
 /// [`Self::RsaSha256`] is the default. [`Self::RsaSha1`], [`Self::DsaSha1`],
 /// and [`Self::HmacSha1`] use a SHA-1 digest and are used only when selected.
 ///
-/// A [`Self::Custom`] URI works for a detached signature, which HTTP-Redirect
-/// and HTTP-POST-SimpleSign carry, when the crypto backend supports it. An
-/// embedded XML signature needs one of the built-in URIs. Any other URI
-/// returns [`SamlError::Crypto`](crate::SamlError::Crypto) when the first
-/// message is signed.
+/// The crypto backend must support the [`Self::Custom`] URI to sign a
+/// message. For embedded XML signatures, known URIs use the reference digest
+/// from [`crate::constants::digest_for_signature`]. Other URIs use SHA-256
+/// for the reference digest.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SignatureAlgorithm {
@@ -39,8 +38,8 @@ pub enum SignatureAlgorithm {
     HmacSha1,
     /// Backend-specific signature algorithm URI.
     ///
-    /// See [`SignatureAlgorithm`] for the URIs an embedded XML signature
-    /// accepts.
+    /// Set a shared secret with [`crate::Credentials::with_hmac_secret`] if
+    /// the URI identifies an HMAC algorithm.
     Custom(String),
 }
 
