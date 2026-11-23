@@ -74,6 +74,9 @@ impl ServiceProvider {
     /// Browser requests require a verified signature. SOAP also accepts an
     /// unsigned request over a mutually authenticated, integrity-protected channel.
     ///
+    /// A request must carry exactly one `<BaseID>`, `<NameID>`, or
+    /// `<EncryptedID>` as a direct child in the SAML assertion namespace.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the inbound message or relay state is invalid,
@@ -285,6 +288,8 @@ impl IdentityProvider {
     ///
     /// Browser requests require a verified signature. SOAP also accepts an
     /// unsigned request over a mutually authenticated, integrity-protected channel.
+    ///
+    /// The identifier requirement is the same as for [`ServiceProvider::receive_slo`].
     ///
     /// # Errors
     ///

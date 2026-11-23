@@ -496,6 +496,39 @@ fn identity_provider_answers_a_plaintext_base_id() -> Result<(), Box<dyn std::er
 }
 
 #[test]
+fn idp_without_decryption_key_requires_a_single_identifier(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties_with(
+        sp_with(XmlEncryptionPolicy::default())?,
+        idp_with_credentials(XmlEncryptionPolicy::default(), signing_credentials())?,
+    )?;
+    let sent = start(&parties, Initiator::Sp, StartSlo::soap())?;
+    let encrypted = encrypted_id(BASE_ID)?;
+
+    let result = receive(
+        &parties,
+        Initiator::Sp,
+        soap_request_with_identifier(&sent, &format!("{encrypted}{BASE_ID}"))?,
+    );
+    assert!(
+        matches!(result, Err(SamlError::ProtocolProfile(_))),
+        "expected ProtocolProfile for mixed identifiers, got {:?}",
+        result.err()
+    );
+    let received = receive(
+        &parties,
+        Initiator::Sp,
+        soap_request_with_identifier(&sent, &encrypted)?,
+    )?;
+    assert_eq!(received.message().name_id(), None);
+    assert_eq!(
+        received.message().session_indexes(),
+        &[SessionIndex::try_new("_session")?]
+    );
+    Ok(())
+}
+
+#[test]
 fn identity_provider_answers_an_encrypted_base_id() -> Result<(), Box<dyn std::error::Error>> {
     assert_answers_without_name_id(&encrypted_id(BASE_ID)?)
 }

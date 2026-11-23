@@ -31,6 +31,7 @@ Check the topics that affect your integration.
 - [Update AuthnRequest signature verification](authn-request-signatures.md)
 - [Update truncated XML HMAC signatures](hmac-truncation.md)
 - [Authenticate browser logout messages](logout-authentication.md)
+- [Send one principal identifier per logout request](logout-request-identifier.md)
 - [Upgrade logout, validation, and replay code](logout-validation-replay.md)
 - [Match typed `SamlError` variants](errors.md)
 - [Handle SSO error responses with missing correlation data or mismatched RelayState](sso-error-correlation.md)

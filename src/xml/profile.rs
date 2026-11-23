@@ -607,21 +607,28 @@ pub(crate) fn validate_protocol_profile(
         .set_max_namespace_bindings(limits.max_attributes_per_element);
     let mut stack = Vec::new();
     let mut saw_root = false;
+    let mut logout_identifiers = 0usize;
 
     loop {
         let (resolved, event) = reader.read_resolved_event().map_err(reader_err)?;
         let element_namespace = classify_namespace(resolved);
         match event {
-            Event::Start(element) => {
-                validate_element(&reader, &element, element_namespace, &stack, parser_type)?;
-                saw_root = true;
-                stack.push(ExpandedName {
-                    local: element.local_name().into_inner().as_bytes().to_vec(),
-                    namespace: element_namespace,
-                });
-            }
-            Event::Empty(element) => {
-                validate_element(&reader, &element, element_namespace, &stack, parser_type)?;
+            Event::Start(ref element) | Event::Empty(ref element) => {
+                validate_element(&reader, element, element_namespace, &stack, parser_type)?;
+                let local = element.local_name().into_inner().as_bytes();
+                if parser_type == ParserType::LogoutRequest
+                    && stack.len() == 1
+                    && element_namespace == NamespaceKind::Assertion
+                    && matches!(local, b"BaseID" | b"NameID" | b"EncryptedID")
+                {
+                    logout_identifiers += 1;
+                }
+                if matches!(event, Event::Start(_)) {
+                    stack.push(ExpandedName {
+                        local: local.to_vec(),
+                        namespace: element_namespace,
+                    });
+                }
                 saw_root = true;
             }
             Event::End(_) => {
@@ -640,6 +647,11 @@ pub(crate) fn validate_protocol_profile(
 
     if !saw_root {
         return Err(profile_error("missing SAML protocol root"));
+    }
+    if parser_type == ParserType::LogoutRequest && logout_identifiers != 1 {
+        return Err(profile_error(
+            "LogoutRequest requires one BaseID, NameID, or EncryptedID",
+        ));
     }
     Ok(())
 }
