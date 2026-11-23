@@ -14,6 +14,16 @@ element, or an element with no namespace, import now returns
 `urn:oasis:names:tc:SAML:2.0:metadata` for the member and every group from
 the root to that member.
 
+## Read metadata expiration from unqualified `validUntil`
+
+Metadata readers now use only unqualified `validUntil` attributes to
+limit the validity of an entity or its enclosing group. If your publisher
+uses a prefix on that attribute, publish it without a prefix.
+
+A valid midnight value with hour 24, such as `2029-12-31T24:00:00Z`, now
+expires at the start of the next day. Update tests that expected the import
+or validity check to reject that value.
+
 ## Parse without extractor fields, and pass limits in `XmlPolicy`
 
 Remove the extractor list from `Metadata::parse`. Custom extraction remains an
@@ -296,8 +306,7 @@ let xml = generate_sp_metadata(&input)?;
 
 The typed config readers expose the former `name_id_format` field through
 `name_id_formats()`. The builder setter stays `name_id_format(format)` because
-it adds one format per call. Code using the earlier unreleased getter
-`config.metadata().name_id_format()` must use the plural getter too.
+it adds one format per call.
 
 Before:
 

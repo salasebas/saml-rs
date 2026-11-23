@@ -60,12 +60,13 @@ let denied = idp.respond_sso(
 After the upgrade:
 
 ```rust
-# use saml_rs::{AuthnRequest, Attributes, NameId, Received, RespondSso, SamlError, SpDescriptor, SsoAssertion, SsoOutcome, Status, IdentityProvider};
+# use saml_rs::{AuthnRequest, Attributes, NameId, NameIdFormat, Received, RespondSso, SamlError, SpDescriptor, SsoAssertion, SsoOutcome, Status, IdentityProvider};
 # fn respond(idp: &IdentityProvider, sp: &SpDescriptor, request: &Received<AuthnRequest>, attributes: Attributes) -> Result<(), SamlError> {
+let name_id = NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress);
 let response = idp.respond_sso(
 	sp,
 	request,
-	SsoAssertion::new(NameId::new("alice@example.com")).with_attributes(attributes),
+	SsoAssertion::new(name_id).with_attributes(attributes),
 	RespondSso::post(),
 )?;
 let denied = idp.respond_sso(
@@ -87,6 +88,8 @@ Two status choices behave differently:
 - A `Success` response always has the bare top-level `Success` status.
   Before the upgrade, `RespondSso::status` could put a subordinate code under
   `Success` next to the assertion. That response cannot be expressed now.
+
+If the request specifies a format, [supply a matching NameID](name-id-policy.md).
 
 ## Build a `NameId` with its `with_` methods
 
@@ -178,6 +181,7 @@ let attributes = Attributes::new([
 | `session.authn_session()` | `session.authn_statements().first()` |
 | `session.assertion()` | `session.assertion_id()`, `session.issuer()`, and `session.name_id()` |
 | `authn_session.not_on_or_after()` | `statement.session_not_on_or_after()` |
+| `authn_session.subject_locality()` | `statement.subject_locality()` |
 | `session.replay_keys()` | Removed |
 
 `authn_session()` returned an empty `AuthnSession` when the assertion had no
@@ -307,7 +311,9 @@ the value came from:
 | `AuthnSession::new` | Removed. Read `SsoSession::authn_statements()` |
 | `SubjectConfirmation::from_raw_xml` | Removed. Read `SsoSession::subject_confirmations()` |
 | `Assertion` | Removed. Read the `SsoSession` accessors |
-| `SsoResponse` accessors and `SsoResponse::try_from(flow)` | Removed. Use `SsoSession` |
+| `SsoResponse::response_id()`, `issuer()`, or `in_response_to()` | Read the same accessor on the accepted `SsoSession` |
+| `SsoResponse::issue_instant()` | `SsoSession::response_issue_instant()` |
+| `SsoResponse::raw_flow()` or `try_from(flow)` | Removed with the raw API |
 
 A service provider configures the `NameIDPolicy` it sends on `SpConfig`. To
 compare a received policy in a test, compare its accessors:
@@ -350,7 +356,7 @@ let options = StartSso::post().requested_authn_context(RequestedAuthnContext::tr
 
 **Affects:** service providers whose identity provider omits the SAML
 `AuthnContext` of an `AuthnStatement` or sends more than one, and code that
-calls `authn_context()` on an `AuthnStatement`.
+reads `AuthnSession::authn_context()` as an `Option`.
 
 Ask the identity provider to send exactly one context in each statement, as
 the assertion schema requires. Before the upgrade, the service provider

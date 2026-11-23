@@ -55,7 +55,13 @@ fn authentication_failed(error: &SamlError) -> bool {
 
 `status.top_level().as_uri()` and
 `status.subordinate().map(SubordinateStatusCode::as_uri)` return the strings
-the old fields held. An empty subordinate `Value` reads as no subordinate code.
+for the status codes. The receiver strips surrounding XML Schema whitespace
+from each received code. An empty or whitespace-only top-level `Value`
+returns `SamlError::StatusMissing`. An empty or whitespace-only subordinate
+`Value` reads as no subordinate code.
+
+`SubordinateStatusCode::try_new` now accepts `&` and `'` in absolute URI
+references, such as `https://idp.example/status?a=1&b=2`.
 
 A top-level code outside the four that Core §3.2.2.2 lists, such as
 `urn:example:status:Unknown`, now returns `ProtocolProfile` instead of
@@ -327,8 +333,7 @@ fn decode(field: &str) -> Result<Vec<u8>, SamlError> {
 }
 ```
 
-Return your own error type, or wrap the error in a `SamlError` variant on
-purpose:
+Return an error type that can carry the decoder's error.
 
 ```rust
 use base64::engine::general_purpose::STANDARD;

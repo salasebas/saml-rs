@@ -4,10 +4,9 @@
 
 When upgrading from 0.8, replace `AllowUnsignedVerifyIfPresent` or
 `AllowUnsignedForCompatibility` with `AuthnRequestValidationPolicy::AllowUnsigned`.
-If you used `AllowUnsignedForCompatibility`, or `AllowUnsigned` from an
-unreleased revision, the IdP now verifies present signatures and enforces
-`AuthnRequestsSigned` in SP metadata. Callers using `IdpValidationPolicy::default()`
-need no code changes.
+If you used `AllowUnsignedForCompatibility`, the IdP now verifies present
+signatures and enforces `AuthnRequestsSigned` in SP metadata.
+Callers using `IdpValidationPolicy::default()` need no code changes.
 
 ```diff
 -validation.authn_requests = AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent;

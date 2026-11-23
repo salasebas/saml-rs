@@ -60,3 +60,21 @@ another name format is written as before.
 **Upgrade:** create the value with `SubjectId::try_new` or
 `PairwiseId::try_new` and add it with `Attribute::from`. Write the scope in
 lower case, and the unique ID in one case.
+
+If the service provider reads these attributes as identifiers, call
+`SsoSession::subject_id()` or `SsoSession::pairwise_id()`. Each returns
+`Ok(None)` when the attribute is absent and `SamlError::ProtocolProfile`
+when the corresponding identifier is malformed. Check which scopes the
+issuer is authorized to assert before using the identifier to select an
+account.
+
+## Compare attributes that carry a `FriendlyName`
+
+The SP now preserves `FriendlyName` on received attributes. If you compare
+an entire received `Attribute` with one your application constructs, the
+comparison includes that field. Set the expected label with
+`Attribute::with_friendly_name` or compare the name, format, and values
+your application uses.
+
+When several elements share the same name and format, their values still
+merge. The merged attribute keeps the first element's `FriendlyName`.

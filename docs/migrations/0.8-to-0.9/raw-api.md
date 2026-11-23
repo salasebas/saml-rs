@@ -16,9 +16,9 @@ typed API:
 
 | Removed | Replacement |
 | --- | --- |
-| `ServiceProvider::create_login_request` | `ServiceProvider::start_sso` |
+| `ServiceProvider::create_login_request`, `create_login_request_with_options` | `ServiceProvider::start_sso` |
 | `ServiceProvider::parse_login_response_with_request_id` | `ServiceProvider::finish_sso` |
-| `ServiceProvider::parse_unsolicited_login_response` | `ServiceProvider::accept_unsolicited_sso` |
+| `ServiceProvider::parse_unsolicited_login_response`, `parse_login_response` | `ServiceProvider::accept_unsolicited_sso` |
 | `IdentityProvider::parse_login_request` | `IdentityProvider::receive_sso` |
 | `IdentityProvider::create_login_response` | `IdentityProvider::respond_sso`, or `IdentityProvider::initiate_sso` for an unsolicited response |
 | `logout::create_logout_request`, `create_logout_request_with_id` | `start_slo` on `ServiceProvider` or `IdentityProvider` |
@@ -77,8 +77,10 @@ fn send<Message>(outbound: &Outbound<Message>) {
 }
 ```
 
-`examples/sso.rs` and `examples/slo.rs` show the full typed flows. Typed
-operations check what the raw functions left to the caller, such as
+The [SSO example](../../../examples/sso.rs) and
+[logout example](../../../examples/slo.rs) show the full typed flows.
+Use [replay storage](logout-validation-replay.md#supply-replay-storage-for-http-post-sso)
+when receiving HTTP-POST SSO. The typed operations also check
 `InResponseTo` correlation, RelayState, and the receiving endpoint.
 
 The raw service provider's defaults differ from `SpValidationPolicy::default`

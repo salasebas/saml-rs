@@ -51,3 +51,24 @@ let idp = IdpDescriptor::from_metadata_xml_with_policy(
 `IdpMetadata::from_xml_with_policy`, `SpMetadata::from_xml_with_policy`, and
 `Metadata::parse_with_policy`. Existing constructors keep their default XML
 limits and have no callback.
+
+## Update comparisons of received URI attributes
+
+The built-in readers now collapse XML Schema whitespace in received SAML
+URI values. Surrounding spaces no longer cause an endpoint comparison to
+fail for a `Destination` or bearer `Recipient`, or prevent a bearer
+`Method` from being recognized. Audience checks compare the collapsed
+`Audience` value. `AuthnRequest::acs_url()`
+returns the collapsed `AssertionConsumerServiceURL` value. If you test
+these paths with padded URI values, expect the same result as for the
+unpadded value.
+
+Entity identifiers in `Issuer` use exact string comparison. See
+[SOAP issuer comparison](soap-artifact-discovery.md#send-a-soap-issuer-without-surrounding-whitespace).
+
+## Accept XML that starts with a UTF-8 byte order mark
+
+The built-in XML parser now preserves the correct source positions when a
+document starts with a UTF-8 byte order mark. If you stripped the mark to
+work around parsing failures when importing metadata or receiving a
+response, remove that workaround.
