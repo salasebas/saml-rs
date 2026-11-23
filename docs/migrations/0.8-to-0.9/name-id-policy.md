@@ -1,5 +1,7 @@
 # Honor the requested NameID format
 
+[How to upgrade from 0.8 to 0.9](README.md)
+
 This change affects identity providers that answer an `AuthnRequest` with
 `respond_sso` or `respond_sso_artifact`.
 When the requester names a specific standard format in `NameIDPolicy`, the
@@ -22,10 +24,11 @@ If the service provider uses the default `emailAddress` request format and
 you issue email addresses, add the format to your `NameId`.
 
 ```diff
--let name_id = NameId::new(verified_email);
+-let name_id = NameId::new(verified_email, None);
 +let name_id = NameId::new(verified_email).with_format(NameIdFormat::EmailAddress);
- let response = idp.respond_sso(&sp, &request, SsoAssertion::new(name_id), RespondSso::post())?;
 ```
+
+Pass the identifier in an [`SsoAssertion`](sso-results-and-identities.md#answer-with-an-ssoassertion-or-an-ssooutcome).
 
 You can also set the IdP's default with
 `IdpConfigBuilder::name_id_format` when that format applies to the identifiers

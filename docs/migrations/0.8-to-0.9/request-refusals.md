@@ -1,9 +1,13 @@
 # Send SAML responses for refused requests
 
+[How to upgrade from 0.8 to 0.9](README.md)
+
 ## Single Logout
 
-If your SP or IdP handler maps every `receive_slo` error to a local error
-page or SOAP fault, add an arm for `SamlError::LogoutRequestRefused`.
+When `receive_slo` authenticates a request with a newer version, it can now
+return `SamlError::LogoutRequestRefused` in place of a protocol profile
+error. If your SP or IdP maps every receive error to a local page or SOAP
+fault, add an arm for that variant.
 Pass its `refusal` to `respond_slo_refusal` with the same peer descriptor
 and `RespondSlo` options you use for `respond_slo`. Send the resulting
 `Outbound<LogoutResponse>` on the selected binding.
@@ -14,11 +18,12 @@ even when you configured a custom logout-response template.
 
 ## Name identifier management
 
-If your SOAP or HTTP-Redirect handler catches
-`TimeWindowInvalid` for `ManageNameIdRequestIssueInstant`, handle
-`NameIdManagementReceipt::Refused` instead. The reason is
-`NameIdManagementRefusal::RequestAgeOutsideWindow`. Send
-`refused.response()` as you would for an undecryptable identifier.
+If your handler catches `TimeWindowInvalid` for
+`ManageNameIdRequestIssueInstant`, handle a refused receipt. Match
+`NameIdManagementReceipt::Refused` over SOAP or
+`NameIdManagementRedirectReceipt::Refused` over HTTP-Redirect. Read
+`NameIdManagementRefusal::RequestAgeOutsideWindow` from `refused.reason()`
+and send `refused.response()` as you would for an undecryptable identifier.
 
 ## Response versions
 

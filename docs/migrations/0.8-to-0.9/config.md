@@ -492,6 +492,10 @@ and instant, and `SsoOutcome::Failure` for an error status. Arbitrary XML
 extensions have no typed replacement. Logout templates remain available on
 `TemplatePolicy`.
 
+The built-in renderer writes failure responses from `SsoOutcome::Failure`.
+Change handlers that expected an error when combining a failure status with
+a custom login response template.
+
 ## Use one rule for generated XML prefixes
 
 **Affects:** callers that set `TemplatePolicy::tag_prefix_protocol`,
@@ -528,6 +532,11 @@ Update peers and XML snapshots that expect the old spellings. In a
 namespace-aware consumer, match the namespace URI and local name. To emit
 `samlp` and `saml` throughout, use the default prefix settings. The artifact
 response embeds the stored protocol message with its original prefixes.
+
+The generated SSO response declares XML Schema and XML Schema Instance
+prefixes on typed `AttributeValue` elements. If the assertion prefix is
+`xs` or `xsi`, the corresponding schema prefix on the value is `xsd` or
+`xsi1`. Compare namespace URIs when reading the value's type.
 
 ## Write logout templates as well-formed XML
 

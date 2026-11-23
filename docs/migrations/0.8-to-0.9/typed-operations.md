@@ -182,9 +182,10 @@ is the outcome only when it is true:
   not recognize, it passes `Status::requester()` or `Status::responder()`,
   optionally with `SubordinateStatusCode::unknown_principal()`.
 
-In every other case, pass an error status. A logout-response template still
-substitutes only the top-level code: `respond_slo` rejects a subordinate code
-in `status` when a template is set.
+In every other case, pass an error status. A logout-response template
+substitutes only the top-level code. Keep the `{StatusCode}` placeholder so
+the rendered response carries the code you passed. `respond_slo` checks the
+rendered code and rejects a subordinate code when a template is set.
 
 **Upgrade:** move the status from the options to the argument. Where the call
 set no status, pass the status that reports what happened.

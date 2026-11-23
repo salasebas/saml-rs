@@ -22,9 +22,6 @@ provider used PAOS and the identity provider used SOAP.
 - `Saml<Idp>::receive_paos_sso`, `respond_paos_sso`, `reject_paos_sso`, and
   `paos_soap_fault`
 
-Browser SSO, SOAP Single Logout, SOAP artifact resolution, and SOAP name
-identifier management are unchanged.
-
 **Upgrade:** saml-rs 0.9 has no replacement.
 
 - To log in a client without a browser, use the flow your identity provider

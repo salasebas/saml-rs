@@ -36,9 +36,6 @@ let relay_state = RelayStateParam::try_from_option(Some("return-to-cart".to_stri
 let started = sp.start_sso(&idp, StartSso::redirect().relay_state(relay_state))?;
 
 let session = sp.finish_sso(&idp, &pending, input, validation)?;
-if session.relay_state() == &RelayStateParam::Absent {
-    return Ok(None);
-}
 let target = session.relay_state().as_deref();
 ```
 
@@ -246,8 +243,17 @@ signature, as before.
 Before the upgrade, each call named the message type.
 
 ```rust,ignore
-let session = sp.finish_sso(&idp, &pending, BrowserInput::<SsoResponse>::post(fields), validation)?;
-let request = idp.receive_slo(&sp, BrowserInput::<LogoutRequest>::soap(body), validation)?;
+let session = sp.finish_sso(
+    &idp_descriptor,
+    &pending,
+    BrowserInput::<SsoResponse>::post(fields),
+    finish_validation,
+)?;
+let request = idp.receive_slo(
+    &sp_descriptor,
+    BrowserInput::<LogoutRequest>::soap(body),
+    receive_validation,
+)?;
 ```
 
 After the upgrade, the operation fixes the message type.
