@@ -9,8 +9,8 @@ use crate::flow::{
     SignedMessageDestination,
 };
 use crate::model::{
-    AuthnRequest, OutstandingLogout, RelayState, SamlValidationContext, SsoResponse, SsoSession,
-    VerifiedXmlSignature,
+    AuthnContextComparison, AuthnContextReference, AuthnRequest, OutstandingLogout, RelayState,
+    SamlValidationContext, SsoResponse, SsoSession, VerifiedXmlSignature,
 };
 use crate::sp::{self, AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions};
 use crate::xml::XmlLimits;
@@ -21,6 +21,34 @@ use super::peer::{
     relay_state_from_input, selected_acs,
 };
 use super::{ForceAuthn, SamlError, StartSso};
+
+fn ensure_required_authn_context(
+    required: Option<&[AuthnContextReference]>,
+    session: &SsoSession,
+) -> Result<(), SamlError> {
+    let Some(expected) = required else {
+        return Ok(());
+    };
+    let actual: Vec<AuthnContextReference> = session
+        .authn_statements()
+        .iter()
+        .flat_map(|statement| {
+            let context = statement.authn_context();
+            context
+                .class_reference()
+                .into_iter()
+                .chain(context.declaration_reference())
+                .cloned()
+        })
+        .collect();
+    if actual.iter().any(|reference| expected.contains(reference)) {
+        return Ok(());
+    }
+    Err(SamlError::AuthnContextMismatch {
+        expected: expected.to_vec(),
+        actual,
+    })
+}
 
 pub(super) fn session_from_verified_flow(
     result: FlowResultWithSignatureEvidence,
@@ -145,6 +173,8 @@ impl ServiceProvider {
     /// Returns [`SamlError`] when relay state is invalid, the IdP metadata
     /// cannot be parsed or trusted, the requested ACS is missing or conflicts
     /// with the selected binding, a requested authentication reference is not an absolute URI,
+    /// [`StartSso::require_exact_authn_context`] is set without an exact
+    /// [`RequestedAuthnContext`](crate::RequestedAuthnContext),
     /// `ProviderName` contains invalid XML characters, or request creation fails
     /// because required metadata, signing keys, or supported bindings are unavailable.
     /// Returns [`SamlError::Invalid`] for [`StartSso::simple_sign`] when the
@@ -188,6 +218,26 @@ impl ServiceProvider {
         if let Some(relay_state) = &options.relay_state {
             relay_state.ensure_sendable()?;
         }
+        let required_authn_context = if options.require_exact_authn_context {
+            match options.requested_authn_context.as_ref() {
+                Some(context) if context.comparison() == AuthnContextComparison::Exact => {
+                    Some(context.references().to_vec())
+                }
+                Some(_) => {
+                    return Err(SamlError::Invalid(
+                        "require_exact_authn_context requires RequestedAuthnContext with exact comparison"
+                            .into(),
+                    ));
+                }
+                None => {
+                    return Err(SamlError::Invalid(
+                        "require_exact_authn_context requires requested_authn_context".into(),
+                    ));
+                }
+            }
+        } else {
+            None
+        };
         let peer_idp = idp_engine_at(idp, SystemTime::now())?;
         let acs = selected_acs(self.engine(), options.response_binding, options.acs_index)?;
         let response_binding = acs.binding();
@@ -214,6 +264,7 @@ impl ServiceProvider {
             options.relay_state,
             idp.entity_id().clone(),
             acs,
+            required_authn_context,
         );
         Ok(Started { pending, outbound })
     }
@@ -241,12 +292,16 @@ impl ServiceProvider {
     ///
     /// Returns [`SamlError`] when the response does not match the pending
     /// request, including issuer, binding, relay state, destination, recipient,
-    /// or `InResponseTo` mismatches; when an artifact input pairs the artifact
-    /// with a message resolved from another artifact or another identity
-    /// provider; when XML, signature, certificate trust,
-    /// audience, condition, or time validation fails; when the assertions do
-    /// not share one issuer and one principal; or when replay validation
-    /// fails. See [`crate::ReplayCache`] for replay storage errors. A status
+    /// `InResponseTo`, or required authentication context mismatches; when an
+    /// artifact input pairs the artifact with a message resolved from another
+    /// artifact or another identity provider; when XML, signature, certificate
+    /// trust, audience, condition, or time validation fails; when the
+    /// assertions do not share one issuer and one principal; or when replay
+    /// validation fails. When `pending` carries
+    /// [`PendingAuthnRequest::required_authn_context`], returns
+    /// [`SamlError::AuthnContextMismatch`] unless a validated `AuthnStatement`
+    /// of the consumed assertion carries a matching class or declaration
+    /// reference. See [`crate::ReplayCache`] for replay storage errors. A status
     /// other than `Success` returns [`SamlError::StatusNotSuccess`] once all present
     /// signatures verify and the issuer and destination checks pass. An error
     /// response can omit `InResponseTo`. If present, it must match the pending
@@ -296,7 +351,12 @@ impl ServiceProvider {
         mut validation: SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         let session = self.parsed_sso_session(idp, pending, input, &validation)?;
-        self.finish_validated_session(session, &mut validation, None)
+        self.finish_validated_session(
+            session,
+            &mut validation,
+            None,
+            pending.required_authn_context(),
+        )
     }
 
     /// Finish SP-initiated SSO and apply an [`OutstandingLogout`].
@@ -317,7 +377,12 @@ impl ServiceProvider {
         outstanding_logout: &OutstandingLogout,
     ) -> Result<SsoSession, SamlError> {
         let session = self.parsed_sso_session(idp, pending, input, &validation)?;
-        self.finish_validated_session(session, &mut validation, Some(outstanding_logout))
+        self.finish_validated_session(
+            session,
+            &mut validation,
+            Some(outstanding_logout),
+            pending.required_authn_context(),
+        )
     }
 
     /// Accept an IdP-initiated SSO response explicitly.
@@ -365,7 +430,7 @@ impl ServiceProvider {
         mut validation: SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         let session = self.parsed_unsolicited_session(idp, input, &validation)?;
-        self.finish_validated_session(session, &mut validation, None)
+        self.finish_validated_session(session, &mut validation, None, None)
     }
 
     /// Accept an IdP-initiated HTTP-POST response from a configured identity provider.
@@ -449,7 +514,7 @@ impl ServiceProvider {
             relay_state,
             &validation,
         )?;
-        self.finish_validated_session(session, &mut validation, None)
+        self.finish_validated_session(session, &mut validation, None, None)
     }
 
     /// Accept an IdP-initiated SSO response and apply an [`OutstandingLogout`].
@@ -466,7 +531,7 @@ impl ServiceProvider {
         outstanding_logout: &OutstandingLogout,
     ) -> Result<SsoSession, SamlError> {
         let session = self.parsed_unsolicited_session(idp, input, &validation)?;
-        self.finish_validated_session(session, &mut validation, Some(outstanding_logout))
+        self.finish_validated_session(session, &mut validation, Some(outstanding_logout), None)
     }
 
     pub(super) fn finish_validated_session(
@@ -474,11 +539,15 @@ impl ServiceProvider {
         session: SsoSession,
         validation: &mut SamlValidationContext<'_>,
         outstanding_logout: Option<&OutstandingLogout>,
+        required_authn_context: Option<&[AuthnContextReference]>,
     ) -> Result<SsoSession, SamlError> {
         let matches_outstanding_logout = match outstanding_logout {
             Some(logout) => logout.matches_unexpired(&session, validation)?,
             None => false,
         };
+        if !matches_outstanding_logout {
+            ensure_required_authn_context(required_authn_context, &session)?;
+        }
         session.check_and_store_replay(validation, self.engine().setting.xml_limits)?;
         if matches_outstanding_logout {
             return Err(SamlError::AssertionMatchesOutstandingLogout);

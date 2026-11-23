@@ -55,6 +55,9 @@ fn typed_api_contract_reexports_typed_binding_building_blocks(
     let pending = PendingAuthnRequest::from_snapshot(snapshot)?;
     let _: &AcsEndpoint = pending.acs();
     let _: SsoResponseBinding = pending.acs().binding();
+    let _: Option<&[saml_rs::AuthnContextReference]> = pending.required_authn_context();
+    let _: fn(saml_rs::StartSso) -> saml_rs::StartSso =
+        saml_rs::StartSso::require_exact_authn_context;
     let mut logout_snapshot = PendingLogoutRequestSnapshot::new(
         "_logout123",
         "https://idp.example.com/metadata",

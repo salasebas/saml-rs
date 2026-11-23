@@ -6,7 +6,8 @@
 use crate::config::NameIdFormat;
 use crate::constants::Binding;
 use crate::model::{
-    RefusedLogoutRequest, RelayState, ReplayKey, Status, StatusMessage, SubordinateStatusCode,
+    AuthnContextReference, RefusedLogoutRequest, RelayState, ReplayKey, Status, StatusMessage,
+    SubordinateStatusCode,
 };
 use std::fmt;
 
@@ -404,6 +405,20 @@ pub enum SamlError {
     /// `SPNameQualifier`. An omitted `Format` is unspecified.
     #[error("assertions do not refer to one principal")]
     PrincipalMismatch,
+    /// None of the consumed assertion's authentication statements matched the
+    /// exact authentication context required by the pending request.
+    #[error("authentication context mismatch")]
+    #[non_exhaustive]
+    AuthnContextMismatch {
+        /// Exact authentication context references required by the pending
+        /// request, in request order.
+        expected: Vec<AuthnContextReference>,
+        /// Authentication context class and declaration references reported by
+        /// the consumed assertion's authentication statements, in statement
+        /// order with each statement's class reference before its declaration
+        /// reference.
+        actual: Vec<AuthnContextReference>,
+    },
     /// The assertion identifier differs from the standard format in the request's `NameIDPolicy`.
     #[error(
         "NameIDPolicy format mismatch: requested {}, issued {}",

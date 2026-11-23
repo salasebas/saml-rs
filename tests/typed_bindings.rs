@@ -2,10 +2,10 @@ use saml_rs::constants::Binding;
 use saml_rs::metadata::Endpoint;
 use saml_rs::SamlError;
 use saml_rs::{
-    AcsEndpoint, LogoutBinding, NameIdManagementBinding, PendingAuthnRequest,
-    PendingAuthnRequestSnapshot, PendingLogoutRequest, PendingLogoutRequestSnapshot, RelayState,
-    SamlInstant, SloEndpoint, SsoEndpoint, SsoRequestBinding, SsoResponseBinding,
-    MAX_RELAY_STATE_BYTES,
+    AcsEndpoint, AuthnContextReference, LogoutBinding, NameIdManagementBinding,
+    PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
+    PendingLogoutRequestSnapshot, RelayState, SamlInstant, SloEndpoint, SsoEndpoint,
+    SsoRequestBinding, SsoResponseBinding, MAX_RELAY_STATE_BYTES,
 };
 
 #[test]
@@ -295,6 +295,7 @@ fn typed_bindings_pending_authn_request_snapshot_round_trips(
         restored.idp_entity_id().as_str(),
         "https://idp.example.com/metadata"
     );
+    assert_eq!(restored.required_authn_context(), None);
     assert_eq!(restored.snapshot(), snapshot);
     let mut snapshot_with_other_index = snapshot;
     snapshot_with_other_index.acs_index = Some(3);
@@ -302,6 +303,62 @@ fn typed_bindings_pending_authn_request_snapshot_round_trips(
         restored,
         PendingAuthnRequest::from_snapshot(snapshot_with_other_index)?
     );
+    Ok(())
+}
+
+#[test]
+fn typed_bindings_pending_authn_request_snapshot_round_trips_required_authn_context(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut class_snapshot = valid_authn_snapshot();
+    class_snapshot.required_authn_context_class_refs = vec![
+        "https://refeds.org/profile/mfa".to_string(),
+        "urn:oasis:names:tc:SAML:2.0:ac:classes:TimeSyncToken".to_string(),
+    ];
+    let class_pending = PendingAuthnRequest::from_snapshot(class_snapshot.clone())?;
+    assert_eq!(
+        class_pending.required_authn_context(),
+        Some(
+            &[
+                AuthnContextReference::class("https://refeds.org/profile/mfa")?,
+                AuthnContextReference::class(
+                    "urn:oasis:names:tc:SAML:2.0:ac:classes:TimeSyncToken"
+                )?,
+            ][..]
+        )
+    );
+    assert_eq!(class_pending.snapshot(), class_snapshot);
+
+    let mut decl_snapshot = valid_authn_snapshot();
+    decl_snapshot.required_authn_context_decl_refs =
+        vec!["https://idp.example.com/context/mfa".to_string()];
+    let decl_pending = PendingAuthnRequest::from_snapshot(decl_snapshot.clone())?;
+    assert_eq!(
+        decl_pending.required_authn_context(),
+        Some(
+            &[AuthnContextReference::declaration(
+                "https://idp.example.com/context/mfa"
+            )?][..]
+        )
+    );
+    assert_eq!(decl_pending.snapshot(), decl_snapshot);
+    assert_ne!(class_pending, decl_pending);
+
+    let mut mixed_snapshot = valid_authn_snapshot();
+    mixed_snapshot.required_authn_context_class_refs =
+        vec!["https://refeds.org/profile/mfa".to_string()];
+    mixed_snapshot.required_authn_context_decl_refs =
+        vec!["https://idp.example.com/context/mfa".to_string()];
+    assert!(matches!(
+        PendingAuthnRequest::from_snapshot(mixed_snapshot),
+        Err(SamlError::Invalid(_))
+    ));
+
+    let mut relative_snapshot = valid_authn_snapshot();
+    relative_snapshot.required_authn_context_class_refs = vec!["relative-context".to_string()];
+    assert!(matches!(
+        PendingAuthnRequest::from_snapshot(relative_snapshot),
+        Err(SamlError::Invalid(_))
+    ));
     Ok(())
 }
 

@@ -18,6 +18,7 @@ pub struct StartSso {
     pub(super) passive: Option<IsPassive>,
     pub(super) provider_name: Option<String>,
     pub(super) requested_authn_context: Option<RequestedAuthnContext>,
+    pub(super) require_exact_authn_context: bool,
     pub(super) extensions: Vec<ExtensionElement>,
 }
 
@@ -52,6 +53,7 @@ impl StartSso {
             passive: None,
             provider_name: None,
             requested_authn_context: None,
+            require_exact_authn_context: false,
             extensions: Vec::new(),
         }
     }
@@ -99,8 +101,32 @@ impl StartSso {
     }
 
     /// Request authentication contexts in preference order. Omitted by default.
+    ///
+    /// By default, [`ServiceProvider::finish_sso`](crate::ServiceProvider::finish_sso)
+    /// exposes the received authentication statements without checking them
+    /// against this request. Call [`Self::require_exact_authn_context`] to
+    /// require an exact match when finishing SSO.
     pub fn requested_authn_context(mut self, context: RequestedAuthnContext) -> Self {
         self.requested_authn_context = Some(context);
+        self
+    }
+
+    /// Require [`ServiceProvider::finish_sso`](crate::ServiceProvider::finish_sso)
+    /// to reject the response unless a validated authentication statement in
+    /// the consumed assertion matches one of the requested contexts exactly.
+    ///
+    /// This opt-in requires [`Self::requested_authn_context`] with
+    /// [`AuthnContextComparison::Exact`](crate::AuthnContextComparison::Exact);
+    /// otherwise [`ServiceProvider::start_sso`](crate::ServiceProvider::start_sso)
+    /// returns [`SamlError::Invalid`](crate::SamlError::Invalid). The required
+    /// references are stored in
+    /// [`PendingAuthnRequest`](crate::PendingAuthnRequest) and preserved in its
+    /// snapshot. Older releases ignore those snapshot fields when reading JSON,
+    /// so upgrade every instance that can finish a login before enabling this
+    /// option and drain or invalidate pending step-up logins before rolling
+    /// back.
+    pub fn require_exact_authn_context(mut self) -> Self {
+        self.require_exact_authn_context = true;
         self
     }
 

@@ -8,8 +8,10 @@ use crate::xml::protocol_element::{parse_saml_with_limits, SamlElement};
 
 /// The authentication context reported by one accepted `AuthnStatement`.
 ///
-/// This is information from the identity provider. The service provider does
-/// not compare it with the requested context or assign an assurance level.
+/// This is information from the identity provider. By default, the service
+/// provider does not compare it with the requested context or assign an
+/// assurance level. Opt in to exact matching for a solicited login with
+/// [`StartSso::require_exact_authn_context`](crate::StartSso::require_exact_authn_context).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthnContext {
     class_reference: Option<AuthnContextReference>,
