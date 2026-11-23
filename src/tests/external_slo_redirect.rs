@@ -202,8 +202,8 @@ fn shibboleth_idp5_redirect_logout_request_is_authenticated_and_parsed_by_sp(
     let subject = extract(
         &wire_xml,
         &[
-            ExtractorField::new("encryptedID", &["LogoutRequest", "EncryptedID"]).with_context(),
-            ExtractorField::new("nameID", &["LogoutRequest", "NameID"]).with_context(),
+            ExtractorField::new("encryptedID", &["LogoutRequest", "EncryptedID"]).capture_source(),
+            ExtractorField::new("nameID", &["LogoutRequest", "NameID"]).capture_source(),
         ],
     )?;
     assert!(subject.get_str("encryptedID").is_some());

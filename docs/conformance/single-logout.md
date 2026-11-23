@@ -55,8 +55,8 @@ HTTP-POST-SimpleSign, and SOAP. The request signature covers the attribute.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Write a caller-supplied `Reason` and omit it when unset | Optional | Core §3.7.1, §3.7.3 | `StartSlo::with_reason` |
-| Require an absolute URI reference for a typed `Reason`, using the same `anyURI` whitespace and syntax rules as [identifier formats](identifiers.md#name-identifier-formats) | Mandatory | Core §1.3.2, §3.7.1, E10 | `StartSlo::with_reason` |
+| Write a caller-supplied `Reason` and omit it when unset | Optional | Core §3.7.1, §3.7.3 | `StartSlo::reason` |
+| Require an absolute URI reference for a typed `Reason`, using the same `anyURI` whitespace and syntax rules as [identifier formats](identifiers.md#name-identifier-formats) | Mandatory | Core §1.3.2, §3.7.1, E10 | `StartSlo::reason` |
 
 ## Peer endpoints
 
@@ -81,7 +81,7 @@ HTTP-POST-SimpleSign, and SOAP. The request signature covers the attribute.
 | Refuse to answer over SOAP a request that carried `RelayState` | Mandatory | Bindings §3.4.3, §3.5.3 | Always |
 | Reject a `LogoutRequest` whose issuer is not the peer descriptor entity | Library policy: a response must not go to another party's `SingleLogoutService`. | — | Always |
 | Write a top-level `StatusCode` of `Success`, `Requester`, `Responder`, or `VersionMismatch`, with an optional subordinate code | Mandatory | Core §3.2.2.2 | `status` argument |
-| Write caller-supplied plain text as `StatusMessage` after `StatusCode` before signing. Omit the element by default | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType` | `RespondSlo::with_status_message` |
+| Write caller-supplied plain text as `StatusMessage` after `StatusCode` before signing. Omit the element by default | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType` | `RespondSlo::status_message` |
 | Write a subordinate `StatusCode` `Value` that is an absolute URI reference | Mandatory | Core §1.3.2 | `SubordinateStatusCode::try_new` |
 | Reject whitespace, `"`, `<`, and `>` in a caller-supplied subordinate code, and whitespace in the outbound response `Issuer` | Library policy: reason not recorded. | Core §1.3.2 | Always |
 | A session authority returns `Success` only when it ended its own session, and adds `PartialLogout` when another participant did not confirm. The caller passes the status | Mandatory | Core §3.7.3.2 | `IdentityProvider::respond_slo` `status` |

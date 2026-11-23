@@ -67,8 +67,8 @@ impl<'a> LoginResponseParseOptions<'a> {
         }
     }
 
-    /// Whether a signed response must carry `Destination`.
-    pub(crate) fn with_signed_destination(
+    /// Set whether a signed response must carry `Destination`.
+    pub(crate) fn signed_destination(
         mut self,
         signed_destination: SignedMessageDestination,
     ) -> Self {
@@ -76,7 +76,7 @@ impl<'a> LoginResponseParseOptions<'a> {
         self
     }
 
-    pub(crate) fn with_expected_recipient(mut self, expected_recipient: &'a str) -> Self {
+    pub(crate) fn expected_recipient(mut self, expected_recipient: &'a str) -> Self {
         self.expected_recipient = Some(expected_recipient);
         self
     }
@@ -182,6 +182,7 @@ impl Engine {
             is_passive: preferences.is_passive,
             provider_name: preferences.provider_name,
             requested_authn_context: preferences.requested_authn_context,
+            extensions: preferences.extensions,
             issuer: &issuer,
             name_id_format,
             allow_create: self.setting.allow_create,

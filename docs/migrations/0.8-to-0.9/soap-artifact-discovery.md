@@ -309,3 +309,9 @@ let cookie = Cookie::build((CommonDomainCookie::NAME, common_domain_cookie.value
 	.domain(common_domain_cookie.domain())
 	.secure(true);
 ```
+
+## Pass the existing discovery cookie
+
+If you call `RememberIdentityProvider::with_existing_cookie` to keep earlier
+entries in the discovery cookie, rename the call to
+`RememberIdentityProvider::existing_cookie`. Pass the same `_saml_idp` value.

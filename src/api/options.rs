@@ -1,7 +1,7 @@
 use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
 use crate::config::IdentifierEncryptionPolicy;
 use crate::idp::ResponseMessageSignature;
-use crate::model::{RelayState, RequestedAuthnContext};
+use crate::model::{ExtensionElement, RelayState, RequestedAuthnContext};
 
 pub use crate::model::{ForceAuthn, IsPassive};
 
@@ -18,6 +18,7 @@ pub struct StartSso {
     pub(super) passive: Option<IsPassive>,
     pub(super) provider_name: Option<String>,
     pub(super) requested_authn_context: Option<RequestedAuthnContext>,
+    pub(super) extensions: Vec<ExtensionElement>,
 }
 
 impl StartSso {
@@ -51,6 +52,7 @@ impl StartSso {
             passive: None,
             provider_name: None,
             requested_authn_context: None,
+            extensions: Vec::new(),
         }
     }
 
@@ -105,6 +107,17 @@ impl StartSso {
     /// Set the `AssertionConsumerServiceIndex` of the AuthnRequest.
     pub fn acs_index(mut self, acs_index: u16) -> Self {
         self.acs_index = Some(acs_index);
+        self
+    }
+
+    /// Append an element to the AuthnRequest's `<Extensions>`.
+    ///
+    /// The request carries the elements in the order you add them. By default
+    /// it omits `<Extensions>`. Exclusive canonicalization in the default
+    /// HTTP-POST signature omits a namespace declaration if its prefix
+    /// appears only in text or an attribute value.
+    pub fn extension(mut self, element: ExtensionElement) -> Self {
+        self.extensions.push(element);
         self
     }
 }
@@ -310,7 +323,7 @@ impl StartSlo {
     /// reference such as `urn:oasis:names:tc:SAML:2.0:logout:user`. The writer
     /// collapses XML whitespace, and `start_slo` returns [`crate::SamlError::Invalid`]
     /// for an invalid reference.
-    pub fn with_reason(mut self, reason: impl Into<String>) -> Self {
+    pub fn reason(mut self, reason: impl Into<String>) -> Self {
         self.reason = Some(reason.into());
         self
     }
@@ -407,7 +420,7 @@ impl RespondSlo {
     /// default. A later call replaces the previous message.
     /// The text must contain only XML 1.0 characters.
     #[must_use]
-    pub fn with_status_message(mut self, message: impl Into<String>) -> Self {
+    pub fn status_message(mut self, message: impl Into<String>) -> Self {
         self.status_message = Some(message.into());
         self
     }

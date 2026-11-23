@@ -9,6 +9,7 @@ mod authn_context;
 mod authn_details;
 mod authn_statement;
 mod endpoint;
+mod extension;
 mod extract;
 mod identifiers;
 mod logout;
@@ -38,6 +39,7 @@ pub use authn_context::{
 pub use authn_details::{AuthnContext, SubjectLocality};
 pub use authn_statement::AuthnStatement;
 pub use endpoint::EndpointUrl;
+pub use extension::ExtensionElement;
 pub use identifiers::{AssertionId, MessageId, SamlInstant, SessionIndex};
 pub use logout::{
     LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, RefusedLogoutRequest,

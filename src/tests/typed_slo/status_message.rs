@@ -13,7 +13,7 @@ fn signed_logout_error_carries_status_message_in_every_binding(
     for binding in LOGOUT_BINDINGS_WITH_SOAP {
         for requester in LOCAL_SLO_ROLES {
             let start = start_slo_for_binding(binding)?;
-            let respond = respond_slo_for_binding(binding)?.with_status_message(message);
+            let respond = respond_slo_for_binding(binding)?.status_message(message);
             let (response, result) = match requester {
                 LocalSloRole::Sp => {
                     let started = sp.start_slo(&idp_descriptor, subject()?, start)?;

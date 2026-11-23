@@ -199,7 +199,7 @@ fn exchange_between(
     let response = idp.respond_sso(
         sp_descriptor,
         &received,
-        SsoAssertion::new(alice()).with_attributes(attributes()),
+        SsoAssertion::new(alice()).attributes(attributes()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
@@ -685,7 +685,7 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
         let response = idp.respond_sso(
             &sp_descriptor,
             &received,
-            SsoAssertion::new(alice()).with_attributes(attributes()),
+            SsoAssertion::new(alice()).attributes(attributes()),
             RespondSso::simple_sign(),
         )?;
         let session = sp.finish_sso(
@@ -885,7 +885,7 @@ fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(alice()).with_attributes(attributes()),
+        SsoAssertion::new(alice()).attributes(attributes()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;

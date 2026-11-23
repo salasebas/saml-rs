@@ -304,7 +304,7 @@ fn xmlenc11_algorithms_round_trip_each_encrypted_element() -> Result<(), Box<dyn
             )]);
             let exchange = signed_redirect_request_then_post_response(
                 &peers,
-                alice().with_attributes(attributes.clone()),
+                alice().attributes(attributes.clone()),
             )?;
             assert!(exchange.response_xml.contains(&format!("<saml:{wrapper}")));
             assert_eq!(exchange.session.attributes(), &attributes);

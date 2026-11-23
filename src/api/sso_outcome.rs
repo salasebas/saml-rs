@@ -9,7 +9,7 @@ use crate::xml::OutboundNameIdQualifiers;
 
 use super::SamlError;
 
-/// The assertion a successful login response carries.
+/// Inputs for the assertion a successful login response carries.
 ///
 /// The caller chooses the subject `NameId` and, optionally, the attributes,
 /// the authentication context, and the authentication instant. The library
@@ -25,7 +25,7 @@ pub struct SsoAssertion {
 impl SsoAssertion {
     /// An assertion whose `Subject` is `name_id`.
     ///
-    /// The assertion has no `AttributeStatement` until [`Self::with_attributes`]
+    /// The assertion has no `AttributeStatement` until [`Self::attributes`]
     /// sets one.
     pub fn new(name_id: NameId) -> Self {
         Self {
@@ -52,7 +52,7 @@ impl SsoAssertion {
     /// scope, or mixes upper and lower case letters in its unique ID.
     /// [`Attribute::from`] with a [`crate::SubjectId`] or
     /// [`crate::PairwiseId`] writes the `uri` `NameFormat` and one value.
-    pub fn with_attributes(mut self, attributes: Attributes) -> Self {
+    pub fn attributes(mut self, attributes: Attributes) -> Self {
         self.attributes = attributes;
         self
     }
@@ -70,7 +70,7 @@ impl SsoAssertion {
     /// the caller. When no requested context can be met, answer with
     /// [`SsoOutcome::Failure`] and [`Status::responder`], optionally with
     /// [`crate::SubordinateStatusCode::no_authn_context`].
-    pub fn with_authn_context(mut self, authn_context: AuthnContextReference) -> Self {
+    pub fn authn_context(mut self, authn_context: AuthnContextReference) -> Self {
         self.authn_context = Some(authn_context);
         self
     }
@@ -84,7 +84,7 @@ impl SsoAssertion {
     ///
     /// The response is rejected when the written instant is later than the
     /// response `IssueInstant` or before year 1.
-    pub fn with_authn_instant(mut self, authn_instant: SystemTime) -> Self {
+    pub fn authn_instant(mut self, authn_instant: SystemTime) -> Self {
         self.authn_instant = Some(authn_instant);
         self
     }

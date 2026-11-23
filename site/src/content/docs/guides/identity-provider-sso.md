@@ -89,7 +89,7 @@ Use `request.message().name_id_policy()` to read the requested format. If the re
 
 If the request combines the `entity` format with `SPNameQualifier`, send a failure outcome. SAML requires entity identifiers to omit qualifiers.
 
-Pass the attributes with `SsoAssertion::with_attributes`. `with_name_format` sets an attribute's format: `Unspecified`, `Uri`, `Basic`, or `Custom` for another URI. An attribute without it has no `NameFormat`, which SAML reads as `Unspecified`.
+Pass the attributes with `SsoAssertion::attributes`. `with_name_format` sets an attribute's format: `Unspecified`, `Uri`, `Basic`, or `Custom` for another URI. An attribute without it has no `NameFormat`, which SAML reads as `Unspecified`.
 
 `with_friendly_name` adds a `FriendlyName`, a readable label such as `mail` for an OID name. The service provider still identifies the attribute by its `Name` and `NameFormat`.
 
@@ -111,7 +111,7 @@ let attributes = Attributes::new([
 let response = idp.respond_sso(
     &sp,
     &request,
-    SsoAssertion::new(name_id).with_attributes(attributes),
+    SsoAssertion::new(name_id).attributes(attributes),
     RespondSso::post(),
 )?;
 ```

@@ -16,7 +16,7 @@ already returned an error for the same configuration.
 A typed identity provider has no template attributes.
 Use the [typed SSO inputs](config.md#replace-sso-templates-with-typed-options).
 
-**Upgrade:** pass the attributes with `SsoAssertion::with_attributes`, as
+**Upgrade:** pass the attributes with `SsoAssertion::attributes`, as
 [2.2](public-imports.md#22-pass-attributes-to-the-response) shows.
 
 ## 5. Send a `Name` on every attribute
@@ -43,7 +43,7 @@ attribute it releases.
 **Affects:** identity providers that pass an attribute named
 `urn:oasis:names:tc:SAML:attribute:subject-id` or
 `urn:oasis:names:tc:SAML:attribute:pairwise-id`, with the `uri` name format,
-the unspecified one, or none, to `SsoAssertion::with_attributes`.
+the unspecified one, or none, to `SsoAssertion::attributes`.
 
 **Before:** the identity provider wrote the attribute as given, with
 `xsi:type="xs:string"` on each value.

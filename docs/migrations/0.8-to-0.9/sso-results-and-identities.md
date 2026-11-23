@@ -31,8 +31,8 @@ it says what the response reports:
   with confirmations returned `SamlError::Unsupported`. A caller can no longer
   pass one.
 - `RespondSso::attributes`, `authn_context`, and `authn_instant` become
-  `SsoAssertion::with_attributes`, `with_authn_context`, and
-  `with_authn_instant`. They take the same values and are checked as before.
+  `SsoAssertion::attributes`, `authn_context`, and
+  `authn_instant`. They take the same values and are checked as before.
 - `RespondSso::status` is removed. Pass `SsoOutcome::Failure(status)` for an
   error response. It needs no `NameId`, and it cannot carry the assertion
   options. Put the authentication context, instant, attributes and NameID
@@ -66,7 +66,7 @@ let name_id = NameId::new("alice@example.com").with_format(NameIdFormat::EmailAd
 let response = idp.respond_sso(
 	sp,
 	request,
-	SsoAssertion::new(name_id).with_attributes(attributes),
+	SsoAssertion::new(name_id).attributes(attributes),
 	RespondSso::post(),
 )?;
 let denied = idp.respond_sso(

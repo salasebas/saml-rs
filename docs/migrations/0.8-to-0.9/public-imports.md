@@ -54,13 +54,13 @@ fn decode_with_limit(input: &str, max_output_len: usize) -> Option<Vec<u8>> {
 
 Replace `template::attribute_statement_builder`, `LoginResponseAttribute`,
 `ATTRIBUTE_TEMPLATE`, and `ATTRIBUTE_STATEMENT_TEMPLATE` with
-`SsoAssertion::with_attributes`. The IdP writes the attribute statement when
+`SsoAssertion::attributes`. The IdP writes the attribute statement when
 you call `respond_sso` or `initiate_sso`.
 
 ```rust
 use saml_rs::{Attribute, AttributeNameFormat, AttributeValue, Attributes, NameId, SsoAssertion};
 
-let assertion = SsoAssertion::new(NameId::new("alice@example.com")).with_attributes(Attributes::new([
+let assertion = SsoAssertion::new(NameId::new("alice@example.com")).attributes(Attributes::new([
     Attribute::new(
         "urn:oid:0.9.2342.19200300.100.1.3",
         [AttributeValue::new("alice@example.com")],

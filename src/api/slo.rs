@@ -161,7 +161,7 @@ impl ServiceProvider {
     /// invalidating the sessions the request names that this identity
     /// provider's assertions established. Otherwise, pass an error status,
     /// such as [`Status::responder`].
-    /// Use [`RespondSlo::with_status_message`] to include a diagnostic.
+    /// Use [`RespondSlo::status_message`] to include a diagnostic.
     ///
     /// # Errors
     ///
@@ -428,7 +428,7 @@ impl IdentityProvider {
     /// [`SubordinateStatusCode::partial_logout`](crate::SubordinateStatusCode::partial_logout)
     /// with [`Status::with_subordinate`]. Pass an error status, such as
     /// [`Status::responder`], when the session could not be ended.
-    /// Use [`RespondSlo::with_status_message`] to include a diagnostic.
+    /// Use [`RespondSlo::status_message`] to include a diagnostic.
     ///
     /// # Errors
     ///

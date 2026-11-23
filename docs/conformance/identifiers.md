@@ -16,7 +16,7 @@ and [Single Logout](single-logout.md) use the name identifier rules here.
 
 ## Attribute names and name formats
 
-The identity provider writes `<Attribute>` elements with `SsoAssertion::with_attributes`, and the service provider reads them. A `FriendlyName` is a human-readable label for the `Name`. `<AttributeQuery>` and metadata `<RequestedAttribute>` are not claimed, so a service provider writes no `<Attribute>`.
+The identity provider writes `<Attribute>` elements with `SsoAssertion::attributes`, and the service provider reads them. A `FriendlyName` is a human-readable label for the `Name`. `<AttributeQuery>` and metadata `<RequestedAttribute>` are not claimed, so a service provider writes no `<Attribute>`.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
@@ -46,13 +46,13 @@ defines a general-purpose identifier in §3.3 and a pairwise identifier in
 
 ### Identity provider
 
-The identity provider writes these attributes with `SsoAssertion::with_attributes`.
+The identity provider writes these attributes with `SsoAssertion::attributes`.
 `Attribute::from(SubjectId)` and `Attribute::from(PairwiseId)` supply the profile
 name and format.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Write the profile's `subject-id` or `pairwise-id` name with the `uri` `NameFormat` | Mandatory | Subject Identifier §3.3, §3.4 | `SsoAssertion::with_attributes` |
+| Write the profile's `subject-id` or `pairwise-id` name with the `uri` `NameFormat` | Mandatory | Subject Identifier §3.3, §3.4 | `SsoAssertion::attributes` |
 | Write each of these attributes at most once per assertion, with exactly one value | Mandatory | Subject Identifier §3.2, §3.3.1, §3.4.1 | Always |
 | Write a `uniqueID@scope` value. Each part starts with an ASCII letter or digit and has 1 to 127 characters. The unique ID also allows `=` and `-`. The scope also allows `-` and `.` | Mandatory | Subject Identifier §3.3.1, §3.4.1 | `SubjectId::try_new`, `PairwiseId::try_new` |
 | Omit `xsi:type` from these values | Recommended | Subject Identifier §3.3.1, §3.4.1 | Always |

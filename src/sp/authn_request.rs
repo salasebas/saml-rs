@@ -1,5 +1,5 @@
 use crate::constants::namespace;
-use crate::model::{AuthnContextReferenceKind, RequestedAuthnContext};
+use crate::model::{AuthnContextReferenceKind, ExtensionElement, RequestedAuthnContext};
 use crate::xml::write::{Prefixes, XmlWriter};
 
 #[derive(Default)]
@@ -7,6 +7,7 @@ pub(crate) struct AuthnRequestPreferences<'a> {
     pub(crate) is_passive: Option<bool>,
     pub(crate) provider_name: Option<&'a str>,
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
+    pub(crate) extensions: &'a [ExtensionElement],
 }
 
 impl AuthnRequestPreferences<'_> {
@@ -45,6 +46,7 @@ pub(super) struct AuthnRequestXml<'a> {
     pub(super) is_passive: Option<bool>,
     pub(super) provider_name: Option<&'a str>,
     pub(super) requested_authn_context: Option<&'a RequestedAuthnContext>,
+    pub(super) extensions: &'a [ExtensionElement],
     pub(super) issuer: &'a str,
     pub(super) name_id_format: Option<&'a str>,
     pub(super) allow_create: bool,
@@ -112,6 +114,14 @@ pub(super) fn render_default_authn_request_xml(
     let mut writer = XmlWriter::new();
     writer.start(&prefixes.protocol("AuthnRequest"), &attrs);
     writer.text_element(&prefixes.assertion("Issuer"), &[], input.issuer);
+    if !input.extensions.is_empty() {
+        let name = prefixes.protocol("Extensions");
+        writer.start(&name, &[]);
+        for element in input.extensions {
+            writer.raw(element.xml());
+        }
+        writer.end(&name);
+    }
     writer.empty(&prefixes.protocol("NameIDPolicy"), &name_id_policy_attrs);
     if let Some(context) = input.requested_authn_context {
         writer.start(

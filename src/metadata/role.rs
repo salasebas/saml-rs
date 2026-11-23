@@ -35,7 +35,7 @@ impl SsoDescriptorRole {
             "singleLogoutService",
             &["EntityDescriptor", descriptor, "SingleLogoutService"],
         )
-        .with_context()]
+        .capture_source()]
     }
 
     pub(super) fn descriptors<'a>(

@@ -95,7 +95,7 @@ impl SignedExchange {
         let response = idp.respond_sso(
             &sp_descriptor,
             &received,
-            SsoAssertion::new(NameId::new(NAME_ID)).with_attributes(Attributes::new(vec![role])),
+            SsoAssertion::new(NameId::new(NAME_ID)).attributes(Attributes::new(vec![role])),
             RespondSso::post(),
         )?;
         let fields = response.post_form()?.fields().to_vec();

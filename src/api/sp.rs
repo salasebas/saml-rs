@@ -101,8 +101,8 @@ impl ResponseParseInput {
         expected_recipient: &'a str,
     ) -> LoginResponseParseOptions<'a> {
         LoginResponseParseOptions::at(validation.now(), validation.clock_skew())
-            .with_signed_destination(self.signed_destination)
-            .with_expected_recipient(expected_recipient)
+            .signed_destination(self.signed_destination)
+            .expected_recipient(expected_recipient)
     }
 }
 
@@ -201,6 +201,7 @@ impl ServiceProvider {
                 is_passive: options.passive.map(super::IsPassive::as_bool),
                 provider_name: options.provider_name.as_deref(),
                 requested_authn_context: options.requested_authn_context.as_ref(),
+                extensions: &options.extensions,
             },
         )?;
         let outbound = Outbound::<AuthnRequest>::from_context(context)?;

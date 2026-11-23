@@ -24,6 +24,8 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Refuse to build an unsigned request when the identity provider publishes `WantAuthnRequestsSigned` as `true` or `1` | Library policy: E7 does not require the refusal, but the service provider can reasonably expect the identity provider to reject an unsigned request. | Metadata §2.4.3, E7 | `SpValidationPolicy::authn_requests` |
 | Write `ForceAuthn` | Optional | Core §3.4.1 | `StartSso::force_authn` |
 | Write `IsPassive` | Optional | Core §3.4.1 | `StartSso::passive` |
+| Write supplied elements in call order inside `Extensions`, after `Issuer` and any embedded signature, before `NameIDPolicy` | Optional | Core §3.2.1, `RequestAbstractType`, `AuthnRequestType` | `StartSso::extension` |
+| Require each extension's root to use a namespace other than SAML protocol, assertion, or metadata | Mandatory | Core §3.2.1, `ExtensionsType` | `ExtensionElement::from_xml` |
 | Write `ProviderName` | Optional | Core §3.4.1, `AuthnRequestType` | `StartSso::provider_name` |
 | Reject a `ProviderName` with a character XML 1.0 forbids | Library policy: the XML writer cannot represent the character. | `AuthnRequestType` | Always |
 | Write `RequestedAuthnContext` with an explicit `Comparison`, after `NameIDPolicy`, with the references in the order given | Optional | Core §3.3.2.2.1, §3.4.1, E45 | `StartSso::requested_authn_context` |
@@ -58,12 +60,12 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Write `SessionIndex` on the `AuthnStatement` when the identity provider metadata advertises `SingleLogoutService` | Mandatory | Profiles §4.1.4.2, E26 | `IdpConfigBuilder::slo_endpoint` |
 | Write the assertion ID as the `SessionIndex` | Recommended | Core §2.7.2 | Always |
 | Write `AuthnInstant` and an `AuthnContext` on the `AuthnStatement` | Mandatory | Core §2.7.2, `AuthnStatementType` | Always |
-| Write the caller's authentication time in UTC as `AuthnInstant` | Mandatory | Core §2.7.2, §1.3.3 | `SsoAssertion::with_authn_instant` |
-| Write the assertion `IssueInstant` as `AuthnInstant` when the caller sets none | Library policy: reason not recorded. | Core §2.7.2 | `SsoAssertion::with_authn_instant` |
-| Reject an `AuthnInstant` later than the response `IssueInstant` | Library policy: an assertion cannot report an authentication after it was issued. | Core §2.7.2 | `SsoAssertion::with_authn_instant` |
-| Reject an `AuthnInstant` before year 1 | Library policy: the formatter writes a four-digit non-negative year. | Core §1.3.3 | `SsoAssertion::with_authn_instant` |
-| Write the unspecified class as the authentication context when the caller sets none | Library policy: the schema requires a context, and that class is the Authentication Context class for unspecified means. | Core §2.7.2.2 | `SsoAssertion::with_authn_context` |
-| Reject a success response whose context is not one of the requested references of the same kind, when `Comparison` is `exact` or omitted | Mandatory | Core §3.3.2.2.1 | `SsoAssertion::with_authn_context` |
+| Write the caller's authentication time in UTC as `AuthnInstant` | Mandatory | Core §2.7.2, §1.3.3 | `SsoAssertion::authn_instant` |
+| Write the assertion `IssueInstant` as `AuthnInstant` when the caller sets none | Library policy: reason not recorded. | Core §2.7.2 | `SsoAssertion::authn_instant` |
+| Reject an `AuthnInstant` later than the response `IssueInstant` | Library policy: an assertion cannot report an authentication after it was issued. | Core §2.7.2 | `SsoAssertion::authn_instant` |
+| Reject an `AuthnInstant` before year 1 | Library policy: the formatter writes a four-digit non-negative year. | Core §1.3.3 | `SsoAssertion::authn_instant` |
+| Write the unspecified class as the authentication context when the caller sets none | Library policy: the schema requires a context, and that class is the Authentication Context class for unspecified means. | Core §2.7.2.2 | `SsoAssertion::authn_context` |
+| Reject a success response whose context is not one of the requested references of the same kind, when `Comparison` is `exact` or omitted | Mandatory | Core §3.3.2.2.1 | `SsoAssertion::authn_context` |
 | Write the issued `NameID` `Format` as an absolute URI reference. If unset, use the first configured format, and omit `Format` when there is none | Mandatory | Core §1.3.2, §2.2.2, E60 | Always |
 | Write `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` from the issued `NameId`, and omit each one that is unset | Optional | `NameIDType` | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier`, `NameId::with_sp_provided_id` |
 | Issue the `NameID` `Format` the `NameIDPolicy` names, when it is a Core §8.3 format other than `unspecified` or `encrypted` | Mandatory | Core §3.4.1.1, E15, `NameIDPolicyType` | Always |

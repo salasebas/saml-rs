@@ -69,7 +69,7 @@ fn fetch_entire_context_of_non_existing_node() -> Result<(), Box<dyn std::error:
             "assertionSignature",
             &["Response", "Assertion", "Signature"],
         )
-        .with_context()],
+        .capture_source()],
     )?;
     assert!(r
         .get("assertionSignature")
@@ -82,7 +82,7 @@ fn fetch_entire_context_of_non_existing_node() -> Result<(), Box<dyn std::error:
 fn fetch_entire_context_of_existing_node() -> Result<(), Box<dyn std::error::Error>> {
     let r = extract(
         RESPONSE,
-        &[ExtractorField::new("messageSignature", &["Response", "Signature"]).with_context()],
+        &[ExtractorField::new("messageSignature", &["Response", "Signature"]).capture_source()],
     )?;
     assert!(!r
         .get("messageSignature")
