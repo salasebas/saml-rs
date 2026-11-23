@@ -53,8 +53,9 @@ export default defineConfig({
 				'./src/styles/custom.css',
 			],
 			components: {
-				Banner: './src/components/DocsVersion.astro',
 				Hero: './src/components/Hero.astro',
+				Sidebar: './src/components/Sidebar.astro',
+				SiteTitle: './src/components/SiteTitle.astro',
 			},
 			plugins: [
 				starlightLlmsTxt({

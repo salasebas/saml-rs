@@ -33,7 +33,11 @@ test('home and guide links stay in their version', async () => {
 		const home = await page(prefix);
 		const guideHtml = await page(`${prefix}${guide}`);
 		const main = guideHtml.match(/<main\b[\s\S]*?<\/main>/)?.[0];
-		assert.ok(home.includes(`href="/${prefix}start/install/"`), `Install action on /${prefix}`);
+		const actions = home.match(/<div class="actions">([\s\S]*?)<\/div>/)?.[1];
+		assert.ok(actions, `Hero action on /${prefix}`);
+		assert.equal([...actions.matchAll(/<a\b/g)].length, 1, `Single hero action on /${prefix}`);
+		assert.ok(actions.includes(`href="/${prefix}start/install/"`), `Install action on /${prefix}`);
+		assert.match(actions, />\s*Get Started\s*<\/a>/);
 		assert.ok(home.includes(`href="/${prefix}${guide}"`), `SP guide card on /${prefix}`);
 		assert.ok(main?.includes(`href="/${prefix}${record}"`), `Conformance link in /${prefix}${guide}`);
 		await page(`${prefix}${record}`);
@@ -41,14 +45,21 @@ test('home and guide links stay in their version', async () => {
 	}
 });
 
-test('a guide exposes the version selector and identifies the current version', async () => {
+test('the version dropdown is in the guide sidebar or home header and marks the current version', async () => {
 	for (const prefix of ['', 'next/']) {
-		const html = await page(`${prefix}guides/service-provider-sso/`);
-		const picker = html.match(/<nav\b[^>]*aria-label="Documentation version"[^>]*>[\s\S]*?<\/nav>/)?.[0];
-		assert.ok(picker, `Version selector on /${prefix}guides/service-provider-sso/`);
-		assert.match(picker, /href="\/"[^>]*>v[\d.]+ \(Stable\)/);
-		assert.match(picker, /href="\/next\/"[^>]*>Next \(unreleased\)/);
-		assert.ok(picker.includes(`href="/${prefix}" aria-current="true"`), `Current version on /${prefix}`);
+		const guide = await page(`${prefix}guides/service-provider-sso/`);
+		const home = await page(prefix);
+		const sidebar = guide.match(/<sl-sidebar-pane\b[\s\S]*?<\/sl-sidebar-pane>/)?.[0];
+		const header = home.match(/<header\b[\s\S]*?<\/header>/)?.[0];
+		for (const [location, html] of [['sidebar', sidebar], ['header', header]]) {
+			assert.ok(html, `The ${location} exists for /${prefix}`);
+			assert.match(html, /<button\b[^>]*popovertarget="docs-versions"/);
+			const picker = html.match(/<nav\b[^>]*id="docs-versions"[^>]*>[\s\S]*?<\/nav>/)?.[0];
+			assert.ok(picker, `Version menu is in the ${location} for /${prefix}`);
+			assert.match(picker, /href="\/"[^>]*>\s*<span\b[^>]*>Stable <small\b[^>]*>v[\d.]+<\/small>/);
+			assert.match(picker, /href="\/next\/"[^>]*>\s*<span\b[^>]*>Next <small\b[^>]*>Unreleased<\/small>/);
+			assert.ok(picker.includes(`href="/${prefix}" aria-current="true"`), `Current version on /${prefix}`);
+		}
 	}
 });
 

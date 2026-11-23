@@ -1,0 +1,21 @@
+---
+import SiteTitle from '@astrojs/starlight/components/SiteTitle.astro';
+import DocsVersion from './DocsVersion.astro';
+
+const { hasSidebar } = Astro.locals.starlightRoute;
+---
+
+{hasSidebar ? <SiteTitle /> : (
+	<div class="title-with-version">
+		<SiteTitle />
+		<DocsVersion />
+	</div>
+)}
+
+<style>
+	.title-with-version {
+		display: flex;
+		align-items: center;
+		gap: var(--sl-nav-gap);
+	}
+</style>
