@@ -3,7 +3,8 @@ use super::audience_restriction::AudienceRestriction;
 use super::authn_statement::AuthnStatement;
 use super::extract::{
     attributes_from_extract, audience_restrictions_from_extract, authn_statements_from_extract,
-    conditions_instants, optional_request_id, required_str, subject_confirmations_from_extract,
+    conditions_instants, optional_request_id, required_saml_utc_instant, required_str,
+    subject_confirmations_from_extract,
 };
 use super::identifiers::{AssertionId, MessageId, SamlInstant};
 use super::subject::{NameId, SubjectConfirmation};
@@ -17,7 +18,7 @@ use crate::config::{EntityId, NameIdFormat};
 use crate::error::{SamlError, TimeWindowField};
 use crate::flow::FlowResult;
 use crate::xml::fields::{login_response, name_id, response};
-use crate::xml::{dom, parse_saml_utc_date_time, XmlLimits};
+use crate::xml::{dom, XmlLimits};
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
 const REPLAY_EXPIRATION_FIELD: TimeWindowField = TimeWindowField::ReplayExpiration;
@@ -408,16 +409,21 @@ impl SsoSession {
         relay_state: Option<RelayState>,
     ) -> Result<Self, SamlError> {
         let response_id = MessageId::try_new(required_str(&raw_flow.extract, response::ID)?)?;
-        let response_issue_instant =
-            issue_instant_from_extract(&raw_flow.extract, response::ISSUE_INSTANT, "Response")?;
+        let response_issue_instant = required_saml_utc_instant(
+            raw_flow.extract.get_str(response::ISSUE_INSTANT),
+            "Response",
+            "IssueInstant",
+        )?;
         let assertion_id = AssertionId::try_new(required_str(
             &raw_flow.extract,
             login_response::ASSERTION_ID,
         )?)?;
-        let assertion_issue_instant = issue_instant_from_extract(
-            &raw_flow.extract,
-            login_response::ASSERTION_ISSUE_INSTANT,
+        let assertion_issue_instant = required_saml_utc_instant(
+            raw_flow
+                .extract
+                .get_str(login_response::ASSERTION_ISSUE_INSTANT),
             "Assertion",
+            "IssueInstant",
         )?;
         let issuer = EntityId::try_new(required_str(
             &raw_flow.extract,
@@ -463,22 +469,4 @@ impl SsoSession {
             raw_flow,
         })
     }
-}
-
-fn issue_instant_from_extract(
-    extract: &crate::util::Value,
-    path: &str,
-    element: &str,
-) -> Result<SamlInstant, SamlError> {
-    let issue_instant = extract.get_str(path).ok_or_else(|| {
-        SamlError::ProtocolProfile(format!(
-            "{element} is missing required unqualified attribute IssueInstant"
-        ))
-    })?;
-    let issue_instant = parse_saml_utc_date_time(issue_instant).ok_or_else(|| {
-        SamlError::ProtocolProfile(format!(
-            "{element} IssueInstant must use the SAML-conformant UTC xs:dateTime form ending in Z"
-        ))
-    })?;
-    SamlInstant::try_new(issue_instant)
 }

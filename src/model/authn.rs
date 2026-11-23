@@ -1,7 +1,7 @@
 use super::authn_context::{requested_authn_context_from_extract, RequestedAuthnContext};
 use super::extract::{
-    name_id_policy_from_extract, optional_endpoint, optional_u16, required_str,
-    subject_confirmations_at,
+    name_id_policy_from_extract, optional_endpoint, optional_u16, required_saml_utc_instant,
+    required_str, subject_confirmations_at,
 };
 use super::identifiers::{MessageId, SamlInstant};
 use super::subject::{NameId, NameIdPolicy, RequestedSubject, RequestedSubjectIdentifier};
@@ -12,7 +12,7 @@ use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::flow::FlowResult;
 use crate::xml::fields::{authn_request, request, ISSUER};
-use crate::xml::{parse_saml_utc_date_time, xs_boolean};
+use crate::xml::xs_boolean;
 
 /// `ForceAuthn` on an `<AuthnRequest>` (Core §3.4.1).
 ///
@@ -191,7 +191,11 @@ impl AuthnRequest {
         response_binding: fn(&crate::util::Value) -> Result<Option<SsoResponseBinding>, SamlError>,
     ) -> Result<Self, SamlError> {
         let id = MessageId::try_new(required_str(&raw_flow.extract, request::ID)?)?;
-        let issue_instant = issue_instant_from_extract(&raw_flow.extract)?;
+        let issue_instant = required_saml_utc_instant(
+            raw_flow.extract.get_str(request::ISSUE_INSTANT),
+            "AuthnRequest",
+            "IssueInstant",
+        )?;
         let issuer = EntityId::try_new(required_str(&raw_flow.extract, ISSUER)?)?;
         let destination = optional_endpoint(&raw_flow.extract, request::DESTINATION)?;
         let acs_url =
@@ -350,21 +354,6 @@ fn single_text<'a>(
             Err(SamlError::Invalid(format!("{label} must occur once")))
         }
     }
-}
-
-fn issue_instant_from_extract(extract: &crate::util::Value) -> Result<SamlInstant, SamlError> {
-    let issue_instant = extract.get_str(request::ISSUE_INSTANT).ok_or_else(|| {
-        SamlError::ProtocolProfile(
-            "AuthnRequest is missing required unqualified attribute IssueInstant".into(),
-        )
-    })?;
-    let issue_instant = parse_saml_utc_date_time(issue_instant).ok_or_else(|| {
-        SamlError::ProtocolProfile(
-            "AuthnRequest IssueInstant must use the SAML-conformant UTC xs:dateTime form ending in Z"
-                .into(),
-        )
-    })?;
-    SamlInstant::try_new(issue_instant)
 }
 
 const PAOS_BINDING: &str = "urn:oasis:names:tc:SAML:2.0:bindings:PAOS";

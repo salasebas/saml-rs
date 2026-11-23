@@ -411,24 +411,30 @@ returns `SamlError::Invalid` from that callback. If the document reaches the
 built-in statement reader, a repeated locality in the selected assertion
 returns `SamlError::ProtocolProfile`.
 
-## Send `AuthnInstant` in every statement
+## Send a UTC `AuthnInstant` in every statement
 
 **Affects:** service providers whose identity provider omits the
-`AuthnInstant` attribute of an `AuthnStatement`, and code that calls
-`authn_instant()` on an `AuthnStatement`.
+`AuthnInstant` attribute of an `AuthnStatement` or writes it in a form other
+than a UTC `xs:dateTime` ending in `Z`, and code that reads `authn_instant()`
+as an `Option`, on an `AuthnSession` before the upgrade or on its replacement
+`AuthnStatement`.
 
-Ask the identity provider to send `AuthnInstant` in each statement, as the
-assertion schema requires. Before the upgrade, the service provider accepted a
-statement without it, and `authn_instant()` returned `None`.
+Ask the identity provider to send `AuthnInstant` in each statement, in the
+same UTC form as `IssueInstant`, such as `2026-01-01T12:00:00Z`. The assertion
+schema requires the attribute, and SAML Core requires UTC. Before the upgrade,
+the service provider accepted a statement without it, and `authn_instant()`
+returned `None`. It also accepted any non-blank text, such as an offset form like
+`2026-01-01T12:00:00+01:00`, and returned that text unchanged.
 
 If a configured schema validator rejects the document, the service provider
 returns `SamlError::Invalid` from that callback. If the document reaches the
 built-in statement reader, `finish_sso`, `accept_unsolicited_sso`, and
 `finish_paos_sso` return `SamlError::ProtocolProfile` when a statement of the
-selected assertion has no `AuthnInstant`.
+selected assertion has no `AuthnInstant` or one in another form.
 
 `AuthnStatement::authn_instant()` returns `&SamlInstant` instead of
-`Option<&SamlInstant>`. Remove the `None` case.
+`Option<&SamlInstant>`. Remove the `None` case. The value has leading and
+trailing XML Schema whitespace removed, as for `IssueInstant`.
 
 Before the upgrade:
 
