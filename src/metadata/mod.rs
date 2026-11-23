@@ -17,6 +17,7 @@ pub use generate::{
 };
 pub use idp::{ArtifactResolutionServiceEndpoint, IdpMetadata};
 pub use lifetime::MetadataLifetime;
+pub(crate) use sp::DefaultMarking;
 pub use sp::SpMetadata;
 pub(crate) use validity::MetadataValidity;
 

@@ -243,18 +243,12 @@ impl<Delivery> RespondSso<Delivery> {
 /// HTTPS recommendation for a message the user agent carries to a peer
 /// endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum PeerEndpointTransport {
+pub(super) enum PeerEndpointTransport {
     /// Send the user agent to an `https` peer endpoint.
     #[default]
     RequireHttps,
     /// Allow an `http` peer endpoint.
     AllowHttp,
-}
-
-impl PeerEndpointTransport {
-    fn allows_http(self) -> bool {
-        matches!(self, Self::AllowHttp)
-    }
 }
 
 /// Options for issuing a signed LogoutRequest. A service provider must
@@ -342,8 +336,8 @@ impl StartSlo {
         self
     }
 
-    pub(super) fn allows_http(&self) -> bool {
-        self.transport.allows_http()
+    pub(super) fn transport(&self) -> PeerEndpointTransport {
+        self.transport
     }
 }
 
@@ -401,8 +395,8 @@ impl RespondSlo {
         self
     }
 
-    pub(super) fn allows_http(&self) -> bool {
-        self.transport.allows_http()
+    pub(super) fn transport(&self) -> PeerEndpointTransport {
+        self.transport
     }
 }
 
@@ -465,8 +459,8 @@ impl StartNameIdManagement {
         self
     }
 
-    pub(super) fn allows_http(&self) -> bool {
-        self.transport.allows_http()
+    pub(super) fn transport(&self) -> PeerEndpointTransport {
+        self.transport
     }
 }
 
@@ -496,8 +490,8 @@ impl ReceiveNameIdManagement {
         self
     }
 
-    pub(super) fn allows_http(&self) -> bool {
-        self.transport.allows_http()
+    pub(super) fn transport(&self) -> PeerEndpointTransport {
+        self.transport
     }
 }
 
@@ -526,7 +520,7 @@ impl RespondNameIdManagement {
         self
     }
 
-    pub(super) fn allows_http(&self) -> bool {
-        self.transport.allows_http()
+    pub(super) fn transport(&self) -> PeerEndpointTransport {
+        self.transport
     }
 }

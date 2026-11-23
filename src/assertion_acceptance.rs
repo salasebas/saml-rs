@@ -52,19 +52,19 @@ pub(crate) fn accept_response_assertions(
     reject_unrecognized_conditions(response_xml, opts.xml_limits)?;
     let document = dom::parse_document(response_xml, opts.xml_limits)?;
     let assertions = direct_assertions(&document.root);
-    if assertions.is_empty() {
+    let [first, ..] = assertions.as_slice() else {
         return Err(SamlError::AssertionMissing);
-    }
+    };
+    let first_issuer = issuer_text(first);
 
     let mut saw_bearer = false;
     let mut confirmation_error = None;
-    let mut shared_issuer: Option<Option<String>> = None;
     let mut shared_principal: Option<Principal> = None;
     let several = assertions.len() > 1;
-    for assertion in assertions {
+    for assertion in &assertions {
         let assertion_xml = &response_xml[assertion.start..assertion.end];
         if several {
-            remember_same_issuer(opts.from_issuer, assertion, &mut shared_issuer)?;
+            require_shared_issuer(opts.from_issuer, first_issuer, assertion)?;
             remember_same_principal(assertion, &mut shared_principal)?;
         }
         let extracted = extract_with_limits(
@@ -246,10 +246,10 @@ fn issuer_text(assertion: &Node) -> Option<&str> {
         .map(|issuer| issuer.text.as_str())
 }
 
-fn remember_same_issuer(
+fn require_shared_issuer(
     expected_issuer: Option<&str>,
+    first_issuer: Option<&str>,
     assertion: &Node,
-    shared_issuer: &mut Option<Option<String>>,
 ) -> Result<(), SamlError> {
     let actual = issuer_text(assertion);
     if let Some(expected) = expected_issuer {
@@ -257,13 +257,11 @@ fn remember_same_issuer(
             return Err(SamlError::issuer_mismatch(expected, actual));
         }
     }
-    match shared_issuer {
-        None => *shared_issuer = Some(actual.map(str::to_string)),
-        Some(previous) if previous.as_deref() != actual => {
-            let expected = previous.as_deref().unwrap_or("");
-            return Err(SamlError::issuer_mismatch(expected, actual));
-        }
-        Some(_) => {}
+    if actual != first_issuer {
+        return Err(SamlError::issuer_mismatch(
+            first_issuer.unwrap_or(""),
+            actual,
+        ));
     }
     Ok(())
 }

@@ -22,6 +22,7 @@ use std::time::SystemTime;
 use super::super::raw_mapping::{
     ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, RawPeer,
 };
+use super::super::options::PeerEndpointTransport;
 use super::super::{
     IdentityProvider, ReceiveNameIdManagement, RespondNameIdManagement, SamlError, ServiceProvider,
     StartNameIdManagement,
@@ -417,13 +418,7 @@ fn start(
     }
     local_locations(local.metadata, EndpointDirection::Response)?;
     let destination = peer_location(&peer, EndpointDirection::Request)?;
-    if !options.allows_http() {
-        ensure_https_endpoint(
-            &destination,
-            "name identifier management",
-            "ManageNameIDService",
-        )?;
-    }
+    ensure_management_transport(&destination, options.transport())?;
     let issuer = local.entity_id()?;
     let (idp_entity_id, sp_entity_id) = match local.requester {
         Requester::IdentityProvider => (issuer.as_str(), peer.entity_id.as_str()),
@@ -499,7 +494,7 @@ fn receive(
             relay_state.as_ref().map(RelayState::as_str),
             reason,
             decryption_error,
-            options.allows_http(),
+            options.transport(),
         ),
     }
 }
@@ -511,7 +506,7 @@ fn refuse(
     relay_state: Option<&str>,
     reason: NameIdManagementRefusal,
     decryption_error: Option<SamlError>,
-    allows_http: bool,
+    transport: PeerEndpointTransport,
 ) -> Result<NameIdManagementRedirectReceipt, SamlError> {
     let response = response_outbound(
         local,
@@ -519,7 +514,7 @@ fn refuse(
         in_response_to.as_str(),
         &reason.status(),
         relay_state,
-        allows_http,
+        transport,
     )?;
     Ok(NameIdManagementReceipt::Refused(
         RefusedNameIdManagement::new(response, reason, decryption_error),
@@ -540,7 +535,7 @@ fn respond(
         request.message().id().as_str(),
         status,
         request.relay_state().map(RelayState::as_str),
-        options.allows_http(),
+        options.transport(),
     )
 }
 
@@ -550,16 +545,10 @@ fn response_outbound(
     in_response_to: &str,
     status: &Status,
     relay_state: Option<&str>,
-    allows_http: bool,
+    transport: PeerEndpointTransport,
 ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
     let destination = peer_location(peer, EndpointDirection::Response)?;
-    if !allows_http {
-        ensure_https_endpoint(
-            &destination,
-            "name identifier management",
-            "ManageNameIDService",
-        )?;
-    }
+    ensure_management_transport(&destination, transport)?;
     let context = create_response(
         local.setting,
         &ResponseXml {
@@ -612,6 +601,20 @@ fn require_redirect_input<Message>(input: &Inbound<Message>) -> Result<(), SamlE
         return Ok(());
     }
     Err(SamlError::UnsupportedBinding { binding })
+}
+
+fn ensure_management_transport(
+    destination: &str,
+    transport: PeerEndpointTransport,
+) -> Result<(), SamlError> {
+    match transport {
+        PeerEndpointTransport::AllowHttp => Ok(()),
+        PeerEndpointTransport::RequireHttps => ensure_https_endpoint(
+            destination,
+            "name identifier management",
+            "ManageNameIDService",
+        ),
+    }
 }
 
 fn peer_location(peer: &RawPeer<'_>, direction: EndpointDirection) -> Result<String, SamlError> {

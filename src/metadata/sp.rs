@@ -15,10 +15,29 @@ pub(crate) struct AcsMetadataEndpoint {
     pub(crate) location: String,
     /// Metadata index, when declared.
     pub(crate) index: Option<u16>,
-    /// Whether `isDefault` is the boolean `true` or `1`.
-    pub(crate) is_default: bool,
-    /// Whether `isDefault` is the boolean `false` or `0`.
-    pub(crate) is_default_false: bool,
+    /// `isDefault`, read as an `xs:boolean`.
+    pub(crate) is_default: DefaultMarking,
+}
+
+/// The `isDefault` attribute of an indexed endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DefaultMarking {
+    /// `isDefault` is `true` or `1`.
+    Default,
+    /// `isDefault` is absent, or is not an `xs:boolean` value.
+    Unmarked,
+    /// `isDefault` is `false` or `0`.
+    NotDefault,
+}
+
+impl DefaultMarking {
+    fn from_attribute(is_default: Option<&str>) -> Self {
+        match crate::xml::xs_boolean(is_default) {
+            Some(true) => Self::Default,
+            Some(false) => Self::NotDefault,
+            None => Self::Unmarked,
+        }
+    }
 }
 
 impl AcsMetadataEndpoint {
@@ -162,9 +181,7 @@ impl SpMetadata {
             .into_iter()
             .filter(|endpoint| endpoint.binding == binding)
             .collect();
-        select_indexed_default(endpoints, |endpoint| {
-            (endpoint.is_default, endpoint.is_default_false)
-        })
+        select_indexed_default(endpoints, |endpoint| endpoint.is_default)
     }
 
     /// Default `AssertionConsumerService` across the SAML 2.0 role's bindings.
@@ -173,7 +190,7 @@ impl SpMetadata {
     ) -> Result<Option<AcsMetadataEndpoint>, SamlError> {
         select_indexed_default(
             as_object_list(&self.saml2_assertion_consumer_services),
-            |value| indexed_default_flags(value.get_str("isDefault")),
+            |value| DefaultMarking::from_attribute(value.get_str("isDefault")),
         )
         .map(|value| {
             acs_metadata_endpoint_from_value(value).ok_or_else(|| {
@@ -219,7 +236,7 @@ impl SpMetadata {
     /// [`Self::assertion_consumer_location`].
     pub(crate) fn default_assertion_consumer_location(&self) -> Option<String> {
         select_indexed_default(self.posted_response_endpoints(), |endpoint| {
-            (endpoint.is_default, endpoint.is_default_false)
+            endpoint.is_default
         })
         .map(|endpoint| endpoint.location)
     }
@@ -281,26 +298,28 @@ fn acs_metadata_endpoint_from_value(value: &crate::util::Value) -> Option<AcsMet
     let index = value
         .get_str("index")
         .and_then(|index| index.parse::<u16>().ok());
-    let (is_default, is_default_false) = indexed_default_flags(value.get_str("isDefault"));
     Some(AcsMetadataEndpoint {
         binding,
         location,
         index,
-        is_default,
-        is_default_false,
+        is_default: DefaultMarking::from_attribute(value.get_str("isDefault")),
     })
 }
 
-fn indexed_default_flags(is_default: Option<&str>) -> (bool, bool) {
-    let is_default = crate::xml::xs_boolean(is_default);
-    (is_default == Some(true), is_default == Some(false))
-}
-
-fn select_indexed_default<T>(endpoints: Vec<T>, flags: impl Fn(&T) -> (bool, bool)) -> Option<T> {
-    if let Some(index) = endpoints.iter().position(|endpoint| flags(endpoint).0) {
+fn select_indexed_default<T>(
+    endpoints: Vec<T>,
+    marking: impl Fn(&T) -> DefaultMarking,
+) -> Option<T> {
+    if let Some(index) = endpoints
+        .iter()
+        .position(|endpoint| marking(endpoint) == DefaultMarking::Default)
+    {
         return endpoints.into_iter().nth(index);
     }
-    if let Some(index) = endpoints.iter().position(|endpoint| !flags(endpoint).1) {
+    if let Some(index) = endpoints
+        .iter()
+        .position(|endpoint| marking(endpoint) != DefaultMarking::NotDefault)
+    {
         return endpoints.into_iter().nth(index);
     }
     endpoints.into_iter().next()
