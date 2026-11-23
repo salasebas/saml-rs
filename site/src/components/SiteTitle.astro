@@ -16,6 +16,9 @@ const { hasSidebar } = Astro.locals.starlightRoute;
 	.title-with-version {
 		display: flex;
 		align-items: center;
-		gap: var(--sl-nav-gap);
+		gap: 0.75rem;
+	}
+	.title-with-version :global(.site-title) {
+		flex: none;
 	}
 </style>

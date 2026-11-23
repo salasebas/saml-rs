@@ -14,7 +14,7 @@ const current = isNext ? next : stable;
 	popovertarget="docs-versions"
 	aria-label={`Documentation version (${current.label} ${current.detail})`}
 >
-	<span>{current.label} <small>{current.detail}</small></span>
+	<span>{isNext ? current.label : current.detail}</span>
 	<Icon name="down-caret" />
 </button>
 <nav id="docs-versions" class="version-options" popover aria-label="Documentation version">
@@ -33,7 +33,6 @@ const current = isNext ? next : stable;
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.625rem;
-		min-block-size: 2.75rem;
 		padding: 0.375rem 0.75rem;
 		border-radius: var(--saml-radius);
 		color: var(--sl-color-text);
@@ -46,13 +45,17 @@ const current = isNext ? next : stable;
 	}
 
 	.version-trigger {
-		inline-size: 100%;
+		block-size: var(--saml-header-control-height);
 		border: 1px solid var(--sl-color-hairline-light);
 		background: var(--saml-card);
 		cursor: pointer;
+		white-space: nowrap;
 	}
 
-	.version-trigger small,
+	.version-options a {
+		min-block-size: 2.75rem;
+	}
+
 	.version-options small {
 		display: block;
 		margin-block-start: 0.125rem;

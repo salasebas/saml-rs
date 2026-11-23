@@ -53,7 +53,9 @@ test('the version dropdown is in the guide sidebar or home header and marks the 
 		const header = home.match(/<header\b[\s\S]*?<\/header>/)?.[0];
 		for (const [location, html] of [['sidebar', sidebar], ['header', header]]) {
 			assert.ok(html, `The ${location} exists for /${prefix}`);
-			assert.match(html, /<button\b[^>]*popovertarget="docs-versions"/);
+			const trigger = html.match(/<button\b[^>]*popovertarget="docs-versions"[^>]*>([\s\S]*?)<\/button>/)?.[1];
+			assert.ok(trigger, `Version picker button is in the ${location} for /${prefix}`);
+			assert.equal(trigger.replace(/<[^>]*>/g, '').trim(), prefix ? 'Next' : `v${stableVersion}`);
 			const picker = html.match(/<nav\b[^>]*id="docs-versions"[^>]*>[\s\S]*?<\/nav>/)?.[0];
 			assert.ok(picker, `Version menu is in the ${location} for /${prefix}`);
 			assert.match(picker, /href="\/"[^>]*>\s*<span\b[^>]*>Stable <small\b[^>]*>v[\d.]+<\/small>/);
