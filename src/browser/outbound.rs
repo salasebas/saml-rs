@@ -528,7 +528,6 @@ fn post_form_from_context(
     signature_fields: Option<(&str, &str)>,
 ) -> Result<PostForm, SamlError> {
     let action = EndpointUrl::try_new(context.entity_endpoint.clone())?;
-    context.post_form()?;
     let mut fields = vec![FormField::new(
         context.request_type,
         context.context.clone(),

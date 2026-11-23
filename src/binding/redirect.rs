@@ -237,9 +237,7 @@ pub(crate) fn append_signature(base_url: &str, octet: &str, signature_b64: &str)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::binding::{
-        decode_base64, deflate_raw_decode, saml_post_binding_form, MAX_DEFLATE_RAW_DECODE_BYTES,
-    };
+    use crate::binding::{decode_base64, deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
     use url::Url;
 
     const REQUEST: &str = "<samlp:AuthnRequest ID=\"_1\">hi&amp;bye</samlp:AuthnRequest>";
@@ -321,22 +319,6 @@ mod tests {
                 "{base}"
             );
         }
-        Ok(())
-    }
-
-    #[test]
-    fn post_and_simplesign_base64_message() -> Result<(), Box<dyn std::error::Error>> {
-        // POST / SimpleSign carry base64(xml) verbatim (no DEFLATE)
-        let b64 = encode_base64(REQUEST.as_bytes());
-        assert_eq!(String::from_utf8(decode_base64(&b64)?)?, REQUEST);
-        let form = saml_post_binding_form(
-            "https://idp.example.com/sso",
-            ParserType::SamlRequest.query_param(),
-            &b64,
-            None,
-        )?;
-        assert!(form.contains("name=\"SAMLRequest\""));
-        assert!(form.contains(&b64));
         Ok(())
     }
 

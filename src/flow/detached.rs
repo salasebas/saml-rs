@@ -196,7 +196,7 @@ mod tests {
         let certificates = vec!["not a certificate".to_string()];
         let options = FlowOptions {
             signing_certs: &certificates,
-            ..Default::default()
+            ..FlowOptions::new(Binding::Redirect, ParserType::SamlRequest)
         };
         let octet = url::form_urlencoded::Serializer::new(String::new())
             .append_pair("SAMLRequest", "payload")
@@ -253,7 +253,7 @@ mod tests {
         for certificates in [vec![garbage.clone(), signer.clone()], vec![signer, garbage]] {
             let options = FlowOptions {
                 signing_certs: &certificates,
-                ..Default::default()
+                ..FlowOptions::new(Binding::Redirect, ParserType::SamlRequest)
             };
             assert!(
                 matches!(

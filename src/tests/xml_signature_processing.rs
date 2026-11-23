@@ -47,12 +47,10 @@ fn sign(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
 fn verify_flow(xml: &str, profile: XmlSignatureProfile) -> Result<(), SamlError> {
     let certs = [CERT.to_string()];
     let options = FlowOptions {
-        binding: Some(Binding::Post),
-        parser_type: Some(ParserType::SamlResponse),
         signature_check: SignatureCheck::Require,
         signing_certs: &certs,
         xml_signatures: profile,
-        ..FlowOptions::default()
+        ..FlowOptions::new(Binding::Post, ParserType::SamlResponse)
     };
     flow(
         &options,

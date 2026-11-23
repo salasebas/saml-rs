@@ -104,9 +104,9 @@ pub enum SignatureCheck {
 #[cfg_attr(not(crypto), allow(dead_code))]
 pub struct FlowOptions<'a> {
     /// Protocol binding.
-    pub binding: Option<Binding>,
+    pub binding: Binding,
     /// Message parser type.
-    pub parser_type: Option<ParserType>,
+    pub parser_type: ParserType,
     pub(crate) defer_logout_request_version: bool,
     /// Maximum decoded compressed and inflated raw-DEFLATE bytes accepted for
     /// HTTP-Redirect input.
@@ -159,11 +159,11 @@ pub struct FlowOptions<'a> {
     pub expected_in_response_to: Option<&'a str>,
 }
 
-impl<'a> Default for FlowOptions<'a> {
-    fn default() -> Self {
+impl<'a> FlowOptions<'a> {
+    pub(crate) fn new(binding: Binding, parser_type: ParserType) -> Self {
         Self {
-            binding: None,
-            parser_type: None,
+            binding,
+            parser_type,
             defer_logout_request_version: false,
             redirect_inflate_max_bytes: MAX_DEFLATE_RAW_DECODE_BYTES,
             xml_limits: XmlLimits::default(),
@@ -187,10 +187,10 @@ impl<'a> Default for FlowOptions<'a> {
             expected_in_response_to: None,
         }
     }
-}
 
-impl<'a> FlowOptions<'a> {
     pub(crate) fn for_peer(
+        binding: Binding,
+        parser_type: ParserType,
         setting: &EntitySetting,
         peer: &'a Metadata,
         hmac_secret: Option<&'a HmacSecret>,
@@ -207,7 +207,7 @@ impl<'a> FlowOptions<'a> {
             hmac_secret,
             clock_skew,
             now: Some(now),
-            ..Self::default()
+            ..Self::new(binding, parser_type)
         }
     }
 
@@ -648,12 +648,8 @@ fn flow_inner(
     response_signature: ResponseSignatureRequirement,
     signed_destination: SignedMessageDestination,
 ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
-    let binding = opts
-        .binding
-        .ok_or_else(|| missing_binding_parameter("binding"))?;
-    let parser_type = opts
-        .parser_type
-        .ok_or_else(|| SamlError::Invalid("flow options name no parser type".into()))?;
+    let binding = opts.binding;
+    let parser_type = opts.parser_type;
 
     let xml = decode_message(
         binding,

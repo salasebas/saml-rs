@@ -1,4 +1,5 @@
 use super::*;
+use crate::constants::{Binding, ParserType};
 use std::time::{Duration, SystemTime};
 
 #[test]
@@ -17,7 +18,7 @@ fn confirmation_attributes_with_the_same_local_name_use_the_first_value(
     let opts = FlowOptions {
         now: Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000)),
         expected_in_response_to: Some("_req1"),
-        ..FlowOptions::default()
+        ..FlowOptions::new(Binding::Post, ParserType::SamlResponse)
     };
     accept_response_assertions(xml, &opts, Some("https://sp/acs"))?;
 

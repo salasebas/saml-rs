@@ -83,7 +83,7 @@ impl<'a> LoginResponseParseOptions<'a> {
 }
 
 impl Engine {
-    /// Build from SP metadata XML, merging the metadata-declared flags into `setting`.
+    /// Build from SP metadata XML and copy its assertion signing requirement into `setting`.
     ///
     /// # Errors
     ///
@@ -98,7 +98,6 @@ impl Engine {
     }
 
     pub(crate) fn from_parsed_metadata(metadata: SpMetadata, mut setting: EntitySetting) -> Self {
-        setting.authn_requests_signed = metadata.authn_requests_signed();
         setting.want_assertions_signed = metadata.want_assertions_signed();
         let formats = metadata.as_metadata().name_id_formats();
         if !formats.is_empty() {
@@ -346,8 +345,6 @@ impl Engine {
         };
         let result = flow_with_expected_recipient_and_signature_evidence(
             &FlowOptions {
-                binding: Some(binding),
-                parser_type: Some(ParserType::SamlResponse),
                 signature_check: SignatureCheck::Require,
                 require_audience_restriction: self.setting.require_audience_restriction,
                 xml_signatures: self.setting.xml_signatures,
@@ -370,7 +367,7 @@ impl Engine {
                 schema_validator: self.setting.schema_validator,
                 expected_audience: Some(audience.as_str()),
                 expected_in_response_to,
-                ..FlowOptions::default()
+                ..FlowOptions::new(binding, ParserType::SamlResponse)
             },
             request,
             recipient.as_str(),

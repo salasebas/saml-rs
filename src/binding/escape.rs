@@ -1,4 +1,4 @@
-//! XML and HTML escaping helpers.
+//! XML escaping helpers.
 
 /// Escape `& " ' < >` for safe inclusion in XML text or attributes.
 pub(crate) fn xml_escape(input: &str) -> String {
@@ -8,16 +8,6 @@ pub(crate) fn xml_escape(input: &str) -> String {
         .replace('\'', "&apos;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
-}
-
-/// Escape a value for an HTML attribute (e.g. form `action` / `value`).
-pub(super) fn html_escape(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
 }
 
 #[cfg(test)]

@@ -17,11 +17,7 @@ const AUTHN_REQUEST: &str = concat!(
 );
 
 fn options(binding: Binding) -> FlowOptions<'static> {
-    FlowOptions {
-        binding: Some(binding),
-        parser_type: Some(ParserType::SamlRequest),
-        ..FlowOptions::default()
-    }
+    FlowOptions::new(binding, ParserType::SamlRequest)
 }
 
 fn post_request(xml: &str) -> HttpRequest {

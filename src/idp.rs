@@ -111,7 +111,7 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Build from IdP metadata XML, merging metadata-declared flags into `setting`.
+    /// Build from IdP metadata XML.
     ///
     /// # Errors
     ///
@@ -126,7 +126,6 @@ impl Engine {
     }
 
     pub(crate) fn from_parsed_metadata(metadata: IdpMetadata, mut setting: EntitySetting) -> Self {
-        setting.want_authn_requests_signed = metadata.want_authn_requests_signed();
         let formats = metadata.as_metadata().name_id_formats();
         if !formats.is_empty() {
             setting.name_id_format = formats
@@ -598,8 +597,6 @@ impl Engine {
             };
         crate::flow::flow_with_authentication(
             &FlowOptions {
-                binding: Some(binding),
-                parser_type: Some(ParserType::SamlRequest),
                 signature_check,
                 require_audience_restriction: true,
                 xml_signatures: self.setting.xml_signatures,
@@ -613,7 +610,7 @@ impl Engine {
                 schema_validator: self.setting.schema_validator,
                 expected_audience: None,
                 expected_in_response_to: None,
-                ..FlowOptions::default()
+                ..FlowOptions::new(binding, ParserType::SamlRequest)
             },
             request,
         )
@@ -683,9 +680,8 @@ mod tests {
     }
 
     #[test]
-    fn from_metadata_merges_flags() -> Result<(), Box<dyn std::error::Error>> {
+    fn from_metadata_reads_redirect_sso_endpoint() -> Result<(), Box<dyn std::error::Error>> {
         let idp = Engine::from_metadata(IDPMETA, EntitySetting::default())?;
-        assert!(idp.setting.want_authn_requests_signed);
         assert_eq!(
             idp.metadata
                 .single_sign_on_location(Binding::Redirect)
