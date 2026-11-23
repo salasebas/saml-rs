@@ -263,7 +263,17 @@ impl Inbound<SsoResponse> {
     }
 
     pub(crate) fn into_http_request(self, limits: XmlLimits) -> Result<HttpRequest, SamlError> {
-        http_request_from_transport(self.transport, false, MessageField::Response, limits)
+        match self.transport {
+            Transport::Redirect { .. } => Err(SamlError::UnsupportedBinding {
+                binding: Binding::Redirect,
+            }),
+            transport @ (Transport::Post { .. }
+            | Transport::SimpleSign { .. }
+            | Transport::Artifact { .. }
+            | Transport::Soap { .. }) => {
+                http_request_from_transport(transport, MessageField::Response, limits)
+            }
+        }
     }
 }
 
@@ -287,7 +297,7 @@ impl Inbound<AuthnRequest> {
         };
         Ok((
             encoding,
-            http_request_from_transport(transport, true, MessageField::Request, limits)?,
+            http_request_from_transport(transport, MessageField::Request, limits)?,
         ))
     }
 }
@@ -324,23 +334,13 @@ impl Inbound<LogoutResponse> {
 
 impl Inbound<ManageNameIdRequest> {
     pub(crate) fn into_http_request(self) -> Result<HttpRequest, SamlError> {
-        http_request_from_transport(
-            self.transport,
-            true,
-            MessageField::Request,
-            XmlLimits::default(),
-        )
+        http_request_from_transport(self.transport, MessageField::Request, XmlLimits::default())
     }
 }
 
 impl Inbound<ManageNameIdResponse> {
     pub(crate) fn into_http_request(self) -> Result<HttpRequest, SamlError> {
-        http_request_from_transport(
-            self.transport,
-            true,
-            MessageField::Response,
-            XmlLimits::default(),
-        )
+        http_request_from_transport(self.transport, MessageField::Response, XmlLimits::default())
     }
 }
 
@@ -354,7 +354,7 @@ fn logout_http_request(
         Transport::Soap { envelope, .. } => {
             soap_request(&envelope, expected_message, limits, schema_validator)
         }
-        other => http_request_from_transport(other, true, expected_message, limits),
+        other => http_request_from_transport(other, expected_message, limits),
     }
 }
 
@@ -375,17 +375,11 @@ fn soap_request(
 
 fn http_request_from_transport(
     transport: Transport,
-    allow_redirect: bool,
     expected_message: MessageField,
     limits: XmlLimits,
 ) -> Result<HttpRequest, SamlError> {
     match transport {
         Transport::Redirect { raw_query } => {
-            if !allow_redirect {
-                return Err(SamlError::UnsupportedBinding {
-                    binding: Binding::Redirect,
-                });
-            }
             let raw_query = raw_query.trim_start_matches('?').to_string();
             let octet_string = redirect_octet_from_raw_query(&raw_query, expected_message)?;
             let query = parse_form_pairs(&raw_query);
