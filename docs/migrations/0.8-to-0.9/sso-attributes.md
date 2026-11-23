@@ -52,10 +52,11 @@ attribute it releases.
 **Now:** `respond_sso`, `initiate_sso`, `respond_sso_artifact`,
 `initiate_sso_artifact`, and `respond_paos_sso` return `SamlError::Invalid`
 when the attribute has no value or several values, when the assertion has it
-twice, when the value is not `uniqueID@scope`, or when the scope has an upper
-case letter. The value is written without `xsi:type`. An attribute with one of
-these names and another name format is written as before.
+twice, when the value is not `uniqueID@scope`, when the scope has an upper
+case letter, or when the unique ID has both upper and lower case letters. The
+value is written without `xsi:type`. An attribute with one of these names and
+another name format is written as before.
 
 **Upgrade:** create the value with `SubjectId::try_new` or
 `PairwiseId::try_new` and add it with `Attribute::from`. Write the scope in
-lower case.
+lower case, and the unique ID in one case.

@@ -111,8 +111,10 @@ scoped_identifier!(
     /// Two values are equal when they differ only in ASCII case, and they then
     /// identify the same subject. [`Hash`] agrees with that equality.
     ///
-    /// An identity provider adds it to an assertion as an [`Attribute`]. A
-    /// service provider reads it with [`crate::SsoSession::subject_id`].
+    /// An identity provider adds it to an assertion as an [`Attribute`]. The
+    /// response is rejected when the scope has an upper case letter, or the
+    /// unique ID has both upper and lower case letters. A service provider
+    /// reads it with [`crate::SsoSession::subject_id`].
     ///
     /// # Examples
     ///
@@ -140,11 +142,16 @@ scoped_identifier!(
     /// A `pairwise-id` value: a long-lived identifier of the subject that
     /// differs for each service provider.
     ///
-    /// Two values are equal when they differ only in ASCII case, and they then
-    /// identify the same subject. [`Hash`] agrees with that equality.
+    /// Two values are equal when they differ only in ASCII case. [`Hash`]
+    /// agrees with that equality. Equal values from one identity provider
+    /// identify one subject at one service provider. The same value at
+    /// another service provider, or from another identity provider, can
+    /// identify another subject.
     ///
-    /// An identity provider adds it to an assertion as an [`Attribute`]. A
-    /// service provider reads it with [`crate::SsoSession::pairwise_id`].
+    /// An identity provider adds it to an assertion as an [`Attribute`]. The
+    /// response is rejected when the scope has an upper case letter, or the
+    /// unique ID has both upper and lower case letters. A service provider
+    /// reads it with [`crate::SsoSession::pairwise_id`].
     ///
     /// The identity provider gives each subject one value per service
     /// provider, the same value on every login, and a different value for
@@ -237,7 +244,8 @@ pub(crate) fn is_subject_identifier(attribute: &Attribute) -> bool {
 ///
 /// Returns [`SamlError::Invalid`] when either attribute occurs more than once,
 /// does not have exactly one value, has a value that is not `uniqueID@scope`,
-/// or has a scope with an upper case letter.
+/// has a scope with an upper case letter, or has a unique ID with both upper
+/// and lower case letters.
 pub(crate) fn check_issued_subject_identifiers(attributes: &[Attribute]) -> Result<(), SamlError> {
     for name in [SUBJECT_ID, PAIRWISE_ID] {
         let mut issued = attributes
@@ -260,12 +268,17 @@ pub(crate) fn check_issued_subject_identifiers(attributes: &[Attribute]) -> Resu
         let separator = scope_separator(value).ok_or_else(|| {
             SamlError::Invalid(format!("`{name}` attribute value must be uniqueID@scope"))
         })?;
-        if value[separator + 1..]
-            .bytes()
-            .any(|byte| byte.is_ascii_uppercase())
-        {
+        let (unique_id, scope) = (&value[..separator], &value[separator + 1..]);
+        if scope.bytes().any(|byte| byte.is_ascii_uppercase()) {
             return Err(SamlError::Invalid(format!(
                 "`{name}` attribute scope must be lower case"
+            )));
+        }
+        if unique_id.bytes().any(|byte| byte.is_ascii_uppercase())
+            && unique_id.bytes().any(|byte| byte.is_ascii_lowercase())
+        {
+            return Err(SamlError::Invalid(format!(
+                "`{name}` attribute unique ID must be all upper case or all lower case"
             )));
         }
     }

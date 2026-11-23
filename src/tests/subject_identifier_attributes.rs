@@ -11,12 +11,13 @@ use std::collections::HashSet;
 use super::identifier_formats::{
     accept_peer_attribute_statement, alice, exchange, respond, values,
 };
-use saml_rs::constants::attribute_name::{PAIRWISE_ID, SUBJECT_ID};
 use saml_rs::{
     Attribute, AttributeNameFormat, AttributeValue, Attributes, PairwiseId, RespondSso, SamlError,
     SsoAssertion, SubjectId,
 };
 
+const SUBJECT_ID: &str = "urn:oasis:names:tc:SAML:attribute:subject-id";
+const PAIRWISE_ID: &str = "urn:oasis:names:tc:SAML:attribute:pairwise-id";
 const URI: &str = "urn:oasis:names:tc:SAML:2.0:attrname-format:uri";
 const MAIL_OID: &str = "urn:oid:0.9.2342.19200300.100.1.3";
 
@@ -245,6 +246,7 @@ fn identity_provider_does_not_issue_an_identifier_attribute_that_breaks_the_prof
         ],
         vec![identifier(SUBJECT_ID, &["alice.smith@example.org"])],
         vec![identifier(PAIRWISE_ID, &["alice@Example.org"])],
+        vec![identifier(SUBJECT_ID, &["Alice@example.org"])],
         vec![Attribute::from(SubjectId::try_new("alice@EXAMPLE.ORG")?)],
     ] {
         match respond(

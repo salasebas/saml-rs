@@ -118,7 +118,7 @@ let response = idp.respond_sso(
 
 A `Basic` name that is not an XML name is rejected.
 
-To identify the subject with the `subject-id` or `pairwise-id` attribute, create a `SubjectId` or `PairwiseId` from its `uniqueID@scope` text and add it with `Attribute::from`. `try_new` rejects text outside the profile's syntax. The response is rejected when the scope has an upper case letter.
+To identify the subject with the `subject-id` or `pairwise-id` attribute, create a `SubjectId` or `PairwiseId` from its `uniqueID@scope` text and add it with `Attribute::from`. `try_new` rejects text outside the profile's syntax. The response is rejected when the scope has an upper case letter, or the unique ID has both upper and lower case letters.
 
 ```rust
 let attributes = Attributes::new([
