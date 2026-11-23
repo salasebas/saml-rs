@@ -106,6 +106,7 @@ pub struct LogoutRequest {
     name_id: Option<NameId>,
     session_indexes: Vec<SessionIndex>,
     destination: Option<EndpointUrl>,
+    reason: Option<String>,
     raw_flow: FlowResult,
 }
 
@@ -150,13 +151,24 @@ impl LogoutRequest {
         self.destination.as_ref()
     }
 
+    /// Peer-supplied `Reason` attribute, when present.
+    ///
+    /// Returns the XML-parsed attribute value without whitespace collapse or
+    /// URI validation, or `None` when the attribute was absent.
+    pub fn reason(&self) -> Option<&str> {
+        self.reason.as_deref()
+    }
+
     pub(crate) fn raw_flow(&self) -> &FlowResult {
         &self.raw_flow
     }
 }
 
 impl LogoutRequest {
-    pub(crate) fn from_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
+    pub(crate) fn from_flow(
+        raw_flow: FlowResult,
+        reason: Option<String>,
+    ) -> Result<Self, SamlError> {
         let id = MessageId::try_new(required_str(&raw_flow.extract, request::ID)?)?;
         let issue_instant = required_saml_utc_instant(
             raw_flow.extract.get_str(request::ISSUE_INSTANT),
@@ -184,6 +196,7 @@ impl LogoutRequest {
             name_id,
             session_indexes,
             destination,
+            reason,
             raw_flow,
         })
     }

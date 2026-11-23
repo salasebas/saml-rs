@@ -7,6 +7,7 @@ use crate::error::SamlError;
 use crate::flow::FlowResult;
 use crate::metadata::Metadata;
 use crate::model::LogoutRequest;
+use crate::xml::protocol_element::SamlElement;
 
 /// `xml` with its `<NameID>` encrypted for the peer when `policy` selects it.
 /// The peer key is the first `KeyDescriptor` with `use="encryption"` in
@@ -55,14 +56,13 @@ fn encrypt(_xml: &str, _certificate: &str, _setting: &EntitySetting) -> Result<S
 pub(crate) fn decrypt_encrypted_id(
     request: LogoutRequest,
     setting: &EntitySetting,
+    document: &SamlElement,
 ) -> Result<LogoutRequest, SamlError> {
     let Some(key_pem) = setting.enc_private_key.as_deref() else {
         return Ok(request);
     };
     let flow = request.raw_flow();
-    let document = crate::xml::dom::parse_document(&flow.saml_content, setting.xml_limits)?;
     let carries_encrypted_id = document
-        .root
         .children
         .iter()
         .any(|child| child.local_name == "EncryptedID");
@@ -89,11 +89,15 @@ pub(crate) fn decrypt_encrypted_id(
     {
         return Ok(request);
     }
-    LogoutRequest::from_flow(FlowResult {
-        saml_content,
-        extract,
-        sig_alg: flow.sig_alg.clone(),
-    })
+    let reason = request.reason().map(str::to_owned);
+    LogoutRequest::from_flow(
+        FlowResult {
+            saml_content,
+            extract,
+            sig_alg: flow.sig_alg.clone(),
+        },
+        reason,
+    )
 }
 
 #[cfg(crypto)]

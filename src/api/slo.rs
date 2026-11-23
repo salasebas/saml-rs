@@ -13,6 +13,7 @@ use crate::model::{
     LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, Received, RefusedLogoutRequest,
     RelayState, ReplayKey, SamlInstant, SamlValidationContext, SessionIndex, Status,
 };
+use crate::xml::protocol_element::parse_saml_with_limits;
 use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
 
@@ -725,12 +726,14 @@ fn receive_slo_impl(
         validation.now_offset()?,
         validation.clock_skew().not_on_or_after_millis(),
     )?;
-    let logout = LogoutRequest::from_flow(flow)?;
+    let document = parse_saml_with_limits(&flow.saml_content, local_setting.xml_limits)?;
+    let reason = document.attr("Reason").map(str::to_owned);
+    let logout = LogoutRequest::from_flow(flow, reason)?;
     validation.check_and_store_message_replay_until(
         ReplayKey::LogoutRequest(logout.id().clone()),
         replay_deadline,
     )?;
-    let logout = decrypt_encrypted_id(logout, local_setting)?;
+    let logout = decrypt_encrypted_id(logout, local_setting, &document)?;
     Ok(Received::new(logout, relay_state))
 }
 
