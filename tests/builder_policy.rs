@@ -445,6 +445,7 @@ fn config_builders_reject_a_credential_that_cannot_be_used(
         X509Credential::new(CertificatePem::new(certificate), PrivateKeyPem::new(key))
     };
     let signing = |credential| Credentials::default().with_signing_credential(credential);
+    let with_bag_attributes = format!("Bag Attributes\n    localKeyID: 01 00 00 00\n{CERT}");
     let cases = [
         (
             signing(pair(OTHER_CERT, KEY)),
@@ -460,6 +461,10 @@ fn config_builders_reject_a_credential_that_cannot_be_used(
         ),
         (
             signing(pair("not a certificate", KEY)),
+            "signing credential: the certificate does not load",
+        ),
+        (
+            signing(pair(&with_bag_attributes, KEY)),
             "signing credential: the certificate does not load",
         ),
         (

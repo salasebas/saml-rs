@@ -26,7 +26,7 @@ pub(crate) fn check_credentials(credentials: &Credentials) -> Result<(), SamlErr
         .iter()
         .enumerate()
     {
-        load_named_certificate(
+        load_published_certificate(
             certificate,
             &format!("additional signing certificate at index {index}"),
         )?;
@@ -52,7 +52,7 @@ fn check_credential(credential: &X509Credential, name: &str) -> Result<(), SamlE
             "{name}: the private key PEM holds only a public key"
         )));
     }
-    let certificate = load_named_certificate(credential.certificate(), name)?;
+    let certificate = load_published_certificate(credential.certificate(), name)?;
     if public_key(&key, name)? != public_key(&certificate, name)? {
         return Err(SamlError::crypto(format!(
             "{name}: the private key does not match the certificate"
@@ -61,9 +61,10 @@ fn check_credential(credential: &X509Credential, name: &str) -> Result<(), SamlE
     Ok(())
 }
 
-fn load_named_certificate(certificate: &CertificatePem, name: &str) -> Result<Key, SamlError> {
+fn load_published_certificate(certificate: &CertificatePem, name: &str) -> Result<Key, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
-    let pem = to_cert_pem(certificate.as_str())
+    let published = normalize_cert_string(certificate.as_str());
+    let pem = to_cert_pem(&published)
         .ok_or_else(|| SamlError::crypto(format!("{name}: the certificate does not load")))?;
     load_x509_cert_pem(pem.as_bytes())
         .map_err(|error| credential_error(name, "the certificate does not load", error))
