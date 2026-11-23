@@ -13,7 +13,7 @@ use crate::idp::{self, LoginResponseOptions, LoginResponseOverrides, ResponseMes
 use crate::logout::{
     create_logout_response_inner, issuer_of, parse_logout_request_at, parse_logout_response_at,
     reject_soap_relay_state, render_logout_request, LogoutFlowValidation, LogoutReceipt,
-    LogoutRequestSubject, LogoutRequestTimeAttributes, LogoutResponseInput,
+    LogoutRequestAttributes, LogoutRequestSubject, LogoutResponseInput,
 };
 use crate::metadata::Metadata;
 use crate::model::{validate_name_id_format, ClockSkew, Status};
@@ -260,12 +260,13 @@ pub(crate) fn create_logout_request_with_id(
     let xml = render_logout_request(
         init_setting,
         &issuer_of(init_setting, init_meta),
-        &id,
-        LogoutRequestTimeAttributes {
+        LogoutRequestAttributes {
+            id: &id,
+            destination: &destination,
             issue_instant: &issue_instant,
             not_on_or_after: None,
+            reason: None,
         },
-        &destination,
         &subject,
         name_id_format,
     )?;

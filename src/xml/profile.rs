@@ -742,6 +742,7 @@ mod tests {
                 destination: "https://idp.example.com/slo",
                 issuer: "https://sp.example.com/metadata",
                 expiration: OutboundLogoutExpiration::Optional,
+                reason: None,
                 name_id: "user",
                 name_id_format: None,
                 name_id_qualifiers: OutboundNameIdQualifiers::default(),

@@ -46,6 +46,7 @@ pub(crate) struct OutboundLogoutRequestExpectation<'a> {
     pub(crate) destination: &'a str,
     pub(crate) issuer: &'a str,
     pub(crate) expiration: OutboundLogoutExpiration<'a>,
+    pub(crate) reason: Option<&'a str>,
     pub(crate) name_id: &'a str,
     /// Expected `<NameID>` `Format`. `None` expects the attribute to be absent
     /// or to name the unspecified format.
@@ -154,6 +155,13 @@ fn validate_root(
         return Err(SamlError::destination_mismatch(
             expectation.destination,
             destination,
+        ));
+    }
+
+    if expectation.reason.is_some() && attribute_value(&attributes, b"Reason") != expectation.reason
+    {
+        return Err(SamlError::Invalid(
+            "outbound LogoutRequest Reason does not match the requested reason".into(),
         ));
     }
 

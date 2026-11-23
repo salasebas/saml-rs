@@ -259,6 +259,7 @@ pub struct StartSlo {
     pub(super) binding: LogoutBinding,
     pub(super) relay_state: Option<RelayState>,
     pub(super) identifier_encryption: IdentifierEncryptionPolicy,
+    pub(super) reason: Option<String>,
     transport: PeerEndpointTransport,
 }
 
@@ -298,8 +299,23 @@ impl StartSlo {
             binding,
             relay_state: None,
             identifier_encryption: IdentifierEncryptionPolicy::PlaintextIdentifiers,
+            reason: None,
             transport: PeerEndpointTransport::default(),
         }
+    }
+
+    /// Set the reason URI on the signed `LogoutRequest`.
+    ///
+    /// The built-in writer omits `Reason` by default. Supply an absolute URI
+    /// reference such as `urn:oasis:names:tc:SAML:2.0:logout:user`. The writer
+    /// collapses XML whitespace, and `start_slo` returns [`crate::SamlError::Invalid`]
+    /// for an invalid reference.
+    ///
+    /// If a custom [`crate::TemplatePolicy::logout_request_template`] already
+    /// writes a `Reason`, that attribute must match the supplied value.
+    pub fn with_reason(mut self, reason: impl Into<String>) -> Self {
+        self.reason = Some(reason.into());
+        self
     }
 
     /// Set the RelayState the LogoutRequest carries. The request carries none

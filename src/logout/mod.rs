@@ -18,4 +18,4 @@ pub(crate) use parsing::{
 };
 pub(crate) use rendering::LogoutRequestSubject;
 #[cfg(test)]
-pub(crate) use rendering::{issuer_of, render_logout_request, LogoutRequestTimeAttributes};
+pub(crate) use rendering::{issuer_of, render_logout_request, LogoutRequestAttributes};

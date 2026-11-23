@@ -34,6 +34,17 @@
 | Omit every `SessionIndex` to end all applicable sessions of the principal | Optional | Profiles §4.4.4.1, E38 | Always |
 | Sign the request on HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign. CD-04 §2.4 makes the SimpleSign signature optional, but §4.4.4.1 requires the requester to authenticate by signing | Mandatory | Profiles §4.4.4.1, CD-04 §2.4 | Always |
 
+## LogoutRequest reason
+
+`start_slo` on both roles can write `Reason` on HTTP-Redirect, HTTP-POST,
+HTTP-POST-SimpleSign, and SOAP. The request signature covers the attribute.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Write a caller-supplied `Reason`. The built-in writer omits it by default | Optional | Core §3.7.1, §3.7.3 | `StartSlo::with_reason` |
+| Require an absolute URI reference for a typed `Reason`, using the same `anyURI` whitespace and syntax rules as [identifier formats](identifiers.md#name-identifier-formats) | Mandatory | Core §1.3.2, §3.7.1, E10 | `StartSlo::with_reason` |
+| Add the supplied reason to a rendered custom template when it has no `Reason`. Require an existing `Reason` to match the supplied value. A template can supply its own `Reason` when the option is unset | Library policy. This keeps the signed request consistent with the options for that request. | — | `TemplatePolicy::logout_request_template` |
+
 ## Peer endpoints
 
 | Rule | Level | Section | Option |
@@ -149,7 +160,7 @@ Typed logout send and receive use HTTP-Redirect, HTTP-POST, and HTTP-POST-Simple
 - Propagating logout to other participants. Each call addresses one peer. After a synchronous participant request, the IdP should use a synchronous binding for required propagation. Recommended, Core §3.7.3.2, Profiles §4.4.3.1.
 - Session invalidation and session tracking. The caller owns them. Mandatory for the participant, Core §3.7.3.1.
 - Setting `NotOnOrAfter` at or after the latest assertion `NotOnOrAfter`. Recommended, Core §3.7.3.2. Typed `start_slo` receives no assertion, and [ADR 0001](https://samlrs.vercel.app/explanation/logout-expiration/) records the choice.
-- Generating a `Reason` value. The attribute is optional. A producer that includes it must use a URI reference. The default request omits it, and the receiver does not check its form. Core §3.7.1, E10.
+- Reading `Reason` from a received request. Core §3.7.1 and E10 specify its form for producers.
 - Adding `RelayState` in `respond_slo` when the request carried none. Optional for the responder, Bindings §3.4.3, §3.5.3, CD-04 §2.3.
 - An `https` check on a session authority's `LogoutRequest`. Profiles §4.4.3.3 does not repeat the §4.4.3.1 recommendation.
 - TLS and HTTP authentication of the SOAP exchange. Deployment duty, Conformance Requirements §3.5. `allow_http` has no effect on SOAP.

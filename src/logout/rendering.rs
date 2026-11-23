@@ -1,11 +1,14 @@
+use quick_xml::events::Event;
+use quick_xml::Reader;
+
 use crate::constants::namespace;
 use crate::entity::EntitySetting;
-use crate::error::SamlError;
+use crate::error::{xml_err, SamlError};
 use crate::metadata::Metadata;
 use crate::model::Status;
 use crate::template::{render_template, validate_tag_prefixes};
 use crate::xml::write::{Prefixes, XmlWriter};
-use crate::xml::OutboundNameIdQualifiers;
+use crate::xml::{utf8_bom_len, OutboundNameIdQualifiers};
 
 pub(crate) fn issuer_of(setting: &EntitySetting, meta: &Metadata) -> String {
     setting
@@ -21,9 +24,12 @@ pub(crate) struct LogoutRequestSubject<'a> {
     pub(crate) session_indexes: Vec<&'a str>,
 }
 
-pub(crate) struct LogoutRequestTimeAttributes<'a> {
+pub(crate) struct LogoutRequestAttributes<'a> {
+    pub(crate) id: &'a str,
+    pub(crate) destination: &'a str,
     pub(crate) issue_instant: &'a str,
     pub(crate) not_on_or_after: Option<&'a str>,
+    pub(crate) reason: Option<&'a str>,
 }
 
 pub(super) fn render_default_logout_response(
@@ -83,12 +89,17 @@ fn write_logout_status(writer: &mut XmlWriter, protocol_prefix: &str, status: &S
 pub(crate) fn render_logout_request(
     setting: &EntitySetting,
     issuer: &str,
-    id: &str,
-    timing: LogoutRequestTimeAttributes<'_>,
-    destination: &str,
+    attributes: LogoutRequestAttributes<'_>,
     subject: &LogoutRequestSubject<'_>,
     name_id_format: Option<&str>,
 ) -> Result<String, SamlError> {
+    let LogoutRequestAttributes {
+        id,
+        destination,
+        issue_instant,
+        not_on_or_after,
+        reason,
+    } = attributes;
     if let Some(template) = setting.logout_request_template.as_deref() {
         if subject.session_indexes.len() > 1 {
             return Err(SamlError::Unsupported(
@@ -97,7 +108,7 @@ pub(crate) fn render_logout_request(
         }
         let mut replacements = vec![
             ("ID", Some(id.to_owned())),
-            ("IssueInstant", Some(timing.issue_instant.to_string())),
+            ("IssueInstant", Some(issue_instant.to_owned())),
             ("Destination", Some(destination.to_owned())),
             ("Issuer", Some(issuer.to_owned())),
             ("NameIDFormat", name_id_format.map(str::to_string)),
@@ -122,10 +133,14 @@ pub(crate) fn render_logout_request(
                     .map(|value| (*value).to_string()),
             ),
         ];
-        if let Some(expiration) = timing.not_on_or_after {
+        if let Some(expiration) = not_on_or_after {
             replacements.push(("NotOnOrAfter", Some(expiration.to_owned())));
         }
-        return render_template(template, Prefixes::of(setting)?, &replacements);
+        let xml = render_template(template, Prefixes::of(setting)?, &replacements)?;
+        return match reason {
+            Some(reason) => add_template_reason(xml, reason),
+            None => Ok(xml),
+        };
     }
     validate_tag_prefixes(&setting.tag_prefix_protocol, &setting.tag_prefix_assertion)?;
 
@@ -143,14 +158,17 @@ pub(crate) fn render_logout_request(
         (xmlns_assertion.as_str(), namespace::ASSERTION),
         ("ID", id),
         ("Version", "2.0"),
-        ("IssueInstant", timing.issue_instant),
+        ("IssueInstant", issue_instant),
         ("Destination", destination),
     ];
-    if let Some(value) = timing.not_on_or_after {
+    if let Some(value) = not_on_or_after {
         // SAML Core 2.0 §3.7.3.2 requires this attribute when the
         // LogoutRequest producer is acting as the Session Authority. The
         // selected lifetime remains saml-rs policy.
         attrs.push(("NotOnOrAfter", value));
+    }
+    if let Some(value) = reason {
+        attrs.push(("Reason", value));
     }
 
     let mut writer = XmlWriter::new();
@@ -176,4 +194,26 @@ pub(crate) fn render_logout_request(
     }
     writer.end(&root_name);
     Ok(writer.finish())
+}
+
+fn add_template_reason(mut xml: String, reason: &str) -> Result<String, SamlError> {
+    let bom_len = utf8_bom_len(&xml);
+    let mut reader = Reader::from_str(&xml);
+    loop {
+        let before = usize::try_from(reader.buffer_position()).map_err(xml_err)?;
+        match reader.read_event().map_err(xml_err)? {
+            Event::Start(root) => {
+                if root.try_get_attribute("Reason").map_err(xml_err)?.is_none() {
+                    let mut root = root.into_owned();
+                    root.push_attribute(("Reason", reason));
+                    let after = usize::try_from(reader.buffer_position()).map_err(xml_err)?;
+                    xml.replace_range(bom_len + before + 1..bom_len + after - 1, &root);
+                }
+                break;
+            }
+            Event::Empty(_) | Event::Eof => break,
+            _ => {}
+        }
+    }
+    Ok(xml)
 }
