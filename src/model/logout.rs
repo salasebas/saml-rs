@@ -2,14 +2,51 @@ use super::extract::{
     optional_endpoint, optional_request_id, required_str, session_indexes_from_value,
 };
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
-use super::status::Status;
+use super::status::{RequestVersionMismatch, Status};
 use super::subject::NameId;
 use super::{EndpointUrl, RelayState};
+use crate::browser::LogoutBinding;
 use crate::config::{EntityId, NameIdFormat};
 use crate::error::SamlError;
 use crate::flow::FlowResult;
 use crate::xml::fields::{logout_request, logout_response, name_id, request, response, ISSUER};
 use crate::xml::parse_saml_utc_date_time;
+
+/// An authenticated LogoutRequest that requires a version mismatch response.
+#[derive(Debug, Clone)]
+pub struct RefusedLogoutRequest {
+    pub(crate) id: MessageId,
+    pub(crate) issuer: EntityId,
+    pub(crate) relay_state: Option<RelayState>,
+    pub(crate) binding: LogoutBinding,
+    pub(crate) status: Status,
+}
+
+impl RefusedLogoutRequest {
+    pub(crate) fn for_version(
+        flow: &FlowResult,
+        issuer: &EntityId,
+        relay_state: Option<&RelayState>,
+        binding: LogoutBinding,
+    ) -> Result<Option<Self>, SamlError> {
+        let version = required_str(&flow.extract, request::VERSION)?;
+        let Some(mismatch) = RequestVersionMismatch::for_request(version)? else {
+            return Ok(None);
+        };
+        Ok(Some(Self {
+            id: MessageId::try_new(required_str(&flow.extract, request::ID)?)?,
+            issuer: issuer.clone(),
+            relay_state: relay_state.cloned(),
+            binding,
+            status: mismatch.status(),
+        }))
+    }
+
+    /// Status the LogoutResponse will report.
+    pub fn status(&self) -> &Status {
+        &self.status
+    }
+}
 
 /// Subject data used to issue a Single Logout request.
 #[derive(Debug, Clone, PartialEq, Eq)]

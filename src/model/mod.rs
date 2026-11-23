@@ -39,12 +39,15 @@ pub use authn_details::{AuthnContext, SubjectLocality};
 pub use authn_statement::AuthnStatement;
 pub use endpoint::EndpointUrl;
 pub use identifiers::{AssertionId, MessageId, SamlInstant, SessionIndex};
-pub use logout::{LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject};
+pub use logout::{
+    LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, RefusedLogoutRequest,
+};
 pub use outstanding_logout::OutstandingLogout;
 pub use received::Received;
 pub use relay::{RelayState, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES};
 pub use replay_cache::InMemoryReplayCache;
 pub use sso::{SsoResponse, SsoSession, VerifiedXmlSignature, VerifiedXmlSignatureCoverage};
+pub(crate) use status::RequestVersionMismatch;
 pub use status::{Status, SubordinateStatusCode, TopLevelStatusCode};
 pub use subject::{
     NameId, NameIdCreationRequest, NameIdPolicy, RequestedSubject, RequestedSubjectIdentifier,

@@ -5,7 +5,10 @@
 
 use crate::config::NameIdFormat;
 use crate::constants::Binding;
-use crate::model::{RelayState, ReplayKey, Status, SubordinateStatusCode};
+use crate::model::{
+    RefusedLogoutRequest, RelayState, ReplayKey, SsoResponse, Status, SubordinateStatusCode,
+};
+use crate::PaosHttpResponse;
 use std::fmt;
 
 /// Reason a required SAML signature verification failed.
@@ -410,6 +413,22 @@ pub enum SamlError {
     StatusNotSuccess {
         /// Top-level and subordinate status codes.
         status: Status,
+    },
+    /// The authenticated LogoutRequest requires a version mismatch response.
+    #[error("logout request has an unsupported newer SAML version")]
+    #[non_exhaustive]
+    LogoutRequestRefused {
+        /// Data for the version mismatch response.
+        refusal: Box<RefusedLogoutRequest>,
+    },
+    /// The authenticated PAOS AuthnRequest was refused with a SAML response.
+    #[error("PAOS authentication request refused: {source}")]
+    #[non_exhaustive]
+    PaosRequestRefused {
+        /// Age or replay validation error.
+        source: Box<SamlError>,
+        /// HTTP 200 SOAP envelope containing a SAML error response.
+        response: Box<PaosHttpResponse<SsoResponse>>,
     },
     /// A SAML message, assertion, session, or replay time bound is not satisfied.
     #[error("SAML time window is invalid for {field}")]

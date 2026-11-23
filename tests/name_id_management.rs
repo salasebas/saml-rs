@@ -26,7 +26,6 @@ use replay_cache::RecordingReplayCache;
 
 use std::time::{Duration, SystemTime};
 
-use saml_rs::error::TimeWindowField;
 use saml_rs::{
     AcsEndpoint, EndpointUrl, EntityId, IdentityProvider, IdpConfig, ManageNameIdService,
     MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange,
@@ -605,7 +604,7 @@ fn a_version_other_than_2_0_is_answered_with_version_mismatch() -> TestResult {
     assert_eq!(refused.reason(), NameIdManagementRefusal::VersionMismatch);
     let xml = body(refused.response().envelope())?;
     assert!(xml.contains(&format!(
-        r#"<samlp:StatusCode Value="{VERSION_MISMATCH}"/>"#
+        r#"<samlp:StatusCode Value="{VERSION_MISMATCH}"><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:RequestVersionTooHigh"/></samlp:StatusCode>"#
     )));
     Ok(())
 }
@@ -842,13 +841,16 @@ fn a_bounded_request_age_rejects_an_old_request_before_replay_storage() -> TestR
         if accepted {
             received_request(received?)?;
         } else {
-            assert!(matches!(
-                received,
-                Err(SamlError::TimeWindowInvalid {
-                    field: TimeWindowField::ManageNameIdRequestIssueInstant,
-                    ..
-                })
-            ));
+            let NameIdManagementReceipt::Refused(refused) = received? else {
+                return Err("an expired request was exposed for processing".into());
+            };
+            assert_eq!(
+                refused.reason(),
+                NameIdManagementRefusal::RequestAgeOutsideWindow
+            );
+            let xml = body(refused.response().envelope())?;
+            assert_eq!(attribute(&xml, "InResponseTo"), Some(SP_REQUEST_ID));
+            assert!(xml.contains(&format!(r#"<samlp:StatusCode Value="{REQUESTER}"/>"#)));
         }
         assert_eq!(cache.seen.is_empty(), !accepted);
     }

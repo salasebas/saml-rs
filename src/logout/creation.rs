@@ -155,6 +155,7 @@ pub(crate) struct LogoutResponseInput<'a> {
     pub(crate) in_response_to: Option<&'a str>,
     pub(crate) relay_state: Option<&'a str>,
     pub(crate) status: &'a Status,
+    pub(crate) template: Option<&'a str>,
 }
 
 pub(crate) struct RenderedLogoutResponse {
@@ -174,6 +175,7 @@ impl LogoutResponseInput<'_> {
             in_response_to,
             relay_state,
             status,
+            template,
         } = *self;
         reject_soap_relay_state(binding, relay_state)?;
         // A SOAP response returns on the requester's own HTTP exchange, so it has
@@ -190,7 +192,7 @@ impl LogoutResponseInput<'_> {
         let id = generate_id();
         let issue_instant = now_iso8601();
         let issuer = issuer_of(init_setting, init_meta);
-        let xml = if let Some(template) = init_setting.logout_response_template.as_deref() {
+        let xml = if let Some(template) = template {
             if status.subordinate().is_some() {
                 return Err(SamlError::Invalid(
                     "LogoutResponse template StatusCode placeholder cannot carry a subordinate status code"

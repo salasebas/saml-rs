@@ -2,6 +2,44 @@ use crate::constants::status_code;
 use crate::error::SamlError;
 use crate::xml::any_uri::is_absolute_uri_reference;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RequestVersionMismatch {
+    SameMajor,
+    NewerMajor,
+}
+
+impl RequestVersionMismatch {
+    pub(crate) fn for_request(version: &str) -> Result<Option<Self>, SamlError> {
+        if version == "2.0" {
+            return Ok(None);
+        }
+        let malformed = || SamlError::ProtocolProfile("invalid request Version".into());
+        let (major, minor) = version.split_once('.').ok_or_else(malformed)?;
+        for part in [major, minor] {
+            if part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_digit()) {
+                return Err(malformed());
+            }
+        }
+        match major.trim_start_matches('0') {
+            "" | "1" => Err(SamlError::ProtocolProfile(
+                "request Version is too low for a SAML 2.0 response".into(),
+            )),
+            "2" => Ok(Some(Self::SameMajor)),
+            _ => Ok(Some(Self::NewerMajor)),
+        }
+    }
+
+    pub(crate) fn status(self) -> Status {
+        let status = Status::version_mismatch();
+        match self {
+            Self::SameMajor => status,
+            Self::NewerMajor => status.with_subordinate(SubordinateStatusCode::received(
+                status_code::REQUEST_VERSION_TOO_HIGH,
+            )),
+        }
+    }
+}
+
 /// Top-level `StatusCode` value.
 ///
 /// Core §3.2.2.2 allows only these four URIs. For logout, Core §3.7.3.2 says

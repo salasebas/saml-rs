@@ -12,11 +12,11 @@ use base64::Engine;
 use sha1::{Digest, Sha1};
 
 use crate::config::{IdpDescriptor, SpDescriptor};
-use crate::constants::{namespace, status_code};
+use crate::constants::namespace;
 use crate::entity::{generate_id, now_iso8601, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::IdpMetadata;
-use crate::model::{EndpointUrl, ReplayKey, SamlValidationContext};
+use crate::model::{EndpointUrl, ReplayKey, RequestVersionMismatch, SamlValidationContext, Status};
 use crate::soap::{read_soap_body, MessageConfidentiality, SoapChannel, SoapRequest, SoapResponse};
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::fragment::standalone_element;
@@ -189,7 +189,7 @@ pub enum ArtifactRelease {
     Returned,
     /// The response status is Success and the message is absent.
     Withheld(ArtifactWithheld),
-    /// The request version is not 2.0. The response status is `VersionMismatch`.
+    /// The request version is unsupported. The response status is `VersionMismatch`.
     VersionMismatch,
 }
 
@@ -515,12 +515,12 @@ pub(crate) fn answer(
     }
     let request = parse_resolve(&body.xml, setting.xml_limits)?;
     let prefixes = Prefixes::of(setting)?;
-    if request.version != "2.0" {
+    if let Some(mismatch) = RequestVersionMismatch::for_request(&request.version)? {
         return answered(
             &prefixes,
             &entity_id,
             &request.id,
-            status_code::VERSION_MISMATCH,
+            &mismatch.status(),
             None,
             ArtifactRelease::VersionMismatch,
         );
@@ -530,7 +530,7 @@ pub(crate) fn answer(
             &prefixes,
             &entity_id,
             &request.id,
-            status_code::SUCCESS,
+            &Status::success(),
             None,
             ArtifactRelease::Withheld(reason),
         )
@@ -571,7 +571,7 @@ pub(crate) fn answer(
         &prefixes,
         &entity_id,
         &request.id,
-        status_code::SUCCESS,
+        &Status::success(),
         Some(&message_xml),
         ArtifactRelease::Returned,
     )?;
@@ -583,7 +583,7 @@ fn answered(
     prefixes: &Prefixes<'_>,
     issuer: &str,
     in_response_to: &str,
-    status: &str,
+    status: &Status,
     message_xml: Option<&str>,
     release: ArtifactRelease,
 ) -> Result<AnsweredArtifact, SamlError> {
@@ -600,9 +600,7 @@ fn answered(
         ],
     );
     writer.text_element(&prefixes.assertion("Issuer"), &[], issuer);
-    writer.start(&prefixes.protocol("Status"), &[]);
-    writer.empty(&prefixes.protocol("StatusCode"), &[("Value", status)]);
-    writer.end(&prefixes.protocol("Status"));
+    writer.status(prefixes, status);
     if let Some(message_xml) = message_xml {
         writer.raw(message_xml);
     }

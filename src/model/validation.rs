@@ -294,10 +294,9 @@ impl<'a> SamlValidationContext<'a> {
     /// `receive_name_id_management_redirect`.
     ///
     /// [`RequestAgePolicy::Bounded`] accepts the window described
-    /// on [`Self::with_authn_request_age`]. A request outside it is
-    /// [`SamlError::TimeWindowInvalid`] with
-    /// [`TimeWindowField::ManageNameIdRequestIssueInstant`], and its `ID` is
-    /// not stored for replay detection.
+    /// on [`Self::with_authn_request_age`]. An authenticated request outside
+    /// the window returns [`crate::NameIdManagementReceipt::Refused`]
+    /// before its `ID` is stored for replay detection.
     pub fn with_manage_name_id_request_age(
         mut self,
         manage_name_id_request_age: RequestAgePolicy,

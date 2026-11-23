@@ -105,6 +105,7 @@ pub struct FlowOptions<'a> {
     pub binding: Option<Binding>,
     /// Message parser type.
     pub parser_type: Option<ParserType>,
+    pub(crate) defer_logout_request_version: bool,
     /// Maximum decoded compressed and inflated raw-DEFLATE bytes accepted for
     /// HTTP-Redirect input.
     pub redirect_inflate_max_bytes: usize,
@@ -161,6 +162,7 @@ impl<'a> Default for FlowOptions<'a> {
         Self {
             binding: None,
             parser_type: None,
+            defer_logout_request_version: false,
             redirect_inflate_max_bytes: MAX_DEFLATE_RAW_DECODE_BYTES,
             xml_limits: XmlLimits::default(),
             schema_validator: None,
@@ -639,6 +641,14 @@ fn flow_inner(
     )?;
     let document = crate::schema::document(&xml, opts.xml_limits, opts.schema_validator)?;
     validate_protocol_profile(&xml, parser_type, opts.xml_limits)?;
+    if parser_type == ParserType::LogoutRequest
+        && !opts.defer_logout_request_version
+        && document.root.attr("Version") != Some("2.0")
+    {
+        return Err(SamlError::ProtocolProfile(
+            "LogoutRequest Version must be 2.0".into(),
+        ));
+    }
     if parser_type == ParserType::SamlResponse {
         if let Err(status) = check_status(&xml, parser_type, opts.xml_limits) {
             error_response::validate_error_response(

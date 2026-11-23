@@ -388,7 +388,10 @@ fn validate_root(
         root_consumed_attributes(parser_type),
         &[b"ID", b"Version", b"IssueInstant"],
     )?;
-    if parser_type != ParserType::ManageNameIdRequest {
+    if !matches!(
+        parser_type,
+        ParserType::LogoutRequest | ParserType::ManageNameIdRequest
+    ) {
         require_version_2(&attributes, element)?;
     }
     require_issue_instant(&attributes, element)?;

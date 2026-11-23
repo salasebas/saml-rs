@@ -378,6 +378,7 @@ impl Engine {
                 schema_validator: self.setting.schema_validator,
                 expected_audience: Some(audience.as_str()),
                 expected_in_response_to,
+                ..FlowOptions::default()
             },
             request,
             recipient.as_str(),

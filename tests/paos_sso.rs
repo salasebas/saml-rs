@@ -14,6 +14,9 @@ mod authn_context;
 #[path = "paos_sso/relay_state.rs"]
 mod relay_state;
 
+#[path = "paos_sso/request_refusals.rs"]
+mod request_refusals;
+
 use std::time::{Duration, SystemTime};
 
 use roxmltree::{Document, Node};

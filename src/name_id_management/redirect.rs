@@ -16,7 +16,9 @@ use crate::flow::{
 };
 use crate::logout::sign_browser_message;
 use crate::metadata::Metadata;
-use crate::model::{ClockSkew, MessageId, SamlInstant};
+use crate::model::{
+    ClockSkew, MessageId, ReplayKey, RequestVersionMismatch, SamlInstant, SamlValidationContext,
+};
 use crate::xml::protocol_element::{issuer, parse_saml_with_limits};
 use crate::xml::write::Prefixes;
 use crate::xml::XmlLimits;
@@ -24,7 +26,7 @@ use crate::xml::XmlLimits;
 use super::xml::{render_request, render_response, RequestXml, ResponseXml};
 use super::{
     identifier_and_change, plaintext_content, protect_request, require_one_status_code,
-    require_utc_instant, Change, Identifier, ManageNameIdRequest, NameIdManagementRefusal,
+    require_utc_instant, Change, Identifier, ManageNameIdRequest, Refusal,
 };
 
 /// The receiving endpoint and clock for an inbound message.
@@ -117,22 +119,19 @@ pub(crate) fn parse_response(
 pub(crate) struct UndecryptedRequest {
     pub(crate) id: MessageId,
     pub(crate) issuer: EntityId,
-    pub(crate) issue_instant: SamlInstant,
+    issue_instant: SamlInstant,
     content: RequestContent,
 }
 
 enum RequestContent {
-    VersionMismatch,
+    VersionMismatch(RequestVersionMismatch),
     Identifiers(Identifier, Change),
 }
 
 /// What a parsed request names, before the caller decides how to answer.
 pub(crate) enum ParsedRequest {
     Plain(ManageNameIdRequest),
-    Refused {
-        reason: NameIdManagementRefusal,
-        decryption_error: Option<SamlError>,
-    },
+    Refused(Refusal),
 }
 
 /// The request in `flow`, before its `EncryptedID` and `NewEncryptedID` are
@@ -148,11 +147,12 @@ pub(crate) fn request_from_flow(
         SamlError::ProtocolProfile("ManageNameIDRequest is missing Issuer".into())
     })?;
     let issuer = EntityId::try_new(issuer.value)?;
-    let content = if request.required_attr("Version")? == "2.0" {
-        let (identifier, change) = identifier_and_change(&request)?;
-        RequestContent::Identifiers(identifier, change)
-    } else {
-        RequestContent::VersionMismatch
+    let content = match RequestVersionMismatch::for_request(&request.required_attr("Version")?)? {
+        Some(mismatch) => RequestContent::VersionMismatch(mismatch),
+        None => {
+            let (identifier, change) = identifier_and_change(&request)?;
+            RequestContent::Identifiers(identifier, change)
+        }
     };
     Ok(UndecryptedRequest {
         id,
@@ -163,30 +163,39 @@ pub(crate) fn request_from_flow(
 }
 
 impl UndecryptedRequest {
-    /// The request with `EncryptedID` and `NewEncryptedID` decrypted from
-    /// `flow` by the key in `setting`.
-    pub(crate) fn decrypt(self, flow: &FlowResult, setting: &EntitySetting) -> ParsedRequest {
+    pub(crate) fn validate_and_decrypt(
+        self,
+        flow: &FlowResult,
+        setting: &EntitySetting,
+        mut validation: SamlValidationContext<'_>,
+    ) -> Result<ParsedRequest, SamlError> {
+        let age_is_valid = validation
+            .check_manage_name_id_request_issue_instant(&self.issue_instant)
+            .is_ok();
+        if age_is_valid {
+            validation
+                .check_and_store_message_replay(ReplayKey::ManageNameIdRequest(self.id.clone()))?;
+        }
         let (identifier, change) = match self.content {
-            RequestContent::Identifiers(identifier, change) => (identifier, change),
-            RequestContent::VersionMismatch => {
-                return ParsedRequest::Refused {
-                    reason: NameIdManagementRefusal::VersionMismatch,
-                    decryption_error: None,
-                }
+            RequestContent::VersionMismatch(mismatch) => {
+                return Ok(ParsedRequest::Refused(Refusal::VersionMismatch(mismatch)));
+            }
+            RequestContent::Identifiers(identifier, change) if age_is_valid => (identifier, change),
+            RequestContent::Identifiers(..) => {
+                return Ok(ParsedRequest::Refused(Refusal::RequestAgeOutsideWindow));
             }
         };
-        match plaintext_content(&flow.saml_content, identifier, change, setting) {
-            Ok((name_id, change)) => ParsedRequest::Plain(ManageNameIdRequest {
-                id: self.id,
-                issuer: self.issuer,
-                name_id,
-                change,
-            }),
-            Err(undecryptable) => ParsedRequest::Refused {
-                reason: undecryptable.reason,
-                decryption_error: Some(undecryptable.error),
+        Ok(
+            match plaintext_content(&flow.saml_content, identifier, change, setting) {
+                Ok((name_id, change)) => ParsedRequest::Plain(ManageNameIdRequest {
+                    id: self.id,
+                    issuer: self.issuer,
+                    name_id,
+                    change,
+                }),
+                Err(undecryptable) => ParsedRequest::Refused(Refusal::Undecryptable(undecryptable)),
             },
-        }
+        )
     }
 }
 
