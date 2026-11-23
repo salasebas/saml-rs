@@ -43,8 +43,8 @@ attribute it releases.
 
 **Affects:** identity providers that pass an attribute named
 `urn:oasis:names:tc:SAML:attribute:subject-id` or
-`urn:oasis:names:tc:SAML:attribute:pairwise-id`, with the `uri` name format, to
-`SsoAssertion::with_attributes`.
+`urn:oasis:names:tc:SAML:attribute:pairwise-id`, with the `uri` name format,
+the unspecified one, or none, to `SsoAssertion::with_attributes`.
 
 **Before:** the identity provider wrote the attribute as given, with
 `xsi:type="xs:string"` on each value.
@@ -52,10 +52,10 @@ attribute it releases.
 **Now:** `respond_sso`, `initiate_sso`, `respond_sso_artifact`,
 `initiate_sso_artifact`, and `respond_paos_sso` return `SamlError::Invalid`
 when the attribute has no value or several values, when the assertion has it
-twice, when the value is not `uniqueID@scope`, when the scope has an upper
-case letter, or when the unique ID has both upper and lower case letters. The
-value is written without `xsi:type`. An attribute with one of these names and
-another name format is written as before.
+twice in any of those name formats, when the value is not `uniqueID@scope`,
+when the scope has an upper case letter, or when the unique ID has both upper
+and lower case letters. The value is written without `xsi:type`. An attribute
+with one of these names and another name format is written as before.
 
 **Upgrade:** create the value with `SubjectId::try_new` or
 `PairwiseId::try_new` and add it with `Attribute::from`. Write the scope in

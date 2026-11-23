@@ -19,6 +19,8 @@ use saml_rs::{
 const SUBJECT_ID: &str = "urn:oasis:names:tc:SAML:attribute:subject-id";
 const PAIRWISE_ID: &str = "urn:oasis:names:tc:SAML:attribute:pairwise-id";
 const URI: &str = "urn:oasis:names:tc:SAML:2.0:attrname-format:uri";
+const UNSPECIFIED: &str = "urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified";
+const BASIC: &str = "urn:oasis:names:tc:SAML:2.0:attrname-format:basic";
 const MAIL_OID: &str = "urn:oid:0.9.2342.19200300.100.1.3";
 
 fn statement(attributes: &str) -> String {
@@ -160,19 +162,31 @@ fn identity_provider_issues_and_service_provider_reads_both_identifiers(
 }
 
 #[test]
-fn service_provider_reads_only_the_identifiers_with_the_uri_name_format(
+fn service_provider_reads_an_identifier_with_the_uri_or_unspecified_name_format_or_none(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let session = accept_peer_attribute_statement(&statement(&format!(
         "<saml:Attribute Name=\"{SUBJECT_ID}\">\
          <saml:AttributeValue>alice@example.org</saml:AttributeValue></saml:Attribute>\
-         <saml:Attribute Name=\"{PAIRWISE_ID}\" \
-         NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\">\
-         <saml:AttributeValue>not an identifier</saml:AttributeValue></saml:Attribute>"
+         <saml:Attribute Name=\"{PAIRWISE_ID}\" NameFormat=\"{UNSPECIFIED}\">\
+         <saml:AttributeValue>HA2TKNZZ=@example.org</saml:AttributeValue></saml:Attribute>"
     )))?;
+    assert_eq!(
+        session.subject_id()?,
+        Some(SubjectId::try_new("alice@example.org")?)
+    );
+    assert_eq!(
+        session.pairwise_id()?,
+        Some(PairwiseId::try_new("HA2TKNZZ=@example.org")?)
+    );
 
+    let session = accept_peer_attribute_statement(&statement(&format!(
+        "<saml:Attribute Name=\"{SUBJECT_ID}\" NameFormat=\"{BASIC}\">\
+         <saml:AttributeValue>not an identifier</saml:AttributeValue></saml:Attribute>\
+         <saml:Attribute Name=\"{PAIRWISE_ID}\" NameFormat=\"https://example.com/format\">\
+         <saml:AttributeValue>alice@example.org</saml:AttributeValue></saml:Attribute>"
+    )))?;
     assert_eq!(session.subject_id()?, None);
     assert_eq!(session.pairwise_id()?, None);
-    assert_eq!(session.attributes().as_slice().len(), 2);
     Ok(())
 }
 
@@ -208,6 +222,11 @@ fn service_provider_reports_a_malformed_identifier_as_an_error(
         ),
         uri_attribute(SUBJECT_ID, &["alice.smith@example.org"]),
         uri_attribute(SUBJECT_ID, &["alice"]),
+        format!(
+            "{}<saml:Attribute Name=\"{SUBJECT_ID}\">\
+             <saml:AttributeValue>bob@example.org</saml:AttributeValue></saml:Attribute>",
+            uri_attribute(SUBJECT_ID, &["alice@example.org"])
+        ),
     ] {
         let session = accept_peer_attribute_statement(&statement(&attributes))?;
         assert!(
@@ -248,6 +267,15 @@ fn identity_provider_does_not_issue_an_identifier_attribute_that_breaks_the_prof
         vec![identifier(PAIRWISE_ID, &["alice@Example.org"])],
         vec![identifier(SUBJECT_ID, &["Alice@example.org"])],
         vec![Attribute::from(SubjectId::try_new("alice@EXAMPLE.ORG")?)],
+        vec![Attribute::new(
+            SUBJECT_ID,
+            values(&["alice.smith@example.org"]),
+        )],
+        vec![
+            identifier(PAIRWISE_ID, &["alice@example.org"]),
+            Attribute::new(PAIRWISE_ID, values(&["bob@example.org"]))
+                .with_name_format(AttributeNameFormat::Unspecified),
+        ],
     ] {
         match respond(
             SsoAssertion::new(alice()).with_attributes(Attributes::new(attributes.clone())),

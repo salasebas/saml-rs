@@ -175,8 +175,9 @@ impl SsoSession {
     ///
     /// This is the attribute named
     /// [`crate::constants::attribute_name::SUBJECT_ID`] with the `uri`
-    /// `NameFormat`. An attribute with that name and another `NameFormat` is
-    /// not read. Leading and trailing XML whitespace of the value is removed.
+    /// `NameFormat`, the unspecified one, or none. An attribute with that name
+    /// and another `NameFormat` is a different attribute. Leading and trailing
+    /// XML whitespace of the value is removed.
     ///
     /// The scope is not checked against the issuer. Before you trust the
     /// value, confirm that [`Self::issuer`] may assert identifiers in
@@ -185,8 +186,8 @@ impl SsoSession {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::ProtocolProfile`] when the attribute does not have
-    /// exactly one value, or the value is not `uniqueID@scope`.
+    /// Returns [`SamlError::ProtocolProfile`] when those attributes together
+    /// do not have exactly one value, or the value is not `uniqueID@scope`.
     pub fn subject_id(&self) -> Result<Option<SubjectId>, SamlError> {
         SubjectId::received(&self.attributes)
     }
@@ -195,8 +196,9 @@ impl SsoSession {
     ///
     /// This is the attribute named
     /// [`crate::constants::attribute_name::PAIRWISE_ID`] with the `uri`
-    /// `NameFormat`. An attribute with that name and another `NameFormat` is
-    /// not read. Leading and trailing XML whitespace of the value is removed.
+    /// `NameFormat`, the unspecified one, or none. An attribute with that name
+    /// and another `NameFormat` is a different attribute. Leading and trailing
+    /// XML whitespace of the value is removed.
     ///
     /// The scope is not checked against the issuer. Before you trust the
     /// value, confirm that [`Self::issuer`] may assert identifiers in
@@ -205,8 +207,8 @@ impl SsoSession {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::ProtocolProfile`] when the attribute does not have
-    /// exactly one value, or the value is not `uniqueID@scope`.
+    /// Returns [`SamlError::ProtocolProfile`] when those attributes together
+    /// do not have exactly one value, or the value is not `uniqueID@scope`.
     pub fn pairwise_id(&self) -> Result<Option<PairwiseId>, SamlError> {
         PairwiseId::received(&self.attributes)
     }

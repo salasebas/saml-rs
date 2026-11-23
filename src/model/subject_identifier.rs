@@ -212,19 +212,24 @@ fn is_part(part: &str, is_punctuation: impl Fn(u8) -> bool) -> bool {
             .all(|&byte| byte.is_ascii_alphanumeric() || is_punctuation(byte))
 }
 
-/// The value of the received attribute `name` with the `uri` `NameFormat`,
-/// without its leading and trailing XML whitespace.
+/// The one value of the received attributes `name`, without its leading and
+/// trailing XML whitespace.
 fn received_value<'a>(
     attributes: &'a Attributes,
     name: &str,
 ) -> Result<Option<&'a str>, SamlError> {
-    let Some(attribute) = attributes
+    let matching: Vec<&Attribute> = attributes
         .iter()
-        .find(|attribute| is_attribute(attribute, name))
-    else {
+        .filter(|attribute| is_attribute(attribute, name))
+        .collect();
+    if matching.is_empty() {
         return Ok(None);
-    };
-    match attribute.values() {
+    }
+    let values: Vec<&AttributeValue> = matching
+        .iter()
+        .flat_map(|attribute| attribute.values())
+        .collect();
+    match values.as_slice() {
         [value] => Ok(Some(value.as_str().trim_matches(is_xml_whitespace_char))),
         _ => Err(SamlError::ProtocolProfile(format!(
             "`{name}` attribute must have exactly one AttributeValue"
@@ -285,6 +290,12 @@ pub(crate) fn check_issued_subject_identifiers(attributes: &[Attribute]) -> Resu
     Ok(())
 }
 
+/// Whether `attribute` is the attribute `name`: its `NameFormat` is `uri`,
+/// `unspecified`, or absent.
 fn is_attribute(attribute: &Attribute, name: &str) -> bool {
-    attribute.name() == name && attribute.name_format() == Some(&AttributeNameFormat::Uri)
+    attribute.name() == name
+        && matches!(
+            attribute.name_format(),
+            None | Some(AttributeNameFormat::Uri | AttributeNameFormat::Unspecified)
+        )
 }
