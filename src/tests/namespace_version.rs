@@ -72,10 +72,8 @@ fn parse_flow_with_binding(
         _ => return Err(SamlError::UnsupportedBinding { binding }),
     };
     let options = FlowOptions {
-        binding: Some(binding),
-        parser_type: Some(parser_type),
         signature_check,
-        ..FlowOptions::default()
+        ..FlowOptions::new(binding, parser_type)
     };
     flow(&options, &request)
 }
@@ -214,11 +212,9 @@ fn expect_decrypted_assertion_profile_rejection_with_context(
         STANDARD.encode(encrypted.as_bytes()),
     )]);
     let options = FlowOptions {
-        binding: Some(Binding::Post),
-        parser_type: Some(ParserType::SamlResponse),
         signature_check: SignatureCheck::Require,
         decrypt_key: Some(PRIVATE_KEY),
-        ..FlowOptions::default()
+        ..FlowOptions::new(Binding::Post, ParserType::SamlResponse)
     };
 
     match flow(&options, &request) {
@@ -978,10 +974,8 @@ fn decrypted_assertion_honors_xml_depth_limit_before_profile(
         STANDARD.encode(encrypted.as_bytes()),
     )]);
     let mut options = FlowOptions {
-        binding: Some(Binding::Post),
-        parser_type: Some(ParserType::SamlResponse),
         signature_check: SignatureCheck::Require,
-        ..FlowOptions::default()
+        ..FlowOptions::new(Binding::Post, ParserType::SamlResponse)
     };
     options.xml_limits.max_depth = 12;
 

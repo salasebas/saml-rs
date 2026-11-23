@@ -36,11 +36,9 @@ fn parse_response_at(
     validation: &SamlValidationContext<'_>,
 ) -> Result<FlowResult, SamlError> {
     let options = FlowOptions {
-        binding: Some(Binding::Post),
-        parser_type: Some(ParserType::SamlResponse),
         now: Some(validation.now()),
         clock_skew: validation.clock_skew(),
-        ..FlowOptions::default()
+        ..FlowOptions::new(Binding::Post, ParserType::SamlResponse)
     };
     flow(&options, &response_request(xml))
 }

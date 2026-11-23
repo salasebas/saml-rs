@@ -29,7 +29,7 @@ use saml_rs::tests::engine::{
 };
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::RelayState;
-use saml_rs::SamlError;
+use saml_rs::{Inbound, Outbound, SamlError, SsoResponse, XmlLimits};
 
 const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -169,39 +169,6 @@ fn simplesign_request(param: &str, ctx: &BindingContext) -> Result<HttpRequest, 
         octet_string: Some(octet),
         ..Default::default()
     })
-}
-
-fn form_hidden_fields(form: &str) -> Result<Vec<(String, String)>, SamlError> {
-    let mut fields = Vec::new();
-    let mut rest = form;
-    while let Some((_, after_marker)) = rest.split_once("<input type=\"hidden\" name=\"") {
-        let (name, after_name) = after_marker
-            .split_once("\" value=\"")
-            .ok_or_else(|| SamlError::Invalid("unterminated hidden input name".into()))?;
-        let (value, after_value) = after_name
-            .split_once("\"/>")
-            .ok_or_else(|| SamlError::Invalid("unterminated hidden input value".into()))?;
-        fields.push((name.to_string(), value.to_string()));
-        rest = after_value;
-    }
-    Ok(fields)
-}
-
-fn simplesign_form_request(
-    param: &str,
-    ctx: &BindingContext,
-) -> Result<HttpRequest, Box<dyn std::error::Error>> {
-    let form = ctx.post_form()?;
-    let mut request = HttpRequest::post(form_hidden_fields(&form)?);
-    let encoded = body_param(&request, param)?.to_string();
-    let raw_xml = String::from_utf8(STANDARD.decode(&encoded)?)?;
-    let relay_state = body_param(&request, "RelayState")?.to_string();
-    let sig_alg = body_param(&request, "SigAlg")?.to_string();
-    let _signature = body_param(&request, "Signature")?.to_string();
-    request.octet_string = Some(format!(
-        "{param}={raw_xml}&RelayState={relay_state}&SigAlg={sig_alg}"
-    ));
-    Ok(request)
 }
 
 /// A `customTagReplacement` that renders our default template + attributes.
@@ -557,7 +524,9 @@ fn flow_conformance_simplesign_login_response_post_form_round_trips_to_parser(
         },
     )?;
 
-    let request = simplesign_form_request("SAMLResponse", &ctx)?;
+    let outbound = Outbound::<SsoResponse>::echoing_received_relay_state(ctx.clone())?;
+    let request = Inbound::<SsoResponse>::simple_sign(outbound.post_form()?.fields().to_vec())
+        .into_http_request(XmlLimits::default())?;
 
     assert_eq!(body_param(&request, "RelayState")?, "relay-123");
     assert_eq!(

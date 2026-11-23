@@ -39,8 +39,6 @@ pub struct EntitySetting {
     /// Maximum estimated decryption work per inbound message. Defaults to 16.
     /// See [`crate::config::XmlEncryptionPolicy::max_decryption_work`].
     pub max_decryption_work: usize,
-    /// SP: signs its AuthnRequests.
-    pub authn_requests_signed: bool,
     /// SP: requires signed assertions.
     pub want_assertions_signed: bool,
     /// SP: reject a bearer assertion that omits `<AudienceRestriction>`.
@@ -52,8 +50,6 @@ pub struct EntitySetting {
     pub(crate) xml_signatures: XmlSignatureProfile,
     /// Typed SP: requires outer integrity for CBC-encrypted Assertions.
     pub(crate) want_encrypted_cbc_response_signed: bool,
-    /// IdP: requires signed AuthnRequests.
-    pub want_authn_requests_signed: bool,
     /// Supported NameID formats. The first is the default format of
     /// generated messages.
     ///
@@ -133,7 +129,6 @@ impl fmt::Debug for EntitySetting {
                 &self.allow_rsa15_key_transport_decryption,
             )
             .field("max_decryption_work", &self.max_decryption_work)
-            .field("authn_requests_signed", &self.authn_requests_signed)
             .field("want_assertions_signed", &self.want_assertions_signed)
             .field(
                 "require_audience_restriction",
@@ -144,10 +139,6 @@ impl fmt::Debug for EntitySetting {
             .field(
                 "want_encrypted_cbc_response_signed",
                 &self.want_encrypted_cbc_response_signed,
-            )
-            .field(
-                "want_authn_requests_signed",
-                &self.want_authn_requests_signed,
             )
             .field("name_id_format", &self.name_id_format)
             .field("private_key", &redacted_option(&self.private_key))
@@ -245,13 +236,11 @@ impl Default for EntitySetting {
             assertion_element_encryption: AssertionElementEncryption::default(),
             allow_rsa15_key_transport_decryption: false,
             max_decryption_work: crate::constants::DEFAULT_MAX_DECRYPTION_WORK,
-            authn_requests_signed: false,
             want_assertions_signed: false,
             require_audience_restriction: true,
             want_message_signed: false,
             xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
             want_encrypted_cbc_response_signed: false,
-            want_authn_requests_signed: false,
             name_id_format: Vec::new(),
             private_key: None,
             private_key_pass: None,
@@ -428,24 +417,4 @@ pub struct BindingContext {
     pub signature: Option<String>,
     /// Signature algorithm URI accompanying `signature`.
     pub sig_alg: Option<String>,
-}
-
-impl BindingContext {
-    /// Build the POST/SimpleSign auto-submit form after validating the endpoint.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`crate::error::SamlError::Invalid`] when `entity_endpoint`
-    /// is not an absolute HTTP(S) URL, or when detached SimpleSign state has
-    /// only one of `sig_alg` or `signature`.
-    pub fn post_form(&self) -> Result<String, crate::error::SamlError> {
-        crate::binding::saml_post_binding_form_with_signature(
-            &self.entity_endpoint,
-            self.request_type,
-            &self.context,
-            self.relay_state.as_deref(),
-            self.sig_alg.as_deref(),
-            self.signature.as_deref(),
-        )
-    }
 }

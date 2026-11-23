@@ -432,11 +432,9 @@ fn encrypted_assertion_parse_path_returns_unsupported() {
         ),
     )]);
     let options = FlowOptions {
-        binding: Some(Binding::Post),
-        parser_type: Some(ParserType::SamlResponse),
         signature_check: SignatureCheck::Require,
         decrypt_key: Some("private key is unavailable without crypto feature"),
-        ..FlowOptions::default()
+        ..FlowOptions::new(Binding::Post, ParserType::SamlResponse)
     };
 
     assert_unsupported(flow(&options, &request));

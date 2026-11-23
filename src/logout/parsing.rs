@@ -91,12 +91,12 @@ pub(crate) fn parse_logout_request_at(
 ) -> Result<FlowResult, SamlError> {
     run_logout_flow(
         &FlowOptions {
-            binding: Some(receipt.decode_as),
-            parser_type: Some(ParserType::LogoutRequest),
             defer_logout_request_version: true,
             signature_check: receipt.signature,
             require_audience_restriction: true,
             ..FlowOptions::for_peer(
+                receipt.decode_as,
+                ParserType::LogoutRequest,
                 self_setting,
                 from_meta,
                 validation.peer_hmac_secret,
@@ -123,12 +123,12 @@ pub(crate) fn parse_logout_response_at(
     }
     run_logout_flow(
         &FlowOptions {
-            binding: Some(receipt.decode_as),
-            parser_type: Some(ParserType::LogoutResponse),
             signature_check: receipt.signature,
             require_audience_restriction: true,
             expected_in_response_to: Some(request_id),
             ..FlowOptions::for_peer(
+                receipt.decode_as,
+                ParserType::LogoutResponse,
                 self_setting,
                 from_meta,
                 validation.peer_hmac_secret,

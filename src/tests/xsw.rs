@@ -113,12 +113,10 @@ fn xsw_authn_request_reference_must_cover_consumed_root() -> Result<(), Box<dyn 
     let request = HttpRequest::post(vec![("SAMLRequest".into(), encoded)]);
     let certs = [CERT.to_string()];
     let options = FlowOptions {
-        binding: Some(Binding::Post),
-        parser_type: Some(ParserType::SamlRequest),
         signature_check: SignatureCheck::Require,
         from_issuer: Some("https://sp.example.com/metadata"),
         signing_certs: &certs,
-        ..FlowOptions::default()
+        ..FlowOptions::new(Binding::Post, ParserType::SamlRequest)
     };
     match flow(&options, &request) {
         Err(SamlError::SignedReferenceMismatch) => Ok(()),

@@ -1,6 +1,6 @@
 use crate::browser::{AcsEndpoint, SsoEndpoint};
 use crate::config::{EntityId, IdpConfig, SpConfig};
-use crate::config::{IdpValidationPolicy, NameIdFormat, SpValidationPolicy};
+use crate::config::{NameIdFormat, SpValidationPolicy};
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, name_id_format, signature_algorithm,
     transform_algorithm,
@@ -13,9 +13,9 @@ const CERT: &str = include_str!("../../../tests/fixtures/key/sp/cert.unencrypted
 #[test]
 fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
     use crate::config::{
-        AlgorithmPolicy, AssertionSignaturePolicy, AuthnRequestSigningPolicy, CertificatePem,
-        Credentials, DataEncryptionAlgorithm, KeyEncryptionAlgorithm, PrivateKeyPem,
-        ResponseSignaturePolicy, SignatureAlgorithm, TransformAlgorithm, X509Credential, XmlPolicy,
+        AlgorithmPolicy, AssertionSignaturePolicy, CertificatePem, Credentials,
+        DataEncryptionAlgorithm, KeyEncryptionAlgorithm, PrivateKeyPem, ResponseSignaturePolicy,
+        SignatureAlgorithm, TransformAlgorithm, X509Credential, XmlPolicy,
     };
     use crate::xml::XmlLimits;
 
@@ -41,7 +41,6 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
     .validation(SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,
         responses: ResponseSignaturePolicy::RequireSigned,
-        authn_requests: AuthnRequestSigningPolicy::Sign,
         ..SpValidationPolicy::default()
     })
     .xml(XmlPolicy {
@@ -70,7 +69,6 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
     );
     assert!(setting.want_assertions_signed);
     assert!(setting.want_message_signed);
-    assert!(setting.authn_requests_signed);
     assert_eq!(setting.xml_limits, limits);
     assert_eq!(
         setting.request_signature_algorithm,
@@ -92,18 +90,12 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
 }
 
 #[test]
-fn idp_config_converts_authn_request_policy() -> Result<(), SamlError> {
-    use crate::config::AuthnRequestValidationPolicy;
-
+fn idp_config_converts_entity_id_and_name_id_format() -> Result<(), SamlError> {
     let setting = IdpConfig::builder(
         EntityId::try_new("https://idp.example.com/metadata")?,
         SsoEndpoint::redirect("https://idp.example.com/sso")?,
     )
     .name_id_format(NameIdFormat::Transient)
-    .validation(IdpValidationPolicy {
-        authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-        ..IdpValidationPolicy::default()
-    })
     .build()?
     .engine
     .setting;
@@ -112,7 +104,6 @@ fn idp_config_converts_authn_request_policy() -> Result<(), SamlError> {
         setting.entity_id.as_deref(),
         Some("https://idp.example.com/metadata")
     );
-    assert!(setting.want_authn_requests_signed);
     assert_eq!(
         setting.name_id_format,
         vec![name_id_format::TRANSIENT.to_string()]

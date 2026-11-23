@@ -574,6 +574,9 @@ fn typed_authn_request_signing_stays_optional_and_does_not_reject_unsigned_reque
     requiring_idp_policy.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
     let sp = sp_with(signed_sp_policy)?;
     let idp = idp_with(requiring_idp_policy, false)?;
+    assert!(idp
+        .metadata_xml()
+        .contains("WantAuthnRequestsSigned=\"true\""));
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
     let redirect = started.outbound.redirect_url()?;

@@ -1,6 +1,6 @@
 use saml_rs::constants::{
     data_encryption_algorithm, digest_algorithm, key_encryption_algorithm, name_id_format,
-    signature_algorithm, transform_algorithm,
+    signature_algorithm, transform_algorithm, Binding, ParserType,
 };
 use saml_rs::entity::EntitySetting;
 use saml_rs::flow::FlowOptions;
@@ -46,7 +46,7 @@ fn hmac_secret_debug_is_redacted_where_it_is_carried() -> Result<(), SamlError> 
     };
     let flow = FlowOptions {
         hmac_secret: Some(&secret),
-        ..FlowOptions::default()
+        ..FlowOptions::new(Binding::Redirect, ParserType::SamlRequest)
     };
 
     for debug in [

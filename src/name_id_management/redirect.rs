@@ -217,13 +217,13 @@ fn parse_signed(
     validation: InboundValidation<'_>,
 ) -> Result<FlowResult, SamlError> {
     let options = FlowOptions {
-        binding: Some(Binding::from(NameIdManagementBinding::Redirect)),
-        parser_type: Some(parser_type),
         // SAML Profiles 2.0 §4.5.3.1 and §4.5.3.2 require a signed message on
         // HTTP-Redirect.
         signature_check: SignatureCheck::Require,
         expected_in_response_to,
         ..FlowOptions::for_peer(
+            Binding::from(NameIdManagementBinding::Redirect),
+            parser_type,
             setting,
             peer_meta,
             validation.peer_hmac_secret,

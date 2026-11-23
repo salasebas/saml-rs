@@ -181,13 +181,20 @@ fn typed_models_redirect_outbound_exposes_only_redirect_url(
 
 #[test]
 fn typed_models_post_outbound_exposes_post_form() -> Result<(), Box<dyn std::error::Error>> {
-    let outbound = Outbound::<AuthnRequest>::from_context(binding_context(Binding::Post)?)?;
+    let action = "https://idp.example.com/sso?tenant=a&region=b";
+    let outbound = Outbound::<AuthnRequest>::from_context(BindingContext {
+        entity_endpoint: action.into(),
+        ..binding_context(Binding::Post)?
+    })?;
     let form = outbound.post_form()?;
 
-    assert_eq!(form.action().as_str(), "https://idp.example.com/sso");
+    assert_eq!(form.action().as_str(), action);
     assert_eq!(
-        form.value("SAMLRequest"),
-        Some("PHNhbWxwOkF1dGhuUmVxdWVzdC8+")
+        form.fields(),
+        [
+            FormField::new("SAMLRequest", "PHNhbWxwOkF1dGhuUmVxdWVzdC8+"),
+            FormField::new("RelayState", "relay"),
+        ]
     );
     assert!(matches!(
         outbound.redirect_url(),
@@ -200,45 +207,106 @@ fn typed_models_post_outbound_exposes_post_form() -> Result<(), Box<dyn std::err
 }
 
 #[test]
+fn typed_models_post_outbound_rejects_non_http_and_relative_actions(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for action in ["ftp://idp.example.org/sso", "/sso"] {
+        let context = BindingContext {
+            entity_endpoint: action.into(),
+            ..binding_context(Binding::Post)?
+        };
+        let result = Outbound::<AuthnRequest>::from_context(context);
+        assert!(
+            matches!(result, Err(SamlError::Invalid(_))),
+            "unexpected result for {action}: {result:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn typed_models_post_outbound_distinguishes_absent_and_empty_relay_state(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for state in [None, Some("")] {
+        let context = BindingContext {
+            relay_state: state.map(str::to_owned),
+            ..binding_context(Binding::Post)?
+        };
+        let outbound = Outbound::<AuthnRequest>::from_context(context)?;
+        assert_eq!(outbound.post_form()?.value("RelayState"), state);
+        assert_eq!(outbound.relay_state().map(RelayState::as_str), state);
+    }
+    Ok(())
+}
+
+#[test]
 fn typed_models_post_outbound_rejects_detached_signature_fields(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut context = binding_context(Binding::Post)?;
-    context.sig_alg = Some("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256".to_string());
-    context.signature = Some("signature-value".to_string());
-
-    let result = Outbound::<AuthnRequest>::from_context(context);
-
-    assert!(matches!(result, Err(SamlError::Invalid(_))));
+    for (sig_alg, signature) in [
+        (Some("alg"), None),
+        (None, Some("AA==")),
+        (Some("alg"), Some("AA==")),
+    ] {
+        let context = BindingContext {
+            sig_alg: sig_alg.map(str::to_owned),
+            signature: signature.map(str::to_owned),
+            ..binding_context(Binding::Post)?
+        };
+        let result = Outbound::<AuthnRequest>::from_context(context);
+        assert!(
+            matches!(&result, Err(SamlError::Invalid(message)) if message == "POST and SOAP outbound must not carry detached signature fields"),
+            "unexpected result for {sig_alg:?} and {signature:?}: {result:?}"
+        );
+    }
     Ok(())
 }
 
 #[test]
 fn typed_models_simplesign_outbound_preserves_signature_fields(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut context = binding_context(Binding::SimpleSign)?;
-    context.sig_alg = Some("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256".to_string());
-    context.signature = Some("signature-value".to_string());
+    let state = "relay=&<>\"'";
+    let context = BindingContext {
+        relay_state: Some(state.into()),
+        ..signed_binding_context(Binding::SimpleSign)?
+    };
 
     let outbound = Outbound::<AuthnRequest>::from_context(context)?;
     let form = outbound.post_form()?;
 
     assert_eq!(
-        form.value("SigAlg"),
-        Some("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256")
+        form.fields(),
+        [
+            FormField::new("SAMLRequest", "PHNhbWxwOkF1dGhuUmVxdWVzdC8+"),
+            FormField::new("RelayState", state),
+            FormField::new(
+                "SigAlg",
+                saml_rs::constants::signature_algorithm::RSA_SHA256
+            ),
+            FormField::new("Signature", "signature-value"),
+        ]
     );
-    assert_eq!(form.value("Signature"), Some("signature-value"));
     Ok(())
 }
 
 #[test]
-fn typed_models_simplesign_outbound_rejects_partial_signature_state(
+fn typed_models_simplesign_outbound_requires_both_detached_signature_fields(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut context = binding_context(Binding::SimpleSign)?;
-    context.sig_alg = Some("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256".to_string());
-
-    let result = Outbound::<AuthnRequest>::from_context(context);
-
-    assert!(matches!(result, Err(SamlError::Invalid(_))));
+    let partial_signature = "partial detached signature state is invalid";
+    for (sig_alg, signature, expected) in [
+        (None, None, "SimpleSign requires SigAlg and Signature"),
+        (Some("alg"), None, partial_signature),
+        (None, Some("AA=="), partial_signature),
+    ] {
+        let context = BindingContext {
+            sig_alg: sig_alg.map(str::to_owned),
+            signature: signature.map(str::to_owned),
+            ..binding_context(Binding::SimpleSign)?
+        };
+        let result = Outbound::<AuthnRequest>::from_context(context);
+        assert!(
+            matches!(&result, Err(SamlError::Invalid(message)) if message == expected),
+            "unexpected result for {sig_alg:?} and {signature:?}: {result:?}"
+        );
+    }
     Ok(())
 }
 

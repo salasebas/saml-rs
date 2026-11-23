@@ -52,10 +52,8 @@ fn redirect_flow_rejects_oversized_compressed_input_before_inflate(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let request = redirect_query(vec![("SAMLRequest".to_string(), STANDARD.encode([0u8; 9]))]);
     let opts = FlowOptions {
-        binding: Some(Binding::Redirect),
-        parser_type: Some(ParserType::SamlRequest),
         redirect_inflate_max_bytes: 8,
-        ..FlowOptions::default()
+        ..FlowOptions::new(Binding::Redirect, ParserType::SamlRequest)
     };
 
     let err = flow(&opts, &request)
@@ -85,10 +83,8 @@ fn flow_options_custom_redirect_inflate_limit_is_enforced() -> Result<(), Box<dy
         STANDARD.encode(&compressed),
     )]);
     let opts = FlowOptions {
-        binding: Some(Binding::Redirect),
-        parser_type: Some(ParserType::SamlRequest),
         redirect_inflate_max_bytes: compressed.len(),
-        ..FlowOptions::default()
+        ..FlowOptions::new(Binding::Redirect, ParserType::SamlRequest)
     };
 
     let err = flow(&opts, &request)
@@ -136,11 +132,7 @@ fn redirect_flow_rejects_oversized_inflated_message() -> Result<(), Box<dyn std:
         "SAMLRequest".to_string(),
         STANDARD.encode(&compressed),
     )]);
-    let opts = FlowOptions {
-        binding: Some(Binding::Redirect),
-        parser_type: Some(ParserType::SamlRequest),
-        ..FlowOptions::default()
-    };
+    let opts = FlowOptions::new(Binding::Redirect, ParserType::SamlRequest);
 
     let err = flow(&opts, &request)
         .err()
@@ -162,11 +154,7 @@ fn post_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::error::
         "SAMLRequest".to_string(),
         STANDARD.encode(b"<AuthnRequest/>"),
     )]);
-    let mut opts = FlowOptions {
-        binding: Some(Binding::Post),
-        parser_type: Some(ParserType::SamlRequest),
-        ..FlowOptions::default()
-    };
+    let mut opts = FlowOptions::new(Binding::Post, ParserType::SamlRequest);
     opts.xml_limits.max_bytes = 8;
 
     let err = flow(&opts, &request)
@@ -189,11 +177,7 @@ fn simplesign_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::e
         "SAMLRequest".to_string(),
         STANDARD.encode(b"<AuthnRequest/>"),
     )]);
-    let mut opts = FlowOptions {
-        binding: Some(Binding::SimpleSign),
-        parser_type: Some(ParserType::SamlRequest),
-        ..FlowOptions::default()
-    };
+    let mut opts = FlowOptions::new(Binding::SimpleSign, ParserType::SamlRequest);
     opts.xml_limits.max_bytes = 8;
 
     let err = flow(&opts, &request)
@@ -218,11 +202,7 @@ fn post_flow_rejects_dom_node_budget_before_authentication(
         "SAMLRequest".to_string(),
         STANDARD.encode(xml.as_bytes()),
     )]);
-    let mut opts = FlowOptions {
-        binding: Some(Binding::Post),
-        parser_type: Some(ParserType::SamlRequest),
-        ..FlowOptions::default()
-    };
+    let mut opts = FlowOptions::new(Binding::Post, ParserType::SamlRequest);
     opts.xml_limits.max_nodes = 3;
 
     let err = flow(&opts, &request)
