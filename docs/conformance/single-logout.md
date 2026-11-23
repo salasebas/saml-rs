@@ -116,6 +116,20 @@ shared [status code rule](web-browser-sso-acceptance.md#status-codes).
 | Discard a `LogoutRequest` at or after its skew-adjusted `NotOnOrAfter` | Library policy: Core §3.7.1 only permits discarding an expired request. | Core §3.7.1 | `ClockSkew` |
 | Apply the [signature algorithm profile](xml-security-algorithms.md#weak-algorithms-and-keys) to an embedded signature and a detached `SigAlg`, including the mandatory logout signatures | Library policy: hardening beyond the default exclusions. | — | `XmlSignatureProfile::StrictRsaSha2` |
 
+## SP session selection
+
+`Received<LogoutRequest>::matches_sp_session` checks one local session after
+`ServiceProvider::receive_slo` authenticates the IdP request. The application
+stores the assertion issuer and logout subject, looks up candidate sessions,
+and invalidates each match.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Match only sessions established by an assertion from the request issuer | Mandatory | Core §3.7.3.1 | `matches_sp_session` |
+| Compare the `NameID` value, effective `Format`, and all three qualifier attributes. An omitted `Format` means `unspecified` | Mandatory | Core §2.2.2, §3.3.4, §3.7.3.1, Profiles §4.4.4.1, E60, `NameIDType` | `matches_sp_session` |
+| With one or more `SessionIndex` elements, require at least one match. With none, select every session from that authority with the matching `NameID` | Mandatory | Core §3.7.3.1, Profiles §4.4.4.1, E38, `LogoutRequestType` | `matches_sp_session` |
+| Return no built-in match for a `BaseID` or an `EncryptedID` that could not be decrypted to a `NameID` | Library policy: the helper needs a `NameID` to compare. | Core §2.2.1, §3.3.4, §3.7.3.1 | `matches_sp_session` |
+
 ## Encrypted principal identifier
 
 `StartSlo::identifier_encryption` and `receive_slo` on both roles, on HTTP-Redirect, HTTP-POST, HTTP-POST-SimpleSign, and SOAP. Conformance Requirements §3.4 requires every relevant operational mode to process or generate `<saml:EncryptedID>` wherever it processes or generates `<saml:NameID>`. These rows do not claim the IdP or SP operational mode.

@@ -219,6 +219,26 @@ impl NameId {
     pub fn sp_provided_id(&self) -> Option<&str> {
         self.sp_provided_id.as_deref()
     }
+
+    pub(super) fn strongly_matches(&self, other: &Self) -> bool {
+        self.matches_value_and_qualifiers(other.value(), other.into())
+            && self.effective_format() == other.effective_format()
+    }
+
+    fn effective_format(&self) -> String {
+        name_id_format_in_effect(self.format().map(NameIdFormat::as_uri))
+    }
+
+    fn matches_value_and_qualifiers(
+        &self,
+        value: &str,
+        qualifiers: OutboundNameIdQualifiers,
+    ) -> bool {
+        self.value() == value
+            && self.name_qualifier() == qualifiers.name_qualifier
+            && self.sp_name_qualifier() == qualifiers.sp_name_qualifier
+            && self.sp_provided_id() == qualifiers.sp_provided_id
+    }
 }
 
 impl<'a> From<&'a NameId> for OutboundNameIdQualifiers<'a> {
@@ -457,8 +477,7 @@ impl RequestedSubject {
             }
         };
         let issued_format = name_id_format_in_effect(format);
-        let requested_format =
-            name_id_format_in_effect(requested.format().map(NameIdFormat::as_uri));
+        let requested_format = requested.effective_format();
         let policy_format = policy
             .and_then(NameIdPolicy::format)
             .map(|policy_format| collapse_whitespace(policy_format.as_uri()));
@@ -467,11 +486,8 @@ impl RequestedSubject {
         {
             return Ok(());
         }
-        if requested.value() == value
-            && requested_format == issued_format
-            && requested.name_qualifier() == qualifiers.name_qualifier
-            && requested.sp_name_qualifier() == qualifiers.sp_name_qualifier
-            && requested.sp_provided_id() == qualifiers.sp_provided_id
+        if requested_format == issued_format
+            && requested.matches_value_and_qualifiers(value, qualifiers)
         {
             return Ok(());
         }

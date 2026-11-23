@@ -5,7 +5,7 @@ use super::extract::{
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
 use super::status::{RequestVersionMismatch, Status, StatusMessage};
 use super::subject::NameId;
-use super::{EndpointUrl, RelayState};
+use super::{EndpointUrl, Received, RelayState};
 use crate::browser::LogoutBinding;
 use crate::config::EntityId;
 use crate::error::SamlError;
@@ -186,6 +186,56 @@ impl LogoutRequest {
             destination,
             raw_flow,
         })
+    }
+}
+
+impl Received<LogoutRequest> {
+    /// Return whether an authenticated IdP logout names one local SP session.
+    ///
+    /// Call this on the result of [`crate::ServiceProvider::receive_slo`].
+    /// Store the session's assertion issuer and logout subject using
+    /// [`crate::SsoSession::issuer`] and [`crate::SsoSession::logout_subject`]
+    /// when the SP accepts the sign-in.
+    ///
+    /// The issuer and the full `NameID` must match, including its qualifiers.
+    /// An omitted format is equivalent to `unspecified`. If the request
+    /// carries indexes, at least one must match an index in the stored subject.
+    /// A request with no indexes can match each session with the same issuer
+    /// and `NameID`. A `BaseID` or an undecryptable `EncryptedID` returns `false`.
+    /// The application owns session lookup and invalidation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use saml_rs::{EntityId, LogoutRequest, LogoutSubject, Received};
+    ///
+    /// fn end_matching_session(
+    ///     request: &Received<LogoutRequest>,
+    ///     assertion_issuer: &EntityId,
+    ///     logout_subject: &LogoutSubject,
+    ///     invalidate: impl FnOnce(),
+    /// ) {
+    ///     if request.matches_sp_session(assertion_issuer, logout_subject) {
+    ///         invalidate();
+    ///     }
+    /// }
+    /// ```
+    #[must_use]
+    pub fn matches_sp_session(
+        &self,
+        assertion_issuer: &EntityId,
+        logout_subject: &LogoutSubject,
+    ) -> bool {
+        let request = self.message();
+        request.issuer() == assertion_issuer
+            && request
+                .name_id()
+                .is_some_and(|name_id| name_id.strongly_matches(logout_subject.name_id()))
+            && (request.session_indexes().is_empty()
+                || request
+                    .session_indexes()
+                    .iter()
+                    .any(|index| logout_subject.session_indexes().contains(index)))
     }
 }
 
