@@ -1528,7 +1528,7 @@ fn typed_models_logout_request_from_flow_result_exposes_session_indexes(
         ]),
     };
 
-    let request = LogoutRequest::from_flow(flow)?;
+    let request = LogoutRequest::from_flow(flow, None)?;
 
     assert_eq!(request.id().as_str(), "_logout123");
     assert_eq!(request.issue_instant().as_str(), "2024-01-01T00:00:00Z");
