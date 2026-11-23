@@ -268,7 +268,7 @@ impl ArtifactResolution {
     /// Returns [`SamlError::ArtifactNotReturned`] when a `Success` response
     /// carries no protocol message.
     pub fn finish(&self, response_envelope: &str) -> Result<ResolvedProtocolMessage, SamlError> {
-        let (body_xml, response) = read_soap_status_response(
+        let (body, response) = read_soap_status_response(
             response_envelope,
             self.xml_limits,
             self.schema_validator,
@@ -300,7 +300,7 @@ impl ArtifactResolution {
         }
         Ok(ResolvedProtocolMessage {
             local_name: message.local_name.clone(),
-            xml: standalone_element(&body_xml, message.start, message.end)?,
+            xml: standalone_element(&body.xml, message.start, message.end)?,
             identity_provider: self.identity_provider.clone(),
             artifact: self.artifact.clone(),
         })

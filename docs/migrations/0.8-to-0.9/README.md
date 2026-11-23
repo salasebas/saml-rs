@@ -43,5 +43,6 @@ Check the topics that affect your integration.
 - [Upgrade typed operation options and name identifier management code](typed-operations.md)
 - [Remove Enhanced Client/Proxy SSO](ecp-removal.md)
 - [Send SAML responses for refused requests](request-refusals.md)
+- [Update signing keys for SOAP name identifier management](soap-name-id-signatures.md)
 
 [All migration guides](../README.md)

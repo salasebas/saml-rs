@@ -5,8 +5,13 @@
 
 use std::sync::Arc;
 
-use crate::config::{EntityId, IdentifierEncryptionPolicy, NameIdFormat, SpDescriptor};
-use crate::constants::{namespace, Binding};
+use crate::config::{
+    EntityId, HmacSecret, IdentifierEncryptionPolicy, NameIdFormat, SpDescriptor,
+    XmlSignatureProfile,
+};
+use crate::constants::{namespace, Binding, CertUse};
+#[cfg(crypto)]
+use crate::crypto::verify::verify_soap_body_signature;
 use crate::entity::{generate_id, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::{EndpointDirection, Metadata};
@@ -197,6 +202,9 @@ pub struct StartedNameIdManagement {
     request: SoapRequest,
     request_id: String,
     service_provider: String,
+    signing_certificates: Vec<String>,
+    hmac_secret: Option<HmacSecret>,
+    signature_profile: XmlSignatureProfile,
     xml_limits: XmlLimits,
     schema_validator: Option<crate::SchemaValidator>,
 }
@@ -207,12 +215,18 @@ impl PartialEq for StartedNameIdManagement {
             request,
             request_id,
             service_provider,
+            signing_certificates,
+            hmac_secret,
+            signature_profile,
             xml_limits,
             schema_validator,
         } = self;
         request == &other.request
             && request_id == &other.request_id
             && service_provider == &other.service_provider
+            && signing_certificates == &other.signing_certificates
+            && hmac_secret == &other.hmac_secret
+            && signature_profile == &other.signature_profile
             && xml_limits == &other.xml_limits
             && crate::schema::validator_addresses_equal(*schema_validator, other.schema_validator)
     }
@@ -230,6 +244,8 @@ impl StartedNameIdManagement {
     /// Read the service provider's SOAP `ManageNameIDResponse`.
     ///
     /// `Ok` means the service provider applied the change.
+    /// A present XML signature must cover the response and verify against the
+    /// service provider's signing keys captured when the exchange started.
     ///
     /// # Errors
     ///
@@ -239,7 +255,7 @@ impl StartedNameIdManagement {
     /// not a `ManageNameIDResponse` from that service provider for this
     /// request.
     pub fn finish(&self, response_envelope: &str) -> Result<(), SamlError> {
-        let (_, response) = read_soap_status_response(
+        let (body, response) = read_soap_status_response(
             response_envelope,
             self.xml_limits,
             self.schema_validator,
@@ -248,6 +264,14 @@ impl StartedNameIdManagement {
             &self.request_id,
         )?;
         require_peer_issuer(&response, &self.service_provider)?;
+        verify_signature_if_present(
+            response_envelope,
+            body.message_start,
+            &response,
+            &self.signing_certificates,
+            self.hmac_secret.as_ref(),
+            self.signature_profile,
+        )?;
         require_one_status_code(&response)?;
         read_status(&response)?.require_success()
     }
@@ -304,6 +328,13 @@ pub(crate) fn start(
         request,
         request_id,
         service_provider: sp_entity_id.to_string(),
+        signing_certificates: service_provider
+            .metadata()
+            .as_metadata()
+            .x509_certificates(CertUse::Signing)
+            .to_vec(),
+        hmac_secret: service_provider.provider().setting.hmac_secret.clone(),
+        signature_profile: idp.setting.xml_signatures,
         xml_limits: idp.setting.xml_limits,
         schema_validator: idp.setting.schema_validator,
     })
@@ -351,6 +382,17 @@ pub(crate) fn receive(
             ));
         }
     }
+    verify_signature_if_present(
+        request_envelope,
+        body.message_start,
+        &request,
+        service_provider
+            .metadata()
+            .as_metadata()
+            .x509_certificates(CertUse::Signing),
+        service_provider.provider().setting.hmac_secret.as_ref(),
+        idp.setting.xml_signatures,
+    )?;
     if let Some(mismatch) = RequestVersionMismatch::for_request(&version)? {
         return refused(idp, &id, Refusal::VersionMismatch(mismatch));
     }
@@ -582,6 +624,48 @@ fn require_channel(channel: SoapChannel) -> Result<(), SamlError> {
     }
 }
 
+fn verify_signature_if_present(
+    envelope: &str,
+    message_start: usize,
+    message: &SamlElement,
+    signing_certificates: &[String],
+    hmac_secret: Option<&HmacSecret>,
+    profile: XmlSignatureProfile,
+) -> Result<(), SamlError> {
+    if message
+        .children
+        .iter()
+        .any(|child| child.is(namespace::DSIG, "Signature"))
+    {
+        let id = message
+            .attr("ID")
+            .ok_or(SamlError::SignedReferenceMismatch)?;
+        verify_soap_body_signature(
+            envelope,
+            message_start,
+            id,
+            signing_certificates,
+            hmac_secret,
+            profile,
+        )?;
+    }
+    Ok(())
+}
+
+#[cfg(not(crypto))]
+fn verify_soap_body_signature(
+    _envelope: &str,
+    _message_start: usize,
+    _id: &str,
+    _signing_certificates: &[String],
+    _hmac_secret: Option<&HmacSecret>,
+    _profile: XmlSignatureProfile,
+) -> Result<(), SamlError> {
+    Err(SamlError::Unsupported(
+        "signature verification requires a crypto provider feature".into(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -599,6 +683,9 @@ mod tests {
             )?,
             request_id: "_request".into(),
             service_provider: "https://sp.example.com/metadata".into(),
+            signing_certificates: Vec::new(),
+            hmac_secret: None,
+            signature_profile: XmlSignatureProfile::ExcludeWeakAlgorithms,
             xml_limits: XmlLimits::default(),
             schema_validator: None,
         };

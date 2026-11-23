@@ -23,7 +23,7 @@ use crate::error::{
 use crate::xml::dom::{self, Node, XmlLimits};
 use crate::xml::signature_placement::saml_signature_candidates;
 use bergshamra::core::ns as bergshamra_ns;
-use bergshamra::dsig::verify::verify_document_with_source;
+use bergshamra::dsig::verify::{verify_document, verify_document_with_source};
 use bergshamra::xml::{uppsala, Document as BergshamraDocument, NodeId as BergshamraNodeId};
 use bergshamra::{DsigContext, KeysManager, VerifiedReference, VerifyResult};
 use std::collections::HashSet;
@@ -32,9 +32,9 @@ mod processing;
 #[cfg(test)]
 use processing::enforce_strict_profile_on_verified_signature;
 use processing::{
-    document_signatures, enforce_hmac_truncation_minimum, enforce_profile_on_verified_signature,
-    preflight_signature_processing, verified_authn_request_signature, verify_all_signatures,
-    SignatureSelection,
+    document_signatures, enforce_hmac_truncation_minimum, enforce_message_signature_reference,
+    enforce_profile_on_verified_signature, exactly_one_dsig_child, preflight_signature_processing,
+    verified_authn_request_signature, verify_all_signatures, SignatureSelection,
 };
 
 fn has_descendant(node: &Node, names: &[&str]) -> bool {
@@ -612,6 +612,67 @@ pub(crate) fn verify_present_signatures(
     let document = uppsala::parse(xml).map_err(xml_err)?;
     let results = verify_all_signatures(&prepared.context, &document, xml, profile)?;
     reject_present_signature_that_does_not_verify(&prepared, &document, &results)
+}
+
+/// Verify the signature of a SAML message already located by the SOAP reader.
+pub(crate) fn verify_soap_body_signature(
+    envelope: &str,
+    message_start: usize,
+    id: &str,
+    metadata_certs: &[String],
+    hmac_secret: Option<&HmacSecret>,
+    profile: XmlSignatureProfile,
+) -> Result<(), SamlError> {
+    let mut document = uppsala::parse(envelope).map_err(xml_err)?;
+    let root = document
+        .document_element()
+        .ok_or_else(verified_content_not_covered)?;
+    let body = document
+        .first_child_element_by_name_ns(root, crate::soap::SOAP_NAMESPACE, "Body")
+        .ok_or_else(verified_content_not_covered)?;
+    let message = document
+        .children_iter(body)
+        .find(|node| {
+            document.element(*node).is_some()
+                && document
+                    .node_range(*node)
+                    .is_some_and(|range| range.start == message_start)
+        })
+        .ok_or_else(verified_content_not_covered)?;
+    // Bergshamra selects the first signature in document order. Detaching the
+    // SOAP header preserves the signed message and its canonicalization context.
+    if let Some(header) =
+        document.first_child_element_by_name_ns(root, crate::soap::SOAP_NAMESPACE, "Header")
+    {
+        document.detach(header);
+    }
+    let signature = exactly_one_dsig_child(&document, message, bergshamra_ns::node::SIGNATURE)
+        .filter(|&signature| document_signatures(&document).next() == Some(signature))
+        .ok_or_else(verified_content_not_covered)?;
+    enforce_message_signature_reference(&document, signature, id)?;
+    preflight_signature_processing(&document, SignatureSelection::First, profile)?;
+
+    super::provider::ensure_crypto_provider_initialized()?;
+    let context = metadata_verification_context(metadata_certs, hmac_secret, profile)?;
+    let mut result = verify_document(&context, &document).map_err(crypto_err)?;
+    enforce_hmac_truncation_minimum(&document, &mut result);
+    let VerifyResult::Valid { references, .. } = result else {
+        return Err(SamlError::SignatureVerification {
+            reason: SignatureVerificationReason::XmlSignature,
+        });
+    };
+    let [reference] = references.as_slice() else {
+        return Err(verified_content_not_covered());
+    };
+    if reference.resolved_node != Some(message) {
+        return Err(verified_content_not_covered());
+    }
+    if !reference.digest_verified {
+        return Err(SamlError::SignatureVerification {
+            reason: SignatureVerificationReason::ReferenceDigest,
+        });
+    }
+    enforce_profile_on_verified_signature(&document, signature, profile)
 }
 
 /// What [`verify_signatures_detailed_with_profile`] found in a document.

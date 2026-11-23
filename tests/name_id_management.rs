@@ -50,7 +50,6 @@ const VERSION_MISMATCH: &str = "urn:oasis:names:tc:SAML:2.0:status:VersionMismat
 const UNKNOWN_PRINCIPAL: &str = "urn:oasis:names:tc:SAML:2.0:status:UnknownPrincipal";
 const SP_REQUEST_ID: &str = "_sp_manage_request";
 const EXTENSIONS: &str = r#"<samlp:Extensions><ext:Data xmlns:ext="urn:test"/></samlp:Extensions>"#;
-const SIGNATURE: &str = r#"<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"/>"#;
 const TRANSIENT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:transient";
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -877,7 +876,6 @@ fn a_request_without_one_identifier_and_one_change_is_rejected() -> TestResult {
             .to_string(),
         format!("{name_id}<samlp:Terminate/>{EXTENSIONS}"),
         format!("{name_id}{EXTENSIONS}<samlp:Terminate/>"),
-        format!("{EXTENSIONS}{SIGNATURE}{name_id}<samlp:Terminate/>"),
         format!("{EXTENSIONS}{EXTENSIONS}{name_id}<samlp:Terminate/>"),
     ] {
         let received = idp.receive_name_id_management(
@@ -906,9 +904,7 @@ fn a_request_without_one_identifier_and_one_change_is_rejected() -> TestResult {
         "Extensions before Issuer was accepted"
     );
 
-    let in_order = sp_request(&format!(
-        "{SIGNATURE}{EXTENSIONS}{name_id}<samlp:Terminate/>"
-    ))?;
+    let in_order = sp_request(&format!("{EXTENSIONS}{name_id}<samlp:Terminate/>"))?;
     let request = received_request(idp.receive_name_id_management(
         &sp,
         &in_order,
@@ -916,6 +912,24 @@ fn a_request_without_one_identifier_and_one_change_is_rejected() -> TestResult {
         validation(),
     )?)?;
     assert_eq!(request.message().change(), &NameIdChange::Terminate);
+    Ok(())
+}
+
+#[test]
+#[cfg(not(crypto))]
+fn a_present_signature_requires_a_crypto_provider_even_on_an_authenticated_channel() -> TestResult {
+    let idp = identity_provider(Some(IDP_NIM_URL))?;
+    let sp = soap_service_provider()?;
+    let signature = r#"<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"/>"#;
+    let envelope = sp_request(&format!(
+        "{signature}{}<samlp:Terminate/>",
+        current_name_id_xml()
+    ))?;
+    let result = idp.receive_name_id_management(&sp, &envelope, authenticated(), validation());
+    assert!(
+        matches!(result, Err(SamlError::Unsupported(_))),
+        "{result:?}"
+    );
     Ok(())
 }
 
