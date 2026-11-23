@@ -33,7 +33,7 @@ fn credentials(key: &str, cert: &str) -> Credentials {
 
 fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<saml_rs::ServiceProvider, SamlError> {
     let mut validation = SpValidationPolicy::default();
-    validation.authn_requests = AuthnRequestSigningPolicy::Sign;
+    validation.authn_request_signing = AuthnRequestSigningPolicy::Sign;
     Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
@@ -47,7 +47,7 @@ fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<saml_rs::ServicePr
 
 fn idp_requiring_signed_authn_requests() -> Result<saml_rs::IdentityProvider, SamlError> {
     let mut validation = IdpValidationPolicy::default();
-    validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
+    validation.authn_request_signatures = AuthnRequestValidationPolicy::RequireSigned;
     Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -107,7 +107,7 @@ fn receive(
     idp.receive_sso(
         sp_descriptor,
         Inbound::post(form),
-        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled),
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache),
     )
     .map(drop)
 }

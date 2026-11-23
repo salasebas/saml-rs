@@ -251,7 +251,7 @@ let contact = ContactPerson {
 
 // Now
 let mut validation = SpValidationPolicy::default();
-validation.assertions = AssertionSignaturePolicy::RequireSigned;
+validation.assertion_signatures = AssertionSignaturePolicy::RequireSigned;
 let mut xml = XmlPolicy::default();
 xml.limits.max_depth = 64;
 let mut contact = ContactPerson::new(ContactType::Technical);
@@ -321,7 +321,7 @@ let label = match validation.assertions {
 };
 
 // Now
-let label = match validation.assertions {
+let label = match validation.assertion_signatures {
     AssertionSignaturePolicy::RequireSigned => "signed",
     AssertionSignaturePolicy::AllowUnsigned => "unsigned allowed",
     _ => "other",

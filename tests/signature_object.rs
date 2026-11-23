@@ -35,7 +35,7 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
         PrivateKeyPem::new(KEY),
     ));
     let mut sp_validation = SpValidationPolicy::default();
-    sp_validation.authn_requests = AuthnRequestSigningPolicy::Sign;
+    sp_validation.authn_request_signing = AuthnRequestSigningPolicy::Sign;
     sp_validation.xml_signatures = xml_signatures;
     let mut idp_validation = IdpValidationPolicy::default();
     idp_validation.xml_signatures = xml_signatures;
@@ -80,7 +80,7 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn principal() -> NameId {

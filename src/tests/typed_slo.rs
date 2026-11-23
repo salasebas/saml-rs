@@ -144,8 +144,8 @@ impl LocalSloRole {
 
 fn signing_sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
-        assertions: AssertionSignaturePolicy::RequireSigned,
-        authn_requests: AuthnRequestSigningPolicy::Sign,
+        assertion_signatures: AssertionSignaturePolicy::RequireSigned,
+        authn_request_signing: AuthnRequestSigningPolicy::Sign,
         audience: AudienceValidationPolicy::RequireRestriction,
         ..SpValidationPolicy::default()
     }
@@ -153,7 +153,7 @@ fn signing_sp_validation() -> SpValidationPolicy {
 
 fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
     IdpValidationPolicy {
-        authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+        authn_request_signatures: AuthnRequestValidationPolicy::RequireSigned,
         ..IdpValidationPolicy::default()
     }
 }
@@ -253,7 +253,7 @@ fn subject() -> Result<LogoutSubject, SamlError> {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), saml_rs::ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), saml_rs::ReplayPolicy::NoCache)
 }
 
 fn validation_with_cache(cache: &mut dyn ReplayCache) -> SamlValidationContext<'_> {
@@ -1184,13 +1184,13 @@ fn new_validation_context_allows_five_minutes_on_logout_request_not_on_or_after(
     receive_signed_logout_request_with_expiration(
         LogoutBinding::Post,
         within,
-        SamlValidationContext::new(now, ReplayPolicy::Disabled),
+        SamlValidationContext::new(now, ReplayPolicy::NoCache),
     )?;
 
     match receive_signed_logout_request_with_expiration(
         LogoutBinding::Post,
         boundary,
-        SamlValidationContext::new(now, ReplayPolicy::Disabled),
+        SamlValidationContext::new(now, ReplayPolicy::NoCache),
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
             assert_eq!(field, TimeWindowField::LogoutRequestNotOnOrAfter);
@@ -1210,7 +1210,7 @@ fn clock_skew_strict_allows_no_logout_request_skew() -> Result<(), Box<dyn std::
     match receive_signed_logout_request_with_expiration(
         LogoutBinding::Post,
         expiration,
-        SamlValidationContext::new(system_time("2026-07-15T12:00:00Z")?, ReplayPolicy::Disabled)
+        SamlValidationContext::new(system_time("2026-07-15T12:00:00Z")?, ReplayPolicy::NoCache)
             .with_clock_skew(ClockSkew::strict()),
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
@@ -1232,13 +1232,13 @@ fn explicit_clock_skew_replaces_logout_request_five_minute_default(
     receive_signed_logout_request_with_expiration(
         LogoutBinding::Post,
         within,
-        SamlValidationContext::new(now, ReplayPolicy::Disabled).with_clock_skew(skew),
+        SamlValidationContext::new(now, ReplayPolicy::NoCache).with_clock_skew(skew),
     )?;
 
     match receive_signed_logout_request_with_expiration(
         LogoutBinding::Post,
         beyond,
-        SamlValidationContext::new(now, ReplayPolicy::Disabled).with_clock_skew(skew),
+        SamlValidationContext::new(now, ReplayPolicy::NoCache).with_clock_skew(skew),
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
             assert_eq!(field, TimeWindowField::LogoutRequestNotOnOrAfter);

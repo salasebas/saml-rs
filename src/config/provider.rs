@@ -31,8 +31,12 @@ fn sp_metadata_input(config: &SpConfigBuilder) -> SpMetadataInput {
         entity_id: config.entity_id.as_str().to_string(),
         signing_certs: signing_certificates(&config.credentials),
         encrypt_certs: encryption_certificates(&config.credentials),
-        authn_requests_signed: authn_request_signing_enabled(config.validation.authn_requests),
-        want_assertions_signed: assertion_signature_required(config.validation.assertions),
+        authn_requests_signed: authn_request_signing_enabled(
+            config.validation.authn_request_signing,
+        ),
+        want_assertions_signed: assertion_signature_required(
+            config.validation.assertion_signatures,
+        ),
         name_id_format: name_id_format_uris(metadata.name_id_formats()),
         single_logout_service: metadata
             .slo_endpoints()
@@ -64,7 +68,7 @@ fn idp_metadata_input(config: &IdpConfigBuilder) -> IdpMetadataInput {
         signing_certs: signing_certificates(&config.credentials),
         encrypt_certs: encryption_certificates(&config.credentials),
         want_authn_requests_signed: authn_request_signature_required(
-            config.validation.authn_requests,
+            config.validation.authn_request_signatures,
         ),
         name_id_format: name_id_format_uris(metadata.name_id_formats()),
         single_sign_on_service: metadata

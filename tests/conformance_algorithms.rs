@@ -113,10 +113,10 @@ fn peers_with_profiles(
     idp_xml_signatures: XmlSignatureProfile,
 ) -> Result<Peers, SamlError> {
     let mut sp_validation = SpValidationPolicy::default();
-    sp_validation.authn_requests = AuthnRequestSigningPolicy::Sign;
+    sp_validation.authn_request_signing = AuthnRequestSigningPolicy::Sign;
     sp_validation.xml_signatures = sp_xml_signatures;
     let mut idp_validation = IdpValidationPolicy::default();
-    idp_validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
+    idp_validation.authn_request_signatures = AuthnRequestValidationPolicy::RequireSigned;
     idp_validation.xml_signatures = idp_xml_signatures;
     let sp = SpConfig::builder(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -162,7 +162,7 @@ fn peers_with_profiles(
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn post_fields<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, SamlError> {

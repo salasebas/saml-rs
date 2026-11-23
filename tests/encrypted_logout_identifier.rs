@@ -172,7 +172,7 @@ fn subject() -> Result<LogoutSubject, SamlError> {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn start_options(binding: LogoutBinding) -> Result<StartSlo, SamlError> {

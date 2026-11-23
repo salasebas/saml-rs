@@ -51,7 +51,7 @@ struct Exchange {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn principal() -> NameId {
@@ -1068,7 +1068,7 @@ fn an_assertion_signature_that_does_not_verify_rejects_a_signed_response(
             ..SpValidationPolicy::default()
         },
         SpValidationPolicy {
-            assertions: AssertionSignaturePolicy::RequireSigned,
+            assertion_signatures: AssertionSignaturePolicy::RequireSigned,
             ..SpValidationPolicy::default()
         },
     ] {
@@ -1240,7 +1240,7 @@ mod encrypted_assertions {
     fn each_decrypted_assertion_must_be_signed_when_assertions_must_be_signed(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let exchange = post_exchange(SpValidationPolicy {
-            assertions: AssertionSignaturePolicy::RequireSigned,
+            assertion_signatures: AssertionSignaturePolicy::RequireSigned,
             ..SpValidationPolicy::default()
         })?;
         let first_signed = encrypt_first(
@@ -1298,7 +1298,7 @@ mod encrypted_assertions {
 
     fn require_signed() -> SpValidationPolicy {
         SpValidationPolicy {
-            assertions: AssertionSignaturePolicy::RequireSigned,
+            assertion_signatures: AssertionSignaturePolicy::RequireSigned,
             ..SpValidationPolicy::default()
         }
     }

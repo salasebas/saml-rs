@@ -143,7 +143,7 @@
 //! # ) -> Result<(), saml_rs::SamlError> {
 //! let validation = SamlValidationContext::new(
 //!     SystemTime::now(),
-//!     ReplayPolicy::Disabled,
+//!     ReplayPolicy::NoCache,
 //! );
 //! let request = idp.receive_sso(
 //!     sp,
@@ -205,7 +205,7 @@
 //!     let started = sp.start_slo(idp, subject, StartSlo::post())?;
 //!     let validation = SamlValidationContext::new(
 //!         SystemTime::now(),
-//!         ReplayPolicy::Disabled,
+//!         ReplayPolicy::NoCache,
 //!     );
 //!     let completed = sp.finish_slo(
 //!         idp,

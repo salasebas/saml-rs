@@ -39,7 +39,7 @@ pub enum AssertionSignaturePolicy {
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 ///
 /// The policy has no `Default`. Take it from the role policy, for example
-/// `SpValidationPolicy::default().responses`:
+/// `SpValidationPolicy::default().response_signatures`:
 ///
 /// ```compile_fail,E0599
 /// let policy = saml_rs::ResponseSignaturePolicy::default();
@@ -140,7 +140,7 @@ pub enum AuthnRequestSigningPolicy {
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 ///
 /// The policy has no `Default`. Take it from the role policy, for example
-/// `IdpValidationPolicy::default().authn_requests`:
+/// `IdpValidationPolicy::default().authn_request_signatures`:
 ///
 /// ```compile_fail,E0599
 /// let policy = saml_rs::AuthnRequestValidationPolicy::default();
@@ -211,13 +211,13 @@ pub enum NameIdCreationPolicy {
 #[non_exhaustive]
 pub struct SpValidationPolicy {
     /// Assertion signature requirement.
-    pub assertions: AssertionSignaturePolicy,
+    pub assertion_signatures: AssertionSignaturePolicy,
     /// Top-level SAML Response signature requirement.
-    pub responses: ResponseSignaturePolicy,
+    pub response_signatures: ResponseSignaturePolicy,
     /// Signature algorithm and reference requirements.
     pub xml_signatures: XmlSignatureProfile,
     /// Outbound AuthnRequest signing behavior.
-    pub authn_requests: AuthnRequestSigningPolicy,
+    pub authn_request_signing: AuthnRequestSigningPolicy,
     /// Audience validation behavior.
     pub audience: AudienceValidationPolicy,
     /// NameID creation behavior for AuthnRequests.
@@ -238,7 +238,7 @@ impl Default for SpValidationPolicy {
     /// use saml_rs::{AssertionSignaturePolicy, SpValidationPolicy, XmlSignatureProfile};
     ///
     /// let mut with_assertion_signature = SpValidationPolicy::default();
-    /// with_assertion_signature.assertions = AssertionSignaturePolicy::RequireSigned;
+    /// with_assertion_signature.assertion_signatures = AssertionSignaturePolicy::RequireSigned;
     /// assert_eq!(
     ///     with_assertion_signature.xml_signatures,
     ///     XmlSignatureProfile::ExcludeWeakAlgorithms
@@ -246,10 +246,10 @@ impl Default for SpValidationPolicy {
     /// ```
     fn default() -> Self {
         Self {
-            assertions: AssertionSignaturePolicy::AllowUnsigned,
-            responses: ResponseSignaturePolicy::RequireForEncryptedCbc,
+            assertion_signatures: AssertionSignaturePolicy::AllowUnsigned,
+            response_signatures: ResponseSignaturePolicy::RequireForEncryptedCbc,
             xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
-            authn_requests: AuthnRequestSigningPolicy::DoNotSign,
+            authn_request_signing: AuthnRequestSigningPolicy::DoNotSign,
             audience: AudienceValidationPolicy::EvaluatePresentRestrictions,
             name_id_creation: NameIdCreationPolicy::DoNotAllowCreate,
         }
@@ -268,7 +268,7 @@ impl Default for SpValidationPolicy {
 /// use saml_rs::{AuthnRequestValidationPolicy, IdpValidationPolicy};
 ///
 /// let policy = IdpValidationPolicy {
-///     authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+///     authn_request_signatures: AuthnRequestValidationPolicy::RequireSigned,
 ///     ..IdpValidationPolicy::default()
 /// };
 /// ```
@@ -276,7 +276,7 @@ impl Default for SpValidationPolicy {
 #[non_exhaustive]
 pub struct IdpValidationPolicy {
     /// Inbound AuthnRequest signature requirement.
-    pub authn_requests: AuthnRequestValidationPolicy,
+    pub authn_request_signatures: AuthnRequestValidationPolicy,
     /// Signature algorithm and reference requirements.
     pub xml_signatures: XmlSignatureProfile,
 }
@@ -289,7 +289,7 @@ impl Default for IdpValidationPolicy {
     /// verified under [`XmlSignatureProfile::ExcludeWeakAlgorithms`].
     fn default() -> Self {
         Self {
-            authn_requests: AuthnRequestValidationPolicy::AllowUnsigned,
+            authn_request_signatures: AuthnRequestValidationPolicy::AllowUnsigned,
             xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
         }
     }

@@ -88,7 +88,7 @@ impl IdentityProvider {
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
-    ///     ReplayPolicy::Disabled,
+    ///     ReplayPolicy::NoCache,
     /// );
     /// let input = Inbound::post(fields);
     /// let request = idp.receive_sso(sp, input, validation)?;

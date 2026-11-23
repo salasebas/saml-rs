@@ -29,12 +29,14 @@ const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const IDP_SSO_REDIRECT: &str = "https://idp.example.com/sso/redirect";
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
-fn sp(authn_requests: AuthnRequestSigningPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
+fn sp(
+    authn_request_signing: AuthnRequestSigningPolicy,
+) -> Result<saml_rs::ServiceProvider, SamlError> {
     let mut validation = SpValidationPolicy::default();
-    validation.authn_requests = authn_requests;
+    validation.authn_request_signing = authn_request_signing;
     Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,

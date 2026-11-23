@@ -86,7 +86,7 @@ fn idp() -> Result<IdentityProvider, SamlError> {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn principal() -> NameId {
@@ -141,7 +141,7 @@ fn accept(
                 &idp_descriptor,
                 delivered.artifact(),
                 SoapChannel::mutually_authenticated_confidential(),
-                SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled),
+                SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache),
             )?;
             let answer = idp.answer_artifact_resolve(
                 &sender_view,
@@ -168,7 +168,7 @@ fn a_response_to_the_supplied_non_default_consumer_is_accepted(
         let policy = if binding == SsoResponseBinding::Post {
             ReplayPolicy::RequireCache(&mut cache)
         } else {
-            ReplayPolicy::Disabled
+            ReplayPolicy::NoCache
         };
         let validation = SamlValidationContext::new(SystemTime::now(), policy)
             .with_recipient_endpoint(EndpointUrl::try_new(ACS_B)?);

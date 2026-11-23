@@ -53,7 +53,7 @@ fn idp_signing_with(key: &str, cert: &str) -> Result<saml_rs::IdentityProvider, 
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn sso_response_from(
@@ -174,7 +174,7 @@ fn http_post_honors_want_assertions_signed_with_multiple_saml2_sp_roles(
     let sp = ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .validation(SpValidationPolicy {
-                assertions: AssertionSignaturePolicy::RequireSigned,
+                assertion_signatures: AssertionSignaturePolicy::RequireSigned,
                 ..Default::default()
             })
             .build()?,
@@ -206,7 +206,7 @@ fn http_post_honors_want_assertions_signed_with_multiple_saml2_sp_roles(
 
 fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<saml_rs::ServiceProvider, SamlError> {
     let validation = SpValidationPolicy {
-        authn_requests: saml_rs::AuthnRequestSigningPolicy::Sign,
+        authn_request_signing: saml_rs::AuthnRequestSigningPolicy::Sign,
         ..Default::default()
     };
     Ok(ServiceProvider::new(
@@ -223,13 +223,13 @@ fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_
     let rolling = credentials(SP_ROLE_KEY, SP_ROLE_CERT)
         .with_additional_signing_certificate(CertificatePem::new(IDP_ROLE_CERT));
     let sp_validation = SpValidationPolicy {
-        authn_requests: saml_rs::AuthnRequestSigningPolicy::Sign,
+        authn_request_signing: saml_rs::AuthnRequestSigningPolicy::Sign,
         ..Default::default()
     };
     let sp_config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
         .validation(sp_validation);
     let idp_validation = IdpValidationPolicy {
-        authn_requests: saml_rs::AuthnRequestValidationPolicy::RequireSigned,
+        authn_request_signatures: saml_rs::AuthnRequestValidationPolicy::RequireSigned,
         ..Default::default()
     };
     let idp_config = IdpConfig::builder(
@@ -385,7 +385,7 @@ fn authn_request_signed_with_a_saml11_role_key_is_rejected(
     let sp = sp_signing_authn_requests(SP_ROLE_KEY, SP_ROLE_CERT)?;
     let signed_with_saml11_role_key = sp_signing_authn_requests(IDP_ROLE_KEY, IDP_ROLE_CERT)?;
     let idp_validation = IdpValidationPolicy {
-        authn_requests: saml_rs::AuthnRequestValidationPolicy::RequireSigned,
+        authn_request_signatures: saml_rs::AuthnRequestValidationPolicy::RequireSigned,
         ..Default::default()
     };
     let idp = IdentityProvider::new(

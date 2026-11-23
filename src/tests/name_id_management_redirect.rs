@@ -98,7 +98,7 @@ fn idp_descriptor(idp: &saml_rs::IdentityProvider) -> Result<IdpDescriptor, Saml
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn validation_with_cache(cache: &mut dyn ReplayCache) -> SamlValidationContext<'_> {
@@ -826,7 +826,7 @@ fn a_bounded_request_age_rejects_a_request_outside_the_window_before_replay_stor
     }
 
     let unbounded =
-        SamlValidationContext::new(issued_at_plus(30 * 24 * 60 * 60)?, ReplayPolicy::Disabled);
+        SamlValidationContext::new(issued_at_plus(30 * 24 * 60 * 60)?, ReplayPolicy::NoCache);
     assert_eq!(
         unbounded.manage_name_id_request_age(),
         RequestAgePolicy::Disabled

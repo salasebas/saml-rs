@@ -30,6 +30,7 @@ Check the topics that affect your integration.
 - [Keep response signatures for SPs with several SAML 2.0 roles](sso-response-signatures.md)
 - [Move schema validation into XML policy](xml-policy.md)
 - [Update XML resource limit names](xml-resource-limits.md)
+- [Rename the signature and replay policies](signature-and-replay-policies.md)
 - [Update AuthnRequest signature verification](authn-request-signatures.md)
 - [Update truncated XML HMAC signatures](hmac-truncation.md)
 - [Authenticate browser logout messages](logout-authentication.md)

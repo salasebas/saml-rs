@@ -122,7 +122,7 @@ fn authenticated() -> SoapChannel {
 }
 
 fn validation<'a>() -> SamlValidationContext<'a> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn body(envelope: &str) -> Result<String, SamlError> {

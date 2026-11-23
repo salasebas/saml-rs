@@ -6,7 +6,7 @@ fn encrypted_exchange(
 ) -> Result<SsoExchange, Box<dyn std::error::Error>> {
     let sp = ServiceProvider::new(
         sp_with_validation_and_xml(SpValidationPolicy {
-            assertions: AssertionSignaturePolicy::RequireSigned,
+            assertion_signatures: AssertionSignaturePolicy::RequireSigned,
             ..recommended_sso_accept_validation()
         })?
         .build()?,
@@ -82,7 +82,7 @@ fn recommended_sso_accept_rejects_unsigned_cbc_response_unless_relaxed(
     );
     let relaxed = ServiceProvider::new(
         sp_with_validation_and_xml(SpValidationPolicy {
-            responses: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
+            response_signatures: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
             ..recommended_sso_accept_validation()
         })?
         .build()?,

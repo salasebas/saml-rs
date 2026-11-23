@@ -679,7 +679,7 @@ fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
     crate::crypto::keys::check_credentials(&config.credentials)?;
     validate_shared_policy(&config.algorithms, &config.templates)?;
     #[cfg(crypto)]
-    if authn_request_signing_enabled(config.validation.authn_requests) {
+    if authn_request_signing_enabled(config.validation.authn_request_signing) {
         validate_signing_credentials(&config.credentials, config.algorithms.signature.as_uri())?;
     }
     if config.xml.encryption.selects_any_element()
@@ -762,16 +762,16 @@ fn validate_idp_crypto_support(config: &IdpConfigBuilder) -> Result<(), SamlErro
 #[cfg(not(crypto))]
 fn sp_config_requires_crypto(config: &SpConfigBuilder) -> bool {
     let validation = &config.validation;
-    assertion_signature_required(validation.assertions)
-        || response_signature_required(validation.responses)
-        || encrypted_cbc_response_signature_required(validation.responses)
-        || authn_request_signing_enabled(validation.authn_requests)
+    assertion_signature_required(validation.assertion_signatures)
+        || response_signature_required(validation.response_signatures)
+        || encrypted_cbc_response_signature_required(validation.response_signatures)
+        || authn_request_signing_enabled(validation.authn_request_signing)
         || config.xml.encryption.selects_any_element()
 }
 
 #[cfg(not(crypto))]
 fn idp_config_requires_crypto(config: &IdpConfigBuilder) -> bool {
-    authn_request_signature_required(config.validation.authn_requests)
+    authn_request_signature_required(config.validation.authn_request_signatures)
         || config.xml.encryption.selects_any_element()
 }
 

@@ -165,7 +165,7 @@ comparison. Use the response ID and request correlation to distinguish exchanges
 
 Pass a shared cache to every `finish_sso` and `accept_unsolicited_sso` call
 that receives an HTTP-POST response, including the outstanding-logout variants.
-With `ReplayPolicy::Disabled`, these calls now return `SamlError::ReplayCacheRequired`.
+With `ReplayPolicy::NoCache`, these calls now return `SamlError::ReplayCacheRequired`.
 
 ```rust
 # use saml_rs::{ReplayCache, ReplayPolicy, SamlValidationContext};

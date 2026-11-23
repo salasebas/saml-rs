@@ -125,7 +125,7 @@ fn typed_protocol_facades() -> Result<
 }
 
 fn typed_validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 #[test]
@@ -269,7 +269,7 @@ fn default_sp_requires_crypto_and_default_idp_builds_without_it(
 fn sp_required_assertion_signatures_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut validation = sp_validation_without_crypto();
-    validation.assertions = AssertionSignaturePolicy::RequireSigned;
+    validation.assertion_signatures = AssertionSignaturePolicy::RequireSigned;
 
     assert_unsupported(sp_config_builder()?.validation(validation).build());
     Ok(())
@@ -279,7 +279,7 @@ fn sp_required_assertion_signatures_return_unsupported_without_default_crypto(
 fn sp_required_response_signatures_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut validation = sp_validation_without_crypto();
-    validation.responses = ResponseSignaturePolicy::RequireSigned;
+    validation.response_signatures = ResponseSignaturePolicy::RequireSigned;
 
     assert_unsupported(sp_config_builder()?.validation(validation).build());
     Ok(())
@@ -289,7 +289,7 @@ fn sp_required_response_signatures_return_unsupported_without_default_crypto(
 fn sp_signed_authn_requests_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut validation = sp_validation_without_crypto();
-    validation.authn_requests = AuthnRequestSigningPolicy::Sign;
+    validation.authn_request_signing = AuthnRequestSigningPolicy::Sign;
 
     assert_unsupported(sp_config_builder()?.validation(validation).build());
     Ok(())
@@ -309,7 +309,7 @@ fn sp_encrypted_assertions_return_unsupported_without_default_crypto(
 fn idp_required_authn_request_signatures_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let validation = saml_rs::IdpValidationPolicy {
-        authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+        authn_request_signatures: AuthnRequestValidationPolicy::RequireSigned,
         ..Default::default()
     };
 

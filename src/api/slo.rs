@@ -258,7 +258,7 @@ impl ServiceProvider {
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
-    ///     ReplayPolicy::Disabled,
+    ///     ReplayPolicy::NoCache,
     /// );
     /// let completed = sp.finish_slo(
     ///     idp,
@@ -393,7 +393,7 @@ impl IdentityProvider {
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
-    ///     ReplayPolicy::Disabled,
+    ///     ReplayPolicy::NoCache,
     /// );
     /// let input = Inbound::post(fields);
     /// let request = idp.receive_slo(sp, input, validation)?;
@@ -536,7 +536,7 @@ impl IdentityProvider {
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
-    ///     ReplayPolicy::Disabled,
+    ///     ReplayPolicy::NoCache,
     /// );
     /// let completed = idp.finish_slo(
     ///     sp,

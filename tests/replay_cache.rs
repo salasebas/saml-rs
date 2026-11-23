@@ -195,7 +195,7 @@ fn replay_debug_omits_identifiers_and_does_not_read_the_clock() -> TestResult {
     assert!(cache_debug.contains("InMemoryReplayCache"));
     assert!(!cache_debug.contains(sensitive_id));
     for (replay, policy_name) in [
-        (ReplayPolicy::Disabled, "Disabled"),
+        (ReplayPolicy::NoCache, "NoCache"),
         (ReplayPolicy::RequireCache(&mut cache), "RequireCache"),
     ] {
         let policy_debug = format!("{replay:?}");

@@ -74,7 +74,7 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
     let received = idp.receive_sso(
         &sp_descriptor,
         Inbound::post(started.outbound.post_form()?.fields().to_vec()),
-        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
             .with_clock_skew(ClockSkew::strict()),
     )?;
     let response = idp.respond_sso(

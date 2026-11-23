@@ -49,12 +49,12 @@ const DEPLOYMENT_FORMAT: &str = "https://example.com/attribute-name-format";
 const MAIL_OID: &str = "urn:oid:0.9.2342.19200300.100.1.3";
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
     let validation = SpValidationPolicy {
-        assertions: AssertionSignaturePolicy::RequireSigned,
+        assertion_signatures: AssertionSignaturePolicy::RequireSigned,
         audience: AudienceValidationPolicy::RequireRestriction,
         ..Default::default()
     };

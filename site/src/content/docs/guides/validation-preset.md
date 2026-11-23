@@ -15,7 +15,7 @@ To require a signature directly on the Assertion, and leave the XML-DSig profile
 
 ```rust
 let mut require_assertion_signature = SpValidationPolicy::default();
-require_assertion_signature.assertions = AssertionSignaturePolicy::RequireSigned;
+require_assertion_signature.assertion_signatures = AssertionSignaturePolicy::RequireSigned;
 ```
 
 To require the RSA-SHA2 XML-DSig profile, and leave Assertion signatures optional:
@@ -34,7 +34,7 @@ you can relax the SP's outer signature requirement for those responses.
 
 ```rust
 let mut validation = SpValidationPolicy::default();
-validation.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
+validation.response_signatures = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
 ```
 
 The validation policies' `Default` and the `SpConfig` and `IdpConfig` builders already use Recommended. Each field and what its values relax is in the [conformance records](../reference/conformance.md).

@@ -62,8 +62,8 @@ fn parties() -> TestResult<Parties> {
         )?)
         .credentials(signing_credentials())
         .validation(SpValidationPolicy {
-            assertions: AssertionSignaturePolicy::RequireSigned,
-            authn_requests: AuthnRequestSigningPolicy::Sign,
+            assertion_signatures: AssertionSignaturePolicy::RequireSigned,
+            authn_request_signing: AuthnRequestSigningPolicy::Sign,
             audience: AudienceValidationPolicy::RequireRestriction,
             ..SpValidationPolicy::default()
         })
@@ -80,7 +80,7 @@ fn parties() -> TestResult<Parties> {
         )?)
         .credentials(signing_credentials())
         .validation(IdpValidationPolicy {
-            authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+            authn_request_signatures: AuthnRequestValidationPolicy::RequireSigned,
             ..IdpValidationPolicy::default()
         })
         .xml(raised_xml_policy())
@@ -105,7 +105,7 @@ fn parties() -> TestResult<Parties> {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
 fn field<'a>(fields: &'a [FormField], name: &str) -> Option<&'a str> {
