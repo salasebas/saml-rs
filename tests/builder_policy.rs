@@ -1,17 +1,18 @@
+mod common;
 #[path = "common/policies_without_crypto.rs"]
 mod policies_without_crypto;
 
+use common::signing_credentials;
 use policies_without_crypto::sp_validation_without_crypto;
 
 use std::{str::FromStr, time::Duration};
 
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy,
-    AuthnRequestSigningPolicy, CertificatePem, Credentials, DataEncryptionAlgorithm,
-    DigestAlgorithm, EntityId, IdpConfig, KeyEncryptionAlgorithm, MaskGenerationFunction,
-    NameIdCreationPolicy, PrivateKeyPem, SamlError, SignatureAlgorithm, SignatureConfig, SpConfig,
-    SpValidationPolicy, SsoEndpoint, TemplatePolicy, TransformAlgorithm, X509Credential, XmlPolicy,
-    XmlSignatureProfile,
+    AuthnRequestSigningPolicy, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId,
+    IdpConfig, KeyEncryptionAlgorithm, MaskGenerationFunction, NameIdCreationPolicy, SamlError,
+    SignatureAlgorithm, SignatureConfig, SpConfig, SpValidationPolicy, SsoEndpoint, TemplatePolicy,
+    TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
 };
 
 #[cfg(crypto)]
@@ -80,13 +81,6 @@ fn protocol_only_builders_accept_any_encryption_algorithm() -> Result<(), Box<dy
         .build()?;
     }
     Ok(())
-}
-
-fn signing_credentials() -> Credentials {
-    Credentials::default().with_signing_credential(X509Credential::new(
-        CertificatePem::new("test signing certificate"),
-        PrivateKeyPem::new("test signing key"),
-    ))
 }
 
 #[cfg(crypto)]
@@ -432,6 +426,76 @@ fn config_builders_reject_a_tag_prefix_that_is_not_an_ncname(
         assert!(
             matches!(&idp, Err(SamlError::Invalid(message)) if message == expected),
             "{idp:?}"
+        );
+    }
+    Ok(())
+}
+
+#[cfg(crypto)]
+#[test]
+fn config_builders_reject_a_credential_that_cannot_be_used(
+) -> Result<(), Box<dyn std::error::Error>> {
+    use saml_rs::{CertificatePem, PrivateKeyPem, X509Credential};
+
+    const KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+    const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+    const OTHER_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
+    const OTHER_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
+    let pair = |certificate: &str, key: &str| {
+        X509Credential::new(CertificatePem::new(certificate), PrivateKeyPem::new(key))
+    };
+    let signing = |credential| Credentials::default().with_signing_credential(credential);
+    let cases = [
+        (
+            signing(pair(OTHER_CERT, KEY)),
+            "signing credential: the private key does not match the certificate",
+        ),
+        (
+            signing(pair(CERT, "not a private key")),
+            "signing credential: the private key does not load",
+        ),
+        (
+            signing(pair(CERT, CERT)),
+            "signing credential: the private key PEM holds only a public key",
+        ),
+        (
+            signing(pair("not a certificate", KEY)),
+            "signing credential: the certificate does not load",
+        ),
+        (
+            signing(pair(CERT, KEY))
+                .with_additional_signing_certificate(CertificatePem::new("not a certificate")),
+            "additional signing certificate at index 0: the certificate does not load",
+        ),
+        (
+            Credentials::default()
+                .with_decryption_credential(pair(CERT, KEY))
+                .with_decryption_credential(pair(CERT, OTHER_KEY)),
+            "decryption credential at index 1: the private key does not match the certificate",
+        ),
+    ];
+
+    for (credentials, expected) in cases {
+        let sp = SpConfig::builder(
+            EntityId::try_new("https://sp.example.com/metadata")?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .credentials(credentials.clone())
+        .build();
+        let idp = IdpConfig::builder(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .credentials(credentials)
+        .build();
+
+        assert!(
+            matches!(&sp, Err(SamlError::Crypto { message, .. }) if message == expected),
+            "{expected}: {sp:?}"
+        );
+        assert!(
+            matches!(&idp, Err(SamlError::Crypto { message, .. }) if message == expected),
+            "{expected}: {idp:?}"
         );
     }
     Ok(())

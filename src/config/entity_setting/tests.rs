@@ -7,6 +7,9 @@ use crate::constants::{
 };
 use crate::error::SamlError;
 
+const PRIVKEY: &str = include_str!("../../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+
 #[test]
 fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
     use crate::config::{
@@ -31,8 +34,8 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
     .name_id_format(NameIdFormat::EmailAddress)
     .credentials(
         Credentials::default().with_signing_credential(X509Credential::new(
-            CertificatePem::new("dummy-signing-certificate-for-conversion-test"),
-            PrivateKeyPem::new("dummy-private-key-for-conversion-test"),
+            CertificatePem::new(CERT),
+            PrivateKeyPem::new(PRIVKEY),
         )),
     )
     .validation(SpValidationPolicy {
@@ -59,14 +62,8 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
         setting.entity_id.as_deref(),
         Some("https://sp.example.com/metadata")
     );
-    assert_eq!(
-        setting.private_key.as_deref(),
-        Some("dummy-private-key-for-conversion-test")
-    );
-    assert_eq!(
-        setting.signing_cert.as_deref(),
-        Some("dummy-signing-certificate-for-conversion-test")
-    );
+    assert_eq!(setting.private_key.as_deref(), Some(PRIVKEY));
+    assert_eq!(setting.signing_cert.as_deref(), Some(CERT));
     assert_eq!(
         setting.name_id_format,
         vec![name_id_format::EMAIL_ADDRESS.to_string()]

@@ -397,12 +397,12 @@ fn identity_provider_decrypts_an_encrypted_id_made_for_either_published_certific
         CertificatePem::new(NEXT_CERT),
         PrivateKeyPem::new(NEXT_PRIVKEY),
     ));
-    for encryption_cert in [CERT, NEXT_CERT] {
+    for (encryption_cert, decryption_key) in [(CERT, PRIVKEY), (NEXT_CERT, NEXT_PRIVKEY)] {
         let published = idp_with_credentials(
             XmlEncryptionPolicy::default(),
             signing_credentials().with_decryption_credential(X509Credential::new(
                 CertificatePem::new(encryption_cert),
-                PrivateKeyPem::new(PRIVKEY),
+                PrivateKeyPem::new(decryption_key),
             )),
         )?;
         let parties = Parties {
@@ -431,7 +431,7 @@ fn identity_provider_answers_an_encrypted_id_that_no_decryption_key_decrypts(
         XmlEncryptionPolicy::default(),
         signing_credentials().with_decryption_credential(X509Credential::new(
             CertificatePem::new(NEXT_CERT),
-            PrivateKeyPem::new(PRIVKEY),
+            PrivateKeyPem::new(NEXT_PRIVKEY),
         )),
     )?;
     let parties = Parties {
@@ -807,14 +807,11 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
 fn a_replayed_encrypted_id_is_rejected_before_it_is_decrypted(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    // Any attempt to decrypt fails, because this decryption key does not load.
-    let unloadable_key = idp_with_credentials(
-        XmlEncryptionPolicy::default(),
-        signing_credentials().with_decryption_credential(X509Credential::new(
-            CertificatePem::new(CERT),
-            PrivateKeyPem::new("not a private key"),
-        )),
-    )?;
+    // Any attempt to decrypt fails, because this provider allows no decryption
+    // work.
+    let mut no_decryption_work = XmlEncryptionPolicy::default();
+    no_decryption_work.max_decryption_work = 0;
+    let no_decryption = idp_with(no_decryption_work)?;
     let options =
         StartSlo::post().identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
     let sent = start(&parties, Initiator::Sp, options)?;
@@ -827,7 +824,7 @@ fn a_replayed_encrypted_id_is_rejected_before_it_is_decrypted(
     )?;
     assert_eq!(received.message().name_id(), Some(&principal()));
 
-    match unloadable_key.receive_slo(
+    match no_decryption.receive_slo(
         &parties.sp_descriptor,
         request_input(&sent.outbound, LogoutBinding::Post)?,
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache))

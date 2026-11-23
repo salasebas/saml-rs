@@ -510,7 +510,8 @@ pub enum SamlError {
     /// A required cryptographic key was missing.
     #[error("missing key: {0}")]
     MissingKey(String),
-    /// A delegated cryptographic operation failed.
+    /// A delegated cryptographic operation failed, or a configured key or
+    /// certificate cannot be used.
     #[error("crypto error: {message}")]
     #[non_exhaustive]
     Crypto {

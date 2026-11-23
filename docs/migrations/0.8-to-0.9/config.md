@@ -152,6 +152,51 @@ endpoint lists such as `acs_endpoints()`. Section
 to fill `Credentials` with `X509Credential`, which replaces
 `DecryptionCredential`.
 
+## Pass each key with the certificate of its key pair
+
+**Affects:** builds with a crypto provider feature that pass `Credentials`
+to `SpConfigBuilder::credentials` or `IdpConfigBuilder::credentials`.
+
+**Before:** `build()` checked only that a credential the selected policy
+needs was set. It did not read the PEM. A key or certificate that did not load
+built, and the metadata published the certificate text as written. The first
+signature or decryption then returned `SamlError::Crypto`. A signing key with
+the certificate of another key pair signed every message, and every peer
+rejected the signatures.
+
+**Now:** `build()` loads the key of the signing credential and of each
+decryption credential with its passphrase. It loads every certificate,
+including each additional signing certificate, and checks that each key is the
+private key of its certificate. A failure returns `SamlError::Crypto`. Its
+message names the credential, then the problem:
+
+| Problem | Cause |
+| --- | --- |
+| `the private key does not load` | The key is not PEM that the crypto provider reads, or its passphrase is wrong |
+| `the private key PEM holds only a public key` | The key field holds a certificate or a public key |
+| `the certificate does not load` | The certificate is not an X.509 certificate in PEM or base64 |
+| `the private key does not match the certificate` | The certificate holds the public key of another key pair |
+
+The credential is `signing credential`, `additional signing certificate at
+index N`, or `decryption credential at index N`, where `N` counts from zero
+in the order the credentials were added. When the provider reports why a key
+or certificate does not load, `std::error::Error::source` returns that
+report. A build without a crypto provider still checks only that each needed
+credential is set.
+
+**Upgrade:** pair each key with the certificate of its own public key. For a
+matching pair, these two commands print the same digest:
+
+```sh
+openssl pkey -in key.pem -pubout | openssl sha256
+openssl x509 -in cert.pem -noout -pubkey | openssl sha256
+```
+
+A test that built a config with placeholder text, such as
+`PrivateKeyPem::new("test key")`, needs a real key pair. A test that used a key
+that does not load to make every decryption fail can set
+`XmlEncryptionPolicy::max_decryption_work` to zero instead.
+
 ## Assign fields instead of writing a struct literal
 
 **Affects:** code that builds one of these structs with a struct literal,
