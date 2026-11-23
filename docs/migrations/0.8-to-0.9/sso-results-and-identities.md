@@ -395,3 +395,18 @@ let class = session
 # let _ = class;
 # }
 ```
+
+## Send at most one locality per statement
+
+**Affects:** service providers whose identity provider sends more than one
+SAML `SubjectLocality` child in one `AuthnStatement`.
+
+Ask the identity provider to send at most one locality per statement, as the
+assertion schema requires. Before the upgrade, the service provider reported
+the last locality. A statement without a `SubjectLocality` is still accepted.
+Each statement of an assertion can carry its own locality.
+
+If a configured schema validator rejects the document, the service provider
+returns `SamlError::Invalid` from that callback. If the document reaches the
+built-in statement reader, a repeated locality in the selected assertion
+returns `SamlError::ProtocolProfile`.
