@@ -1,7 +1,7 @@
 //! `<EncryptedID>` in the requested `<Subject>` of a received `<AuthnRequest>`.
 
 use crate::entity::EntitySetting;
-use crate::flow::FlowResult;
+use crate::flow::{FlowResult, MessageAuthentication};
 
 /// `flow` with the `<EncryptedID>` of its requested `<Subject>` replaced by
 /// the `<NameID>` it carries, decrypted with the identity provider's
@@ -19,29 +19,22 @@ use crate::flow::FlowResult;
 pub(super) fn decrypt_requested_subject(
     flow: FlowResult,
     setting: &EntitySetting,
-    message_authenticated: bool,
+    authentication: MessageAuthentication,
 ) -> Result<FlowResult, crate::error::SamlError> {
-    Ok(decrypted(&flow, setting, message_authenticated)?.unwrap_or(flow))
+    Ok(decrypted(&flow, setting, authentication)?.unwrap_or(flow))
 }
 
 #[cfg(crypto)]
 fn decrypted(
     flow: &FlowResult,
     setting: &EntitySetting,
-    message_authenticated: bool,
+    authentication: MessageAuthentication,
 ) -> Result<Option<FlowResult>, crate::error::SamlError> {
     use crate::constants::ParserType;
-    use crate::crypto::enc::{
-        decrypt_authn_request_encrypted_id, AssertionDecryptionOptions, RequestAuthentication,
-    };
+    use crate::crypto::enc::{decrypt_authn_request_encrypted_id, AssertionDecryptionOptions};
 
     let Some(key_pem) = setting.enc_private_key.as_deref() else {
         return Ok(None);
-    };
-    let authentication = if message_authenticated {
-        RequestAuthentication::Authenticated
-    } else {
-        RequestAuthentication::Unauthenticated
     };
     let Some(saml_content) = decrypt_authn_request_encrypted_id(
         &flow.saml_content,
@@ -80,7 +73,7 @@ fn decrypted(
 fn decrypted(
     _flow: &FlowResult,
     _setting: &EntitySetting,
-    _message_authenticated: bool,
+    _authentication: MessageAuthentication,
 ) -> Result<Option<FlowResult>, crate::error::SamlError> {
     Ok(None)
 }

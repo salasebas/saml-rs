@@ -528,7 +528,7 @@ fn detailed_verification_ignores_foreign_extension_certificate(
         XmlLimits::default(),
         XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
-    assert!(result.verified() && result.assertion_directly_covered());
+    assert!(verified(&result)?.assertion_directly_covered());
     Ok(())
 }
 
@@ -549,6 +549,17 @@ fn first_invalid_signature_prevents_later_valid_signature_from_authorizing_respo
     )?;
     assert_eq!(result, (false, None));
     Ok(())
+}
+
+fn verified(
+    result: &SignatureVerification,
+) -> Result<&VerifiedSignedContent, Box<dyn std::error::Error>> {
+    match result {
+        SignatureVerification::Verified(verified) => Ok(verified),
+        SignatureVerification::Absent | SignatureVerification::Unverified => {
+            Err(format!("expected a verified signature, got {result:?}").into())
+        }
+    }
 }
 
 fn assert_xml_signature_failure(result: Result<SignatureVerification, SamlError>) {
@@ -615,10 +626,10 @@ fn detailed_verification_excludes_valid_unrelated_signature_evidence(
         XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
 
-    let [signature] = result.verified_embedded_signatures() else {
+    let [signature] = verified(&result)?.signatures() else {
         return Err("expected only the Assertion-covering signature".into());
     };
-    assert!(result.verified() && result.assertion_directly_covered());
+    assert!(verified(&result)?.assertion_directly_covered());
     assert_eq!(signature.algorithm_uri(), RSA_SHA256);
     assert!(signature.assertion_directly_covered() && !signature.response_covered());
     Ok(())
@@ -679,10 +690,10 @@ fn strict_profile_rejects_foreign_xpath_transform_on_verified_assertion_signatur
         XmlLimits::default(),
         XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
-    let [signature] = compatible.verified_embedded_signatures() else {
+    let [signature] = verified(&compatible)?.signatures() else {
         return Err("expected the assertion-covering signature".into());
     };
-    assert!(compatible.verified() && compatible.assertion_directly_covered());
+    assert!(verified(&compatible)?.assertion_directly_covered());
     assert!(signature.assertion_directly_covered());
 
     let strict = verify_signatures_detailed_with_profile(
@@ -725,7 +736,7 @@ fn excluding_weak_algorithms_rejects_md5_and_ripemd160_but_keeps_sha1(
     ] {
         let signed = response_signed_over_assertion_with(algorithm, digest)?;
         let compatible = verify_under(&signed, XmlSignatureProfile::AllowWeakAlgorithms)?;
-        assert!(compatible.verified() && compatible.assertion_directly_covered());
+        assert!(verified(&compatible)?.assertion_directly_covered());
 
         let weak_excluded = verify_under(&signed, XmlSignatureProfile::ExcludeWeakAlgorithms);
         if excluded {
@@ -734,7 +745,10 @@ fn excluding_weak_algorithms_rejects_md5_and_ripemd160_but_keeps_sha1(
                 "{algorithm} with {digest}: {weak_excluded:?}"
             );
         } else {
-            assert!(weak_excluded?.verified(), "{algorithm} with {digest}");
+            assert!(
+                matches!(weak_excluded?, SignatureVerification::Verified(_)),
+                "{algorithm} with {digest}"
+            );
         }
     }
     Ok(())
@@ -808,10 +822,9 @@ fn detailed_rolling_cert_unloadable_peer_keeps_invalid_verdict(
             XmlLimits::default(),
             XmlSignatureProfile::AllowWeakAlgorithms,
         )?;
-        assert!(
-            !result.verified()
-                && !result.assertion_directly_covered()
-                && !result.response_covered(),
+        assert_eq!(
+            result,
+            SignatureVerification::Unverified,
             "unloadable leftover must not replace Invalid with Crypto"
         );
     }
@@ -859,7 +872,7 @@ fn rolling_cert_key_info_naming_another_trusted_cert_still_verifies(
             XmlLimits::default(),
             XmlSignatureProfile::AllowWeakAlgorithms,
         )?;
-        assert!(detailed.verified() && detailed.assertion_directly_covered());
+        assert!(verified(&detailed)?.assertion_directly_covered());
     }
     Ok(())
 }
@@ -908,8 +921,11 @@ fn rolling_certs_and_hmac_secret_verify_only_with_their_own_key(
 
     let rsa_key = read_private_key(SP_PRIVKEY, None)?;
     let rsa = sign_saml_xml(RESPONSE, false, &rsa_key, IDP_CERT, RSA_SHA256, &[], None)?;
-    assert!(verify(&rsa)?.verified());
-    assert!(verify(&sign_hmac(secret.as_bytes())?)?.verified());
+    assert!(matches!(verify(&rsa)?, SignatureVerification::Verified(_)));
+    assert!(matches!(
+        verify(&sign_hmac(secret.as_bytes())?)?,
+        SignatureVerification::Verified(_)
+    ));
 
     let base64 = normalize_cert_string(IDP_CERT);
     let pem = format!("-----BEGIN CERTIFICATE-----\n{base64}\n-----END CERTIFICATE-----\n");

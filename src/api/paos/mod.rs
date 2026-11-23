@@ -582,17 +582,18 @@ impl IdentityProvider {
             "SAMLRequest".into(),
             crate::binding::encode_base64(body.element_xml.as_bytes()),
         )]);
-        let (flow, message_authenticated) = self.engine().parse_login_request_at(
+        let received = self.engine().parse_login_request_at(
             raw_sp,
             crate::constants::Binding::Post,
             &http,
             validation.now(),
             validation.clock_skew(),
         )?;
+        let authentication = received.authentication();
         let flow = super::requested_subject::decrypt_requested_subject(
-            flow,
+            received.into_flow_result(),
             &self.engine().setting,
-            message_authenticated,
+            authentication,
         )?;
         let authn = AuthnRequest::try_from_paos_flow(flow)?;
         if let Some(destination) = authn.destination() {

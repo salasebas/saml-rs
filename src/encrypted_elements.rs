@@ -3,7 +3,7 @@
 
 use crate::constants::ParserType;
 use crate::error::SamlError;
-use crate::flow::FlowOptions;
+use crate::flow::{FlowOptions, MessageAuthentication};
 use crate::xml::XmlLimits;
 
 /// Reject a response with several assertions unless a verified signature
@@ -11,11 +11,12 @@ use crate::xml::XmlLimits;
 /// content that a verified signature covers.
 pub(crate) fn require_one_assertion_unless_message_authenticated(
     saml_content: &str,
-    message_authenticated: bool,
+    authentication: MessageAuthentication,
     limits: XmlLimits,
 ) -> Result<(), SamlError> {
-    if message_authenticated {
-        return Ok(());
+    match authentication {
+        MessageAuthentication::Authenticated => return Ok(()),
+        MessageAuthentication::Unauthenticated => {}
     }
     let document = crate::xml::dom::parse_document(saml_content, limits)?;
     let assertions = document

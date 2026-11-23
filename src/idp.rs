@@ -6,7 +6,7 @@ use crate::entity::{
     EntitySetting, IdpIssuanceWindow, User,
 };
 use crate::error::SamlError;
-use crate::flow::{FlowOptions, FlowResult, HttpRequest, SignatureCheck};
+use crate::flow::{FlowOptions, FlowResultWithSignatureEvidence, HttpRequest, SignatureCheck};
 use crate::metadata::{generate_idp_metadata, IdpMetadata, IdpMetadataInput};
 use crate::model::{
     validate_issued_name_id_length, validate_name_id_format, Attribute, AuthnContextReference,
@@ -525,7 +525,7 @@ impl Engine {
         request: &HttpRequest,
         now: SystemTime,
         clock_skew: ClockSkew,
-    ) -> Result<(FlowResult, bool), SamlError> {
+    ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
         self.parse_login_request_at_inner(sp, binding, request, Some(now), clock_skew)
     }
 
@@ -536,7 +536,7 @@ impl Engine {
         request: &HttpRequest,
         now: Option<SystemTime>,
         clock_skew: ClockSkew,
-    ) -> Result<(FlowResult, bool), SamlError> {
+    ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
         let signing_certs = sp
             .metadata
             .as_metadata()

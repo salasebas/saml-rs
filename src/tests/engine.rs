@@ -213,7 +213,7 @@ impl IdpMessages for idp::Engine {
                 SystemTime::now(),
                 clock_skew(&self.setting),
             )?
-            .0)
+            .into_flow_result())
     }
 }
 
@@ -382,7 +382,7 @@ pub(crate) fn parse_logout_response(
 
 /// Run the receive flow that `opts` describes against `request`.
 pub(crate) fn flow(opts: &FlowOptions<'_>, request: &HttpRequest) -> Result<FlowResult, SamlError> {
-    Ok(flow_with_authentication(opts, request)?.0)
+    Ok(flow_with_authentication(opts, request)?.into_flow_result())
 }
 
 /// `raw_xml` with each `{key}` placeholder of `tags` filled.

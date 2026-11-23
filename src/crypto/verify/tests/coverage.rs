@@ -49,10 +49,11 @@ fn detailed_verification_reports_one_signature_covering_response_and_assertion(
         XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
 
-    let [signature] = result.verified_embedded_signatures() else {
+    let result = verified(&result)?;
+    let [signature] = result.signatures() else {
         return Err("expected one verified embedded signature".into());
     };
-    assert!(result.verified() && result.assertion_directly_covered());
+    assert!(result.assertion_directly_covered());
     assert!(result.response_covered());
     assert_eq!(signature.algorithm_uri(), RSA_SHA512);
     assert!(signature.assertion_directly_covered() && signature.response_covered());
@@ -171,10 +172,7 @@ fn substring_and_foreign_namespace_roots_skip_response_wrapping(
             XmlLimits::default(),
             XmlSignatureProfile::AllowWeakAlgorithms,
         )?;
-        assert!(
-            !detailed.verified() && !detailed.response_covered(),
-            "{xml}"
-        );
+        assert_eq!(detailed, SignatureVerification::Absent, "{xml}");
     }
     Ok(())
 }
@@ -209,8 +207,8 @@ fn assert_both_verifiers_agree(
     response_covered: bool,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
     let certificates = [SP_SIGNING_CERT.to_string()];
-    let (verified, content) = verify_signature(signed, &certificates)?;
-    assert!(verified);
+    let (first_verified, content) = verify_signature(signed, &certificates)?;
+    assert!(first_verified);
     let detailed = verify_signatures_detailed_with_profile(
         signed,
         &certificates,
@@ -218,11 +216,10 @@ fn assert_both_verifiers_agree(
         XmlLimits::default(),
         XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
-    assert!(detailed.verified());
+    let detailed = verified(&detailed)?;
     assert_eq!(detailed.response_covered(), response_covered);
     assert!(!detailed.assertion_directly_covered());
-    let detailed_content = detailed.into_signed_content();
-    assert_eq!(content.as_deref(), detailed_content.as_deref());
+    assert_eq!(content.as_deref(), Some(detailed.content()));
     Ok(content)
 }
 
@@ -298,7 +295,8 @@ fn detailed_verification_aggregates_rolling_cert_coverage_after_first_signature_
         XmlLimits::default(),
         XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
-    assert!(result.verified() && result.assertion_directly_covered() && result.response_covered());
-    assert_eq!(result.verified_embedded_signatures().len(), 2);
+    let result = verified(&result)?;
+    assert!(result.assertion_directly_covered() && result.response_covered());
+    assert_eq!(result.signatures().len(), 2);
     Ok(())
 }

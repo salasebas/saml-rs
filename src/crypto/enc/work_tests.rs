@@ -4,6 +4,7 @@ use crate::constants::{
     data_encryption_algorithm::AES_256_GCM, key_encryption_algorithm::RSA_OAEP_MGF1P,
 };
 use crate::crypto::keys::read_private_key;
+use crate::flow::MessageAuthentication;
 use crate::xml::XmlLimits;
 
 const KEY: &str = include_str!("../../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -31,7 +32,7 @@ fn unsigned_requested_subject_uses_the_canonicalized_data_algorithm(
         &[],
         AssertionDecryptionOptions::default(),
         XmlLimits::default(),
-        RequestAuthentication::Unauthenticated,
+        MessageAuthentication::Unauthenticated,
     )?
     .is_none());
     assert!(decrypt_authn_request_encrypted_id(
@@ -41,7 +42,7 @@ fn unsigned_requested_subject_uses_the_canonicalized_data_algorithm(
         &[],
         AssertionDecryptionOptions::default(),
         XmlLimits::default(),
-        RequestAuthentication::Authenticated,
+        MessageAuthentication::Authenticated,
     )?
     .is_some());
     Ok(())
@@ -105,7 +106,7 @@ fn other_inbound_encrypted_elements_preflight_the_document(
                 &[] as &[X509Credential],
                 options,
                 limits,
-                RequestAuthentication::Unauthenticated,
+                MessageAuthentication::Unauthenticated,
             )
             .map(|_| ()),
             decrypt_logout_request_encrypted_id(&logout, &keys, options, limits).map(|_| ()),

@@ -5,7 +5,7 @@ use super::response_issuer::validate_response_issuer;
 use super::{
     signature_is_present, validate_in_response_to, validate_message_destination,
     verify_and_prepare, verify_detached, verify_present_signatures, AssertionSignatureRequirement,
-    FlowOptions, HttpRequest, ResponseSignatureRequirement, SignatureCheck,
+    FlowOptions, HttpRequest, MessageAuthentication, ResponseSignatureRequirement, SignatureCheck,
     SignedMessageDestination,
 };
 use crate::constants::{Binding, ParserType};
@@ -21,7 +21,7 @@ pub(super) fn validate_error_response(
     expected_recipient: Option<&str>,
     signed_destination: SignedMessageDestination,
 ) -> Result<(), SamlError> {
-    let message_authenticated = verify_present_signature(opts, request, binding, xml, root)?;
+    let authentication = verify_present_signature(opts, request, binding, xml, root)?;
     if let Some(expected) = opts.from_issuer {
         validate_response_issuer(expected, xml, opts.xml_limits)?;
     }
@@ -34,7 +34,7 @@ pub(super) fn validate_error_response(
         ParserType::SamlResponse,
         &extracted,
         expected_recipient,
-        message_authenticated,
+        authentication,
         signed_destination,
     )
 }
@@ -45,7 +45,7 @@ fn verify_present_signature(
     binding: Binding,
     xml: &str,
     root: &crate::xml::dom::Node,
-) -> Result<bool, SamlError> {
+) -> Result<MessageAuthentication, SamlError> {
     let verify = match opts.signature_check {
         SignatureCheck::Skip => false,
         SignatureCheck::VerifyIfPresent | SignatureCheck::Require => {
@@ -53,13 +53,13 @@ fn verify_present_signature(
         }
     };
     if !verify {
-        return Ok(false);
+        return Ok(MessageAuthentication::Unauthenticated);
     }
     match binding {
         Binding::Redirect | Binding::SimpleSign => {
             verify_detached(binding, ParserType::SamlResponse, request, opts, xml)?;
             verify_present_signatures(xml, opts)?;
-            Ok(true)
+            Ok(MessageAuthentication::Authenticated)
         }
         Binding::Post | Binding::Artifact | Binding::Soap => {
             let signature_only = FlowOptions {
@@ -74,7 +74,7 @@ fn verify_present_signature(
                 AssertionSignatureRequirement::Compatible,
                 ResponseSignatureRequirement::Optional,
             )?
-            .message_authenticated)
+            .authentication)
         }
     }
 }
