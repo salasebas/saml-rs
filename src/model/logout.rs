@@ -130,7 +130,11 @@ impl LogoutRequest {
         &self.issuer
     }
 
-    /// NameID, when present.
+    /// The plaintext or decrypted `NameID`.
+    ///
+    /// Returns `None` for a `BaseID`, including a decrypted `BaseID`, or when
+    /// the request's `EncryptedID` could not be decrypted. See
+    /// [`crate::ServiceProvider::receive_slo`] for the receive contract.
     pub fn name_id(&self) -> Option<&NameId> {
         self.name_id.as_ref()
     }

@@ -281,7 +281,8 @@ pub enum SamlError {
     },
 
     // Unsupported profiles and bindings.
-    /// Functionality not yet implemented in the current milestone.
+    /// An operation or input is unsupported, including operations that
+    /// require a Cargo feature disabled in this build.
     #[error("unsupported: {0}")]
     Unsupported(String),
     /// The called operation does not handle this binding.

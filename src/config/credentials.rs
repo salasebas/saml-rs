@@ -26,7 +26,7 @@ impl fmt::Debug for PrivateKeyPem {
     }
 }
 
-/// PEM-encoded X.509 certificate material.
+/// X.509 certificate text for credentials or metadata trust.
 ///
 /// `Debug` avoids printing the certificate body by default because certificate
 /// fields often travel beside private key configuration.
@@ -34,7 +34,11 @@ impl fmt::Debug for PrivateKeyPem {
 pub struct CertificatePem(String);
 
 impl CertificatePem {
-    /// Wrap PEM-encoded certificate material.
+    /// Store X.509 certificate text as supplied.
+    ///
+    /// Local [`Credentials`] and pinned metadata signature verification
+    /// accept either a PEM certificate or bare base64-encoded DER. For pinned
+    /// certificates, see [`crate::MetadataTrustPolicy::RequireSignature`].
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }

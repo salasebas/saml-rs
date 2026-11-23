@@ -228,7 +228,11 @@ impl<Message> Inbound<Message> {
         })
     }
 
-    /// Binding the message arrived on.
+    /// Binding selected by the constructor used to create this input.
+    ///
+    /// [`crate::IdentityProvider::receive_sso`] processes an `AuthnRequest`
+    /// supplied through [`Self::simple_sign`] as HTTP-POST when the form
+    /// contains neither `Signature` nor `SigAlg`.
     pub fn binding(&self) -> Binding {
         match self.transport {
             Transport::Redirect { .. } => Binding::Redirect,
