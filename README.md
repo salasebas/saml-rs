@@ -107,7 +107,6 @@ cargo run -p saml-rs --example sso
 | Area | Typed `ServiceProvider` and `IdentityProvider` API |
 | --- | --- |
 | Web SSO | The SP sends `AuthnRequest` over HTTP-POST, HTTP-Redirect, or HTTP-POST-SimpleSign. The IdP sends `Response` over HTTP-POST, HTTP-POST-SimpleSign, or HTTP-Artifact |
-| Enhanced Client/Proxy | The service provider uses PAOS with the enhanced client. The identity provider uses SOAP with the enhanced client |
 | Single Logout | HTTP-POST, HTTP-Redirect, HTTP-POST-SimpleSign, and SOAP |
 | Metadata | Parse peer metadata, generate SP and IdP metadata, verify signed metadata |
 | Artifact resolution | SOAP `ArtifactResolve` and `ArtifactResponse` |
@@ -128,7 +127,7 @@ is out of scope, is in the [conformance records](docs/conformance/).
   and `InResponseTo` checks on responses.
 - Bounded HTTP-Redirect DEFLATE output.
 - Optional schema validation through `XmlPolicy::schema_validator`, scoped to
-  each local role. It covers received protocol XML, SOAP and PAOS envelopes,
+  each local role. It covers received protocol XML, SOAP envelopes,
   and decrypted protocol documents. Import peer metadata with
   `IdpDescriptor::from_metadata_xml_with_policy` or
   `SpDescriptor::from_metadata_xml_with_policy` to apply it there too. The

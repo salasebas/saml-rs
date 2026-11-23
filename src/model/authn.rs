@@ -164,34 +164,6 @@ impl AuthnRequest {
 
 impl AuthnRequest {
     pub(crate) fn from_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
-        Self::from_flow_with(raw_flow, optional_response_binding)
-    }
-}
-
-impl AuthnRequest {
-    /// Typed request from the SOAP leg of Enhanced Client/Proxy SSO.
-    ///
-    /// A `ProtocolBinding` that names the PAOS binding is reported as none.
-    /// One that names HTTP-Artifact is rejected.
-    pub(crate) fn try_from_paos_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
-        Self::from_flow_with(raw_flow, |extract| {
-            if extract.get_str(request::PROTOCOL_BINDING) == Some(PAOS_BINDING) {
-                return Ok(None);
-            }
-            match optional_response_binding(extract)? {
-                Some(SsoResponseBinding::Artifact) => Err(SamlError::UnsupportedBinding {
-                    binding: Binding::Artifact,
-                }),
-                binding @ (Some(SsoResponseBinding::Post | SsoResponseBinding::SimpleSign)
-                | None) => Ok(binding),
-            }
-        })
-    }
-
-    fn from_flow_with(
-        raw_flow: FlowResult,
-        response_binding: fn(&crate::util::Value) -> Result<Option<SsoResponseBinding>, SamlError>,
-    ) -> Result<Self, SamlError> {
         let id = MessageId::try_new(required_str(&raw_flow.extract, request::ID)?)?;
         let issue_instant = required_saml_utc_instant(
             raw_flow.extract.get_str(request::ISSUE_INSTANT),
@@ -202,7 +174,7 @@ impl AuthnRequest {
         let destination = optional_endpoint(&raw_flow.extract, request::DESTINATION)?;
         let acs_url =
             optional_endpoint(&raw_flow.extract, request::ASSERTION_CONSUMER_SERVICE_URL)?;
-        let protocol_binding = response_binding(&raw_flow.extract)?;
+        let protocol_binding = optional_response_binding(&raw_flow.extract)?;
         let acs_index = optional_u16(&raw_flow.extract, request::ASSERTION_CONSUMER_SERVICE_INDEX)?;
         let name_id_policy = name_id_policy_from_extract(&raw_flow.extract)?;
         let force_authn = optional_flag(&raw_flow.extract, request::FORCE_AUTHN, "ForceAuthn")?
@@ -357,8 +329,6 @@ fn single_text<'a>(
         }
     }
 }
-
-const PAOS_BINDING: &str = "urn:oasis:names:tc:SAML:2.0:bindings:PAOS";
 
 fn optional_response_binding(
     extract: &crate::util::Value,

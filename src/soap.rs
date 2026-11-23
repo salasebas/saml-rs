@@ -211,7 +211,7 @@ impl SoapProtocolMessage {
     /// not contain exactly one element, or a SOAP header requires processing
     /// this crate does not provide.
     pub fn from_envelope(envelope: &str) -> Result<Self, SamlError> {
-        let body = read_soap_body(envelope, XmlLimits::default(), &[])?;
+        let body = read_soap_body(envelope, XmlLimits::default())?;
         Ok(Self {
             local_name: body.local_name,
             namespace: body.namespace,
@@ -239,83 +239,36 @@ pub(crate) struct SoapBody {
     pub(crate) local_name: String,
     pub(crate) namespace: String,
     pub(crate) xml: String,
-    /// Header entries addressed to this receiver, in document order.
-    pub(crate) header: Vec<HeaderEntry>,
-}
-
-/// One child of the SOAP `Header`.
-pub(crate) struct HeaderEntry {
-    /// Namespace URI of the element, empty when it has none.
-    pub(crate) namespace: String,
-    pub(crate) node: Node,
-}
-
-/// A header entry the caller processes, so `mustUnderstand` does not refuse it.
-pub(crate) struct UnderstoodHeader {
-    pub(crate) namespace: &'static str,
-    pub(crate) local_name: &'static str,
 }
 
 /// Read the single SAML element of a SOAP 1.1 body.
 ///
-/// A locally addressed header entry with SOAP `mustUnderstand` set is refused unless it is
-/// listed in `understood`.
-pub(crate) fn read_soap_body(
-    envelope: &str,
-    limits: XmlLimits,
-    understood: &[UnderstoodHeader],
-) -> Result<SoapBody, SamlError> {
+/// A locally addressed header entry with SOAP `mustUnderstand` set is refused.
+pub(crate) fn read_soap_body(envelope: &str, limits: XmlLimits) -> Result<SoapBody, SamlError> {
     let document = dom::parse_document(envelope, limits)?;
-    let scan = scan_envelope(envelope, understood)?;
+    let scan = scan_envelope(envelope)?;
     let child_namespace = scan
         .child
         .ok_or_else(|| SamlError::xml("SOAP body must contain one SAML protocol element"))?;
-    let parts = envelope_parts(&document.root)?;
-    let child = single_element_child(parts.body)?;
+    let child = single_element_child(envelope_body(&document.root)?)?;
     if child.local_name != child_namespace.local_name {
         return Err(SamlError::xml(
             "SOAP body element does not match its namespace declaration",
         ));
     }
-    let header_children = parts.header.map_or(&[][..], |header| &header.children);
-    if header_children.len() != scan.local_header_namespaces.len() {
-        return Err(SamlError::xml(
-            "SOAP header entries do not match their namespace declarations",
-        ));
-    }
-    let header = scan
-        .local_header_namespaces
-        .into_iter()
-        .zip(header_children)
-        .filter_map(|(namespace, node)| {
-            namespace.map(|namespace| HeaderEntry {
-                namespace,
-                node: node.clone(),
-            })
-        })
-        .collect();
     Ok(SoapBody {
         local_name: child.local_name.clone(),
         namespace: child_namespace.namespace,
         xml: standalone_element(envelope, child.start, child.end)?,
-        header,
     })
 }
 
-pub(crate) struct EnvelopeParts<'a> {
-    pub(crate) header: Option<&'a Node>,
-    pub(crate) body: &'a Node,
-}
-
-pub(crate) fn envelope_parts(envelope: &Node) -> Result<EnvelopeParts<'_>, SamlError> {
+/// The `Body` of an envelope whose children are an optional `Header` and one
+/// `Body`.
+fn envelope_body(envelope: &Node) -> Result<&Node, SamlError> {
     match envelope.children.as_slice() {
-        [body] if body.local_name == "Body" => Ok(EnvelopeParts { header: None, body }),
-        [header, body] if header.local_name == "Header" && body.local_name == "Body" => {
-            Ok(EnvelopeParts {
-                header: Some(header),
-                body,
-            })
-        }
+        [body] if body.local_name == "Body" => Ok(body),
+        [header, body] if header.local_name == "Header" && body.local_name == "Body" => Ok(body),
         _ => Err(SamlError::ProtocolProfile(
             "SOAP envelope must contain an optional Header followed by one Body".into(),
         )),
@@ -358,7 +311,7 @@ fn single_element_child(body: &Node) -> Result<&Node, SamlError> {
     Ok(child)
 }
 
-fn scan_envelope(xml: &str, understood: &[UnderstoodHeader]) -> Result<SoapScan, SamlError> {
+fn scan_envelope(xml: &str) -> Result<SoapScan, SamlError> {
     let mut reader = NsReader::from_str(xml);
     let mut buf = Vec::new();
     let mut depth = 0usize;
@@ -368,10 +321,10 @@ fn scan_envelope(xml: &str, understood: &[UnderstoodHeader]) -> Result<SoapScan,
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(element)) => {
                 depth += 1;
-                observe_start(&reader, &element, depth, &mut scan, false, understood)?;
+                observe_start(&reader, &element, depth, &mut scan, false)?;
             }
             Ok(Event::Empty(element)) => {
-                observe_start(&reader, &element, depth + 1, &mut scan, true, understood)?;
+                observe_start(&reader, &element, depth + 1, &mut scan, true)?;
             }
             Ok(Event::End(_)) => {
                 if scan.in_header && depth == scan.header_depth {
@@ -409,7 +362,6 @@ struct SoapScan {
     body_depth: usize,
     body_children: usize,
     child: Option<NamedNamespace>,
-    local_header_namespaces: Vec<Option<String>>,
 }
 
 fn observe_start(
@@ -418,7 +370,6 @@ fn observe_start(
     depth: usize,
     scan: &mut SoapScan,
     empty: bool,
-    understood: &[UnderstoodHeader],
 ) -> Result<(), SamlError> {
     let (namespace, local_name) = reader.resolver().resolve_element(element.name());
     let local_name = local_name.as_ref().to_string();
@@ -458,22 +409,13 @@ fn observe_start(
         return Ok(());
     }
 
-    if scan.in_header && depth == scan.header_depth + 1 {
-        let namespace = namespace.unwrap_or("");
-        let processing = header_processing(reader, element)?;
-        if matches!(processing, HeaderProcessing::Mandatory)
-            && !understood
-                .iter()
-                .any(|header| header.namespace == namespace && header.local_name == local_name)
-        {
-            return Err(SamlError::xml(
-                "SOAP header requires processing this responder does not provide",
-            ));
-        }
-        scan.local_header_namespaces.push(match processing {
-            HeaderProcessing::OtherActor => None,
-            HeaderProcessing::Optional | HeaderProcessing::Mandatory => Some(namespace.to_owned()),
-        });
+    if scan.in_header
+        && depth == scan.header_depth + 1
+        && requires_local_processing(reader, element)?
+    {
+        return Err(SamlError::xml(
+            "SOAP header requires processing this responder does not provide",
+        ));
     }
 
     if scan.in_body && depth == scan.body_depth + 1 {
@@ -491,17 +433,13 @@ fn observe_start(
     Ok(())
 }
 
-enum HeaderProcessing {
-    OtherActor,
-    Optional,
-    Mandatory,
-}
-
-fn header_processing(
+/// Whether a header entry is addressed to this receiver, through no SOAP
+/// `actor` or the `next` actor, and sets SOAP `mustUnderstand`.
+fn requires_local_processing(
     reader: &NsReader<&[u8]>,
     element: &BytesStart<'_>,
-) -> Result<HeaderProcessing, SamlError> {
-    let mut processing = HeaderProcessing::Optional;
+) -> Result<bool, SamlError> {
+    let mut must_understand = false;
     for attribute in element.attributes() {
         let attribute = attribute.map_err(xml_err)?;
         let (namespace, local_name) = reader.resolver().resolve_attribute(attribute.key);
@@ -524,15 +462,15 @@ fn header_processing(
                     "" | SOAP_ACTOR_NEXT
                 ) =>
             {
-                return Ok(HeaderProcessing::OtherActor);
+                return Ok(false);
             }
             "mustUnderstand" if matches!(value.trim(), "1" | "true") => {
-                processing = HeaderProcessing::Mandatory;
+                must_understand = true;
             }
             _ => {}
         }
     }
-    Ok(processing)
+    Ok(must_understand)
 }
 
 fn bound_namespace(result: ResolveResult<'_>) -> Option<&str> {

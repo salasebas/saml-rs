@@ -23,9 +23,9 @@ impl AuthnRequestPreferences<'_> {
     }
 }
 
-/// The protocol and ECP schemas type `ProviderName` as `xs:string`, which
-/// allows an empty name.
-pub(crate) fn validate_provider_name(provider_name: &str) -> Result<(), crate::error::SamlError> {
+/// The protocol schema types `ProviderName` as `xs:string`, which allows an
+/// empty name.
+fn validate_provider_name(provider_name: &str) -> Result<(), crate::error::SamlError> {
     if provider_name.chars().all(crate::xml::is_xml_char) {
         return Ok(());
     }

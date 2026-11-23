@@ -47,13 +47,12 @@ pub trait PostMessage: sealed::Sealed {}
 /// A Single Logout message that [`Inbound::soap`] reads from a SOAP exchange.
 ///
 /// It bounds [`Inbound::soap`]. The trait is sealed: saml-rs implements it for
-/// `LogoutRequest` and `LogoutResponse`, and other crates cannot. A PAOS
-/// message and a SOAP `ManageNameIDRequest` have their own operations, which
-/// take the envelope.
+/// `LogoutRequest` and `LogoutResponse`, and other crates cannot. A SOAP
+/// `ManageNameIDRequest` has its own operations, which take the envelope.
 #[diagnostic::on_unimplemented(
     message = "`Inbound::soap` does not read `{Self}`",
     label = "no `Inbound::soap` input for `{Self}`",
-    note = "`Inbound::soap` reads SOAP Single Logout messages; PAOS and SOAP name identifier management have their own operations"
+    note = "`Inbound::soap` reads SOAP Single Logout messages; SOAP name identifier management has its own operations"
 )]
 pub trait SoapMessage: sealed::Sealed {}
 
@@ -365,7 +364,7 @@ fn soap_request(
     limits: XmlLimits,
     schema_validator: Option<crate::SchemaValidator>,
 ) -> Result<HttpRequest, SamlError> {
-    let body = read_soap_body(envelope, limits, &[])?;
+    let body = read_soap_body(envelope, limits)?;
     crate::schema::validate(envelope, schema_validator)?;
     Ok(HttpRequest::post(vec![(
         expected_message.param_name().to_string(),

@@ -324,7 +324,6 @@
 //! - Artifact resolution
 //! - Single Logout at both the identity provider and the service provider
 //! - Name identifier management at the identity provider
-//! - Enhanced Client/Proxy SSO at the identity provider (the service provider uses PAOS)
 //!
 //! ## Unsupported profiles
 //!
@@ -334,7 +333,7 @@
 //! - Name identifier mapping
 //! - Other SOAP profiles
 //! - Metadata federation
-//! - The enhanced-client role in Enhanced Client/Proxy SSO
+//! - Enhanced Client/Proxy SSO and its PAOS binding
 //!
 //! To request support for a profile, open an issue with the profile, binding,
 //! peer product, and a minimal expected flow.
@@ -353,9 +352,8 @@
 //!
 //! The `serde` feature, off by default, implements `Serialize` and
 //! `Deserialize` for [`PendingAuthnRequestSnapshot`],
-//! [`PendingLogoutRequestSnapshot`], [`PendingManageNameIdRequestSnapshot`],
-//! and [`PendingPaosSsoSnapshot`], so you can keep pending state in a session
-//! store as JSON.
+//! [`PendingLogoutRequestSnapshot`], and [`PendingManageNameIdRequestSnapshot`],
+//! so you can keep pending state in a session store as JSON.
 
 #![forbid(unsafe_code)]
 
@@ -419,11 +417,9 @@ mod xml;
 mod tests;
 
 pub use api::{
-    check_paos_client_headers, ForceAuthn, IdentityProvider, IsPassive, MessageDelivery,
-    NameIdManagementRedirectReceipt, PaosHttpResponse, PendingPaosSso, PendingPaosSsoSnapshot,
+    ForceAuthn, IdentityProvider, IsPassive, MessageDelivery, NameIdManagementRedirectReceipt,
     ReceiveNameIdManagement, RespondNameIdManagement, RespondSlo, RespondSso, ServiceProvider,
-    SoapFault, SsoAssertion, SsoOutcome, StartNameIdManagement, StartPaosSso, StartSlo, StartSso,
-    StartedPaosSso,
+    SsoAssertion, SsoOutcome, StartNameIdManagement, StartSlo, StartSso,
 };
 pub use artifact::{
     AnsweredArtifact, Artifact, ArtifactRelease, ArtifactResolution, ArtifactWithheld,

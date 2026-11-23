@@ -1,7 +1,7 @@
 # Honor the requested NameID format
 
 This change affects identity providers that answer an `AuthnRequest` with
-`respond_sso`, `respond_sso_artifact`, or `respond_paos_sso`.
+`respond_sso` or `respond_sso_artifact`.
 When the requester names a specific standard format in `NameIDPolicy`, the
 IdP checks the identifier's effective format before it issues an assertion.
 

@@ -40,16 +40,6 @@ impl DefaultMarking {
     }
 }
 
-impl AcsMetadataEndpoint {
-    /// Whether the binding is HTTP-POST or HTTP-POST-SimpleSign.
-    pub(crate) fn accepts_posted_response(&self) -> bool {
-        match self.binding {
-            Binding::Post | Binding::SimpleSign => true,
-            Binding::Redirect | Binding::Artifact | Binding::Soap => false,
-        }
-    }
-}
-
 /// Parsed SP metadata. Use [`Self::as_metadata`] for role-scoped shared fields.
 #[derive(Debug, Clone)]
 pub struct SpMetadata {
@@ -220,27 +210,6 @@ impl SpMetadata {
         Ok(first)
     }
 
-    /// Assertion consumer locations a response can be posted to, in metadata
-    /// order.
-    pub(crate) fn assertion_consumer_locations(&self) -> Vec<String> {
-        self.posted_response_endpoints()
-            .into_iter()
-            .map(|endpoint| endpoint.location)
-            .collect()
-    }
-
-    /// Default assertion consumer location a response can be posted to.
-    ///
-    /// The candidates are the HTTP-POST and HTTP-POST-SimpleSign endpoints.
-    /// Selection uses the same default rule as
-    /// [`Self::assertion_consumer_location`].
-    pub(crate) fn default_assertion_consumer_location(&self) -> Option<String> {
-        select_indexed_default(self.posted_response_endpoints(), |endpoint| {
-            endpoint.is_default
-        })
-        .map(|endpoint| endpoint.location)
-    }
-
     /// Every `AssertionConsumerService` location published for `binding`, in
     /// metadata order.
     pub(crate) fn assertion_consumer_service_locations(&self, binding: Binding) -> Vec<String> {
@@ -256,14 +225,6 @@ impl SpMetadata {
         self.assertion_consumer_service_endpoints()
             .iter()
             .any(|endpoint| endpoint.binding == binding && endpoint.location == location)
-    }
-
-    /// HTTP-POST and HTTP-POST-SimpleSign assertion consumer endpoints.
-    fn posted_response_endpoints(&self) -> Vec<AcsMetadataEndpoint> {
-        self.assertion_consumer_service_endpoints()
-            .into_iter()
-            .filter(AcsMetadataEndpoint::accepts_posted_response)
-            .collect()
     }
 
     fn assertion_consumer_service_endpoints(&self) -> Vec<AcsMetadataEndpoint> {

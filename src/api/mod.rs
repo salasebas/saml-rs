@@ -113,7 +113,6 @@ mod artifact;
 mod idp;
 mod name_id_management;
 mod options;
-mod paos;
 mod raw_mapping;
 mod requested_subject;
 mod response_acs;
@@ -128,10 +127,6 @@ pub use name_id_management::NameIdManagementRedirectReceipt;
 pub use options::{
     ForceAuthn, IsPassive, MessageDelivery, ReceiveNameIdManagement, RespondNameIdManagement,
     RespondSlo, RespondSso, StartNameIdManagement, StartSlo, StartSso,
-};
-pub use paos::{
-    check_paos_client_headers, PaosHttpResponse, PendingPaosSso, PendingPaosSsoSnapshot, SoapFault,
-    StartPaosSso, StartedPaosSso,
 };
 pub use sp::ServiceProvider;
 pub use sso_outcome::{SsoAssertion, SsoOutcome};

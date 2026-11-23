@@ -6,26 +6,17 @@ use policies_without_crypto::sp_validation_without_crypto;
 use std::time::SystemTime;
 
 use saml_rs::{
-    AcsEndpoint, EndpointUrl, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
-    Inbound, MetadataTrustPolicy, ReplayPolicy, SamlError, SamlValidationContext, SchemaValidator,
+    AcsEndpoint, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor, Inbound,
+    MetadataTrustPolicy, ReplayPolicy, SamlError, SamlValidationContext, SchemaValidator,
     ServiceProvider, SpConfig, SpDescriptor, SsoEndpoint, StartSso, XmlPolicy,
 };
 
 const SP: &str = "https://sp.example.com/metadata";
 const IDP: &str = "https://idp.example.com/metadata";
-const SOAP: &str = "https://idp.example.com/sso";
 const REJECTED: &str = "schema rejected peer XML";
 
 fn reject_xml(_: &str) -> Result<(), String> {
     Err(REJECTED.into())
-}
-
-fn reject_envelope(xml: &str) -> Result<(), String> {
-    let document = roxmltree::Document::parse(xml).map_err(|error| error.to_string())?;
-    if document.root_element().tag_name().name() == "Envelope" {
-        reject_xml(xml)?;
-    }
-    Ok(())
 }
 
 fn policy(validator: Option<SchemaValidator>) -> XmlPolicy {
@@ -117,40 +108,6 @@ fn typed_schema_policy_is_isolated_and_can_be_disabled() -> Result<(), Box<dyn s
     assert_rejected(rejecting.receive_sso(&peer, Inbound::post(fields.clone()), validation()));
     accepting.receive_sso(&peer, Inbound::post(fields.clone()), validation())?;
     assert_rejected(rejecting.receive_sso(&peer, Inbound::post(fields), validation()));
-    Ok(())
-}
-
-#[test]
-fn schema_policy_covers_paos_envelope() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp()?;
-    let idp = idp(Some(reject_envelope))?;
-    let peer = SpDescriptor::from_metadata_xml(
-        EntityId::try_new(SP)?,
-        sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
-    )?;
-    let destination = IdpDescriptor::from_metadata_xml(
-        EntityId::try_new(IDP)?,
-        idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
-    )?;
-    use base64::Engine;
-    let started = sp.start_sso(&destination, StartSso::post())?;
-    let xml = String::from_utf8(
-        base64::engine::general_purpose::STANDARD.decode(
-            started
-                .outbound
-                .post_form()?
-                .value("SAMLRequest")
-                .ok_or("missing SAMLRequest")?,
-        )?,
-    )?;
-    let envelope = format!(
-        r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>{xml}</soap:Body></soap:Envelope>"#
-    );
-    let soap_endpoint = EndpointUrl::try_new(SOAP)?;
-    assert_rejected(idp.receive_paos_sso(&peer, &envelope, &soap_endpoint, validation()));
-    self::idp(None)?.receive_paos_sso(&peer, &envelope, &soap_endpoint, validation())?;
     Ok(())
 }
 

@@ -24,10 +24,10 @@ use time::{Duration, OffsetDateTime};
 
 const REPLAY_EXPIRATION_FIELD: TimeWindowField = TimeWindowField::ReplayExpiration;
 
-/// The SAML `<Response>` of a Web Browser SSO or ECP login, as a message type.
+/// The SAML `<Response>` of a Web Browser SSO login, as a message type.
 ///
-/// It names the message in [`crate::Inbound`], [`crate::Outbound`], and
-/// [`crate::PaosHttpResponse`]. It has no values: a service provider receives
+/// It names the message in [`crate::Inbound`] and [`crate::Outbound`]. It has
+/// no values: a service provider receives
 /// the accepted response as an [`SsoSession`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SsoResponse {}

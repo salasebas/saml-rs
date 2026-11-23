@@ -261,7 +261,7 @@ impl ArtifactResolution {
     /// from the identity provider, the status is not success, or the response
     /// does not contain one SAML protocol element.
     pub fn finish(&self, response_envelope: &str) -> Result<ResolvedProtocolMessage, SamlError> {
-        let body = read_soap_body(response_envelope, self.xml_limits, &[])?;
+        let body = read_soap_body(response_envelope, self.xml_limits)?;
         crate::schema::validate(response_envelope, self.schema_validator)?;
         if body.local_name != "ArtifactResponse" || body.namespace != namespace::PROTOCOL {
             return Err(SamlError::ProtocolProfile(
@@ -506,7 +506,7 @@ pub(crate) fn answer(
         .entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?
         .to_string();
-    let body = read_soap_body(request_envelope, setting.xml_limits, &[])?;
+    let body = read_soap_body(request_envelope, setting.xml_limits)?;
     crate::schema::validate(request_envelope, setting.schema_validator)?;
     if body.local_name != "ArtifactResolve" || body.namespace != namespace::PROTOCOL {
         return Err(SamlError::ProtocolProfile(

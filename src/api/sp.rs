@@ -109,8 +109,8 @@ impl ResponseParseInput {
 /// A SAML service provider built from an [`SpConfig`].
 ///
 /// It starts and finishes Web Browser SSO, single logout, artifact
-/// resolution, name identifier management, and ECP with the identity
-/// providers it is given as [`IdpDescriptor`]s.
+/// resolution, and name identifier management with the identity providers it
+/// is given as [`IdpDescriptor`]s.
 #[derive(Debug)]
 pub struct ServiceProvider {
     config: SpConfig,

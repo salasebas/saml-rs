@@ -14,7 +14,7 @@ This map lists the behaviour whose file name does not give it away.
 | SP or IdP decryption of the principal identifier in an authenticated logout request | `src/logout/encrypted_id.rs` |
 | Protocol responses that take the wrapping and coverage checks | `src/crypto/response_root.rs` |
 | Algorithms and RSA key sizes each `XmlSignatureProfile` accepts | `src/crypto/signature_profile.rs` |
-| Response rendering for HTTP-Artifact and PAOS | `src/idp/posted_response.rs` |
+| Response rendering for HTTP-Artifact | `src/idp/posted_response.rs` |
 | A binding parameter that may occur once | `src/binding/parameters.rs` |
 | Protocol elements read with their namespaces, and their `Status` | `src/xml/protocol_element.rs` |
 | Typed config to the internal `EntitySetting` | `src/config/entity_setting.rs` |

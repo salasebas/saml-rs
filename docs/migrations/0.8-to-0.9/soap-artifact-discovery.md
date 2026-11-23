@@ -9,27 +9,16 @@ integration.
 
 ## Address mandatory SOAP headers to their receiver
 
-This affects SOAP receivers for artifact resolution, logout, name identifier
-management, and both ends of PAOS SSO.
+This affects SOAP receivers for artifact resolution, logout, and name
+identifier management.
 
 If your deployment relies on a SOAP receiver to reject an unsupported header,
 qualify `mustUnderstand="1"` with the SOAP 1.1 envelope namespace. Omit
 `soap:actor` to address the ultimate destination, or set it to
 `http://schemas.xmlsoap.org/soap/actor/next` to address the next SOAP node.
 Previously an unprefixed attribute could trigger the rejection, and the actor
-had no effect. Receivers now ignore headers addressed to other actors,
-including an ECP relay state addressed elsewhere. If the pending login expects
-a relay state and the only returned value names another actor, `finish_paos_sso`
-returns `SamlError::RelayStateMismatch`. Rust call sites stay the same.
-
-## Handle longer RelayState values in PAOS sessions
-
-When your service provider sends no RelayState, both PAOS completion methods
-now accept responder-added state up to 4096 UTF-8 bytes. Previously a value
-over 80 bytes returned `SamlError::Invalid`. If you store
-`SsoSession::relay_state()`, allow up to 4096 bytes or enforce your own
-limit. If you handle oversize errors, match `SamlError::LimitExceeded` with
-`ResourceLimit::RelayStateBytes` for values above 4096 bytes in this flow.
+had no effect. Receivers now ignore headers addressed to other actors. Rust
+call sites stay the same.
 
 ## Send a SOAP `Issuer` without surrounding whitespace
 
@@ -62,7 +51,7 @@ constant on every value.
 **Now:** the methods are removed. `SoapRequest::headers()` returns
 `Content-Type`, `SOAPAction`, `Cache-Control`, and `Pragma`.
 `SoapResponse::headers()` returns `Content-Type`, `Cache-Control`, and
-`Pragma`. Both return `&[HttpHeader]`, like `PaosHttpResponse::headers()`.
+`Pragma`. Both return `&[HttpHeader]`.
 The values are unchanged. For a SOAP logout message, `Outbound::headers()`
 returns the same list.
 

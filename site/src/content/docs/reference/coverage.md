@@ -8,7 +8,6 @@ description: "`ServiceProvider` and `IdentityProvider` implement this surface."
 | Area | Support |
 | --- | --- |
 | Web SSO | The service provider can send a signed `AuthnRequest` over HTTP-POST, HTTP-Redirect, or HTTP-POST-SimpleSign. The identity provider can send a signed `Response` over HTTP-POST, HTTP-POST-SimpleSign, or HTTP-Artifact |
-| Enhanced Client/Proxy SSO | The service provider uses PAOS with the enhanced client. The identity provider uses SOAP with the enhanced client |
 | Metadata | Parse peer metadata, generate SP and IdP descriptors, verify signed metadata |
 | Single Logout | Create and parse `LogoutRequest` and `LogoutResponse` over HTTP-Redirect, HTTP-POST, HTTP-POST-SimpleSign, or SOAP for the identity provider and service provider. The deployment sends the SOAP HTTP request |
 | Identity Provider Discovery | `common_domain_cookie` returns the `_saml_idp` cookie for the caller to write. Service providers do not set or read it |
@@ -25,7 +24,6 @@ description: "`ServiceProvider` and `IdentityProvider` implement this surface."
 - Artifact resolution
 - Single Logout at both the identity provider and the service provider
 - Name identifier management at the identity provider
-- Enhanced Client/Proxy SSO at the identity provider (the service provider uses PAOS)
 
 ## Unsupported profiles
 
@@ -35,7 +33,7 @@ description: "`ServiceProvider` and `IdentityProvider` implement this surface."
 - Name identifier mapping
 - Other SOAP profiles
 - Metadata federation
-- The enhanced-client role in Enhanced Client/Proxy SSO
+- Enhanced Client/Proxy SSO and its PAOS binding
 
 The crate does not claim the [IdP or SP operational mode](conformance/idp-sp-operational-modes.md).
 

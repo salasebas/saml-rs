@@ -16,13 +16,10 @@ use crate::model::{validate_name_id_format, ClockSkew};
 use std::time::SystemTime;
 
 mod authn_request;
-mod paos;
 
 use crate::xml::write::Prefixes;
+pub(crate) use authn_request::AuthnRequestPreferences;
 use authn_request::{render_default_authn_request_xml, AuthnRequestXml};
-pub(crate) use authn_request::{validate_provider_name, AuthnRequestPreferences};
-
-pub(crate) use paos::PaosAuthnRequestInput;
 
 /// A SAML 2.0 Service Provider: runtime [`EntitySetting`] plus parsed [`SpMetadata`].
 #[derive(Debug, Clone)]

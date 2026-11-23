@@ -268,15 +268,15 @@ is a `const fn`.
 
 ## Destructure with a rest pattern
 
-**Affects:** code that destructures one of the structs above, a `Started`, or
-a `StartedPaosSso` with a struct pattern that lists every field, and code that
-builds a `Started` or a `StartedPaosSso` with a struct literal.
+**Affects:** code that destructures one of the structs above or a `Started`
+with a struct pattern that lists every field, and code that builds a `Started`
+with a struct literal.
 
 **Before:** a pattern could list every field, such as
 `Started { pending, outbound }`, and a struct literal could build a started
 flow from its parts.
 
-**Now:** `Started` and `StartedPaosSso` are `#[non_exhaustive]` too. Outside
+**Now:** `Started` is `#[non_exhaustive]` too. Outside
 saml-rs, a struct pattern without `..` fails with `E0638`, and a struct
 literal of a started flow fails with `E0639`: only saml-rs builds one. Reading
 a field, such as `started.pending`, does not change.
@@ -482,7 +482,7 @@ list. A config that set the other role's template built and ignored it.
 `LoginResponseTemplate` and the default templates were importable only from
 the hidden `saml_rs::template` module.
 
-**Now:** browser SSO and PAOS generate XML from typed inputs. The role-specific
+**Now:** browser SSO generates XML from typed inputs. The role-specific
 builders and configs accept typed SSO settings only.
 
 **Upgrade:** delete the template from your configuration. Set the ACS, binding,
@@ -522,7 +522,6 @@ XML NCName` in place of `contains an invalid character`. A prefix such as
 If you set `TemplatePolicy::tag_prefix_protocol` or `tag_prefix_assertion`,
 the sending entity now uses those prefixes in `AuthnRequest`, `ArtifactResolve`,
 `ArtifactResponse`, and both SOAP name identifier management messages.
-The SAML elements inside the ECP request header also use them.
 Previously those paths always emitted `samlp` and `saml`.
 
 Update peers and XML snapshots that expect the old spellings. In a

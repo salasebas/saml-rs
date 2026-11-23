@@ -17,8 +17,7 @@ use saml_rs::{
     PendingLogoutRequestSnapshot, PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot,
     ReceiveNameIdManagement, ReplayPolicy, RespondNameIdManagement, RespondSlo, SamlError,
     SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SoapChannel, SoapRequest,
-    SpConfig, SpDescriptor, SsoEndpoint, StartNameIdManagement, StartPaosSso, StartSlo, StartSso,
-    Status,
+    SpConfig, SpDescriptor, SsoEndpoint, StartNameIdManagement, StartSlo, StartSso, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -214,7 +213,7 @@ fn resolve_artifact_compares_valid_until_with_the_context_clock(
 }
 
 #[test]
-fn soap_artifact_name_id_and_paos_flows_refuse_expired_metadata(
+fn soap_artifact_and_name_id_flows_refuse_expired_metadata(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let expired = Some(MetadataLifetime::ValidUntil(at(Y2001)));
     let expired_sp = soap_name_id_sp_descriptor(&sp(expired)?)?;
@@ -274,15 +273,6 @@ fn soap_artifact_name_id_and_paos_flows_refuse_expired_metadata(
             "respond_name_id_management",
             idp.respond_name_id_management(&expired_sp, &name_id_request, &Status::success())
                 .map(drop),
-        ),
-        (
-            "start_paos_sso",
-            sp.start_paos_sso(
-                &expired_idp,
-                StartPaosSso::new(EndpointUrl::try_new("https://idp.example.com/soap")?)
-                    .allow_unsigned_authn_request(),
-            )
-            .map(drop),
         ),
     ];
 
