@@ -3416,7 +3416,7 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
     assert_eq!(started.outbound.relay_state(), None);
     assert!(matches!(
         started.outbound.redirect_url(),
-        Err(SamlError::OutboundBindingMismatch {
+        Err(SamlError::OutboundDeliveryMismatch {
             actual: saml_rs::constants::Binding::Soap
         })
     ));

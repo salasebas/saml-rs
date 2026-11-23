@@ -414,7 +414,7 @@ fn web_sso_without_confidentiality_withholds_the_message() -> Result<(), Box<dyn
     )?;
     assert_eq!(
         answer.release(),
-        ArtifactRelease::Withheld(ArtifactWithheld::Channel)
+        ArtifactRelease::Withheld(ArtifactWithheld::InsufficientChannelProtection)
     );
     assert!(answer.response().envelope().contains(SUCCESS));
     assert!(!answer.response().envelope().contains(WEB_SSO_MARKER));
@@ -686,7 +686,7 @@ fn a_destination_mismatch_withholds_the_message_and_leaves_it_outstanding(
     )?;
     assert_eq!(
         answer.release(),
-        ArtifactRelease::Withheld(ArtifactWithheld::Destination)
+        ArtifactRelease::Withheld(ArtifactWithheld::DestinationMismatch)
     );
     assert!(!answer.response().envelope().contains(WEB_SSO_MARKER));
     let padded = resolution.request().envelope().replace(

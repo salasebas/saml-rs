@@ -29,14 +29,14 @@ enum OutboundAction {
 }
 
 impl OutboundAction {
-    fn binding_mismatch(&self) -> SamlError {
+    fn delivery_mismatch(&self) -> SamlError {
         let actual = match self {
             Self::Redirect(_) => Binding::Redirect,
             Self::Post(_) => Binding::Post,
             Self::SimpleSignPost(_) => Binding::SimpleSign,
             Self::SoapRequest(_) | Self::SoapResponse(_) => Binding::Soap,
         };
-        SamlError::OutboundBindingMismatch { actual }
+        SamlError::OutboundDeliveryMismatch { actual }
     }
 }
 
@@ -165,7 +165,7 @@ impl<Message> Outbound<Message> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::OutboundBindingMismatch`] when this action is not
+    /// Returns [`SamlError::OutboundDeliveryMismatch`] when this action is not
     /// Redirect.
     pub fn redirect_url(&self) -> Result<&str, SamlError> {
         match &self.action {
@@ -173,7 +173,7 @@ impl<Message> Outbound<Message> {
             OutboundAction::Post(_)
             | OutboundAction::SimpleSignPost(_)
             | OutboundAction::SoapRequest(_)
-            | OutboundAction::SoapResponse(_) => Err(self.action.binding_mismatch()),
+            | OutboundAction::SoapResponse(_) => Err(self.action.delivery_mismatch()),
         }
     }
 
@@ -182,14 +182,14 @@ impl<Message> Outbound<Message> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::OutboundBindingMismatch`] when this action is a
+    /// Returns [`SamlError::OutboundDeliveryMismatch`] when this action is a
     /// redirect or a SOAP message.
     pub fn post_form(&self) -> Result<&PostForm, SamlError> {
         match &self.action {
             OutboundAction::Post(form) | OutboundAction::SimpleSignPost(form) => Ok(form),
             OutboundAction::Redirect(_)
             | OutboundAction::SoapRequest(_)
-            | OutboundAction::SoapResponse(_) => Err(self.action.binding_mismatch()),
+            | OutboundAction::SoapResponse(_) => Err(self.action.delivery_mismatch()),
         }
     }
 
@@ -221,15 +221,15 @@ impl Outbound<LogoutRequest> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::OutboundBindingMismatch`] when this request uses
-    /// another binding.
+    /// Returns [`SamlError::OutboundDeliveryMismatch`] for other delivery
+    /// actions.
     pub fn soap_request(&self) -> Result<&SoapRequest, SamlError> {
         match &self.action {
             OutboundAction::SoapRequest(request) => Ok(request),
             OutboundAction::Redirect(_)
             | OutboundAction::Post(_)
             | OutboundAction::SimpleSignPost(_)
-            | OutboundAction::SoapResponse(_) => Err(self.action.binding_mismatch()),
+            | OutboundAction::SoapResponse(_) => Err(self.action.delivery_mismatch()),
         }
     }
 }
@@ -239,15 +239,15 @@ impl Outbound<LogoutResponse> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::OutboundBindingMismatch`] when this response uses
-    /// another binding.
+    /// Returns [`SamlError::OutboundDeliveryMismatch`] for other delivery
+    /// actions.
     pub fn soap_response(&self) -> Result<&SoapResponse, SamlError> {
         match &self.action {
             OutboundAction::SoapResponse(response) => Ok(response),
             OutboundAction::Redirect(_)
             | OutboundAction::Post(_)
             | OutboundAction::SimpleSignPost(_)
-            | OutboundAction::SoapRequest(_) => Err(self.action.binding_mismatch()),
+            | OutboundAction::SoapRequest(_) => Err(self.action.delivery_mismatch()),
         }
     }
 }

@@ -169,7 +169,7 @@ impl IssuedArtifacts {
     }
 }
 
-/// Why an understood `ArtifactResolve` did not include the protocol message.
+/// Why the identity provider withheld the protocol message in an `ArtifactResponse`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ArtifactWithheld {
@@ -178,10 +178,10 @@ pub enum ArtifactWithheld {
     NotOutstanding,
     /// The presenter is not the service provider the artifact was issued to.
     DifferentPresenter,
-    /// The channel does not authenticate the presenter and protect the exchange.
-    Channel,
-    /// `Destination`, when present, is not this artifact resolution endpoint.
-    Destination,
+    /// The SOAP channel lacks the protection required for the stored message.
+    InsufficientChannelProtection,
+    /// The request's `Destination` differs from the artifact resolution endpoint.
+    DestinationMismatch,
 }
 
 /// What the identity provider put in `ArtifactResponse`.
@@ -576,14 +576,14 @@ pub(crate) fn answer(
         if let Ok(service) = soap_service(metadata, artifact.endpoint_index()) {
             if let Some(destination) = request.destination.as_deref() {
                 if destination != service.location() {
-                    return success_without(ArtifactWithheld::Destination);
+                    return success_without(ArtifactWithheld::DestinationMismatch);
                 }
             }
         } else {
             return success_without(ArtifactWithheld::NotOutstanding);
         }
         if !channel_allows(channel, entry.required_channel) {
-            return success_without(ArtifactWithheld::Channel);
+            return success_without(ArtifactWithheld::InsufficientChannelProtection);
         }
         let presenter_id = presenter.entity_id().as_str();
         let issuer_matches = request.issuer.as_ref().is_some_and(|issuer| {

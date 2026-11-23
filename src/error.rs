@@ -294,12 +294,13 @@ pub enum SamlError {
         /// Binding that reached the operation.
         binding: Binding,
     },
-    /// An [`crate::Outbound`] accessor was called for a binding the message
-    /// does not use.
-    #[error("outbound message uses binding {actual:?}, not the one this accessor reads")]
+    /// The delivery action differs from the action this [`crate::Outbound`]
+    /// accessor reads. Match on [`crate::Outbound::delivery`] to send the message.
+    #[error("outbound delivery {actual:?} does not match this accessor")]
     #[non_exhaustive]
-    OutboundBindingMismatch {
-        /// Binding of the outbound message.
+    OutboundDeliveryMismatch {
+        /// Binding that represents the delivery action. An artifact delivered
+        /// in a form reports [`Binding::Post`].
         actual: Binding,
     },
 

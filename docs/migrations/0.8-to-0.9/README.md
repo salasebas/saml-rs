@@ -40,6 +40,7 @@ Check the topics that affect your integration.
 - [Upgrade RelayState, pending state, and inbound message code](browser-transport.md)
 - [Upgrade typed config code](config.md)
 - [Upgrade SOAP, artifact resolution, and discovery cookie code](soap-artifact-discovery.md)
+- [Match artifact refusal reasons](artifact-refusals.md)
 - [Prepare SOAP payloads without processing instructions](soap-processing-instructions.md)
 - [Upgrade typed operation options and name identifier management code](typed-operations.md)
 - [Remove Enhanced Client/Proxy SSO](ecp-removal.md)
