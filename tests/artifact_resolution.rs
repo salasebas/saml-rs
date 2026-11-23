@@ -6,7 +6,7 @@
 //! `ArtifactResponse`. The deployment still performs HTTP and TLS.
 //!
 //! Config helpers relax the policy fields that need a crypto provider, so they
-//! build without one. Artifact resolution does not read those fields.
+//! build without one for unsigned artifact resolution.
 
 #[path = "artifact_resolution/schema_validation.rs"]
 mod schema_validation;
@@ -226,6 +226,53 @@ fn hex(bytes: &[u8]) -> String {
         out.push(DIGITS[(byte & 0x0f) as usize] as char);
     }
     out
+}
+
+#[cfg(not(crypto))]
+#[test]
+fn present_artifact_signatures_require_a_crypto_provider() -> Result<(), Box<dyn std::error::Error>>
+{
+    let parties = parties()?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
+    let channel = confidential();
+    let resolution = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        &artifact,
+        channel,
+        without_replay_cache(),
+    )?;
+    let with_signature = |envelope: &str| {
+        envelope.replacen(
+            "</saml:Issuer>",
+            r#"</saml:Issuer><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"/>"#,
+            1,
+        )
+    };
+    let request = resolution.request().envelope();
+    let answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &with_signature(request),
+        &mut issued,
+        channel,
+    );
+    assert!(
+        matches!(answer, Err(SamlError::Unsupported(_))),
+        "{answer:?}"
+    );
+
+    let answer =
+        parties
+            .idp
+            .answer_artifact_resolve(&parties.sp_metadata, request, &mut issued, channel)?;
+    let envelope = answer.response().envelope();
+    let result = resolution.finish(&with_signature(envelope));
+    assert!(
+        matches!(result, Err(SamlError::Unsupported(_))),
+        "{result:?}"
+    );
+    assert!(resolution.finish(envelope)?.xml().contains(WEB_SSO_MARKER));
+    Ok(())
 }
 
 #[test]

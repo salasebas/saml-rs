@@ -20,19 +20,22 @@ use saml_rs::error::SubjectConfirmationReason;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactRelease, ArtifactResolutionService,
     ArtifactWithheld, AuthnRequest, DeliveredArtifact, EndpointUrl, EntityId, FormField,
-    IdentityProvider, IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, MessageConfidentiality,
-    MessageIntegrity, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PartyAuthentication,
-    PendingAuthnRequest, Received, RelayState, ReplayPolicy, ResolvedProtocolMessage, RespondSso,
-    SamlError, SamlValidationContext, ServiceProvider, SoapChannel, SpConfig, SpDescriptor,
-    SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponse, SsoResponseBinding, SsoSession, StartSso,
-    Status, SubordinateStatusCode, TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
+    IdentityProvider, IdpConfig, IdpConfigBuilder, IdpDescriptor, Inbound, IssuedArtifacts,
+    MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
+    PartyAuthentication, PendingAuthnRequest, Received, RelayState, ReplayPolicy,
+    ResolvedProtocolMessage, RespondSso, SamlError, SamlValidationContext, ServiceProvider,
+    SoapChannel, SpConfig, SpConfigBuilder, SpDescriptor, SsoAssertion, SsoEndpoint, SsoOutcome,
+    SsoResponse, SsoResponseBinding, SsoSession, StartSso, Status, SubordinateStatusCode,
+    TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
-    AssertionEncryptionPolicy, CertificatePem, IdpConfigBuilder, PrivateKeyPem, SloEndpoint,
-    XmlEncryptionPolicy, XmlPolicy,
+    AssertionEncryptionPolicy, CertificatePem, PrivateKeyPem, SloEndpoint, XmlEncryptionPolicy,
+    XmlPolicy,
 };
 use url::Url;
+
+mod soap_signatures;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -81,7 +84,19 @@ fn parties_with_consumers(
     artifact: AcsEndpoint,
     algorithms: AlgorithmPolicy,
 ) -> Result<Parties, SamlError> {
-    let idp = IdentityProvider::new(
+    let (idp, sp) = artifact_config_builders(post, artifact)?;
+    build_parties(
+        idp.credentials(signing_credentials())
+            .algorithms(algorithms),
+        sp.credentials(signing_credentials()),
+    )
+}
+
+fn artifact_config_builders(
+    post: AcsEndpoint,
+    artifact: AcsEndpoint,
+) -> Result<(IdpConfigBuilder, SpConfigBuilder), SamlError> {
+    Ok((
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect(IDP_SSO_REDIRECT)?,
@@ -89,17 +104,14 @@ fn parties_with_consumers(
         .artifact_resolution_service(ArtifactResolutionService::new(
             0,
             EndpointUrl::try_new(RESOLUTION_URL)?,
-        ))
-        .credentials(signing_credentials())
-        .algorithms(algorithms)
-        .build()?,
-    );
-    let sp = ServiceProvider::new(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, post)
-            .acs_endpoint(artifact)
-            .credentials(signing_credentials())
-            .build()?,
-    );
+        )),
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, post).acs_endpoint(artifact),
+    ))
+}
+
+fn build_parties(idp: IdpConfigBuilder, sp: SpConfigBuilder) -> Result<Parties, SamlError> {
+    let idp = IdentityProvider::new(idp.build()?);
+    let sp = ServiceProvider::new(sp.build()?);
     let idp_metadata = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),

@@ -6,7 +6,10 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::{Namespace, ResolveResult};
 use quick_xml::reader::{NsReader, Reader};
 
+use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::namespace;
+#[cfg(crypto)]
+use crate::crypto::verify::verify_soap_body_signature;
 use crate::error::{xml_err, SamlError};
 use crate::http_header::{HttpHeader, CACHE_CONTROL, PRAGMA};
 use crate::model::EndpointUrl;
@@ -260,7 +263,51 @@ pub(crate) struct SoapBody {
     pub(crate) local_name: String,
     pub(crate) namespace: String,
     pub(crate) xml: String,
-    pub(crate) message_start: usize,
+    message_start: usize,
+}
+
+impl SoapBody {
+    pub(crate) fn verify_signature_if_present(
+        &self,
+        envelope: &str,
+        message: &SamlElement,
+        signing_certificates: &[String],
+        hmac_secret: Option<&HmacSecret>,
+        profile: XmlSignatureProfile,
+    ) -> Result<(), SamlError> {
+        if message
+            .children
+            .iter()
+            .any(|child| child.is(namespace::DSIG, "Signature"))
+        {
+            let id = message
+                .attr("ID")
+                .ok_or(SamlError::SignedReferenceMismatch)?;
+            verify_soap_body_signature(
+                envelope,
+                self.message_start,
+                id,
+                signing_certificates,
+                hmac_secret,
+                profile,
+            )?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(not(crypto))]
+fn verify_soap_body_signature(
+    _envelope: &str,
+    _message_start: usize,
+    _id: &str,
+    _signing_certificates: &[String],
+    _hmac_secret: Option<&HmacSecret>,
+    _profile: XmlSignatureProfile,
+) -> Result<(), SamlError> {
+    Err(SamlError::Unsupported(
+        "signature verification requires a crypto provider feature".into(),
+    ))
 }
 
 /// Read the single SAML element of a SOAP 1.1 body.

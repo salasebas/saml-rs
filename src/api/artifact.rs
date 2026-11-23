@@ -141,6 +141,8 @@ impl IdentityProvider {
     /// destination or presenter, or insufficient channel protection gets
     /// `Success` without the message. An unsupported newer version gets
     /// `VersionMismatch`, with `RequestVersionTooHigh` for a newer major version.
+    /// A present XML signature must cover the `ArtifactResolve` and verify
+    /// against `presenter`'s signing keys before the request can be processed.
     ///
     /// # Errors
     ///
@@ -150,6 +152,9 @@ impl IdentityProvider {
     /// value or has a second `Issuer`, or the required `ID`, `Version`, or UTC
     /// `IssueInstant` fails validation. A version below 2.0 also returns
     /// [`SamlError::ProtocolProfile`].
+    /// An invalid signature returns a verification error and leaves the
+    /// artifact outstanding. A present signature without a crypto provider
+    /// returns [`SamlError::Unsupported`].
     ///
     /// # Examples
     ///

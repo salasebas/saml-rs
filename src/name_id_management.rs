@@ -10,8 +10,6 @@ use crate::config::{
     XmlSignatureProfile,
 };
 use crate::constants::{namespace, Binding, CertUse};
-#[cfg(crypto)]
-use crate::crypto::verify::verify_soap_body_signature;
 use crate::entity::{generate_id, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::{EndpointDirection, Metadata};
@@ -264,9 +262,8 @@ impl StartedNameIdManagement {
             &self.request_id,
         )?;
         require_peer_issuer(&response, &self.service_provider)?;
-        verify_signature_if_present(
+        body.verify_signature_if_present(
             response_envelope,
-            body.message_start,
             &response,
             &self.signing_certificates,
             self.hmac_secret.as_ref(),
@@ -382,9 +379,8 @@ pub(crate) fn receive(
             ));
         }
     }
-    verify_signature_if_present(
+    body.verify_signature_if_present(
         request_envelope,
-        body.message_start,
         &request,
         service_provider
             .metadata()
@@ -622,48 +618,6 @@ fn require_channel(channel: SoapChannel) -> Result<(), SamlError> {
     } else {
         Err(SamlError::SoapChannelProtection)
     }
-}
-
-fn verify_signature_if_present(
-    envelope: &str,
-    message_start: usize,
-    message: &SamlElement,
-    signing_certificates: &[String],
-    hmac_secret: Option<&HmacSecret>,
-    profile: XmlSignatureProfile,
-) -> Result<(), SamlError> {
-    if message
-        .children
-        .iter()
-        .any(|child| child.is(namespace::DSIG, "Signature"))
-    {
-        let id = message
-            .attr("ID")
-            .ok_or(SamlError::SignedReferenceMismatch)?;
-        verify_soap_body_signature(
-            envelope,
-            message_start,
-            id,
-            signing_certificates,
-            hmac_secret,
-            profile,
-        )?;
-    }
-    Ok(())
-}
-
-#[cfg(not(crypto))]
-fn verify_soap_body_signature(
-    _envelope: &str,
-    _message_start: usize,
-    _id: &str,
-    _signing_certificates: &[String],
-    _hmac_secret: Option<&HmacSecret>,
-    _profile: XmlSignatureProfile,
-) -> Result<(), SamlError> {
-    Err(SamlError::Unsupported(
-        "signature verification requires a crypto provider feature".into(),
-    ))
 }
 
 #[cfg(test)]

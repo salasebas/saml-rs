@@ -44,5 +44,6 @@ Check the topics that affect your integration.
 - [Remove Enhanced Client/Proxy SSO](ecp-removal.md)
 - [Send SAML responses for refused requests](request-refusals.md)
 - [Update signing keys for SOAP name identifier management](soap-name-id-signatures.md)
+- [Update signing keys for SOAP artifact resolution](soap-artifact-signatures.md)
 
 [All migration guides](../README.md)

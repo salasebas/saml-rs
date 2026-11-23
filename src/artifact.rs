@@ -11,8 +11,8 @@ use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
 use base64::Engine;
 use sha1::{Digest, Sha1};
 
-use crate::config::{IdpDescriptor, SpDescriptor};
-use crate::constants::namespace;
+use crate::config::{HmacSecret, IdpDescriptor, SpDescriptor, XmlSignatureProfile};
+use crate::constants::{namespace, CertUse};
 use crate::entity::{generate_id, now_iso8601, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::IdpMetadata;
@@ -224,6 +224,9 @@ pub struct ArtifactResolution {
     request_id: String,
     identity_provider: String,
     artifact: String,
+    signing_certificates: Vec<String>,
+    hmac_secret: Option<HmacSecret>,
+    signature_profile: XmlSignatureProfile,
     xml_limits: XmlLimits,
     schema_validator: Option<crate::SchemaValidator>,
 }
@@ -235,6 +238,9 @@ impl PartialEq for ArtifactResolution {
             request_id,
             identity_provider,
             artifact,
+            signing_certificates,
+            hmac_secret,
+            signature_profile,
             xml_limits,
             schema_validator,
         } = self;
@@ -242,6 +248,9 @@ impl PartialEq for ArtifactResolution {
             && request_id == &other.request_id
             && identity_provider == &other.identity_provider
             && artifact == &other.artifact
+            && signing_certificates == &other.signing_certificates
+            && hmac_secret == &other.hmac_secret
+            && signature_profile == &other.signature_profile
             && xml_limits == &other.xml_limits
             && crate::schema::validator_addresses_equal(*schema_validator, other.schema_validator)
     }
@@ -257,6 +266,11 @@ impl ArtifactResolution {
 
     /// Read the protocol message from the SOAP `ArtifactResponse`.
     ///
+    /// A present XML signature must cover the `ArtifactResponse` and verify
+    /// against the identity provider's signing keys and the signature profile
+    /// captured when resolution started. The returned message is validated
+    /// separately by the caller's SAML flow.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the envelope is not an `ArtifactResponse`
@@ -266,7 +280,9 @@ impl ArtifactResolution {
     /// `ArtifactResolve` ID, and [`SamlError::IssuerMismatch`] when the
     /// `Issuer` is absent or differs from the identity provider's entity ID.
     /// Returns [`SamlError::ArtifactNotReturned`] when a `Success` response
-    /// carries no protocol message.
+    /// carries no protocol message. An invalid signature returns a
+    /// verification error. A present signature without a crypto provider
+    /// returns [`SamlError::Unsupported`].
     pub fn finish(&self, response_envelope: &str) -> Result<ResolvedProtocolMessage, SamlError> {
         let (body, response) = read_soap_status_response(
             response_envelope,
@@ -289,6 +305,13 @@ impl ArtifactResolution {
                 "ArtifactResponse Issuer Format must be omitted or entity".into(),
             ));
         }
+        body.verify_signature_if_present(
+            response_envelope,
+            &response,
+            &self.signing_certificates,
+            self.hmac_secret.as_ref(),
+            self.signature_profile,
+        )?;
         read_status(&response)?.require_success()?;
         let Some(message) = protocol_payload(&response)? else {
             return Err(SamlError::ArtifactNotReturned);
@@ -474,6 +497,13 @@ pub(crate) fn resolve(
         request_id,
         identity_provider: idp_entity_id.to_string(),
         artifact: artifact.as_str().to_string(),
+        signing_certificates: identity_provider
+            .metadata()
+            .as_metadata()
+            .x509_certificates(CertUse::Signing)
+            .to_vec(),
+        hmac_secret: identity_provider.provider().setting.hmac_secret.clone(),
+        signature_profile: setting.xml_signatures,
         xml_limits: setting.xml_limits,
         schema_validator: setting.schema_validator,
     })
@@ -499,7 +529,18 @@ pub(crate) fn answer(
             "SOAP body must be an ArtifactResolve".into(),
         ));
     }
-    let request = parse_resolve(&body.xml, setting.xml_limits)?;
+    let request = parse_saml_with_limits(&body.xml, setting.xml_limits)?;
+    body.verify_signature_if_present(
+        request_envelope,
+        &request,
+        presenter
+            .metadata()
+            .as_metadata()
+            .x509_certificates(CertUse::Signing),
+        presenter.provider().setting.hmac_secret.as_ref(),
+        setting.xml_signatures,
+    )?;
+    let request = parse_resolve(&request)?;
     let prefixes = Prefixes::of(setting)?;
     if let Some(mismatch) = RequestVersionMismatch::for_request(&request.version)? {
         return answered(
@@ -650,9 +691,8 @@ struct ResolveRequest {
     artifact: String,
 }
 
-fn parse_resolve(xml: &str, limits: XmlLimits) -> Result<ResolveRequest, SamlError> {
-    let element = parse_saml_with_limits(xml, limits)?;
-    if element.local_name != "ArtifactResolve" || element.namespace != namespace::PROTOCOL {
+fn parse_resolve(element: &SamlElement) -> Result<ResolveRequest, SamlError> {
+    if !element.is(namespace::PROTOCOL, "ArtifactResolve") {
         return Err(SamlError::ProtocolProfile(
             "SOAP body must be an ArtifactResolve".into(),
         ));
@@ -695,7 +735,7 @@ fn parse_resolve(xml: &str, limits: XmlLimits) -> Result<ResolveRequest, SamlErr
         id,
         version,
         destination: element.attr("Destination").map(collapse_whitespace),
-        issuer: issuer(&element),
+        issuer: issuer(element),
         artifact,
     })
 }
@@ -706,7 +746,7 @@ fn protocol_payload(response: &SamlElement) -> Result<Option<&SamlElement>, Saml
             (child.namespace.as_str(), child.local_name.as_str()),
             (namespace::ASSERTION, "Issuer")
                 | (namespace::PROTOCOL, "Status" | "Extensions")
-                | ("http://www.w3.org/2000/09/xmldsig#", "Signature")
+                | (namespace::DSIG, "Signature")
         )
     });
     let payload = payloads.next();
@@ -736,6 +776,9 @@ mod tests {
             request_id: "_request".into(),
             identity_provider: "https://idp.example.com/metadata".into(),
             artifact: "artifact".into(),
+            signing_certificates: Vec::new(),
+            hmac_secret: None,
+            signature_profile: XmlSignatureProfile::ExcludeWeakAlgorithms,
             xml_limits: XmlLimits::default(),
             schema_validator: None,
         };
