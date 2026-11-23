@@ -5,6 +5,9 @@ use std::fmt;
 use crate::error::SamlError;
 
 /// Compile-time selected document-crypto provider.
+///
+/// Available with `crypto-rustcrypto` (also enabled by `crypto-bergshamra`),
+/// `crypto-aws-lc`, or `crypto-fips`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum CryptoProvider {
@@ -24,6 +27,9 @@ impl fmt::Display for CryptoProvider {
 }
 
 /// Runtime FIPS attestation state for the selected provider.
+///
+/// Available with `crypto-rustcrypto` (also enabled by `crypto-bergshamra`),
+/// `crypto-aws-lc`, or `crypto-fips`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum CryptoFipsStatus {
@@ -36,6 +42,9 @@ pub enum CryptoFipsStatus {
 }
 
 /// Attested information about the selected document-crypto provider.
+///
+/// Available with `crypto-rustcrypto` (also enabled by `crypto-bergshamra`),
+/// `crypto-aws-lc`, or `crypto-fips`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct CryptoProviderInfo {
@@ -82,6 +91,9 @@ fn provider_error(
 
 /// Inspect the selected provider without triggering initialization.
 ///
+/// Available with `crypto-rustcrypto` (also enabled by `crypto-bergshamra`),
+/// `crypto-aws-lc`, or `crypto-fips`.
+///
 /// A `crypto-fips` build reports [`CryptoFipsStatus::Uninitialized`] until
 /// [`initialize_crypto_provider`] or another `saml-rs` crypto operation runs.
 ///
@@ -95,6 +107,9 @@ pub fn crypto_provider_info() -> Result<CryptoProviderInfo, SamlError> {
 }
 
 /// Initialize and attest the selected document-crypto provider.
+///
+/// Available with `crypto-rustcrypto` (also enabled by `crypto-bergshamra`),
+/// `crypto-aws-lc`, or `crypto-fips`.
 ///
 /// Initialization is idempotent and its first result is retained for the
 /// process lifetime. `saml-rs` calls this automatically before its first

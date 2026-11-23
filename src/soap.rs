@@ -126,7 +126,7 @@ impl SoapChannel {
     }
 }
 
-/// Outbound SOAP 1.1 request carrying one SAML protocol element.
+/// Outbound SOAP 1.1 request carrying one XML element.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SoapRequest {
     endpoint: EndpointUrl,
@@ -134,13 +134,18 @@ pub struct SoapRequest {
 }
 
 impl SoapRequest {
-    /// Wrap one SAML protocol element in a SOAP 1.1 request to `endpoint`.
+    /// Wrap the XML document element in a SOAP 1.1 request to `endpoint`.
+    ///
+    /// The payload can use any element name and namespace. Use a typed SAML
+    /// operation such as [`crate::ServiceProvider::start_slo`] to construct a
+    /// request for its protocol flow.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when `protocol_xml` cannot be parsed as one
-    /// element. A processing instruction inside the element returns
-    /// [`SamlError::Xml`]. A leading XML declaration is allowed.
+    /// Returns [`SamlError`] when `protocol_xml` cannot be parsed as a document
+    /// with one root element under the default [`XmlLimits`]. A processing
+    /// instruction inside the element returns [`SamlError::Xml`]. The
+    /// constructor accepts and omits a leading XML declaration.
     pub fn try_new(endpoint: EndpointUrl, protocol_xml: &str) -> Result<Self, SamlError> {
         Ok(Self {
             endpoint,
@@ -165,7 +170,7 @@ impl SoapRequest {
     }
 }
 
-/// SOAP 1.1 response carrying one SAML protocol element.
+/// SOAP 1.1 response carrying one XML element.
 ///
 /// The deployment returns [`Self::envelope`] as the HTTP 200 body of the SOAP
 /// request it answers, with [`Self::headers`].
@@ -175,13 +180,16 @@ pub struct SoapResponse {
 }
 
 impl SoapResponse {
-    /// Wrap one SAML protocol element in a SOAP 1.1 response.
+    /// Wrap the XML document element in a SOAP 1.1 response.
+    ///
+    /// The payload can use any element name and namespace. Use a typed SAML
+    /// operation such as [`crate::IdentityProvider::respond_slo`] to construct a
+    /// response for its protocol flow.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when `protocol_xml` cannot be parsed as one
-    /// element. A processing instruction inside the element returns
-    /// [`SamlError::Xml`]. A leading XML declaration is allowed.
+    /// Returns [`SamlError`] for the XML input errors described by
+    /// [`SoapRequest::try_new`].
     pub fn try_new(protocol_xml: &str) -> Result<Self, SamlError> {
         Ok(Self {
             envelope: envelope(outbound_element(protocol_xml)?),
@@ -200,7 +208,7 @@ impl SoapResponse {
     }
 }
 
-/// One SAML protocol element read from a SOAP 1.1 body.
+/// One XML element read from a SOAP 1.1 body.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SoapProtocolMessage {
     local_name: String,
@@ -211,11 +219,17 @@ pub struct SoapProtocolMessage {
 impl SoapProtocolMessage {
     /// Read the single element in a SOAP 1.1 body.
     ///
+    /// The payload can use any element name and namespace. Use a typed receive
+    /// operation such as [`crate::ServiceProvider::receive_slo`] to validate
+    /// the SAML message for its protocol flow.
+    ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the envelope is not SOAP 1.1, the body does
-    /// not contain exactly one element, or a SOAP header requires processing
-    /// this crate does not provide.
+    /// Returns [`SamlError`] for invalid XML under the default [`XmlLimits`],
+    /// an envelope other than SOAP 1.1, or an envelope structure other than an
+    /// optional `Header` followed by one `Body` with exactly one child element.
+    /// A header entry addressed to this receiver with `mustUnderstand` set
+    /// also returns an error.
     pub fn from_envelope(envelope: &str) -> Result<Self, SamlError> {
         let body = read_soap_body(envelope, XmlLimits::default())?;
         Ok(Self {
@@ -225,17 +239,18 @@ impl SoapProtocolMessage {
         })
     }
 
-    /// Local name of the SAML element.
+    /// Local name of the payload element.
     pub fn local_name(&self) -> &str {
         &self.local_name
     }
 
-    /// Namespace URI of the SAML element.
+    /// Resolved namespace URI of the payload element, or an empty string if
+    /// no namespace was resolved.
     pub fn namespace(&self) -> &str {
         &self.namespace
     }
 
-    /// XML of the SAML element, without the SOAP envelope.
+    /// Standalone XML of the payload element with inherited namespace declarations.
     pub fn xml(&self) -> &str {
         &self.xml
     }

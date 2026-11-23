@@ -307,6 +307,12 @@ impl<'a> SamlValidationContext<'a> {
 
     /// Set explicit replay retention for protocol messages that do not carry a
     /// SAML `NotOnOrAfter` value suitable for cache expiry.
+    ///
+    /// Set a positive duration that can be added to the validation instant
+    /// ([`Self::now`]). When a receive operation uses this duration for the
+    /// replay cache, zero or an unrepresentable deadline returns
+    /// [`SamlError::TimeWindowInvalid`] with
+    /// [`crate::TimeWindowField::ReplayExpiration`].
     pub fn with_replay_retention(mut self, retention: Duration) -> Self {
         self.replay_retention = Some(retention);
         self
