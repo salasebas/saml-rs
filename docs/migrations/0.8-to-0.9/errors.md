@@ -31,6 +31,23 @@ issuer. Resolve it against your configured trusted IdPs. Keep using
 `ServiceProvider::accept_unsolicited_sso` when you already know which
 `IdpDescriptor` to use.
 
+## Handle exact authentication context mismatches
+
+If you opt in with `StartSso::require_exact_authn_context`, match
+`SamlError::AuthnContextMismatch { expected, actual, .. }` from
+`ServiceProvider::finish_sso` or
+`ServiceProvider::finish_sso_with_outstanding_logout`. `expected` holds the
+required references from the pending request, and `actual` holds the class and
+declaration references reported by the consumed assertion's authentication
+statements (empty when none were present). Callers and stored snapshots without
+the opt-in keep their existing behavior.
+
+Older releases ignore `required_authn_context_class_refs` and
+`required_authn_context_decl_refs` when reading stored
+`PendingAuthnRequestSnapshot` JSON. Upgrade every instance that can finish a
+login before enabling `StartSso::require_exact_authn_context`, and drain or
+invalidate pending step-up logins before rolling back to an older release.
+
 ## Read the status from `StatusNotSuccess`
 
 `StatusNotSuccess` carries the same `Status` that `SsoOutcome::Failure` takes

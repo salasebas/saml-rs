@@ -6,7 +6,10 @@ use super::outbound::Outbound;
 use crate::config::EntityId;
 use crate::constants::Binding;
 use crate::error::SamlError;
-use crate::model::{AuthnRequest, EndpointUrl, LogoutRequest, MessageId, RelayState, SamlInstant};
+use crate::model::{
+    AuthnContextReference, AuthnContextReferenceKind, AuthnRequest, EndpointUrl, LogoutRequest,
+    MessageId, RelayState, SamlInstant,
+};
 use crate::name_id_management::ManageNameIdRequest;
 
 mod sealed {
@@ -25,6 +28,7 @@ pub trait PendingMessage: sealed::Sealed {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthnPendingDetails {
     acs: AcsEndpoint,
+    required_authn_context: Option<Vec<AuthnContextReference>>,
 }
 
 /// Protocol-specific pending LogoutRequest details.
@@ -61,11 +65,12 @@ impl PendingMessage for ManageNameIdRequest {
 ///
 /// The finish operation checks the response against the pending state you
 /// pass it: the request ID, the peer entity ID, the RelayState, and for SSO
-/// the assertion consumer service. It trusts that state, so the stored
-/// snapshot must come back unchanged and stay tied to the browser session that
-/// started the request. Keep it in server-side session storage. If the browser
-/// carries it, for example in a cookie, authenticate the value so that a
-/// changed snapshot is refused. A snapshot holds no key material.
+/// the assertion consumer service and any required authentication context. It
+/// trusts that state, so the stored snapshot must come back unchanged and stay
+/// tied to the browser session that started the request. Keep it in
+/// server-side session storage. If the browser carries it, for example in a
+/// cookie, authenticate the value so that a changed snapshot is refused. A
+/// snapshot holds no key material.
 #[derive(Debug, Clone)]
 pub struct Pending<Message: PendingMessage> {
     request_id: MessageId,
@@ -141,12 +146,16 @@ impl Pending<AuthnRequest> {
         relay_state: Option<RelayState>,
         idp_entity_id: EntityId,
         acs: AcsEndpoint,
+        required_authn_context: Option<Vec<AuthnContextReference>>,
     ) -> Self {
         Self::with_details(
             request_id,
             relay_state,
             idp_entity_id,
-            AuthnPendingDetails { acs },
+            AuthnPendingDetails {
+                acs,
+                required_authn_context,
+            },
         )
     }
 
@@ -162,12 +171,35 @@ impl Pending<AuthnRequest> {
         &self.details.acs
     }
 
+    /// Exact authentication context references required when finishing SSO, in
+    /// request order.
+    ///
+    /// Returns `None` when the request did not opt in to exact matching with
+    /// [`StartSso::require_exact_authn_context`](crate::StartSso::require_exact_authn_context).
+    pub fn required_authn_context(&self) -> Option<&[AuthnContextReference]> {
+        self.details.required_authn_context.as_deref()
+    }
+
     /// Fields to store until the response arrives.
     ///
     /// With the `serde` feature, the snapshot serializes to JSON for your session
     /// store.
     pub fn snapshot(&self) -> PendingAuthnRequestSnapshot {
         let acs = &self.details.acs;
+        let (required_authn_context_class_refs, required_authn_context_decl_refs) =
+            match self.details.required_authn_context.as_deref() {
+                Some(references @ [first, ..]) => {
+                    let uris = references
+                        .iter()
+                        .map(|reference| reference.uri().to_string())
+                        .collect();
+                    match first.kind() {
+                        AuthnContextReferenceKind::Class => (uris, Vec::new()),
+                        AuthnContextReferenceKind::Declaration => (Vec::new(), uris),
+                    }
+                }
+                Some([]) | None => (Vec::new(), Vec::new()),
+            };
         PendingAuthnRequestSnapshot {
             request_id: self.request_id.as_str().to_string(),
             relay_state: self.stored_relay_state(),
@@ -176,6 +208,8 @@ impl Pending<AuthnRequest> {
             acs_url: acs.location().as_str().to_string(),
             acs_index: acs.index(),
             acs_is_default: acs.is_default(),
+            required_authn_context_class_refs,
+            required_authn_context_decl_refs,
         }
     }
 
@@ -188,10 +222,13 @@ impl Pending<AuthnRequest> {
     ///
     /// Returns [`SamlError`] when a field fails the check of its type:
     /// [`MessageId::try_new`], [`RelayState::try_new`], [`EntityId::try_new`],
-    /// or [`EndpointUrl::try_new`]. Returns [`SamlError::Invalid`] when
-    /// `acs_binding` is not a binding name, and
-    /// [`SamlError::UnsupportedBinding`] when it names a binding an SSO
-    /// response cannot use.
+    /// [`EndpointUrl::try_new`], [`AuthnContextReference::class`], or
+    /// [`AuthnContextReference::declaration`]. Returns [`SamlError::Invalid`]
+    /// when `acs_binding` is not a binding name or when both
+    /// `required_authn_context_class_refs` and
+    /// `required_authn_context_decl_refs` are non-empty, and
+    /// [`SamlError::UnsupportedBinding`] when `acs_binding` names a binding an
+    /// SSO response cannot use.
     ///
     /// # Examples
     ///
@@ -220,11 +257,16 @@ impl Pending<AuthnRequest> {
         if snapshot.acs_is_default {
             acs = acs.with_default();
         }
+        let required_authn_context = snapshot_required_authn_context(
+            snapshot.required_authn_context_class_refs,
+            snapshot.required_authn_context_decl_refs,
+        )?;
         Ok(Self::new(
             MessageId::try_new(snapshot.request_id)?,
             snapshot.relay_state.map(RelayState::try_new).transpose()?,
             EntityId::try_new(snapshot.idp_entity_id)?,
             acs,
+            required_authn_context,
         ))
     }
 }
@@ -407,13 +449,22 @@ impl Pending<ManageNameIdRequest> {
 ///   "acs_binding": "post",
 ///   "acs_url": "https://sp.example.com/acs",
 ///   "acs_index": null,
-///   "acs_is_default": false
+///   "acs_is_default": false,
+///   "required_authn_context_class_refs": [],
+///   "required_authn_context_decl_refs": []
 /// }
 /// ```
 ///
 /// Reading JSON requires `request_id`, `idp_entity_id`, `acs_binding`, and
-/// `acs_url`. A missing `relay_state` or `acs_index` reads as `None`, and a
-/// missing `acs_is_default` reads as `false`. Unknown fields are ignored.
+/// `acs_url`. A missing `relay_state` or `acs_index` reads as `None`, a
+/// missing `acs_is_default` reads as `false`, and a missing
+/// `required_authn_context_class_refs` or `required_authn_context_decl_refs`
+/// reads as an empty list. Unknown fields are ignored. Because an older
+/// release ignores `required_authn_context_class_refs` and
+/// `required_authn_context_decl_refs`, upgrade every instance that can finish
+/// a login before enabling
+/// [`StartSso::require_exact_authn_context`](crate::StartSso::require_exact_authn_context),
+/// and drain or invalidate pending step-up logins before rolling back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
@@ -436,15 +487,25 @@ pub struct PendingAuthnRequestSnapshot {
     /// Whether the requested assertion consumer service is the default one.
     #[cfg_attr(feature = "serde", serde(default))]
     pub acs_is_default: bool,
+    /// Exact `<AuthnContextClassRef>` URIs required when finishing SSO, in
+    /// request order. Empty when none are required.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub required_authn_context_class_refs: Vec<String>,
+    /// Exact `<AuthnContextDeclRef>` URIs required when finishing SSO, in
+    /// request order. Empty when none are required.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub required_authn_context_decl_refs: Vec<String>,
 }
 
 impl PendingAuthnRequestSnapshot {
     /// Build a snapshot from the request ID, the identity-provider entity ID,
     /// and the binding and location of the assertion consumer service.
     ///
-    /// `relay_state` and `acs_index` start as `None`, and `acs_is_default`
-    /// starts as `false`. Assign them to match the request. `new` does not
-    /// check the values. [`PendingAuthnRequest::from_snapshot`] checks them.
+    /// `relay_state` and `acs_index` start as `None`, `acs_is_default` starts
+    /// as `false`, and `required_authn_context_class_refs` and
+    /// `required_authn_context_decl_refs` start empty. Assign them to match
+    /// the request. `new` does not check the values.
+    /// [`PendingAuthnRequest::from_snapshot`] checks them.
     pub fn new(
         request_id: impl Into<String>,
         idp_entity_id: impl Into<String>,
@@ -459,6 +520,8 @@ impl PendingAuthnRequestSnapshot {
             acs_url: acs_url.into(),
             acs_index: None,
             acs_is_default: false,
+            required_authn_context_class_refs: Vec::new(),
+            required_authn_context_decl_refs: Vec::new(),
         }
     }
 }
@@ -577,6 +640,28 @@ impl PendingManageNameIdRequestSnapshot {
             relay_state: None,
             peer_entity_id: peer_entity_id.into(),
         }
+    }
+}
+
+fn snapshot_required_authn_context(
+    class_refs: Vec<String>,
+    decl_refs: Vec<String>,
+) -> Result<Option<Vec<AuthnContextReference>>, SamlError> {
+    match (class_refs.is_empty(), decl_refs.is_empty()) {
+        (true, true) => Ok(None),
+        (false, false) => Err(SamlError::Invalid(
+            "snapshot must not mix AuthnContextClassRef and AuthnContextDeclRef".into(),
+        )),
+        (false, true) => class_refs
+            .into_iter()
+            .map(AuthnContextReference::class)
+            .collect::<Result<Vec<_>, _>>()
+            .map(Some),
+        (true, false) => decl_refs
+            .into_iter()
+            .map(AuthnContextReference::declaration)
+            .collect::<Result<Vec<_>, _>>()
+            .map(Some),
     }
 }
 

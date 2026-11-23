@@ -3,12 +3,25 @@
 use std::error::Error;
 
 use saml_rs::{
-    PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
+    AuthnContextReference, PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
     PendingLogoutRequestSnapshot, PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot,
+    SamlError,
 };
 use serde_json::Value;
 
 const AUTHN_REQUEST_JSON: &str = r#"{
+  "request_id": "_request123",
+  "relay_state": "return-to-cart",
+  "idp_entity_id": "https://idp.example.com/metadata",
+  "acs_binding": "post",
+  "acs_url": "https://sp.example.com/acs",
+  "acs_index": null,
+  "acs_is_default": false,
+  "required_authn_context_class_refs": [],
+  "required_authn_context_decl_refs": []
+}"#;
+
+const OLD_AUTHN_REQUEST_JSON: &str = r#"{
   "request_id": "_request123",
   "relay_state": "return-to-cart",
   "idp_entity_id": "https://idp.example.com/metadata",
@@ -157,7 +170,9 @@ fn pending_snapshot_serde_authn_request_writes_absent_optional_fields() -> Resul
       "acs_binding": "post",
       "acs_url": "https://sp.example.com/acs",
       "acs_index": null,
-      "acs_is_default": false
+      "acs_is_default": false,
+      "required_authn_context_class_refs": [],
+      "required_authn_context_decl_refs": []
     }"#;
 
     assert_eq!(
@@ -169,6 +184,69 @@ fn pending_snapshot_serde_authn_request_writes_absent_optional_fields() -> Resul
         ))?,
         serde_json::from_str::<Value>(json)?
     );
+    Ok(())
+}
+
+#[test]
+fn pending_snapshot_serde_authn_request_reads_old_snapshot_without_authn_context(
+) -> Result<(), Box<dyn Error>> {
+    let snapshot: PendingAuthnRequestSnapshot = serde_json::from_str(OLD_AUTHN_REQUEST_JSON)?;
+    assert_eq!(snapshot, documented_authn_request_snapshot());
+    let pending = PendingAuthnRequest::from_snapshot(snapshot)?;
+    assert_eq!(pending.required_authn_context(), None);
+    Ok(())
+}
+
+#[test]
+fn pending_snapshot_serde_authn_request_round_trips_required_authn_contexts(
+) -> Result<(), Box<dyn Error>> {
+    let mut class_snapshot = documented_authn_request_snapshot();
+    class_snapshot.required_authn_context_class_refs = vec![
+        "https://refeds.org/profile/mfa".to_string(),
+        "urn:oasis:names:tc:SAML:2.0:ac:classes:TimeSyncToken".to_string(),
+    ];
+    let class_pending = PendingAuthnRequest::from_snapshot(class_snapshot)?;
+    let class_json = serde_json::to_string(&class_pending.snapshot())?;
+    let restored_class = PendingAuthnRequest::from_snapshot(serde_json::from_str(&class_json)?)?;
+    assert_eq!(restored_class, class_pending);
+    assert_eq!(
+        restored_class.required_authn_context(),
+        Some(
+            &[
+                AuthnContextReference::class("https://refeds.org/profile/mfa")?,
+                AuthnContextReference::class(
+                    "urn:oasis:names:tc:SAML:2.0:ac:classes:TimeSyncToken"
+                )?,
+            ][..]
+        )
+    );
+
+    let mut decl_snapshot = documented_authn_request_snapshot();
+    decl_snapshot.required_authn_context_decl_refs =
+        vec!["https://idp.example.com/context/mfa".to_string()];
+    let decl_pending = PendingAuthnRequest::from_snapshot(decl_snapshot)?;
+    let decl_json = serde_json::to_string(&decl_pending.snapshot())?;
+    let restored_decl = PendingAuthnRequest::from_snapshot(serde_json::from_str(&decl_json)?)?;
+    assert_eq!(restored_decl, decl_pending);
+    assert_eq!(
+        restored_decl.required_authn_context(),
+        Some(
+            &[AuthnContextReference::declaration(
+                "https://idp.example.com/context/mfa"
+            )?][..]
+        )
+    );
+
+    let mut mixed_snapshot = documented_authn_request_snapshot();
+    mixed_snapshot.required_authn_context_class_refs =
+        vec!["https://refeds.org/profile/mfa".to_string()];
+    mixed_snapshot.required_authn_context_decl_refs =
+        vec!["https://idp.example.com/context/mfa".to_string()];
+    let mixed_json = serde_json::to_string(&mixed_snapshot)?;
+    assert!(matches!(
+        PendingAuthnRequest::from_snapshot(serde_json::from_str(&mixed_json)?),
+        Err(SamlError::Invalid(_))
+    ));
     Ok(())
 }
 

@@ -67,7 +67,9 @@ A `PendingAuthnRequestSnapshot` in JSON:
   "acs_binding": "post",
   "acs_url": "https://sp.example.com/acs",
   "acs_index": null,
-  "acs_is_default": false
+  "acs_is_default": false,
+  "required_authn_context_class_refs": [],
+  "required_authn_context_decl_refs": []
 }
 ```
 
@@ -83,14 +85,16 @@ Each snapshot stores these fields:
 | `acs_url` | String | AuthnRequest | Required |
 | `acs_index` | Integer or `null` | AuthnRequest | Optional, absent reads as `None` |
 | `acs_is_default` | Boolean | AuthnRequest | Optional, absent reads as `false` |
+| `required_authn_context_class_refs` | Array of strings | AuthnRequest | Optional, absent reads as `[]` |
+| `required_authn_context_decl_refs` | Array of strings | AuthnRequest | Optional, absent reads as `[]` |
 | `request_binding` | Binding short name | LogoutRequest | Required |
 | `not_on_or_after` | String or `null` | LogoutRequest | Optional, absent reads as `None` |
 
 The format follows these rules in JSON, and in any other format that stores field names:
 
 1. Field names are stable. They are the Rust field names, and they are what your session store holds.
-2. Serializing writes every field. An absent optional value is written as `null`.
-3. Deserializing requires the fields marked Required. An optional field may be absent. It then reads as `None`, or as `false` for `acs_is_default`.
+2. Serializing writes every field. An absent optional value is written as `null`, `false`, or `[]`.
+3. Deserializing requires the fields marked Required. An optional field may be absent. It then reads as `None`, `false` for `acs_is_default`, or `[]` for the authentication context lists.
 4. Deserializing ignores a field this release does not know, so data written by a newer release still reads.
 5. A field that a later release adds is optional on read. When it is absent, the crate behaves as it did before the field existed.
 6. `snapshot` writes a binding as the short name that `Binding::short_name` returns: `post`, `redirect`, `simpleSign`, `artifact`, or `soap`. `from_snapshot` also reads a binding URN.
@@ -101,4 +105,6 @@ The stored form has no type tag, and one kind of snapshot can read as another: a
 
 ### Keep the stored snapshot unchanged
 
-The finish operation checks the response against the pending state you pass it: the request ID, the peer entity ID, the RelayState, and for SSO the assertion consumer service. It trusts that state. The stored snapshot must come back unchanged and stay tied to the browser session that started the request. Keep it in server-side session storage. If the browser carries it, for example in a cookie, authenticate the value so that a changed snapshot is refused. A snapshot holds no key material.
+The finish operation checks the response against the pending state you pass it: the request ID, the peer entity ID, the RelayState, and for SSO the assertion consumer service and any required authentication context. It trusts that state. The stored snapshot must come back unchanged and stay tied to the browser session that started the request. Keep it in server-side session storage. If the browser carries it, for example in a cookie, authenticate the value so that a changed snapshot is refused. A snapshot holds no key material.
+
+During a rolling upgrade or rollback, an older release ignores `required_authn_context_class_refs` and `required_authn_context_decl_refs` when reading stored JSON and will finish the login without enforcing them. Upgrade every instance that can finish a login before enabling `StartSso::require_exact_authn_context`, and drain or invalidate pending step-up logins before rolling back.

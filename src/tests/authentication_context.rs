@@ -1,5 +1,7 @@
 #![cfg(crypto)]
 
+mod exact_matching;
+
 use super::common;
 use super::post_validation::post_validation;
 
@@ -136,6 +138,40 @@ fn request_input(outbound: &Outbound<AuthnRequest>) -> Result<Inbound<AuthnReque
 
 fn response_input(outbound: &Outbound<SsoResponse>) -> Result<Inbound<SsoResponse>, SamlError> {
     Ok(Inbound::post(outbound.post_form()?.fields().to_vec()))
+}
+
+fn resign_response_xml(edited: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let document = parse_document(edited, saml_rs::XmlLimits::default())?;
+    let mut unsigned = edited.to_string();
+    let mut signatures: Vec<_> = document
+        .root
+        .children
+        .iter()
+        .filter(|child| child.local_name == "Signature")
+        .map(|child| (child.start, child.end))
+        .collect();
+    for assertion in &document.root.children {
+        signatures.extend(
+            assertion
+                .children
+                .iter()
+                .filter(|child| child.local_name == "Signature")
+                .map(|child| (child.start, child.end)),
+        );
+    }
+    signatures.sort_unstable();
+    for (start, end) in signatures.into_iter().rev() {
+        unsigned.replace_range(start..end, "");
+    }
+    Ok(sign_saml_xml(
+        &unsigned,
+        true,
+        &read_private_key(KEY, None)?,
+        CERT,
+        RSA_SHA256,
+        &[],
+        None,
+    )?)
 }
 
 #[test]
@@ -489,37 +525,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
         &edited[..selected.start],
         &edited[selected.start..]
     );
-    let document = parse_document(&edited, saml_rs::XmlLimits::default())?;
-    let mut unsigned = edited.clone();
-    let mut signatures: Vec<_> = document
-        .root
-        .children
-        .iter()
-        .filter(|child| child.local_name == "Signature")
-        .map(|child| (child.start, child.end))
-        .collect();
-    for assertion in &document.root.children {
-        signatures.extend(
-            assertion
-                .children
-                .iter()
-                .filter(|child| child.local_name == "Signature")
-                .map(|child| (child.start, child.end)),
-        );
-    }
-    signatures.sort_unstable();
-    for (start, end) in signatures.into_iter().rev() {
-        unsigned.replace_range(start..end, "");
-    }
-    let signed = sign_saml_xml(
-        &unsigned,
-        true,
-        &read_private_key(KEY, None)?,
-        CERT,
-        RSA_SHA256,
-        &[],
-        None,
-    )?;
+    let signed = resign_response_xml(&edited)?;
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
