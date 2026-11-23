@@ -1,4 +1,4 @@
-use super::authn_details::{AuthnContext, SubjectLocality};
+use super::authn_details::{AuthnContext, StatementChildren, SubjectLocality};
 use super::identifiers::{SamlInstant, SessionIndex};
 use crate::error::{SamlError, TimeWindowField};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -14,7 +14,7 @@ pub struct AuthnStatement {
     session_index: Option<SessionIndex>,
     authn_instant: Option<SamlInstant>,
     session_not_on_or_after: Option<SamlInstant>,
-    authn_context: Option<AuthnContext>,
+    authn_context: AuthnContext,
     subject_locality: Option<SubjectLocality>,
 }
 
@@ -38,29 +38,21 @@ impl AuthnStatement {
         session_index: Option<SessionIndex>,
         authn_instant: Option<SamlInstant>,
         session_not_on_or_after: Option<SamlInstant>,
+        children: StatementChildren,
     ) -> Self {
         Self {
             session_index,
             authn_instant,
             session_not_on_or_after,
-            authn_context: None,
-            subject_locality: None,
+            authn_context: children.authn_context,
+            subject_locality: children.subject_locality,
         }
     }
 
-    pub(super) fn with_authn_context(mut self, context: AuthnContext) -> Self {
-        self.authn_context = Some(context);
-        self
-    }
-
-    pub(super) fn with_subject_locality(mut self, locality: SubjectLocality) -> Self {
-        self.subject_locality = Some(locality);
-        self
-    }
-
-    /// The reported authentication context, when present.
-    pub fn authn_context(&self) -> Option<&AuthnContext> {
-        self.authn_context.as_ref()
+    /// The reported authentication context. An accepted statement has
+    /// exactly one.
+    pub fn authn_context(&self) -> &AuthnContext {
+        &self.authn_context
     }
 
     /// The reported network location, when present.

@@ -1,7 +1,10 @@
 use super::authn_context::{AuthnContextReference, AuthnContextReferenceKind};
 use crate::constants::namespace;
+use crate::error::SamlError;
+use crate::util::Value;
 use crate::xml::any_uri::collapse_whitespace;
-use crate::xml::protocol_element::SamlElement;
+use crate::xml::dom::XmlLimits;
+use crate::xml::protocol_element::{parse_saml_with_limits, SamlElement};
 
 /// The authentication context reported by one accepted `AuthnStatement`.
 ///
@@ -91,15 +94,43 @@ impl SubjectLocality {
     }
 }
 
-pub(super) fn attach_statement_details(
-    extract: &crate::util::Value,
-    xml: &str,
-    sessions: Vec<super::AuthnStatement>,
-) -> Result<Vec<super::AuthnStatement>, crate::error::SamlError> {
-    use crate::error::SamlError;
-    use crate::xml::dom::XmlLimits;
-    use crate::xml::protocol_element::parse_saml_with_limits;
+pub(super) struct StatementChildren {
+    pub(super) authn_context: AuthnContext,
+    pub(super) subject_locality: Option<SubjectLocality>,
+}
 
+impl StatementChildren {
+    fn from_element(statement: &SamlElement) -> Result<Self, SamlError> {
+        let mut contexts = statement
+            .children
+            .iter()
+            .filter(|child| child.is(namespace::ASSERTION, "AuthnContext"));
+        let context = contexts.next().ok_or_else(|| {
+            SamlError::ProtocolProfile("AuthnStatement is missing AuthnContext".into())
+        })?;
+        if contexts.next().is_some() {
+            return Err(SamlError::ProtocolProfile(
+                "AuthnStatement has more than one AuthnContext".into(),
+            ));
+        }
+        let authn_context = AuthnContext::from_element(context);
+        let subject_locality = statement
+            .children
+            .iter()
+            .rev()
+            .find(|child| child.is(namespace::ASSERTION, "SubjectLocality"))
+            .map(SubjectLocality::from_element);
+        Ok(Self {
+            authn_context,
+            subject_locality,
+        })
+    }
+}
+
+pub(super) fn statement_children(
+    extract: &Value,
+    xml: &str,
+) -> Result<Vec<StatementChildren>, SamlError> {
     let document = parse_saml_with_limits(xml, XmlLimits::unbounded())?;
     let assertion_id = extract.get_str(crate::xml::fields::login_response::ASSERTION_ID);
     let assertion = std::iter::once(&document)
@@ -110,33 +141,10 @@ pub(super) fn attach_statement_details(
         .ok_or_else(|| {
             SamlError::Invalid("extracted AuthnStatement has no matching assertion".into())
         })?;
-    let statements: Vec<_> = assertion
+    assertion
         .children
         .iter()
         .filter(|child| child.is(namespace::ASSERTION, "AuthnStatement"))
-        .collect();
-    if sessions.len() != statements.len() {
-        return Err(SamlError::Invalid(
-            "extracted AuthnStatement count does not match the assertion".into(),
-        ));
-    }
-    sessions
-        .into_iter()
-        .zip(statements)
-        .map(|(mut session, statement)| {
-            for child in &statement.children {
-                if child.is(namespace::ASSERTION, "AuthnContext") {
-                    if session.authn_context().is_some() {
-                        return Err(SamlError::ProtocolProfile(
-                            "AuthnStatement has more than one AuthnContext".into(),
-                        ));
-                    }
-                    session = session.with_authn_context(AuthnContext::from_element(child));
-                } else if child.is(namespace::ASSERTION, "SubjectLocality") {
-                    session = session.with_subject_locality(SubjectLocality::from_element(child));
-                }
-            }
-            Ok(session)
-        })
+        .map(StatementChildren::from_element)
         .collect()
 }

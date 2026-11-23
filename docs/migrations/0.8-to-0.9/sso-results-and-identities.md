@@ -352,15 +352,46 @@ let options = StartSso::post().requested_authn_context(RequestedAuthnContext::tr
 # Ok::<(), saml_rs::SamlError>(())
 ```
 
-## Send one authentication context per statement
+## Send exactly one authentication context per statement
 
-**Affects:** service providers whose identity provider sends multiple SAML
-`AuthnContext` children in one `AuthnStatement`.
+**Affects:** service providers whose identity provider omits the SAML
+`AuthnContext` of an `AuthnStatement` or sends more than one, and code that
+calls `authn_context()` on an `AuthnStatement`.
 
-Ask the identity provider to send one context per statement. Previously the
-service provider reported the last context.
+Ask the identity provider to send exactly one context in each statement, as
+the assertion schema requires. Before the upgrade, the service provider
+accepted both shapes: `authn_context()` returned `None` for an omitted
+context and the last context for repeated ones.
 
 If a configured schema validator rejects the document, the service provider
 returns `SamlError::Invalid` from that callback. If the document reaches the
-built-in statement reader, repeated contexts in the selected assertion
-return `SamlError::ProtocolProfile`.
+built-in statement reader, `finish_sso`, `accept_unsolicited_sso`, and
+`finish_paos_sso` return `SamlError::ProtocolProfile` when a statement of the
+selected assertion has no context or more than one.
+
+`AuthnStatement::authn_context()` returns `&AuthnContext` instead of
+`Option<&AuthnContext>`. Remove the `None` case.
+
+Before the upgrade:
+
+```rust,ignore
+let class = session
+	.authn_session()
+	.authn_context()
+	.and_then(|context| context.class_reference());
+```
+
+After the upgrade:
+
+```rust
+# fn read(session: &saml_rs::SsoSession) {
+use saml_rs::AuthnStatement;
+
+let class = session
+	.authn_statements()
+	.first()
+	.map(AuthnStatement::authn_context)
+	.and_then(|context| context.class_reference());
+# let _ = class;
+# }
+```

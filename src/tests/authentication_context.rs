@@ -14,11 +14,11 @@ use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::xml::dom::parse_document;
 use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, FormField, IdentityProvider,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive, MetadataTrustPolicy, NameId,
-    NameIdFormat, Outbound, OutboundDelivery, ReplayPolicy, RequestedAuthnContext, RespondSso,
-    SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoAssertion, SsoEndpoint, SsoResponse, StartSso,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, AuthnStatement, EntityId, FormField,
+    IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive,
+    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery, ReplayPolicy,
+    RequestedAuthnContext, RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoResponse, StartSso,
 };
 
 const SP: &str = "https://sp.example.com";
@@ -264,7 +264,7 @@ fn respond_and_finish_sso_preserve_class_and_declaration_references(
             .authn_statements()
             .first()
             .ok_or("missing AuthnStatement")?;
-        let context = statement.authn_context().ok_or("missing context")?;
+        let context = statement.authn_context();
         assert_eq!(
             context
                 .class_reference()
@@ -295,7 +295,7 @@ fn unsolicited_sso_exposes_the_asserted_context() -> Result<(), Box<dyn std::err
         session
             .authn_statements()
             .first()
-            .and_then(|statement| statement.authn_context())
+            .map(AuthnStatement::authn_context)
             .and_then(|context| context.class_reference())
             .map(AuthnContextReference::uri),
         Some(MFA)
@@ -438,7 +438,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
             .collect::<Vec<_>>(),
         [Some("first"), Some("second"), Some("third")]
     );
-    let first = sessions[0].authn_context().ok_or("missing first context")?;
+    let first = sessions[0].authn_context();
     assert_eq!(
         first.class_reference(),
         Some(&AuthnContextReference::class(MFA)?)
@@ -461,9 +461,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
     let locality = sessions[0].subject_locality().ok_or("missing locality")?;
     assert_eq!(locality.address(), Some("192.0.2.1"));
     assert_eq!(locality.dns_name(), Some("client.example.com"));
-    let second = sessions[1]
-        .authn_context()
-        .ok_or("missing second context")?;
+    let second = sessions[1].authn_context();
     assert!(second.class_reference().is_none());
     assert!(second.declaration_reference().is_none());
     assert!(second.has_declaration());
@@ -472,7 +470,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
         .ok_or("missing empty locality")?;
     assert!(locality.address().is_none());
     assert!(locality.dns_name().is_none());
-    let third = sessions[2].authn_context().ok_or("missing third context")?;
+    let third = sessions[2].authn_context();
     assert_eq!(
         third.class_reference().map(AuthnContextReference::uri),
         Some("urn:example:third")
@@ -532,7 +530,7 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
         session
             .authn_statements()
             .first()
-            .and_then(|statement| statement.authn_context())
+            .map(AuthnStatement::authn_context)
             .and_then(|context| context.class_reference())
             .map(AuthnContextReference::uri),
         Some(MFA)
