@@ -54,7 +54,7 @@ Bindings §3.6.5.
 | `Issuer` is present and omits `Format` or sets it to `entity` | Requester | Generate ArtifactResolve | Mandatory. Profiles §5.4.1. Generation omits `Format` |
 | `ID`, `Version` `2.0`, and UTC `IssueInstant` are present | Requester | Generate ArtifactResolve | Mandatory. Protocol schema `RequestAbstractType`; Core §1.3.3 |
 | Do not generate a leap-second time | Requester | Generate any instant | Mandatory. Core §1.3.3. Receivers are not required to reject a leap second |
-| `Destination` is the artifact resolution endpoint | Requester | Generate ArtifactResolve | Set to the metadata location. Core treats `Destination` as optional. When a received request includes it, a different value does not release the message |
+| `Destination` is the artifact resolution endpoint | Requester | Generate ArtifactResolve | Set to the metadata location. Core treats `Destination` as optional. When a received request includes it, a different value does not release the message. A received `Destination` is compared after the `xs:anyURI` whitespace collapse |
 | One `Artifact` value | Requester | Generate ArtifactResolve | Mandatory. Protocol schema `ArtifactResolveType`. The value is the protocol element. A second direct child named `Artifact`, including one outside the protocol namespace, is malformed; the responder returns `SamlError` and leaves the artifact outstanding |
 | At most one `Issuer` | Requester | Generate ArtifactResolve | Protocol schema `ArtifactResolveType`. A second `Issuer` is malformed; the responder returns `SamlError` so the deployment can refuse it at HTTP |
 | Authenticate to the responder and protect integrity | Requester | Send ArtifactResolve | Recommendation. Profiles §5.3.1 and §5.4.1. Enforced for every dereference. There is no relaxation. Web SSO makes the same properties mandatory and adds confidentiality; that row is below |
@@ -103,7 +103,9 @@ the message for an unauthorized requester, and Errata 05 E19 does not allow a
 SOAP fault for that SAML error. The looser rule, treating a request with no
 usable `Issuer` as the named presenter, cannot be applied because the
 presenter check compares that `Issuer` with the service provider the artifact
-was issued to.
+was issued to. The presenter check compares the `Issuer` content exactly, as
+[entity identifiers](identifiers.md#entity-identifiers) records, and reads
+`Format` after the `xs:anyURI` whitespace collapse.
 
 ## Web Browser SSO response artifact
 
@@ -134,7 +136,7 @@ message and does not accept a session. `finish_sso` accepts it through
 | One `Status` | Requester | Inbound ArtifactResponse | Protocol schema. A second `Status` is malformed |
 | `InResponseTo` is present and equals the request `ID` | Requester | Inbound ArtifactResponse | Mandatory. Core §3.2.2 |
 | Top-level status is Success, and one protocol message is present | Requester | Inbound ArtifactResponse | The success case of Profiles §5.3.2. Success without a message is `SamlError::ArtifactNotReturned` |
-| `Issuer` is present, equals the identity provider, and omits `Format` or sets it to `entity` | Requester | Inbound ArtifactResponse | Library policy. Profiles §5.4.2 requires the issuer to send that `Issuer` and does not require the requester to reject another response. The looser rule cannot be applied because this requester attributes the responder by that `Issuer` together with `SoapChannel`. Without it, `finish` would return a message that is not attributed to the artifact issuer |
+| `Issuer` is present, equals the identity provider, and omits `Format` or sets it to `entity` | Requester | Inbound ArtifactResponse | Library policy. Profiles §5.4.2 requires the issuer to send that `Issuer` and does not require the requester to reject another response. The looser rule cannot be applied because this requester attributes the responder by that `Issuer` together with `SoapChannel`. Without it, `finish` would return a message that is not attributed to the artifact issuer. The `Issuer` content is compared exactly, as [entity identifiers](identifiers.md#entity-identifiers) records, and `Format` is compared after the `xs:anyURI` whitespace collapse |
 | The payload is one element in the SAML protocol namespace | Requester | Inbound ArtifactResponse | Library policy. The schema allows another child, and Profiles §5.3.2 does not require the requester to reject it. The looser rule cannot be applied because `finish` returns the dereferenced protocol message; a different element would be presented as that message. `finish` returns the protocol payload. `finish_sso` and `accept_unsolicited_sso` require that payload to be a `Response` |
 | The same artifact value is resolved once | Requester | Inbound artifact | Recommendation. Bindings §3.6.5.2. With `ReplayPolicy::RequireCache`, `resolve_artifact` stores `ReplayKey::Artifact` in the caller's `ReplayCache` until the context time plus `SamlValidationContext::with_replay_retention`, which is then required. A repeat returns `SamlError::ReplayDetected`. `ReplayPolicy::Disabled` on that call relaxes this recommendation only. The issuer still returns the message once |
 

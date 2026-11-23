@@ -31,6 +31,26 @@ over 80 bytes returned `SamlError::Invalid`. If you store
 limit. If you handle oversize errors, match `SamlError::LimitExceeded` with
 `ResourceLimit::RelayStateBytes` for values above 4096 bytes in this flow.
 
+## Send a SOAP `Issuer` without surrounding whitespace
+
+**Affects:** deployments whose peer writes whitespace around the entity ID in
+the `<saml:Issuer>` of an `ArtifactResolve`, `ArtifactResponse`,
+`ManageNameIDRequest`, or `ManageNameIDResponse` sent over SOAP.
+
+**Before:** the SOAP receivers trimmed the `Issuer` content before they
+compared it with the peer's entity ID. Web Browser SSO, Single Logout, and
+HTTP-Redirect name identifier management already compared it exactly.
+
+**Now:** every flow compares the content exactly, as SAML Core §1.3.1 requires
+for `xs:string` values. A padded `Issuer` returns `SamlError::IssuerMismatch`
+from `ArtifactResolution::finish`, `receive_name_id_management`, and
+`StartedNameIdManagement::finish`. `answer_artifact_resolve` withholds the
+message with `ArtifactWithheld::DifferentPresenter` and leaves the artifact
+outstanding. Rust call sites stay the same.
+
+**Upgrade:** have the peer write its entity ID in `<saml:Issuer>` with no
+whitespace around it. No option restores the trim.
+
 ## Send the SOAP headers from `headers()`
 
 **Affects:** code that calls `soap_action()`, `cache_control()`, `pragma()`,

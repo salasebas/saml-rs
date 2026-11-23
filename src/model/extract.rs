@@ -11,6 +11,7 @@ use crate::constants::attribute_name_format;
 use crate::error::{SamlError, TimeWindowField};
 use crate::util::Value;
 use crate::validator::conditions_time_window;
+use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::fields::{attribute, authn_request, authn_statement, login_response};
 use crate::xml::{dom, parse_saml_utc_date_time, xs_boolean, xs_unsigned_short, XmlLimits};
 
@@ -49,11 +50,15 @@ pub(super) fn optional_request_id(
         .transpose()
 }
 
+/// An `xs:anyURI` endpoint attribute, with its whitespace collapsed.
 pub(super) fn optional_endpoint(
     extract: &Value,
     path: &str,
 ) -> Result<Option<EndpointUrl>, SamlError> {
-    extract.get_str(path).map(EndpointUrl::try_new).transpose()
+    extract
+        .get_str(path)
+        .map(|value| EndpointUrl::try_new(collapse_whitespace(value)))
+        .transpose()
 }
 
 pub(super) fn optional_u16(extract: &Value, path: &str) -> Result<Option<u16>, SamlError> {
@@ -287,7 +292,7 @@ pub(super) fn audience_restrictions_from_extract(
             restriction
                 .root
                 .children_named("Audience")
-                .map(|audience| EntityId::try_new(audience.text.as_str()))
+                .map(|audience| EntityId::try_new(collapse_whitespace(&audience.text)))
                 .collect::<Result<Vec<_>, _>>()
                 .map(AudienceRestriction::new)
         })

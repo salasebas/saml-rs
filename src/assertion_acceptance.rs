@@ -10,6 +10,7 @@ use crate::flow::FlowOptions;
 use crate::model::{authn_statement_not_on_or_after_values, earliest_authn_session_expiration};
 use crate::util::Value;
 use crate::validator::{conditions_time_window, TimeWindow};
+use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::dom::{self, reader_err, Node};
 use crate::xml::{extract_with_limits, fields, parse_saml_utc_instant, XmlLimits};
 use quick_xml::events::Event;
@@ -423,7 +424,7 @@ fn audience_restrictions_contain(assertion: &Node, expected: &str) -> AudienceCh
     let names_expected = |restriction: &Node| {
         restriction
             .children_named("Audience")
-            .any(|audience| audience.text == expected)
+            .any(|audience| collapse_whitespace(&audience.text) == expected)
     };
     if restrictions.is_empty() {
         AudienceCheck::Absent
@@ -488,7 +489,7 @@ fn check_bearer_subject_confirmation(
     }
 
     if let Some(expected) = expected_recipient {
-        if data.attr("Recipient") != Some(expected) {
+        if data.attr("Recipient").map(collapse_whitespace).as_deref() != Some(expected) {
             return Ok(SubjectConfirmationCheck::Invalid(
                 SubjectConfirmationReason::RecipientMismatch,
             ));

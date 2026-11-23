@@ -620,12 +620,15 @@ fn a_destination_mismatch_withholds_the_message_and_leaves_it_outstanding(
         ArtifactRelease::Withheld(ArtifactWithheld::Destination)
     );
     assert!(!answer.response().envelope().contains(WEB_SSO_MARKER));
-    let accepted = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        resolution.request().envelope(),
-        &mut issued,
-        channel,
-    )?;
+    let padded = resolution.request().envelope().replace(
+        &format!("Destination=\"{RESOLUTION_URL}\""),
+        &format!("Destination=\" {RESOLUTION_URL}&#10;\""),
+    );
+    assert_ne!(padded, resolution.request().envelope());
+    let accepted =
+        parties
+            .idp
+            .answer_artifact_resolve(&parties.sp_metadata, &padded, &mut issued, channel)?;
     assert_eq!(accepted.release(), ArtifactRelease::Returned);
     Ok(())
 }
@@ -855,10 +858,19 @@ fn the_service_provider_rejects_an_artifact_response_it_cannot_attribute(
         channel,
     )?;
     let envelope = answer.response().envelope();
-    let missing_issuer =
-        envelope.replace(&format!("<saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>"), "");
+    let issuer = format!("<saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>");
+    let missing_issuer = envelope.replace(&issuer, "");
     assert!(matches!(
         resolution.finish(&missing_issuer),
+        Err(SamlError::IssuerMismatch { .. })
+    ));
+    let padded_issuer = envelope.replace(
+        &issuer,
+        &format!("<saml:Issuer>\n  {IDP_ENTITY_ID}\n</saml:Issuer>"),
+    );
+    assert_ne!(padded_issuer, envelope);
+    assert!(matches!(
+        resolution.finish(&padded_issuer),
         Err(SamlError::IssuerMismatch { .. })
     ));
     let email_issuer = envelope.replace(
@@ -905,9 +917,28 @@ fn a_non_entity_resolve_issuer_does_not_receive_the_message(
         ArtifactRelease::Withheld(ArtifactWithheld::DifferentPresenter)
     );
     assert!(!withheld.response().envelope().contains(WEB_SSO_MARKER));
+    let padded_issuer = resolution.request().envelope().replace(
+        &format!("{SP_ENTITY_ID}</saml:Issuer>"),
+        &format!(" {SP_ENTITY_ID} </saml:Issuer>"),
+    );
+    assert_ne!(padded_issuer, resolution.request().envelope());
+    let withheld = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &padded_issuer,
+        &mut issued,
+        channel,
+    )?;
+    assert_eq!(
+        withheld.release(),
+        ArtifactRelease::Withheld(ArtifactWithheld::DifferentPresenter)
+    );
+    let padded_entity_format = resolution.request().envelope().replace(
+        "<saml:Issuer>",
+        "<saml:Issuer Format=\"&#9;urn:oasis:names:tc:SAML:2.0:nameid-format:entity \">",
+    );
     let accepted = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
-        resolution.request().envelope(),
+        &padded_entity_format,
         &mut issued,
         channel,
     )?;

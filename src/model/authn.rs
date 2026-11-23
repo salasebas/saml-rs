@@ -109,12 +109,14 @@ impl AuthnRequest {
         &self.issuer
     }
 
-    /// Destination endpoint, when present.
+    /// `Destination`, when present, with its XML Schema `anyURI` whitespace
+    /// collapsed.
     pub fn destination(&self) -> Option<&EndpointUrl> {
         self.destination.as_ref()
     }
 
-    /// AssertionConsumerServiceURL, when present.
+    /// `AssertionConsumerServiceURL`, when present, with its XML Schema
+    /// `anyURI` whitespace collapsed.
     pub fn acs_url(&self) -> Option<&EndpointUrl> {
         self.acs_url.as_ref()
     }
