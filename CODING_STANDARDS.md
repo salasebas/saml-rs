@@ -94,12 +94,15 @@ These rules apply when an API is added or redesigned.
   siblings' names, use the precise name: `PendingAuthnRequest::idp_entity_id()`
   next to `PendingLogoutRequest::peer_entity_id()`.
 - A value the crate cannot guarantee or never reads is deleted, not renamed.
-- Name fluent methods on builders and operation inputs after the option or
-  action, such as `StartSlo::reason` or `RespondSso::sign_response`.
 - Use `with_foo(self, value) -> Self` to return a configured model or reusable
-  configuration value, such as `NameId::with_format`. Keep `foo()` for reading
-  the property when the type exposes it. Constructor variants may also use
-  `with_`, as in `InMemoryReplayCache::with_clock`.
+  configuration value, such as `NameId::with_format`. Use the same pattern
+  when the type has a getter for the property, even on operation inputs.
+  `SamlValidationContext::with_clock_skew` pairs with `clock_skew()`.
+  `LogoutSubject::with_session_index` appends to the values that
+  `session_indexes()` returns.
+- Name other fluent methods on builders and operation inputs after the option
+  or action, such as `StartSlo::reason` or `RespondSso::sign_response`.
+- Constructor variants may use `with_`, as in `InMemoryReplayCache::with_clock`.
 - A method that takes a complete field value replaces it, even when the value
   is a collection. A method that takes one repeated element appends it, as
   `StartSso::extension` does. A bulk append takes an `IntoIterator` and appends
