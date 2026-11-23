@@ -148,7 +148,8 @@ impl IdentityProvider {
     /// [`SsoAssertion`](crate::SsoAssertion) or [`SsoOutcome::Success`] writes
     /// a `Success` response with that assertion, and [`SsoOutcome::Failure`]
     /// writes a response with that error status and no assertion. `options`
-    /// selects the delivery and response signing.
+    /// selects delivery and response signing. Set
+    /// [`RespondSso::status_message`] to include a diagnostic on failure.
     ///
     /// This does not write the Identity Provider Discovery cookie. Call
     /// [`Self::common_domain_cookie`] after authentication when the
@@ -170,7 +171,8 @@ impl IdentityProvider {
     /// # Errors
     ///
     /// Returns [`SamlError::Invalid`] when `outcome` is
-    /// [`SsoOutcome::Failure`] with a top-level `Success` status. Returns
+    /// [`SsoOutcome::Failure`] with a top-level `Success` status or an error
+    /// diagnostic contains characters XML 1.0 forbids. Returns
     /// [`SamlError`] when the request issuer does not match the SP
     /// descriptor, relay state is invalid, the request ACS selection conflicts
     /// with the response binding or SP metadata, required metadata or signing
@@ -248,7 +250,8 @@ impl IdentityProvider {
     /// # Errors
     ///
     /// Returns [`SamlError::Invalid`] when `outcome` is
-    /// [`SsoOutcome::Failure`] with a top-level `Success` status. Returns
+    /// [`SsoOutcome::Failure`] with a top-level `Success` status or an error
+    /// diagnostic contains characters XML 1.0 forbids. Returns
     /// [`SamlError`] when relay state is invalid, SP metadata cannot be
     /// parsed, the metadata default ACS is unsupported or incompatible with
     /// the selected response binding, a signing key is missing, the
@@ -365,6 +368,7 @@ impl IdentityProvider {
             name_id_qualifiers,
             issuance_lifetime: Some(self.issuance_lifetime()),
             status,
+            status_message: options.status_message.as_deref(),
             typed_attributes,
             authn_context,
             authn_instant,

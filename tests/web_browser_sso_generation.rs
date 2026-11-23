@@ -942,7 +942,7 @@ fn typed_sso_without_error_status_keeps_success_and_assertions(
         &sp_descriptor,
         &received,
         SsoAssertion::new(principal()),
-        RespondSso::post(),
+        RespondSso::post().status_message("Passkey authentication is unavailable."),
     )?;
     let solicited_xml = response_xml(&solicited)?;
     assert!(solicited_xml.contains("<saml:Assertion"));
@@ -1012,6 +1012,7 @@ fn typed_unsolicited_error_response_follows_in_response_to_rules(
 #[test]
 fn typed_error_response_uses_configured_namespace_prefixes(
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let diagnostic = " Passkey <required> & unavailable\r\nTry again. ";
     let sp = sp_with(signing_sp_validation())?;
     let mut templates = TemplatePolicy::default();
     templates.tag_prefix_protocol = "saml2p".into();
@@ -1040,7 +1041,7 @@ fn typed_error_response_uses_configured_namespace_prefixes(
         &sp_descriptor,
         &received,
         SsoOutcome::Failure(no_passive.clone()),
-        RespondSso::post(),
+        RespondSso::post().status_message(diagnostic),
     )?;
     let xml = response_xml(&response)?;
     assert!(xml.starts_with("<saml2p:Response "), "{xml}");
@@ -1056,15 +1057,39 @@ fn typed_error_response_uses_configured_namespace_prefixes(
         Inbound::post(response.post_form()?.fields().to_vec()),
         validation(),
     ) {
-        Err(SamlError::StatusNotSuccess { status, .. }) => assert_eq!(status, no_passive),
+        Err(SamlError::StatusNotSuccess {
+            status,
+            status_message,
+            ..
+        }) => {
+            assert_eq!(status, no_passive);
+            assert_eq!(
+                status_message.as_ref().map(saml_rs::StatusMessage::as_str),
+                Some(diagnostic)
+            );
+        }
         other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
     }
+    let document = roxmltree::Document::parse(&xml)?;
+    let status = document
+        .root_element()
+        .children()
+        .find(|node| node.has_tag_name((saml_rs::constants::namespace::PROTOCOL, "Status")))
+        .ok_or("missing Status")?;
+    let children: Vec<_> = status
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .collect();
+    assert_eq!(children.len(), 2);
+    assert!(children[0].has_tag_name((saml_rs::constants::namespace::PROTOCOL, "StatusCode")));
+    assert!(children[1].has_tag_name((saml_rs::constants::namespace::PROTOCOL, "StatusMessage")));
     Ok(())
 }
 
 #[test]
 fn typed_simplesign_error_response_keeps_the_detached_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let diagnostic = " Passkey <required> & unavailable\r\nTry again. ";
     let sp = ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .acs_endpoint(
@@ -1075,11 +1100,11 @@ fn typed_simplesign_error_response_keeps_the_detached_signature(
             .build()?,
     );
     let idp = idp_with(signed_authn_request_idp_validation(), false)?;
-    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
         &sp_descriptor,
         SsoOutcome::Failure(Status::responder()),
-        RespondSso::simple_sign(),
+        RespondSso::simple_sign().status_message(diagnostic),
     )?;
     let form = response.post_form()?;
     let xml = response_xml(&response)?;
@@ -1089,7 +1114,47 @@ fn typed_simplesign_error_response_keeps_the_detached_signature(
     assert!(form.value("Signature").is_some());
     assert!(form.value("SigAlg").is_some());
     assert!(!xml.contains("<ds:Signature"));
+    assert!(!xml.contains("InResponseTo"));
     assert_eq!(header_pairs(&response), NO_CACHE_HEADERS);
+    match sp.accept_unsolicited_sso(
+        &idp_descriptor,
+        Inbound::simple_sign(form.fields().to_vec()),
+        validation(),
+    ) {
+        Err(SamlError::StatusNotSuccess {
+            status,
+            status_message,
+            ..
+        }) => {
+            assert_eq!(status, Status::responder());
+            assert_eq!(
+                status_message.as_ref().map(saml_rs::StatusMessage::as_str),
+                Some(diagnostic)
+            );
+        }
+        other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
+fn typed_simplesign_error_rejects_diagnostics_with_invalid_xml_characters(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = ServiceProvider::new(
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::simple_sign(SP_ACS)?,
+        )
+        .build()?,
+    );
+    let idp = idp_with(signed_authn_request_idp_validation(), false)?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let result = idp.initiate_sso(
+        &sp_descriptor,
+        SsoOutcome::Failure(Status::responder()),
+        RespondSso::simple_sign().status_message("Passkey\u{0} unavailable"),
+    );
+    assert!(matches!(result, Err(SamlError::Invalid(_))), "{result:?}");
     Ok(())
 }
 

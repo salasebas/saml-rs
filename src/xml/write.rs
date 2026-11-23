@@ -46,6 +46,10 @@ impl<'a> Prefixes<'a> {
         format!("xmlns:{}", self.assertion)
     }
 
+    pub(crate) fn assertion_prefix(&self) -> &str {
+        self.assertion
+    }
+
     pub(crate) fn protocol(&self, local: &str) -> String {
         format!("{}:{local}", self.protocol)
     }

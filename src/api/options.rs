@@ -143,6 +143,7 @@ pub struct RespondSso<Delivery = MessageDelivery> {
     pub(super) binding: SsoResponseBinding,
     pub(super) delivery: Delivery,
     pub(super) relay_state: Option<RelayState>,
+    pub(super) status_message: Option<String>,
     response_signing: ResponseSigning,
 }
 
@@ -169,6 +170,7 @@ impl RespondSso {
             binding,
             delivery: MessageDelivery,
             relay_state: None,
+            status_message: None,
             response_signing: ResponseSigning::FollowEncryptedCbcRecommendation,
         }
     }
@@ -189,12 +191,52 @@ impl RespondSso<ArtifactDelivery> {
 }
 
 impl<Delivery> RespondSso<Delivery> {
+    /// Set the plain-text `StatusMessage` for a failed login response.
+    ///
+    /// Choose text suitable for disclosure to the service provider and the
+    /// browser. A later call replaces the message. An empty string clears it.
+    /// Only error responses include it. Issuing an error response with text
+    /// outside XML 1.0's character set returns
+    /// [`SamlError::Invalid`](crate::SamlError::Invalid).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use saml_rs::{
+    ///     AuthnRequest, IdentityProvider, Received, RespondSso, SpDescriptor,
+    ///     SsoOutcome, Status, SubordinateStatusCode,
+    /// };
+    ///
+    /// # fn respond(
+    /// #     idp: &IdentityProvider,
+    /// #     sp: &SpDescriptor,
+    /// #     request: &Received<AuthnRequest>,
+    /// # ) -> Result<(), saml_rs::SamlError> {
+    /// let status = Status::responder().with_subordinate(SubordinateStatusCode::no_authn_context());
+    /// let response = idp.respond_sso(
+    ///     sp,
+    ///     request,
+    ///     SsoOutcome::Failure(status),
+    ///     RespondSso::post().status_message("Passkey authentication is unavailable."),
+    /// )?;
+    /// let form = response.post_form()?;
+    /// # let _ = form;
+    /// # Ok(()) }
+    /// ```
+    #[must_use]
+    pub fn status_message(mut self, message: impl Into<String>) -> Self {
+        let message = message.into();
+        self.status_message = (!message.is_empty()).then_some(message);
+        self
+    }
+
     /// The same options with another delivery.
     pub(super) fn delivered<Other>(self, delivery: Other) -> RespondSso<Other> {
         RespondSso {
             binding: self.binding,
             delivery,
             relay_state: self.relay_state,
+            status_message: self.status_message,
             response_signing: self.response_signing,
         }
     }
