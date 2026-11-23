@@ -198,10 +198,30 @@ fn typed_config_algorithm_enums_return_existing_uri_constants() {
     assert_eq!(DigestAlgorithm::Sha256.as_uri(), digest_algorithm::SHA256);
     assert_eq!(DigestAlgorithm::Sha384.as_uri(), digest_algorithm::SHA384);
     assert_eq!(DigestAlgorithm::Sha1.as_uri(), digest_algorithm::SHA1);
-    assert_eq!(
-        DataEncryptionAlgorithm::Aes256Cbc.as_uri(),
-        data_encryption_algorithm::AES_256
-    );
+    for (algorithm, constant, alias, uri) in [
+        (
+            DataEncryptionAlgorithm::Aes128Cbc,
+            data_encryption_algorithm::AES_128_CBC,
+            data_encryption_algorithm::AES_128,
+            "http://www.w3.org/2001/04/xmlenc#aes128-cbc",
+        ),
+        (
+            DataEncryptionAlgorithm::Aes256Cbc,
+            data_encryption_algorithm::AES_256_CBC,
+            data_encryption_algorithm::AES_256,
+            "http://www.w3.org/2001/04/xmlenc#aes256-cbc",
+        ),
+        (
+            DataEncryptionAlgorithm::TripleDesCbc,
+            data_encryption_algorithm::TRIPLE_DES_CBC,
+            data_encryption_algorithm::TRIPLE_DES,
+            "http://www.w3.org/2001/04/xmlenc#tripledes-cbc",
+        ),
+    ] {
+        assert_eq!(constant, uri, "constant for {algorithm:?}");
+        assert_eq!(alias, uri, "alias for {algorithm:?}");
+        assert_eq!(algorithm.as_uri(), uri, "URI for {algorithm:?}");
+    }
     assert_eq!(
         DataEncryptionAlgorithm::Aes256Gcm.as_uri(),
         "http://www.w3.org/2009/xmlenc11#aes256-gcm"
@@ -230,10 +250,6 @@ fn typed_config_algorithm_enums_return_existing_uri_constants() {
     ] {
         assert_eq!(mgf.as_uri(), uri);
     }
-    assert_eq!(
-        DataEncryptionAlgorithm::TripleDesCbc.as_uri(),
-        data_encryption_algorithm::TRIPLE_DES
-    );
     assert_eq!(
         KeyEncryptionAlgorithm::RsaOaepMgf1p.as_uri(),
         key_encryption_algorithm::RSA_OAEP_MGF1P
