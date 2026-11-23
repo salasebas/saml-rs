@@ -15,10 +15,10 @@ use crate::model::{
 use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
 
+use super::options::PeerEndpointTransport;
 use super::raw_mapping::{
     ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, RawPeer,
 };
-use super::options::PeerEndpointTransport;
 use super::{IdentityProvider, RespondSlo, SamlError, ServiceProvider, StartSlo};
 
 impl ServiceProvider {

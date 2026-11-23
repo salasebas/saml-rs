@@ -65,6 +65,17 @@ pub(crate) enum ResponseMessageSignature {
     UnlessAssertionsSigned,
 }
 
+impl ResponseMessageSignature {
+    /// The signature that the `want_message_signed` setting of `sp` asks for.
+    pub(crate) fn requested_by(sp: &sp::Engine) -> Self {
+        if sp.setting.want_message_signed {
+            Self::Always
+        } else {
+            Self::UnlessAssertionsSigned
+        }
+    }
+}
+
 pub(crate) struct RenderedLoginResponse {
     pub(crate) id: String,
     pub(crate) xml: String,
@@ -359,13 +370,9 @@ impl Engine {
         let signed = if error_response {
             self.finalize_error_response(binding, &rendered.xml, transforms)?
         } else {
-            let response_signature = overrides.response_signature.unwrap_or(
-                if sp.setting.want_message_signed {
-                    ResponseMessageSignature::Always
-                } else {
-                    ResponseMessageSignature::UnlessAssertionsSigned
-                },
-            );
+            let response_signature = overrides
+                .response_signature
+                .unwrap_or_else(|| ResponseMessageSignature::requested_by(sp));
             self.finalize_login_response(
                 sp,
                 binding,

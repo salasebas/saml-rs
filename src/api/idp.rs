@@ -122,8 +122,7 @@ impl IdentityProvider {
             authentication,
         )?;
         let authn = AuthnRequest::from_flow(flow)?;
-        if authn.destination().is_some() || authentication == MessageAuthentication::Authenticated
-        {
+        if authn.destination().is_some() || authentication == MessageAuthentication::Authenticated {
             let locations = self
                 .engine()
                 .metadata

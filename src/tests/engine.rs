@@ -178,16 +178,11 @@ impl IdpMessages for idp::Engine {
             .assertion_consumer_location(binding)
             .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
         let (id, xml) = render(LOGIN_RESPONSE_TEMPLATE);
-        let response_signature = if sp.setting.want_message_signed {
-            ResponseMessageSignature::Always
-        } else {
-            ResponseMessageSignature::UnlessAssertionsSigned
-        };
         let signed = self.finalize_login_response(
             sp,
             binding,
             &xml,
-            response_signature,
+            ResponseMessageSignature::requested_by(sp),
             &sp.setting.transformation_algorithms,
         )?;
         let (context, signature, sig_alg) = self.bind_response(binding, &signed, &acs, None)?;

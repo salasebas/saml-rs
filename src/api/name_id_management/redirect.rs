@@ -19,10 +19,10 @@ use crate::name_id_management::{
 };
 use std::time::SystemTime;
 
+use super::super::options::PeerEndpointTransport;
 use super::super::raw_mapping::{
     ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, RawPeer,
 };
-use super::super::options::PeerEndpointTransport;
 use super::super::{
     IdentityProvider, ReceiveNameIdManagement, RespondNameIdManagement, SamlError, ServiceProvider,
     StartNameIdManagement,
