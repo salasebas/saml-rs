@@ -4,8 +4,9 @@ use crate::constants::Binding;
 use crate::entity::{capture_idp_issuance_window, now_iso8601, EntitySetting};
 use crate::logout::{
     create_logout_request_for_subject_inner, create_logout_response_inner, decrypt_encrypted_id,
-    parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation, LogoutReceipt,
-    LogoutRequestInput, LogoutRequestSubject, LogoutRequestValidation, LogoutResponseInput,
+    parse_logout_request_at, parse_logout_response_at, CreatedLogoutRequest, LogoutFlowValidation,
+    LogoutReceipt, LogoutRequestInput, LogoutRequestSubject, LogoutRequestValidation,
+    LogoutResponseInput,
 };
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
@@ -65,8 +66,47 @@ impl ServiceProvider {
             peer,
             subject,
             options,
-            StartSloRole::SessionParticipant,
+            StartSloRole::SessionParticipant {
+                asynchronous: false,
+            },
         )
+    }
+
+    /// Start SP-initiated Asynchronous Single Logout with HTTP-Redirect or HTTP-POST.
+    ///
+    /// Use this with an IdP endpoint known to support the OASIS Asynchronous
+    /// Single Logout extension. The IdP presents the logout result to the user.
+    /// Send the returned message without storing pending state for
+    /// [`Self::finish_slo`].
+    ///
+    /// # Errors
+    ///
+    /// Applies the request and peer checks of [`Self::start_slo`].
+    /// Returns [`SamlError::UnsupportedBinding`] for SOAP or HTTP-POST-SimpleSign.
+    pub fn start_async_slo(
+        &self,
+        idp: &IdpDescriptor,
+        subject: LogoutSubject,
+        options: StartSlo,
+    ) -> Result<Outbound<LogoutRequest>, SamlError> {
+        match options.binding {
+            LogoutBinding::Redirect | LogoutBinding::Post => {}
+            LogoutBinding::SimpleSign | LogoutBinding::Soap => {
+                return Err(SamlError::UnsupportedBinding {
+                    binding: options.binding.into(),
+                });
+            }
+        }
+        let peer = Peer::from_idp(idp, SystemTime::now())?;
+        let created = issue_logout_request(
+            &self.engine().setting,
+            self.engine().metadata.as_metadata(),
+            peer,
+            subject,
+            &options,
+            StartSloRole::SessionParticipant { asynchronous: true },
+        )?;
+        Outbound::<LogoutRequest>::from_context(created.context)
     }
 
     /// Receive an IdP LogoutRequest.
@@ -530,7 +570,7 @@ impl IdentityProvider {
 
 #[derive(Debug, Clone, Copy)]
 enum StartSloRole {
-    SessionParticipant,
+    SessionParticipant { asynchronous: bool },
     SessionAuthority { issuance_lifetime: time::Duration },
 }
 
@@ -542,10 +582,34 @@ fn start_slo_impl(
     options: StartSlo,
     role: StartSloRole,
 ) -> Result<Started<LogoutRequest>, SamlError> {
+    let created =
+        issue_logout_request(local_setting, local_metadata, peer, subject, &options, role)?;
+    let outbound = Outbound::<LogoutRequest>::from_context(created.context)?;
+    let pending = PendingLogoutRequest::new(
+        outbound.id().clone(),
+        outbound.relay_state().cloned(),
+        peer.entity_id.clone(),
+        options.binding,
+        created
+            .not_on_or_after
+            .map(SamlInstant::try_new)
+            .transpose()?,
+    );
+    Ok(Started { pending, outbound })
+}
+
+fn issue_logout_request(
+    local_setting: &EntitySetting,
+    local_metadata: &Metadata,
+    peer: Peer<'_>,
+    subject: LogoutSubject,
+    options: &StartSlo,
+    role: StartSloRole,
+) -> Result<CreatedLogoutRequest, SamlError> {
     if let Some(relay_state) = &options.relay_state {
         relay_state.ensure_sendable()?;
     }
-    if matches!(role, StartSloRole::SessionParticipant) {
+    if matches!(role, StartSloRole::SessionParticipant { .. }) {
         enforce_participant_https(
             peer.metadata,
             options.binding,
@@ -554,7 +618,7 @@ fn start_slo_impl(
         )?;
     }
     let (issue_instant, not_on_or_after, request_validation) = match role {
-        StartSloRole::SessionParticipant => (
+        StartSloRole::SessionParticipant { .. } => (
             now_iso8601(),
             None,
             LogoutRequestValidation::SessionParticipant,
@@ -573,7 +637,7 @@ fn start_slo_impl(
     // A session authority sends a subject without a format with the format
     // its assertions carry for that subject.
     let name_id_format = match role {
-        StartSloRole::SessionParticipant => name_id_format,
+        StartSloRole::SessionParticipant { .. } => name_id_format,
         StartSloRole::SessionAuthority { .. } => {
             name_id_format.or_else(|| local_setting.default_name_id_format())
         }
@@ -587,7 +651,7 @@ fn start_slo_impl(
             .map(SessionIndex::as_str)
             .collect(),
     };
-    let created = create_logout_request_for_subject_inner(LogoutRequestInput {
+    create_logout_request_for_subject_inner(LogoutRequestInput {
         init_setting: local_setting,
         init_meta: local_metadata,
         target_meta: peer.metadata,
@@ -598,21 +662,13 @@ fn start_slo_impl(
         issue_instant: &issue_instant,
         not_on_or_after: not_on_or_after.as_deref(),
         reason: options.reason.as_deref(),
+        asynchronous: matches!(
+            role,
+            StartSloRole::SessionParticipant { asynchronous: true }
+        ),
         validation: request_validation,
         name_id_encryption: options.identifier_encryption,
-    })?;
-    let outbound = Outbound::<LogoutRequest>::from_context(created.context)?;
-    let pending = PendingLogoutRequest::new(
-        outbound.id().clone(),
-        outbound.relay_state().cloned(),
-        peer.entity_id.clone(),
-        options.binding,
-        created
-            .not_on_or_after
-            .map(SamlInstant::try_new)
-            .transpose()?,
-    );
-    Ok(Started { pending, outbound })
+    })
 }
 
 fn receive_slo_impl(

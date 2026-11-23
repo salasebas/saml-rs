@@ -12,7 +12,7 @@ Normative text is SAML Core 2.0, Profiles 2.0, Bindings 2.0, and Metadata 2.0, a
 - [IdP and SP operational modes](conformance/idp-sp-operational-modes.md) for every cell of the IdP, IdP Lite, SP, and SP Lite columns of Table 2 and Conformance §§3.3 to 5, and what each one is. The same page lists every Table 3 and Table 4 cell and the attribute profiles, none of which is claimed.
 - [SSO acceptance](conformance/web-browser-sso-acceptance.md) for `finish_sso`, `accept_unsolicited_sso`, and `receive_sso`.
 - [SSO generation](conformance/web-browser-sso-generation.md) for `start_sso`, `respond_sso`, and `initiate_sso`.
-- [Logout](conformance/single-logout.md) for `start_slo`, `respond_slo`, `receive_slo`, and `finish_slo`.
+- [Logout](conformance/single-logout.md) for `start_slo`, `start_async_slo`, `respond_slo`, `receive_slo`, and `finish_slo`.
 - [Identity Provider Discovery](conformance/identity-provider-discovery.md) for `common_domain_cookie`.
 - [SAML-defined identifiers](conformance/identifiers.md) for `SsoAssertion::with_attributes`, `AttributeNameFormat`, the persistent and transient `NameId` constructors, the `subject-id` and `pairwise-id` attributes, and the `ID` of every generated message and assertion.
 - [Metadata and replay](conformance/metadata-and-replay.md) for `MetadataTrustPolicy` and `ReplayPolicy`.

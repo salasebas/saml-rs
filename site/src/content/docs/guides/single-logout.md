@@ -38,6 +38,27 @@ With the `serde` feature, the snapshot serializes to JSON for your session store
 
 The service provider includes at least one session index, signs the request and sends the browser to an `https` logout URL. `StartSlo::allow_http()` relaxes the `https` recommendation only.
 
+### Let the IdP present the result
+
+Use `ServiceProvider::start_async_slo` when the selected IdP endpoint supports
+the [OASIS Asynchronous Single Logout extension](https://docs.oasis-open.org/security/saml/Post2.0/saml-async-slo/v1.0/saml-async-slo-v1.0.html).
+Confirm support in your deployment before choosing this flow. The IdP handles
+logout and presents its result to the user.
+
+```rust
+let subject = session
+    .logout_subject()
+    .ok_or("session has no logout subject")?;
+let outbound = sp.start_async_slo(&idp, subject, StartSlo::redirect())?;
+let url = outbound.redirect_url()?;
+```
+
+For HTTP-POST, use `StartSlo::post()` and get the form with
+`outbound.post_form()?`. After building the request, end the local
+application session. Then redirect the browser to `url` or return the POST form.
+This flow ends at dispatch for the SP. It returns no pending state for
+`finish_slo`. This crate supports the SP initiator role for the extension.
+
 ## Identity provider
 
 1. Call `receive_slo` with the browser fields from the `LogoutRequest`.

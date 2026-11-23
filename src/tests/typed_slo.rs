@@ -1,5 +1,7 @@
 #![cfg(crypto)]
 
+mod asynchronous;
+
 #[path = "typed_slo/schema_validation.rs"]
 mod schema_validation;
 

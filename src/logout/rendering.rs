@@ -26,6 +26,7 @@ pub(crate) struct LogoutRequestAttributes<'a> {
     pub(crate) issue_instant: &'a str,
     pub(crate) not_on_or_after: Option<&'a str>,
     pub(crate) reason: Option<&'a str>,
+    pub(crate) asynchronous: bool,
 }
 
 pub(super) struct LogoutResponseAttributes<'a> {
@@ -82,6 +83,7 @@ pub(crate) fn render_logout_request(
         issue_instant,
         not_on_or_after,
         reason,
+        asynchronous,
     } = attributes;
     let prefixes = Prefixes::of(setting)?;
     let root_name = prefixes.protocol("LogoutRequest");
@@ -112,6 +114,18 @@ pub(crate) fn render_logout_request(
     let mut writer = XmlWriter::new();
     writer.start(&root_name, &attrs);
     writer.text_element(&issuer_name, &[], issuer);
+    if asynchronous {
+        let extensions_name = prefixes.protocol("Extensions");
+        writer.start(&extensions_name, &[]);
+        writer.empty(
+            "aslo:Asynchronous",
+            &[(
+                "xmlns:aslo",
+                "urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo",
+            )],
+        );
+        writer.end(&extensions_name);
+    }
     let qualifiers = subject.qualifiers;
     let mut name_id_attrs = Vec::with_capacity(4);
     if let Some(value) = qualifiers.name_qualifier {

@@ -265,6 +265,7 @@ pub(crate) fn create_logout_request_with_id(
             issue_instant: &issue_instant,
             not_on_or_after: None,
             reason: None,
+            asynchronous: false,
         },
         &subject,
         name_id_format,
