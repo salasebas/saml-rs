@@ -81,6 +81,7 @@
 | `soap_action()`, `cache_control()`, `pragma()`, or `content_type()` on `SoapRequest` or `SoapResponse` | Removed; send every header from `headers()` | [SOAP headers](soap-artifact-discovery.md#send-the-soap-headers-from-headers) |
 | `ArtifactDelivery::CACHE_CONTROL` or `ArtifactDelivery::PRAGMA` | Removed; send `Outbound::headers()` | [Browser headers](soap-artifact-discovery.md#send-the-browser-headers-from-outboundheaders) |
 | `SoapProtocolMessage::request` or `SoapProtocolMessage::response_envelope` | Removed; use `SoapRequest::try_new` or `SoapResponse::try_new` | [SOAP envelopes](soap-artifact-discovery.md#build-soap-envelopes-with-soaprequesttry_new-and-soapresponsetry_new) |
+| `SoapProtocolMessage` or `Absent` on a SOAP channel attestation enum | Use `SoapBodyElement` or the enum's `Unattested` variant | [SOAP body and channel names](soap-body-and-channel.md) |
 | `AnsweredArtifact::envelope()` or a header method on `AnsweredArtifact` | Removed; read `response()` | [Artifact response](soap-artifact-discovery.md#read-the-artifact-response-from-answeredartifactresponse) |
 | `IssuedMessage`, or `issue_artifact` with an `IssuedMessage` | Removed; pass the protocol XML | [Issue an artifact](soap-artifact-discovery.md#pass-the-protocol-xml-to-issue_artifact) |
 | `ArtifactDereference`, `ArtifactUses`, or `resolve_artifact(idp, artifact, dereference, uses)` | Removed; pass the `SoapChannel` and a `SamlValidationContext` | [Resolve an artifact](soap-artifact-discovery.md#resolve-an-artifact-with-a-channel-and-a-validation-context) |

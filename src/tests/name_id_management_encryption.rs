@@ -23,9 +23,8 @@ use saml_rs::{
     MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
     NameIdManagementReceipt, NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem,
     ReceiveNameIdManagement, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, SamlError,
-    SamlValidationContext, ServiceProvider, SoapChannel, SoapProtocolMessage, SoapRequest,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status,
-    X509Credential,
+    SamlValidationContext, ServiceProvider, SoapBodyElement, SoapChannel, SoapRequest, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status, X509Credential,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -229,7 +228,7 @@ fn authenticated() -> SoapChannel {
     SoapChannel::new(
         PartyAuthentication::Mutual,
         MessageIntegrity::Protected,
-        MessageConfidentiality::Absent,
+        MessageConfidentiality::Unattested,
     )
 }
 
@@ -390,7 +389,7 @@ fn identity_provider_encrypts_a_soap_request_and_decrypts_one_over_soap() -> Tes
             .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers),
         authenticated(),
     )?;
-    let soap_xml = SoapProtocolMessage::from_envelope(started.request().envelope())?
+    let soap_xml = SoapBodyElement::from_envelope(started.request().envelope())?
         .xml()
         .to_string();
     let (encrypted_id, new_encrypted_id) = encrypted_identifier_and_new_value(&soap_xml)?;

@@ -8,7 +8,7 @@ use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EndpointUrl, EntityId, IdentityProvider, IdpConfig,
     InMemoryReplayCache, ManageNameIdService, MetadataTrustPolicy, NameId, NameIdChange,
     NameIdManagementReceipt, PrivateKeyPem, ReplayPolicy, SamlError, SamlValidationContext,
-    ServiceProvider, SignatureConfig, SoapChannel, SoapProtocolMessage, SoapResponse, SpConfig,
+    ServiceProvider, SignatureConfig, SoapBodyElement, SoapChannel, SoapResponse, SpConfig,
     SpDescriptor, SsoEndpoint, StartNameIdManagement, X509Credential,
 };
 
@@ -126,7 +126,7 @@ fn soap_manage_name_id_response_verifies_in_the_original_envelope() -> TestResul
         StartNameIdManagement::new(),
         SoapChannel::mutually_authenticated_confidential(),
     )?;
-    let request = SoapProtocolMessage::from_envelope(started.request().envelope())?;
+    let request = SoapBodyElement::from_envelope(started.request().envelope())?;
     let request_id =
         crate::xml::protocol_element::parse_saml(request.xml())?.required_attr("ID")?;
     let message = format!(
@@ -220,7 +220,7 @@ fn soap_manage_name_id_response_verifies_the_sp_signature() -> TestResult {
             StartNameIdManagement::new(),
             SoapChannel::mutually_authenticated_confidential(),
         )?;
-        let request = SoapProtocolMessage::from_envelope(started.request().envelope())?;
+        let request = SoapBodyElement::from_envelope(started.request().envelope())?;
         let request = crate::xml::protocol_element::parse_saml(request.xml())?;
         let request_id = request.required_attr("ID")?;
         let xml = sign(

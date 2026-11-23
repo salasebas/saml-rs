@@ -41,6 +41,7 @@ Check the topics that affect your integration.
 - [Upgrade typed config code](config.md)
 - [Upgrade SOAP, artifact resolution, and discovery cookie code](soap-artifact-discovery.md)
 - [Match artifact refusal reasons](artifact-refusals.md)
+- [Rename the SOAP body type and channel variants](soap-body-and-channel.md)
 - [Prepare SOAP payloads without processing instructions](soap-processing-instructions.md)
 - [Upgrade typed operation options and name identifier management code](typed-operations.md)
 - [Remove Enhanced Client/Proxy SSO](ecp-removal.md)

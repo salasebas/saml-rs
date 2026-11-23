@@ -478,6 +478,6 @@ pub use name_id_management::{
     NameIdManagementRefusal, RefusedNameIdManagement, StartedNameIdManagement,
 };
 pub use soap::{
-    MessageConfidentiality, MessageIntegrity, PartyAuthentication, SoapChannel,
-    SoapProtocolMessage, SoapRequest, SoapResponse,
+    MessageConfidentiality, MessageIntegrity, PartyAuthentication, SoapBodyElement, SoapChannel,
+    SoapRequest, SoapResponse,
 };

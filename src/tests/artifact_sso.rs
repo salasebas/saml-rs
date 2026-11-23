@@ -1327,7 +1327,7 @@ fn a_typed_sso_artifact_response_is_withheld_without_confidentiality(
         SoapChannel::new(
             PartyAuthentication::Mutual,
             MessageIntegrity::Protected,
-            MessageConfidentiality::Absent,
+            MessageConfidentiality::Unattested,
         ),
     )?;
     assert_eq!(

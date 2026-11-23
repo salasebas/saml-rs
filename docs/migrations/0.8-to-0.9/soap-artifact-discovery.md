@@ -133,8 +133,8 @@ envelope as a `String`.
 
 **Now:** both are removed. `SoapRequest::try_new(endpoint, xml)` and
 `SoapResponse::try_new(xml)` build the values, and `envelope()` returns the
-envelope. `SoapProtocolMessage` only reads a received envelope, with
-`SoapProtocolMessage::from_envelope`.
+envelope. Use `SoapBodyElement::from_envelope` to read the body element from a
+received envelope.
 
 | Before | After |
 | --- | --- |

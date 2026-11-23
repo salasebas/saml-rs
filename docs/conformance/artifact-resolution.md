@@ -98,7 +98,7 @@ profile. Web SSO applies its own checks to the dereferenced response.
 
 ## SOAP envelope rules
 
-`SoapRequest`, `SoapResponse`, and `SoapProtocolMessage::from_envelope`
+`SoapRequest`, `SoapResponse`, and `SoapBodyElement::from_envelope`
 write and read envelopes for artifact resolution,
 [Single Logout](single-logout.md#soap-binding), and
 [name identifier management](name-id-management.md). SOAP 1.1 governs
@@ -125,9 +125,12 @@ write and read envelopes for artifact resolution,
 | Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` with a request | Recommended | Bindings §3.2.3.2 | `SoapRequest::headers` |
 | Send `Cache-Control: no-cache, no-store, must-revalidate, private` and `Pragma: no-cache` with a response | Recommended | Bindings §3.2.3.2 | `SoapResponse::headers` |
 
-## SOAP for another protocol message
+## SOAP envelope helpers
 
-`SoapRequest::try_new` and `SoapResponse::try_new` place one SAML protocol element in a SOAP 1.1 body, and `SoapProtocolMessage::from_envelope` reads one element back. The envelope rules above apply to each.
+`SoapRequest::try_new` and `SoapResponse::try_new` wrap one XML element in a
+SOAP 1.1 body. `SoapBodyElement::from_envelope` checks the envelope structure
+and reads its body element. Typed SAML operations validate the payload for
+their protocol flow.
 
 ## Outside this flow
 

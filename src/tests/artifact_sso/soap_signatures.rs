@@ -2,8 +2,8 @@ use bergshamra::core::algorithm::HMAC_SHA256;
 use bergshamra::{DsigContext, Key, KeysManager};
 use saml_rs::crypto::keys::load_hmac_secret;
 use saml_rs::{
-    CertificatePem, Credentials, HmacSecret, IdpValidationPolicy, PrivateKeyPem,
-    SoapProtocolMessage, SoapResponse, SpValidationPolicy, X509Credential, XmlSignatureProfile,
+    CertificatePem, Credentials, HmacSecret, IdpValidationPolicy, PrivateKeyPem, SoapBodyElement,
+    SoapResponse, SpValidationPolicy, X509Credential, XmlSignatureProfile,
 };
 
 use super::*;
@@ -50,7 +50,7 @@ fn sign_in_envelope(
     signature_method: &str,
     c14n: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let message = SoapProtocolMessage::from_envelope(envelope)?;
+    let message = SoapBodyElement::from_envelope(envelope)?;
     let id = crate::xml::protocol_element::parse_saml(message.xml())?.required_attr("ID")?;
     let signature = format!(
         r##"<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
@@ -172,7 +172,7 @@ fn artifact_response_signature_precedes_status_and_does_not_authenticate_inner_s
         "{login:?}"
     );
 
-    let message = SoapProtocolMessage::from_envelope(envelope)?;
+    let message = SoapBodyElement::from_envelope(envelope)?;
     let failure = message
         .xml()
         .replacen("status:Success", "status:Responder", 1)
