@@ -22,6 +22,10 @@ const NAMESPACE: &str = "urn:oasis:names:tc:SAML:metadata:attribute";
 /// document order: the outermost group first and the entity last. A
 /// `saml:Assertion` inside `mdattr:EntityAttributes` is not read.
 ///
+/// Each [`AttributeValue`] is the direct text of its `saml:AttributeValue`,
+/// as for the attributes of an assertion. Child elements of a value are not
+/// read.
+///
 /// # Examples
 ///
 /// ```
