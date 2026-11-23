@@ -3,6 +3,8 @@
 #[path = "typed_slo/schema_validation.rs"]
 mod schema_validation;
 
+mod template_prefixes;
+
 #[path = "typed_slo/version_refusals.rs"]
 mod version_refusals;
 

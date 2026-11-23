@@ -17,7 +17,8 @@ use crate::logout::{
 use crate::metadata::Metadata;
 use crate::model::{validate_name_id_format, ClockSkew, Status};
 use crate::sp::{self, AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions};
-use crate::template::{replace_tags_by_optional_value, LOGIN_RESPONSE_TEMPLATE};
+use crate::template::{render_template, LOGIN_RESPONSE_TEMPLATE};
+use crate::xml::write::Prefixes;
 
 /// The subject of a `<LogoutRequest>`.
 #[derive(Debug, Clone, Default)]
@@ -395,6 +396,13 @@ pub(crate) fn fill_template(raw_xml: &str, tags: &[(&str, String)]) -> Result<St
         .map(|(key, value)| (*key, Some(value.clone())))
         .collect();
     replace_tags_by_optional_value(raw_xml, &tags)
+}
+
+pub(crate) fn replace_tags_by_optional_value(
+    raw_xml: &str,
+    tags: &[(&str, Option<String>)],
+) -> Result<String, SamlError> {
+    render_template(raw_xml, Prefixes::of(&EntitySetting::default())?, tags)
 }
 
 /// HTTP-Redirect request from decoded query pairs.

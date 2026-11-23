@@ -4,7 +4,8 @@ use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting};
 use crate::error::{utf8_err, SamlError};
 use crate::metadata::Metadata;
 use crate::model::{validate_name_id_format, Status};
-use crate::template::{apply_tag_prefixes, replace_tags_by_optional_value, validate_tag_prefixes};
+use crate::template::render_template;
+use crate::xml::write::Prefixes;
 use crate::xml::{
     validate_logout_request_outbound, validate_logout_response_outbound, OutboundLogoutExpiration,
     OutboundLogoutRequestExpectation, OutboundLogoutRequestValidation, OutboundLogoutValidation,
@@ -199,17 +200,9 @@ impl LogoutResponseInput<'_> {
                         .into(),
                 ));
             }
-            validate_tag_prefixes(
-                &init_setting.tag_prefix_protocol,
-                &init_setting.tag_prefix_assertion,
-            )?;
-            let template = apply_tag_prefixes(
+            render_template(
                 template,
-                &init_setting.tag_prefix_protocol,
-                &init_setting.tag_prefix_assertion,
-            );
-            replace_tags_by_optional_value(
-                &template,
+                Prefixes::of(init_setting)?,
                 &[
                     ("ID", Some(id.clone())),
                     ("IssueInstant", Some(issue_instant)),

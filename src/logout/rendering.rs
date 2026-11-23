@@ -3,8 +3,8 @@ use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::metadata::Metadata;
 use crate::model::Status;
-use crate::template::{apply_tag_prefixes, replace_tags_by_optional_value, validate_tag_prefixes};
-use crate::xml::write::XmlWriter;
+use crate::template::{render_template, validate_tag_prefixes};
+use crate::xml::write::{Prefixes, XmlWriter};
 use crate::xml::OutboundNameIdQualifiers;
 
 pub(crate) fn issuer_of(setting: &EntitySetting, meta: &Metadata) -> String {
@@ -95,12 +95,6 @@ pub(crate) fn render_logout_request(
                 "custom LogoutRequest templates cannot render multiple SessionIndex values".into(),
             ));
         }
-        validate_tag_prefixes(&setting.tag_prefix_protocol, &setting.tag_prefix_assertion)?;
-        let template = apply_tag_prefixes(
-            template,
-            &setting.tag_prefix_protocol,
-            &setting.tag_prefix_assertion,
-        );
         let mut replacements = vec![
             ("ID", Some(id.to_owned())),
             ("IssueInstant", Some(timing.issue_instant.to_string())),
@@ -131,7 +125,7 @@ pub(crate) fn render_logout_request(
         if let Some(expiration) = timing.not_on_or_after {
             replacements.push(("NotOnOrAfter", Some(expiration.to_owned())));
         }
-        return replace_tags_by_optional_value(&template, &replacements);
+        return render_template(template, Prefixes::of(setting)?, &replacements);
     }
     validate_tag_prefixes(&setting.tag_prefix_protocol, &setting.tag_prefix_assertion)?;
 
