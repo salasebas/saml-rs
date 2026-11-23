@@ -28,6 +28,14 @@ impl<'a> Prefixes<'a> {
         format!("xmlns:{}", self.protocol)
     }
 
+    pub(crate) fn replacement(self, template_prefix: &str) -> Option<&'a str> {
+        match template_prefix {
+            "samlp" if self.protocol != "samlp" => Some(self.protocol),
+            "saml" if self.assertion != "saml" => Some(self.assertion),
+            _ => None,
+        }
+    }
+
     pub(crate) fn xmlns_assertion(&self) -> String {
         format!("xmlns:{}", self.assertion)
     }

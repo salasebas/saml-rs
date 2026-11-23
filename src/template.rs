@@ -1,12 +1,13 @@
 //! Default SAML message templates and tag substitution.
 //!
-//! `{Tag}` placeholders are filled by [`replace_tags_by_optional_value`].
+//! `{Tag}` placeholders are filled by [`render_template`].
 //! Replacement values are XML-escaped in
 //! both attribute and element-text positions so caller-provided data cannot
 //! become signed SAML markup. Text inserted for a value is not scanned for
 //! further placeholders.
 
 use quick_xml::events::{BytesStart, Event};
+use quick_xml::name::{PrefixDeclaration, QName};
 use quick_xml::Reader;
 
 use crate::binding::xml_escape;
@@ -14,6 +15,7 @@ use crate::error::{xml_err, SamlError};
 #[cfg(test)]
 use crate::util::camel_case;
 use crate::xml::name::validate_namespace_prefix;
+use crate::xml::write::Prefixes;
 
 /// Raw `<AuthnRequest>` template for standalone tag substitution.
 #[cfg(test)]
@@ -43,41 +45,6 @@ pub const LOGIN_RESPONSE_TEMPLATE: &str = "<samlp:Response xmlns:samlp=\"urn:oas
 /// Default `<LogoutResponse>` template.
 pub const LOGOUT_RESPONSE_TEMPLATE: &str = "<samlp:LogoutResponse xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"{ID}\" Version=\"2.0\" IssueInstant=\"{IssueInstant}\" Destination=\"{Destination}\" InResponseTo=\"{InResponseTo}\"><saml:Issuer>{Issuer}</saml:Issuer><samlp:Status><samlp:StatusCode Value=\"{StatusCode}\"/></samlp:Status></samlp:LogoutResponse>";
 
-/// Rewrite known SAML template prefixes in one pass while preserving namespace
-/// URIs.
-pub(crate) fn apply_tag_prefixes(
-    xml: &str,
-    protocol_prefix: &str,
-    assertion_prefix: &str,
-) -> String {
-    let rewrites = [
-        ("<samlp:", format!("<{protocol_prefix}:")),
-        ("</samlp:", format!("</{protocol_prefix}:")),
-        ("xmlns:samlp=", format!("xmlns:{protocol_prefix}=")),
-        ("<saml:", format!("<{assertion_prefix}:")),
-        ("</saml:", format!("</{assertion_prefix}:")),
-        ("xmlns:saml=", format!("xmlns:{assertion_prefix}=")),
-    ];
-    let mut result = String::with_capacity(xml.len());
-    let mut rest = xml;
-    while let Some(start) = rest.find(['<', 'x']) {
-        result.push_str(&rest[..start]);
-        rest = &rest[start..];
-        match rewrites.iter().find(|(from, _)| rest.starts_with(from)) {
-            Some((from, to)) => {
-                result.push_str(to);
-                rest = &rest[from.len()..];
-            }
-            None => {
-                result.push_str(&rest[..1]);
-                rest = &rest[1..];
-            }
-        }
-    }
-    result.push_str(rest);
-    result
-}
-
 pub(crate) fn validate_tag_prefixes(
     protocol_prefix: &str,
     assertion_prefix: &str,
@@ -92,7 +59,7 @@ pub(crate) fn validate_tag_prefixes(
     Ok(())
 }
 
-/// Replace `{key}` placeholders in `raw_xml`, omitting optional placeholders.
+/// Apply the configured tag prefixes and fill the template's `{key}` placeholders.
 ///
 /// `Some(value)` is XML-escaped and inserted, including `Some(String::new())`.
 /// Inserted text is not scanned for `{key}` tokens. `None` removes attributes
@@ -103,8 +70,9 @@ pub(crate) fn validate_tag_prefixes(
 ///
 /// Returns [`SamlError::Xml`] when the tags or attributes of `raw_xml` cannot
 /// be read.
-pub fn replace_tags_by_optional_value(
+pub(crate) fn render_template(
     raw_xml: &str,
+    prefixes: Prefixes<'_>,
     tags: &[(&str, Option<String>)],
 ) -> Result<String, SamlError> {
     let value_of = |key: &str| {
@@ -118,7 +86,7 @@ pub fn replace_tags_by_optional_value(
             .and_then(value_of)
             == Some(None)
     };
-    let xml = omit_absent_markup(raw_xml, absent)?;
+    let xml = render_markup(raw_xml, prefixes, absent)?;
     Ok(substitute_placeholders(&xml, |key| {
         value_of(key).map(Option::unwrap_or_default)
     }))
@@ -158,7 +126,11 @@ enum OptionalElement {
 
 /// `raw_xml` without the attributes whose raw value is `absent`, and without
 /// the elements whose only content is one `absent` text node.
-fn omit_absent_markup(raw_xml: &str, absent: impl Fn(&str) -> bool) -> Result<String, SamlError> {
+fn render_markup(
+    raw_xml: &str,
+    prefixes: Prefixes<'_>,
+    absent: impl Fn(&str) -> bool,
+) -> Result<String, SamlError> {
     let mut output = String::with_capacity(raw_xml.len());
     // quick-xml skips one leading byte order mark and counts its positions
     // from the byte after it.
@@ -179,11 +151,11 @@ fn omit_absent_markup(raw_xml: &str, absent: impl Fn(&str) -> bool) -> Result<St
             Event::Eof => return Ok(output),
             Event::Start(tag) => {
                 let before = output.len();
-                push_tag(&mut output, &tag, source, ">", &absent)?;
+                push_tag(&mut output, prefixes, &tag, source, ">", &absent)?;
                 Some(OptionalElement::StartTag(before))
             }
             Event::Empty(tag) => {
-                push_tag(&mut output, &tag, source, "/>", &absent)?;
+                push_tag(&mut output, prefixes, &tag, source, "/>", &absent)?;
                 None
             }
             Event::Text(_) => {
@@ -197,10 +169,14 @@ fn omit_absent_markup(raw_xml: &str, absent: impl Fn(&str) -> bool) -> Result<St
                     }
                 }
             }
-            Event::End(_) => {
+            Event::End(tag) => {
                 match element {
                     Some(OptionalElement::AbsentBody(before)) => output.truncate(before),
-                    Some(OptionalElement::StartTag(_)) | None => output.push_str(source),
+                    Some(OptionalElement::StartTag(_)) | None => {
+                        output.push_str("</");
+                        push_element_name(&mut output, prefixes, tag.name());
+                        output.push_str(&source[2 + tag.name().into_inner().len()..]);
+                    }
                 }
                 None
             }
@@ -221,10 +197,29 @@ fn position(reader: &Reader<&[u8]>) -> Result<usize, SamlError> {
     usize::try_from(reader.buffer_position()).map_err(xml_err)
 }
 
+fn push_element_name(output: &mut String, prefixes: Prefixes<'_>, name: QName<'_>) {
+    let (local, prefix) = name.decompose();
+    if let Some(prefix) = prefix.and_then(|p| prefixes.replacement(p.into_inner())) {
+        output.push_str(prefix);
+        output.push(':');
+        output.push_str(local.into_inner());
+    } else {
+        output.push_str(name.into_inner());
+    }
+}
+
+fn renamed_declaration<'a>(prefixes: Prefixes<'a>, name: QName<'_>) -> Option<&'a str> {
+    match name.as_namespace_binding()? {
+        PrefixDeclaration::Named(prefix) => prefixes.replacement(prefix),
+        PrefixDeclaration::Default => None,
+    }
+}
+
 /// Write `tag`, read from `source`, without its `absent` attributes, closing
 /// it with `close`.
 fn push_tag(
     output: &mut String,
+    prefixes: Prefixes<'_>,
     tag: &BytesStart<'_>,
     source: &str,
     close: &str,
@@ -234,12 +229,14 @@ fn push_tag(
         .attributes()
         .collect::<Result<Vec<_>, _>>()
         .map_err(xml_err)?;
-    if !attributes.iter().any(|attribute| absent(&attribute.value)) {
-        output.push_str(source);
+    output.push('<');
+    push_element_name(output, prefixes, tag.name());
+    if !attributes.iter().any(|attribute| {
+        absent(&attribute.value) || renamed_declaration(prefixes, attribute.key).is_some()
+    }) {
+        output.push_str(&source[1 + tag.name().into_inner().len()..]);
         return Ok(());
     }
-    output.push('<');
-    output.push_str(tag.name().into_inner());
     for attribute in attributes
         .iter()
         .filter(|attribute| !absent(&attribute.value))
@@ -253,7 +250,12 @@ fn push_tag(
             '"'
         };
         output.push(' ');
-        output.push_str(attribute.key.into_inner());
+        if let Some(prefix) = renamed_declaration(prefixes, attribute.key) {
+            output.push_str("xmlns:");
+            output.push_str(prefix);
+        } else {
+            output.push_str(attribute.key.into_inner());
+        }
         output.push('=');
         output.push(quote);
         output.push_str(&attribute.value);
@@ -333,6 +335,7 @@ fn escape_literal_template_text(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::engine::replace_tags_by_optional_value;
 
     #[test]
     fn replacement_values_are_escaped_in_attributes_and_element_text(

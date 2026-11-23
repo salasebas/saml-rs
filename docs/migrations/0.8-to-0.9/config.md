@@ -552,6 +552,20 @@ have been well-formed. A bare placeholder in a start tag and a repeated
 attribute are two such cases. When the library omits an attribute, it
 rewrites that start tag with one space before each remaining attribute. Each
 value keeps double quotes unless it contains one, and then takes single quotes.
+The same formatting applies to a tag whose namespace declaration changes.
+
+Custom prefixes now apply only to element names and namespace declarations.
+Literal content such as `xmlns:saml=example` in an extension keeps its
+spelling. Write the intended literal directly if your template relied on
+prefix substitution inside a value. Use matching names in start and end
+tags. For example, with protocol prefix `p`, the old renderer could turn
+`<samlp:Status>...</p:Status>` into matching tags. Write
+`<samlp:Status>...</samlp:Status>` so the template itself parses.
+
+The renderer also recognizes declarations with whitespace before `=`, such
+as `xmlns:samlp = "..."`. For example, if you configured `p` for protocol
+and declared both `xmlns:samlp = "..."` and `xmlns:p="..."` for that URI on
+one tag, remove `xmlns:p`. Renaming the first declaration already produces it.
 
 **Upgrade:** write the template as well-formed XML. Replace a bare placeholder
 in a start tag with an attribute whose value is the placeholder, such as
