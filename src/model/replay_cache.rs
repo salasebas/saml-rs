@@ -100,10 +100,11 @@ impl ReplayCache for InMemoryReplayCache {
     /// # Errors
     ///
     /// Returns [`SamlError::ReplayDetected`] for a live duplicate, even if the
-    /// supplied deadline has passed. Returns [`SamlError::TimeWindowInvalid`]
-    /// if a new assertion key has already expired. Returns
-    /// [`SamlError::ReplayCacheUnavailable`] when the entry limit prevents
-    /// storage. Neither error removes a live key or changes its deadline.
+    /// supplied deadline has passed. Returns
+    /// [`SamlError::ReplayCacheUnavailable`] when a new assertion key's
+    /// deadline has passed by the cache clock, or when the entry limit
+    /// prevents storage. Neither error removes a live key or changes its
+    /// deadline.
     fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError> {
         let now = (self.clock)();
         while let Some(entry) = self.expirations.first_entry() {
@@ -119,8 +120,8 @@ impl ReplayCache for InMemoryReplayCache {
         }
         if expires_at <= now {
             if matches!(key, ReplayKey::Assertion(_)) {
-                return Err(SamlError::TimeWindowInvalid {
-                    field: crate::TimeWindowField::ReplayExpiration,
+                return Err(SamlError::ReplayCacheUnavailable {
+                    source: Box::new(InMemoryReplayCacheError::Expired),
                 });
             }
             return Ok(());
@@ -145,8 +146,7 @@ impl ReplayCache for &Mutex<InMemoryReplayCache> {
     /// # Errors
     ///
     /// Returns [`SamlError::ReplayCacheUnavailable`] if the mutex is poisoned,
-    /// or the cache's error if the key is a duplicate or its entry limit
-    /// prevents storage.
+    /// or the error [`InMemoryReplayCache`] returns for the key.
     fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError> {
         self.lock()
             .map_err(|_| SamlError::ReplayCacheUnavailable {
@@ -160,6 +160,8 @@ impl ReplayCache for &Mutex<InMemoryReplayCache> {
 enum InMemoryReplayCacheError {
     #[error("in-memory replay cache holds its maximum of {max_entries} entries")]
     Full { max_entries: usize },
+    #[error("assertion replay deadline passed before the in-memory cache stored the key")]
+    Expired,
     #[error("in-memory replay cache lock is poisoned")]
     Poisoned,
 }
@@ -170,8 +172,7 @@ impl ReplayCache for Arc<Mutex<InMemoryReplayCache>> {
     /// # Errors
     ///
     /// Returns [`SamlError::ReplayCacheUnavailable`] if the mutex is poisoned,
-    /// or the cache's error if the key is a duplicate or its entry limit
-    /// prevents storage.
+    /// or the error [`InMemoryReplayCache`] returns for the key.
     fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError> {
         self.as_ref().check_and_store(key, expires_at)
     }
