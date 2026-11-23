@@ -416,7 +416,7 @@ fn parse_roots_inner<N, A>(
                 }
                 None => break,
             },
-            _ => {}
+            Event::Comment(_) | Event::Decl(_) | Event::PI(_) => {}
         }
     }
 
