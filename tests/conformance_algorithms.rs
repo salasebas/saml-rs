@@ -10,24 +10,24 @@ use base64::Engine;
 use saml_rs::constants::{signature_algorithm, transform_algorithm};
 #[cfg(feature = "crypto-rustcrypto")]
 use saml_rs::error::SignatureVerificationReason;
+#[cfg(feature = "crypto-rustcrypto")]
+use saml_rs::AuthnRequest;
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
 use saml_rs::Rsa15KeyTransportPolicy;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
-    CertificatePem, Credentials, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat,
-    Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, SamlError, SamlValidationContext,
-    ServiceProvider, SessionIndex, SloEndpoint, SoapChannel, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession, StartSlo, StartSso,
-    TransformAlgorithm, X509Credential, XmlPolicy, XmlSignatureProfile,
+    CertificatePem, Credentials, EntityId, FormField, HmacSecret, IdentityProvider, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId,
+    NameIdFormat, Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SessionIndex, SignatureAlgorithm, SloEndpoint,
+    SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession,
+    StartSlo, StartSso, TransformAlgorithm, X509Credential, XmlPolicy, XmlSignatureProfile,
 };
 use saml_rs::{
     AssertionEncryptionPolicy, Attribute, AttributeEncryptionPolicy, AttributeValue, Attributes,
     DataEncryptionAlgorithm, DigestAlgorithm, IdentifierEncryptionPolicy, KeyEncryptionAlgorithm,
     MaskGenerationFunction, XmlEncryptionPolicy,
 };
-#[cfg(feature = "crypto-rustcrypto")]
-use saml_rs::{AuthnRequest, HmacSecret, SignatureAlgorithm};
 use url::Url;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -75,7 +75,6 @@ fn rsa(algorithms: AlgorithmPolicy) -> Side {
     signed_with(algorithms, RSA_KEY, RSA_CERT)
 }
 
-#[cfg(feature = "crypto-rustcrypto")]
 fn signing(signature: SignatureAlgorithm) -> AlgorithmPolicy {
     let mut algorithms = AlgorithmPolicy::default();
     algorithms.signature = signature;
@@ -245,6 +244,28 @@ fn verified_algorithms(session: &SsoSession) -> Vec<&str> {
         .iter()
         .map(|signature| signature.algorithm_uri())
         .collect()
+}
+
+#[test]
+fn custom_rsa_pss_signs_a_post_response_with_a_sha256_reference_digest(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let algorithm = "http://www.w3.org/2007/05/xmldsig-more#sha384-rsa-MGF1";
+    let peers = peers(
+        rsa(AlgorithmPolicy::default()),
+        rsa(signing(SignatureAlgorithm::Custom(algorithm.into()))),
+        XmlPolicy::default(),
+    )?;
+    let exchange = signed_redirect_request_then_post_response(&peers, alice())?;
+    assert_eq!(
+        algorithm_attributes(&exchange.response_xml, "SignatureMethod"),
+        [algorithm]
+    );
+    assert_eq!(
+        algorithm_attributes(&exchange.response_xml, "DigestMethod"),
+        [saml_rs::constants::digest_algorithm::SHA256]
+    );
+    assert_eq!(verified_algorithms(&exchange.session), [algorithm]);
+    Ok(())
 }
 
 #[test]
@@ -800,6 +821,30 @@ fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn s
 const SP_HMAC_SECRET: &[u8] = b"service-provider-hmac-sha1-secret";
 #[cfg(feature = "crypto-rustcrypto")]
 const IDP_HMAC_SECRET: &[u8] = b"identity-provider-hmac-sha1-secret";
+
+#[test]
+fn custom_hmac_sha256_signs_a_post_authn_request_with_only_a_secret(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let algorithm = "http://www.w3.org/2001/04/xmldsig-more#hmac-sha256";
+    let secret = HmacSecret::try_new(b"service-provider-hmac-sha256-secret")?;
+    let peers = peers(
+        Side {
+            algorithms: signing(SignatureAlgorithm::Custom(algorithm.into())),
+            credentials: Credentials::default().with_hmac_secret(secret.clone()),
+        },
+        rsa(AlgorithmPolicy::default()),
+        XmlPolicy::default(),
+    )?;
+    let started = peers
+        .sp
+        .start_sso(&peers.idp_descriptor, StartSso::post())?;
+    peers.idp.receive_sso(
+        &peers.sp_descriptor.with_hmac_secret(secret),
+        Inbound::post(post_fields(&started.outbound)?),
+        validation(),
+    )?;
+    Ok(())
+}
 
 #[cfg(feature = "crypto-rustcrypto")]
 fn hmac_sha1(secret: &[u8]) -> Result<Side, SamlError> {

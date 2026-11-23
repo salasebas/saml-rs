@@ -165,10 +165,7 @@ impl Credentials {
         self
     }
 
-    /// Replace the secret for [`crate::SignatureAlgorithm::HmacSha1`].
-    ///
-    /// Messages are signed with it instead of the signing credential when
-    /// that algorithm is selected.
+    /// Replace the secret used to sign messages with an HMAC algorithm.
     pub fn with_hmac_secret(mut self, secret: HmacSecret) -> Self {
         self.hmac_secret = Some(secret);
         self
@@ -210,7 +207,7 @@ impl Credentials {
         &self.additional_signing_certificates
     }
 
-    /// The secret for [`crate::SignatureAlgorithm::HmacSha1`].
+    /// The secret used to sign messages with an HMAC algorithm.
     pub fn hmac_secret(&self) -> Option<&HmacSecret> {
         self.hmac_secret.as_ref()
     }

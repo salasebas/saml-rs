@@ -13,7 +13,7 @@ use crate::template::validate_tag_prefixes;
 use crate::xml::name::validate_namespace_prefix;
 use crate::xml::signature_placement::signature_reference_path;
 
-use super::algorithms::{NameIdFormat, SignatureAlgorithm};
+use super::algorithms::NameIdFormat;
 use super::credentials::Credentials;
 use super::descriptors::{
     ArtifactResolutionService, EntityId, IdpMetadataConfig, ManageNameIdService, SpMetadataConfig,
@@ -678,8 +678,9 @@ fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
     #[cfg(crypto)]
     crate::crypto::keys::check_credentials(&config.credentials)?;
     validate_shared_policy(&config.algorithms, &config.templates)?;
+    #[cfg(crypto)]
     if authn_request_signing_enabled(config.validation.authn_requests) {
-        validate_signing_credentials(&config.credentials, &config.algorithms.signature)?;
+        validate_signing_credentials(&config.credentials, config.algorithms.signature.as_uri())?;
     }
     if config.xml.encryption.selects_any_element()
         && config.credentials.decryption_credentials().is_empty()
@@ -711,11 +712,12 @@ fn validated_idp_issuance_lifetime(
     })
 }
 
+#[cfg(crypto)]
 fn validate_signing_credentials(
     credentials: &Credentials,
-    algorithm: &SignatureAlgorithm,
+    signature_uri: &str,
 ) -> Result<(), SamlError> {
-    if matches!(algorithm, SignatureAlgorithm::HmacSha1) {
+    if bergshamra::crypto::sign::is_hmac_algorithm(signature_uri) {
         if credentials.hmac_secret().is_none() {
             return Err(SamlError::MissingKey("hmac_secret".into()));
         }
