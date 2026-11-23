@@ -9,8 +9,8 @@ use crate::logout::{
 };
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
-    LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, Received, RelayState, ReplayKey,
-    SamlInstant, SamlValidationContext, SessionIndex, Status,
+    LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, Received, RefusedLogoutRequest,
+    RelayState, ReplayKey, SamlInstant, SamlValidationContext, SessionIndex, Status,
 };
 use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
@@ -88,6 +88,8 @@ impl ServiceProvider {
     /// the receiving URL is unpublished, multiple local endpoints have no
     /// explicit receiving URL, or replay
     /// validation detects a duplicate or unusable expiration.
+    /// Returns [`SamlError::LogoutRequestRefused`] for an authenticated newer
+    /// version. Send its refusal with [`Self::respond_slo_refusal`].
     ///
     /// A decrypted `<NameID>` is available through [`LogoutRequest::name_id`].
     /// If no configured key decrypts the `<EncryptedID>`, or it contains a
@@ -143,8 +145,32 @@ impl ServiceProvider {
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
             peer,
-            request,
-            status,
+            LogoutResponseTo::Request { request, status },
+            options,
+            LogoutResponseTransport::SessionParticipant,
+        )
+    }
+
+    /// Answer an authenticated IdP LogoutRequest with a version mismatch.
+    ///
+    /// The response uses the built-in XML and the request's RelayState.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError`] when the issuer does not match the descriptor, the
+    /// response cannot use the selected binding or endpoint, or signing fails.
+    pub fn respond_slo_refusal(
+        &self,
+        idp: &IdpDescriptor,
+        refusal: &RefusedLogoutRequest,
+        options: RespondSlo,
+    ) -> Result<Outbound<LogoutResponse>, SamlError> {
+        let peer = RawPeer::from_idp(idp, SystemTime::now())?;
+        respond_slo_impl(
+            &self.engine().setting,
+            self.engine().metadata.as_metadata(),
+            peer,
+            LogoutResponseTo::Refusal(refusal),
             options,
             LogoutResponseTransport::SessionParticipant,
         )
@@ -303,6 +329,8 @@ impl IdentityProvider {
     /// no explicit receiving URL, or replay validation detects
     /// a duplicate or unusable expiration. The identity provider processes an
     /// `<EncryptedID>` as described in [`ServiceProvider::receive_slo`].
+    /// Returns [`SamlError::LogoutRequestRefused`] for an authenticated newer
+    /// version. Send its refusal with [`Self::respond_slo_refusal`].
     ///
     /// # Examples
     ///
@@ -394,8 +422,32 @@ impl IdentityProvider {
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
             peer,
-            request,
-            status,
+            LogoutResponseTo::Request { request, status },
+            options,
+            LogoutResponseTransport::SessionAuthority,
+        )
+    }
+
+    /// Answer an authenticated SP LogoutRequest with a version mismatch.
+    ///
+    /// The response uses the built-in XML and the request's RelayState.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError`] when the issuer does not match the descriptor, the
+    /// response cannot use the selected binding or endpoint, or signing fails.
+    pub fn respond_slo_refusal(
+        &self,
+        sp: &SpDescriptor,
+        refusal: &RefusedLogoutRequest,
+        options: RespondSlo,
+    ) -> Result<Outbound<LogoutResponse>, SamlError> {
+        let peer = RawPeer::from_sp(sp, SystemTime::now())?;
+        respond_slo_impl(
+            &self.engine().setting,
+            self.engine().metadata.as_metadata(),
+            peer,
+            LogoutResponseTo::Refusal(refusal),
             options,
             LogoutResponseTransport::SessionAuthority,
         )
@@ -587,6 +639,13 @@ fn receive_slo_impl(
             peer.hmac_secret,
         ),
     )?;
+    if let Some(refusal) =
+        RefusedLogoutRequest::for_version(&flow, peer.entity_id, relay_state.as_ref(), binding)?
+    {
+        return Err(SamlError::LogoutRequestRefused {
+            refusal: Box::new(refusal),
+        });
+    }
     let replay_deadline = crate::validator::logout_request_not_on_or_after_deadline(
         &flow.extract,
         validation.now_offset()?,
@@ -601,16 +660,42 @@ fn receive_slo_impl(
     Ok(Received::new(logout, relay_state))
 }
 
+enum LogoutResponseTo<'a> {
+    Request {
+        request: &'a Received<LogoutRequest>,
+        status: &'a Status,
+    },
+    Refusal(&'a RefusedLogoutRequest),
+}
+
 fn respond_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
     peer: RawPeer<'_>,
-    request: &Received<LogoutRequest>,
-    status: &Status,
+    response_to: LogoutResponseTo<'_>,
     options: RespondSlo,
     transport: LogoutResponseTransport,
 ) -> Result<Outbound<LogoutResponse>, SamlError> {
-    ensure_entity_id(request.message().issuer(), peer.entity_id)?;
+    let (issuer, in_response_to, relay_state, status, template) = match response_to {
+        LogoutResponseTo::Request { request, status } => (
+            request.message().issuer(),
+            request.message().id(),
+            request.relay_state(),
+            status,
+            local_setting.logout_response_template.as_deref(),
+        ),
+        LogoutResponseTo::Refusal(refusal) => {
+            logout_response_binding(Binding::from(options.binding), refusal.binding)?;
+            (
+                &refusal.issuer,
+                &refusal.id,
+                refusal.relay_state.as_ref(),
+                refusal.status(),
+                None,
+            )
+        }
+    };
+    ensure_entity_id(issuer, peer.entity_id)?;
     if matches!(transport, LogoutResponseTransport::SessionParticipant) {
         enforce_participant_https(
             peer.metadata,
@@ -619,15 +704,15 @@ fn respond_slo_impl(
             EndpointDirection::Response,
         )?;
     }
-    let relay_state = request.relay_state().map(RelayState::as_str);
     let context = create_logout_response_inner(LogoutResponseInput {
         init_setting: local_setting,
         init_meta: local_metadata,
         target_meta: peer.metadata,
         binding: Binding::from(options.binding),
-        in_response_to: Some(request.message().id().as_str()),
-        relay_state,
+        in_response_to: Some(in_response_to.as_str()),
+        relay_state: relay_state.map(RelayState::as_str),
         status,
+        template,
     })?;
     Outbound::<LogoutResponse>::echoing_received_relay_state(context)
 }

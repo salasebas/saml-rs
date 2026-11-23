@@ -134,15 +134,15 @@ impl IdentityProvider {
     ///
     /// The protocol message is included only when `presenter` is the service
     /// provider the artifact was issued to and `channel` supplies the protection
-    /// that message requires. Any other understood request still gets an
-    /// `ArtifactResponse`; [`AnsweredArtifact::release`] says whether the
-    /// message was included. A request this method cannot read returns an error
-    /// so the deployment can refuse it at HTTP.
+    /// that message requires. [`AnsweredArtifact::release`] says whether the
+    /// response includes the message. A request with a newer version receives
+    /// `VersionMismatch`.
     ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when `request_envelope` is not a SOAP 1.1
-    /// `ArtifactResolve` with the required protocol attributes.
+    /// `ArtifactResolve` with the required protocol attributes, or when its
+    /// version is too low for a SAML 2.0 response.
     ///
     /// # Examples
     ///

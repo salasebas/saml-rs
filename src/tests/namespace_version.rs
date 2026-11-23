@@ -854,9 +854,8 @@ fn all_parser_roots_require_version_2() -> Result<(), Box<dyn std::error::Error>
         ),
         (
             ParserType::LogoutRequest,
-            format!(
-                r#"<p:LogoutRequest xmlns:p="{PROTOCOL_NS}" ID="_id" Version="1.0" IssueInstant="2024-01-01T00:00:00Z"/>"#
-            ),
+            logout_request_xml(Some("2024-01-01T00:00:00Z"), None)
+                .replace(r#"Version="2.0""#, r#"Version="1.0""#),
         ),
         (
             ParserType::LogoutResponse,

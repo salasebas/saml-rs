@@ -114,8 +114,6 @@ pub(crate) fn render_request(
 
 pub(crate) fn render_response(prefixes: &Prefixes<'_>, response: &ResponseXml<'_>) -> String {
     let root = prefixes.protocol("ManageNameIDResponse");
-    let status_name = prefixes.protocol("Status");
-    let status_code_name = prefixes.protocol("StatusCode");
     let xmlns_protocol = prefixes.xmlns_protocol();
     let xmlns_assertion = prefixes.xmlns_assertion();
     let issue_instant = now_iso8601();
@@ -133,17 +131,7 @@ pub(crate) fn render_response(prefixes: &Prefixes<'_>, response: &ResponseXml<'_
     let mut writer = XmlWriter::new();
     writer.start(&root, &attributes);
     writer.text_element(&prefixes.assertion("Issuer"), &[], response.issuer);
-    writer.start(&status_name, &[]);
-    let top_level = [("Value", response.status.top_level().as_uri())];
-    match response.status.subordinate() {
-        Some(subordinate) => {
-            writer.start(&status_code_name, &top_level);
-            writer.empty(&status_code_name, &[("Value", subordinate.as_uri())]);
-            writer.end(&status_code_name);
-        }
-        None => writer.empty(&status_code_name, &top_level),
-    }
-    writer.end(&status_name);
+    writer.status(prefixes, response.status);
     writer.end(&root);
     writer.finish()
 }

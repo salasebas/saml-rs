@@ -8,11 +8,11 @@ use std::marker::PhantomData;
 use std::time::SystemTime;
 
 use crate::config::{EntityId, IdpDescriptor, SpDescriptor};
-use crate::flow::HttpRequest;
+use crate::flow::{HttpRequest, MessageAuthentication};
 use crate::idp::LoginResponseOverrides;
 use crate::model::{
     AuthnRequest, EndpointUrl, ForceAuthn, IsPassive, MessageId, OutstandingLogout, Received,
-    RelayState, SamlValidationContext, SessionIndex, SsoResponse, SsoSession,
+    RelayState, SamlValidationContext, SessionIndex, SsoResponse, SsoSession, Status,
 };
 use crate::sp::{validate_provider_name, LoginResponseParseOptions, PaosAuthnRequestInput};
 use crate::xml::is_xml_char;
@@ -311,10 +311,9 @@ impl<Message> PaosHttpResponse<Message> {
 impl PaosHttpResponse<SoapFault> {
     /// HTTP 500 SOAP fault for an envelope that is not a SAML request.
     ///
-    /// Send this when [`IdentityProvider::receive_paos_sso`] fails before it returns
-    /// a request. A failed login is answered by [`IdentityProvider::respond_paos_sso`]
-    /// with an [`SsoOutcome::Failure`] instead, and that response stays HTTP
-    /// 200.
+    /// Use this for SOAP envelope or header errors. Send the response in
+    /// [`SamlError::PaosRequestRefused`] for an authenticated request refused
+    /// during age or replay validation.
     pub fn soap_fault() -> Self {
         let mut response = Self::from_parts(SOAP_RESPONSE_HEADERS, soap_fault_envelope());
         response.status = 500;
@@ -562,8 +561,9 @@ impl IdentityProvider {
     /// one AuthnRequest, a SOAP header requires processing by the IdP, the issuer
     /// or destination does not match, the request is unsigned while the SP
     /// metadata sets `AuthnRequestsSigned`,
-    /// or signature, time, or replay checks fail. Answer those errors with
-    /// [`PaosHttpResponse::soap_fault`].
+    /// or signature, time, or replay checks fail. For a signed request that
+    /// fails the age policy or repeats a cached ID, returns
+    /// [`SamlError::PaosRequestRefused`] with a SAML error response to send.
     pub fn receive_paos_sso(
         &self,
         sp: &SpDescriptor,
@@ -605,10 +605,31 @@ impl IdentityProvider {
             }
         }
         let mut validation = validation;
-        validation.check_authn_request_issue_instant(authn.issue_instant())?;
-        validation.check_and_store_message_replay(crate::model::ReplayKey::AuthnRequest(
-            authn.id().clone(),
-        ))?;
+        let validated = validation
+            .check_authn_request_issue_instant(authn.issue_instant())
+            .and_then(|()| {
+                validation.check_and_store_message_replay(crate::model::ReplayKey::AuthnRequest(
+                    authn.id().clone(),
+                ))
+            });
+        if let Err(source) = validated {
+            if authentication == MessageAuthentication::Authenticated
+                && matches!(
+                    source,
+                    SamlError::TimeWindowInvalid {
+                        field: crate::TimeWindowField::AuthnRequestIssueInstant,
+                    } | SamlError::ReplayDetected { .. }
+                )
+            {
+                let response =
+                    self.issue_paos_sso(raw_sp, &authn, &SsoOutcome::Failure(Status::requester()))?;
+                return Err(SamlError::PaosRequestRefused {
+                    source: Box::new(source),
+                    response: Box::new(response),
+                });
+            }
+            return Err(source);
+        }
         Ok(Received::new(authn, None))
     }
 
@@ -654,13 +675,15 @@ impl IdentityProvider {
         request: &Received<AuthnRequest>,
         outcome: impl Into<SsoOutcome>,
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
-        self.issue_paos_sso(sp, request, &outcome.into())
+        ensure_entity_id(request.message().issuer(), sp.entity_id())?;
+        let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
+        self.issue_paos_sso(raw_sp, request.message(), &outcome.into())
     }
 
     fn issue_paos_sso(
         &self,
-        sp: &SpDescriptor,
-        request: &Received<AuthnRequest>,
+        sp: &crate::sp::Engine,
+        request: &AuthnRequest,
         outcome: &SsoOutcome,
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
         let OutcomeParts {
@@ -672,13 +695,11 @@ impl IdentityProvider {
             authn_context,
             authn_instant,
         } = outcome.parts()?;
-        ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         let acs = EndpointUrl::try_new(resolve_response_acs(
-            sp.metadata(),
-            Some(request.message()),
+            &sp.metadata,
+            Some(request),
             ResponseAcsBindings::Paos,
         )?)?;
-        let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
         let response_signature = {
             let setting = &self.engine().setting;
             super::options::RespondSso::post().response_signature(
@@ -695,16 +716,16 @@ impl IdentityProvider {
             typed_attributes,
             authn_context,
             authn_instant,
-            requested_authn_context: request.message().requested_authn_context(),
-            requested_name_id_policy: request.message().name_id_policy(),
-            requested_subject: request.message().requested_subject(),
+            requested_authn_context: request.requested_authn_context(),
+            requested_name_id_policy: request.name_id_policy(),
+            requested_subject: request.requested_subject(),
             response_signature: Some(response_signature),
             transformation_algorithms: None,
         };
         let issued = self.engine().render_posted_sso_response(
-            raw_sp,
+            sp,
             &user,
-            Some(request.message().id().as_str()),
+            Some(request.id().as_str()),
             overrides,
         )?;
         let envelope = idp_to_ecp_envelope(&IdpToEcp {

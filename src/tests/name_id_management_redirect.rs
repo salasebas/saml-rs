@@ -25,7 +25,6 @@ use saml_rs::constants::{
     name_id_format, signature_algorithm::RSA_SHA256, status_code, ParserType,
 };
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
-use saml_rs::error::TimeWindowField;
 use saml_rs::{
     AcsEndpoint, ClockSkew, EndpointUrl, EntityId, IdentityProvider, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService,
@@ -764,17 +763,6 @@ fn one_hour_request_age(now: SystemTime, cache: &mut dyn ReplayCache) -> SamlVal
         })
 }
 
-fn assert_request_age_rejected(
-    result: Result<NameIdManagementRedirectReceipt, SamlError>,
-) -> TestResult {
-    match result {
-        Err(SamlError::TimeWindowInvalid {
-            field: TimeWindowField::ManageNameIdRequestIssueInstant,
-        }) => Ok(()),
-        other => Err(format!("expected a request age error, got {other:?}").into()),
-    }
-}
-
 #[test]
 fn a_bounded_request_age_rejects_a_request_outside_the_window_before_replay_storage() -> TestResult
 {
@@ -788,17 +776,39 @@ fn a_bounded_request_age_rejects_a_request_outside_the_window_before_replay_stor
     let other_version = xml.replace(r#"Version="2.0""#, r#"Version="2.1""#);
     let mut cache = RecordingReplayCache::default();
 
-    for (seconds, message) in [
-        (60 * 60 + 1, &xml),
-        (-1, &xml),
-        (60 * 60 + 1, &other_version),
+    for (seconds, message, reason, status) in [
+        (
+            60 * 60 + 1,
+            &xml,
+            NameIdManagementRefusal::RequestAgeOutsideWindow,
+            status_code::REQUESTER,
+        ),
+        (
+            -1,
+            &xml,
+            NameIdManagementRefusal::RequestAgeOutsideWindow,
+            status_code::REQUESTER,
+        ),
+        (
+            60 * 60 + 1,
+            &other_version,
+            NameIdManagementRefusal::VersionMismatch,
+            status_code::VERSION_MISMATCH,
+        ),
     ] {
-        assert_request_age_rejected(sp.receive_name_id_management_redirect(
+        let NameIdManagementReceipt::Refused(refused) = sp.receive_name_id_management_redirect(
             &idp_peer,
             signed_request_input(message)?,
             ReceiveNameIdManagement::new(),
             one_hour_request_age(issued_at_plus(seconds)?, &mut cache),
-        ))?;
+        )?
+        else {
+            return Err("the request was exposed for processing".into());
+        };
+        assert_eq!(refused.reason(), reason);
+        let answer = redirect_message_xml(refused.response())?;
+        assert!(answer.contains(r#"InResponseTo="_manage1""#));
+        assert!(answer.contains(&format!(r#"<samlp:StatusCode Value="{status}"/>"#)));
     }
     assert!(cache.seen.is_empty());
 
@@ -1321,12 +1331,13 @@ fn a_version_other_than_2_0_is_answered_with_version_mismatch() -> TestResult {
         "<samlp:Terminate/>",
     )
     .replace(r#"Version="2.0""#, r#"Version="2.1""#);
+    let mut cache = RecordingReplayCache::default();
 
     let NameIdManagementReceipt::Refused(refused) = sp.receive_name_id_management_redirect(
         &idp_peer,
         signed_request_input(&xml)?,
         ReceiveNameIdManagement::new(),
-        validation(),
+        one_hour_request_age(issued_at_plus(0)?, &mut cache),
     )?
     else {
         return Err("a version mismatch was not refused".into());
@@ -1338,6 +1349,15 @@ fn a_version_other_than_2_0_is_answered_with_version_mismatch() -> TestResult {
         r#"<samlp:StatusCode Value="{}"/>"#,
         status_code::VERSION_MISMATCH
     )));
+    assert!(matches!(
+        sp.receive_name_id_management_redirect(
+            &idp_peer,
+            signed_request_input(&xml)?,
+            ReceiveNameIdManagement::new(),
+            one_hour_request_age(issued_at_plus(0)?, &mut cache),
+        ),
+        Err(SamlError::ReplayDetected { .. })
+    ));
 
     let declared = idp_request_xml(
         r#"<saml:NameID>alice@example.com</saml:NameID>"#,

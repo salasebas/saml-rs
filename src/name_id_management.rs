@@ -11,8 +11,8 @@ use crate::entity::{generate_id, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
-    EndpointUrl, MessageId, NameId, Received, ReplayKey, SamlInstant, SamlValidationContext,
-    Status, SubordinateStatusCode,
+    EndpointUrl, MessageId, NameId, Received, ReplayKey, RequestVersionMismatch, SamlInstant,
+    SamlValidationContext, Status, SubordinateStatusCode,
 };
 use crate::soap::{read_soap_body, SoapChannel, SoapRequest, SoapResponse};
 use crate::xml::any_uri::collapse_whitespace;
@@ -101,8 +101,11 @@ pub enum NameIdManagementReceipt<Response = SoapResponse> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum NameIdManagementRefusal {
-    /// The request `Version` is not `2.0`. The status is `VersionMismatch`.
+    /// The request has an unsupported newer version. The status is `VersionMismatch`.
     VersionMismatch,
+    /// The request's `IssueInstant` falls outside the configured age window.
+    /// The status is `Requester`.
+    RequestAgeOutsideWindow,
     /// The request's `EncryptedID` does not decrypt, with this provider's
     /// decryption key, to one `NameID`. The status is `Requester` with
     /// `UnknownPrincipal`.
@@ -112,14 +115,30 @@ pub enum NameIdManagementRefusal {
     UndecryptableNewIdentifier,
 }
 
-impl NameIdManagementRefusal {
-    pub(crate) fn status(self) -> Status {
+pub(crate) enum Refusal {
+    VersionMismatch(RequestVersionMismatch),
+    RequestAgeOutsideWindow,
+    Undecryptable(Undecryptable),
+}
+
+impl Refusal {
+    fn reason(&self) -> NameIdManagementRefusal {
         match self {
-            Self::VersionMismatch => Status::version_mismatch(),
-            Self::UndecryptableIdentifier => {
+            Self::VersionMismatch(_) => NameIdManagementRefusal::VersionMismatch,
+            Self::RequestAgeOutsideWindow => NameIdManagementRefusal::RequestAgeOutsideWindow,
+            Self::Undecryptable(failure) => failure.reason,
+        }
+    }
+
+    pub(crate) fn status(&self) -> Status {
+        match self {
+            Self::VersionMismatch(mismatch) => mismatch.status(),
+            Self::Undecryptable(failure)
+                if failure.reason == NameIdManagementRefusal::UndecryptableIdentifier =>
+            {
                 Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal())
             }
-            Self::UndecryptableNewIdentifier => Status::requester(),
+            Self::RequestAgeOutsideWindow | Self::Undecryptable(_) => Status::requester(),
         }
     }
 }
@@ -133,15 +152,14 @@ pub struct RefusedNameIdManagement<Response = SoapResponse> {
 }
 
 impl<Response> RefusedNameIdManagement<Response> {
-    pub(crate) fn new(
-        response: Response,
-        reason: NameIdManagementRefusal,
-        decryption_error: Option<SamlError>,
-    ) -> Self {
+    pub(crate) fn new(response: Response, refusal: Refusal) -> Self {
         Self {
             response,
-            reason,
-            decryption_error: decryption_error.map(Arc::new),
+            reason: refusal.reason(),
+            decryption_error: match refusal {
+                Refusal::Undecryptable(failure) => Some(Arc::new(failure.error)),
+                Refusal::VersionMismatch(_) | Refusal::RequestAgeOutsideWindow => None,
+            },
         }
     }
 
@@ -324,9 +342,6 @@ pub(crate) fn receive(
     let id = MessageId::try_new(request.required_attr("ID")?)?;
     let version = request.required_attr("Version")?;
     let issue_instant = require_utc_instant(&request)?;
-    if version != "2.0" {
-        return refused(idp, &id, NameIdManagementRefusal::VersionMismatch, None);
-    }
     let sp_entity_id = service_provider.entity_id();
     if request
         .children
@@ -349,8 +364,16 @@ pub(crate) fn receive(
             ));
         }
     }
+    if let Some(mismatch) = RequestVersionMismatch::for_request(&version)? {
+        return refused(idp, &id, Refusal::VersionMismatch(mismatch));
+    }
     let (identifier, change) = identifier_and_change(&request)?;
-    validation.check_manage_name_id_request_issue_instant(&issue_instant)?;
+    if validation
+        .check_manage_name_id_request_issue_instant(&issue_instant)
+        .is_err()
+    {
+        return refused(idp, &id, Refusal::RequestAgeOutsideWindow);
+    }
     validation.check_and_store_message_replay(ReplayKey::ManageNameIdRequest(id.clone()))?;
     match plaintext_content(&body.xml, identifier, change, idp.setting) {
         Ok((name_id, change)) => Ok(NameIdManagementReceipt::Request(Box::new(Received::new(
@@ -362,7 +385,7 @@ pub(crate) fn receive(
             },
             None,
         )))),
-        Err(undecryptable) => refused(idp, &id, undecryptable.reason, Some(undecryptable.error)),
+        Err(undecryptable) => refused(idp, &id, Refusal::Undecryptable(undecryptable)),
     }
 }
 
@@ -386,15 +409,10 @@ pub(crate) fn respond(
 fn refused(
     idp: &LocalIdentityProvider<'_>,
     in_response_to: &MessageId,
-    reason: NameIdManagementRefusal,
-    decryption_error: Option<SamlError>,
+    refusal: Refusal,
 ) -> Result<NameIdManagementReceipt, SamlError> {
     Ok(NameIdManagementReceipt::Refused(
-        RefusedNameIdManagement::new(
-            response(idp, in_response_to, &reason.status())?,
-            reason,
-            decryption_error,
-        ),
+        RefusedNameIdManagement::new(response(idp, in_response_to, &refusal.status())?, refusal),
     ))
 }
 

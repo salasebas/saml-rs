@@ -319,6 +319,7 @@ pub(crate) fn create_logout_response(
         in_response_to,
         relay_state,
         status: &status,
+        template: init_setting.logout_response_template.as_deref(),
     };
     if want_signed {
         return create_logout_response_inner(input);

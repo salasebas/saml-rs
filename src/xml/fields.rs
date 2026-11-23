@@ -20,6 +20,7 @@ pub(crate) const SIGNATURE: &str = "signature";
 pub(crate) mod request {
     pub(crate) const KEY: &str = "request";
     pub(crate) const ID: &str = "request.id";
+    pub(crate) const VERSION: &str = "request.version";
     pub(crate) const ISSUE_INSTANT: &str = "request.issueInstant";
     pub(crate) const DESTINATION: &str = "request.destination";
     pub(crate) const ASSERTION_CONSUMER_SERVICE_URL: &str = "request.assertionConsumerServiceUrl";
@@ -325,6 +326,7 @@ pub fn logout_request_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(request::KEY, &["LogoutRequest"]).attrs(&[
             "ID",
+            "Version",
             "IssueInstant",
             "Destination",
             "NotOnOrAfter",

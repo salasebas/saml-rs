@@ -14,8 +14,8 @@ use crate::name_id_management::redirect::{
 };
 use crate::name_id_management::xml::{RequestXml, Requester, ResponseXml};
 use crate::name_id_management::{
-    ManageNameIdRequest, ManageNameIdResponse, NameIdChange, NameIdManagementReceipt,
-    NameIdManagementRefusal, RefusedNameIdManagement,
+    ManageNameIdRequest, ManageNameIdResponse, NameIdChange, NameIdManagementReceipt, Refusal,
+    RefusedNameIdManagement,
 };
 use std::time::SystemTime;
 
@@ -112,8 +112,9 @@ impl ServiceProvider {
     /// receiving `ManageNameIDService`, this service provider publishes no
     /// HTTP-Redirect `ManageNameIDService` or several without
     /// [`SamlValidationContext::with_recipient_endpoint`], the message is
-    /// malformed, an enabled [`crate::RequestAgePolicy`] rejects
-    /// `IssueInstant`, or replay validation detects a duplicate. Returns
+    /// malformed, its version is too low for a SAML 2.0 response, or replay
+    /// validation detects a duplicate. A request that falls outside the
+    /// configured age window returns [`NameIdManagementReceipt::Refused`]. Returns
     /// [`SamlError::ProtocolProfile`] when a refused request would be answered
     /// at an `http` endpoint and
     /// [`ReceiveNameIdManagement::allow_http`] is not
@@ -269,8 +270,7 @@ impl IdentityProvider {
     ///
     /// Returns the errors documented on
     /// [`ServiceProvider::receive_name_id_management_redirect`], with the service
-    /// provider as the peer, including when an enabled
-    /// [`crate::RequestAgePolicy`] rejects `IssueInstant`.
+    /// provider as the peer.
     ///
     /// # Examples
     ///
@@ -456,7 +456,7 @@ fn receive(
     peer: RawPeer<'_>,
     input: Inbound<ManageNameIdRequest>,
     options: ReceiveNameIdManagement,
-    mut validation: SamlValidationContext<'_>,
+    validation: SamlValidationContext<'_>,
 ) -> Result<NameIdManagementRedirectReceipt, SamlError> {
     require_redirect_input(&input)?;
     let relay_state = relay_state_from_input(&input)?;
@@ -476,24 +476,17 @@ fn receive(
     )?;
     let request = request_from_flow(&flow, local.setting)?;
     ensure_entity_id(&request.issuer, peer.entity_id)?;
-    validation.check_manage_name_id_request_issue_instant(&request.issue_instant)?;
-    validation
-        .check_and_store_message_replay(ReplayKey::ManageNameIdRequest(request.id.clone()))?;
     let id = request.id.clone();
-    match request.decrypt(&flow, local.setting) {
+    match request.validate_and_decrypt(&flow, local.setting, validation)? {
         ParsedRequest::Plain(message) => Ok(NameIdManagementReceipt::Request(Box::new(
             Received::new(message, relay_state),
         ))),
-        ParsedRequest::Refused {
-            reason,
-            decryption_error,
-        } => refuse(
+        ParsedRequest::Refused(refusal) => refuse(
             local,
             &peer,
             &id,
             relay_state.as_ref().map(RelayState::as_str),
-            reason,
-            decryption_error,
+            refusal,
             options.transport(),
         ),
     }
@@ -504,20 +497,19 @@ fn refuse(
     peer: &RawPeer<'_>,
     in_response_to: &MessageId,
     relay_state: Option<&str>,
-    reason: NameIdManagementRefusal,
-    decryption_error: Option<SamlError>,
+    refusal: Refusal,
     transport: PeerEndpointTransport,
 ) -> Result<NameIdManagementRedirectReceipt, SamlError> {
     let response = response_outbound(
         local,
         peer,
         in_response_to.as_str(),
-        &reason.status(),
+        &refusal.status(),
         relay_state,
         transport,
     )?;
     Ok(NameIdManagementReceipt::Refused(
-        RefusedNameIdManagement::new(response, reason, decryption_error),
+        RefusedNameIdManagement::new(response, refusal),
     ))
 }
 

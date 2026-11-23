@@ -5,6 +5,7 @@ use quick_xml::Writer;
 
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
+use crate::model::Status;
 use crate::template::validate_tag_prefixes;
 
 /// Namespace prefixes for the protocol and assertion elements.
@@ -70,6 +71,21 @@ impl XmlWriter {
     pub(crate) fn empty<'a>(&mut self, name: &'a str, attrs: &[(&'a str, &'a str)]) {
         let elem = element(name, attrs);
         self.write(Event::Empty(elem));
+    }
+
+    pub(crate) fn status(&mut self, prefixes: &Prefixes<'_>, status: &Status) {
+        let status_name = prefixes.protocol("Status");
+        let code = prefixes.protocol("StatusCode");
+        let top_level = [("Value", status.top_level().as_uri())];
+        self.start(&status_name, &[]);
+        if let Some(subordinate) = status.subordinate() {
+            self.start(&code, &top_level);
+            self.empty(&code, &[("Value", subordinate.as_uri())]);
+            self.end(&code);
+        } else {
+            self.empty(&code, &top_level);
+        }
+        self.end(&status_name);
     }
 
     pub(crate) fn text(&mut self, text: &str) {

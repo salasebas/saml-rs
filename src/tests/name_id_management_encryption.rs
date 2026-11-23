@@ -16,7 +16,6 @@ use std::time::{Duration, SystemTime};
 use saml_rs::binding::{append_signature, build_redirect_octet};
 use saml_rs::constants::{signature_algorithm::RSA_SHA256, status_code, ParserType};
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
-use saml_rs::error::TimeWindowField;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EndpointUrl, EntityId, IdentifierEncryptionPolicy,
     IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound,
@@ -536,10 +535,15 @@ fn a_replayed_or_stale_request_is_rejected_before_its_identifier_is_decrypted() 
         stale,
         &mut InMemoryReplayCache::with_clock(|| SystemTime::UNIX_EPOCH),
     ) {
-        Err(SamlError::TimeWindowInvalid {
-            field: TimeWindowField::ManageNameIdRequestIssueInstant,
-        }) => Ok(()),
-        other => Err(format!("expected a request age error, got {other:?}").into()),
+        Ok(NameIdManagementReceipt::Refused(refused)) => {
+            assert_eq!(
+                refused.reason(),
+                NameIdManagementRefusal::RequestAgeOutsideWindow
+            );
+            assert!(refused.decryption_error().is_none());
+            Ok(())
+        }
+        other => Err(format!("expected a request age refusal, got {other:?}").into()),
     }
 }
 

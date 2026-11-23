@@ -111,7 +111,8 @@ impl IdentityProvider {
     /// A [`NameIdManagementReceipt::Request`] is ready for the caller to
     /// apply. Answer it with [`Self::respond_name_id_management`]. A
     /// [`NameIdManagementReceipt::Refused`] already carries the SOAP response
-    /// to return.
+    /// to return, including when the authenticated request falls outside the
+    /// configured age window.
     ///
     /// `sp` is the service provider the deployment authenticated on
     /// `channel`. `validation` selects the receiving endpoint when this
@@ -127,9 +128,8 @@ impl IdentityProvider {
     /// authenticate both parties and protect integrity. Returns another
     /// [`SamlError`] when the envelope is not a SOAP 1.1
     /// `ManageNameIDRequest` from `sp`, its `Destination` is not the receiving
-    /// endpoint, an enabled [`crate::RequestAgePolicy`] rejects
-    /// `IssueInstant`, or replay validation detects a duplicate. The
-    /// deployment can answer those with an HTTP error or a SOAP fault.
+    /// endpoint, the request version is too low for a SAML 2.0 response, or
+    /// replay validation detects a duplicate.
     pub fn receive_name_id_management(
         &self,
         sp: &SpDescriptor,

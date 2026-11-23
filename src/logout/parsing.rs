@@ -94,6 +94,7 @@ pub(crate) fn parse_logout_request_at(
         &FlowOptions {
             binding: Some(receipt.decode_as),
             parser_type: Some(ParserType::LogoutRequest),
+            defer_logout_request_version: true,
             signature_check: receipt.signature,
             require_audience_restriction: true,
             xml_signatures: self_setting.xml_signatures,

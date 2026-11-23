@@ -509,11 +509,13 @@ fn a_version_mismatch_does_not_consume_the_artifact() -> Result<(), Box<dyn std:
         channel,
         without_replay_cache(),
     )?;
-    let mismatched =
-        resolution
-            .request()
-            .envelope()
-            .replacen("Version=\"2.0\"", "Version=\"1.1\"", 1);
+    let envelope = resolution.request().envelope();
+    let old_request = envelope.replacen("Version=\"2.0\"", "Version=\"1.1\"", 1);
+    assert!(parties
+        .idp
+        .answer_artifact_resolve(&parties.sp_metadata, &old_request, &mut issued, channel)
+        .is_err());
+    let mismatched = envelope.replacen("Version=\"2.0\"", "Version=\"3.0\"", 1);
     let rejected = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &mismatched,
@@ -522,6 +524,10 @@ fn a_version_mismatch_does_not_consume_the_artifact() -> Result<(), Box<dyn std:
     )?;
     assert_eq!(rejected.release(), ArtifactRelease::VersionMismatch);
     assert!(rejected.response().envelope().contains(VERSION_MISMATCH));
+    assert!(rejected
+        .response()
+        .envelope()
+        .contains("urn:oasis:names:tc:SAML:2.0:status:RequestVersionTooHigh"));
     assert!(!rejected.response().envelope().contains(SUCCESS));
     assert!(!rejected.response().envelope().contains(WEB_SSO_MARKER));
 

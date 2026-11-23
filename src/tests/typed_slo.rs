@@ -3,6 +3,9 @@
 #[path = "typed_slo/schema_validation.rs"]
 mod schema_validation;
 
+#[path = "typed_slo/version_refusals.rs"]
+mod version_refusals;
+
 use super::common;
 use saml_rs::tests::engine::LogoutUser;
 
