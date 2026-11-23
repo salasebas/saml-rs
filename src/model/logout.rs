@@ -116,23 +116,20 @@ impl LogoutRequest {
 impl LogoutRequest {
     pub(crate) fn from_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
         let id = MessageId::try_new(required_str(&raw_flow.extract, request::ID)?)?;
-        let issue_instant = logout_request_instant_from_extract(
-            &raw_flow.extract,
-            request::ISSUE_INSTANT,
-            "IssueInstant",
-            true,
-        )?
-        .ok_or_else(|| {
-            SamlError::ProtocolProfile(
-                "LogoutRequest is missing required unqualified attribute IssueInstant".into(),
-            )
-        })?;
-        let not_on_or_after = logout_request_instant_from_extract(
-            &raw_flow.extract,
-            request::NOT_ON_OR_AFTER,
-            "NotOnOrAfter",
-            false,
-        )?;
+        let issue_instant = raw_flow
+            .extract
+            .get_str(request::ISSUE_INSTANT)
+            .ok_or_else(|| {
+                SamlError::ProtocolProfile(
+                    "LogoutRequest is missing required unqualified attribute IssueInstant".into(),
+                )
+            })?;
+        let issue_instant = logout_request_instant(issue_instant, "IssueInstant")?;
+        let not_on_or_after = raw_flow
+            .extract
+            .get_str(request::NOT_ON_OR_AFTER)
+            .map(|value| logout_request_instant(value, "NotOnOrAfter"))
+            .transpose()?;
         let issuer = EntityId::try_new(required_str(&raw_flow.extract, ISSUER)?)?;
         let name_id_attribute = |field: &str| raw_flow.extract.get_str(field).map(str::to_string);
         let name_id = raw_flow.extract.get_str(name_id::VALUE).map(|value| {
@@ -163,26 +160,13 @@ impl LogoutRequest {
     }
 }
 
-fn logout_request_instant_from_extract(
-    extract: &crate::util::Value,
-    path: &str,
-    attribute: &str,
-    required: bool,
-) -> Result<Option<SamlInstant>, SamlError> {
-    let Some(value) = extract.get_str(path) else {
-        if required {
-            return Err(SamlError::ProtocolProfile(format!(
-                "LogoutRequest is missing required unqualified attribute {attribute}"
-            )));
-        }
-        return Ok(None);
-    };
+fn logout_request_instant(value: &str, attribute: &str) -> Result<SamlInstant, SamlError> {
     let normalized = parse_saml_utc_date_time(value).ok_or_else(|| {
         SamlError::ProtocolProfile(format!(
             "LogoutRequest {attribute} must use the SAML-conformant UTC xs:dateTime form ending in Z"
         ))
     })?;
-    SamlInstant::try_new(normalized).map(Some)
+    SamlInstant::try_new(normalized)
 }
 
 /// Parsed LogoutResponse result.
