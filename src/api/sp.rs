@@ -201,6 +201,7 @@ impl ServiceProvider {
                 is_passive: options.passive.map(super::IsPassive::as_bool),
                 provider_name: options.provider_name.as_deref(),
                 requested_authn_context: options.requested_authn_context.as_ref(),
+                extensions: &options.extensions,
             },
         )?;
         let outbound = Outbound::<AuthnRequest>::from_context(context)?;

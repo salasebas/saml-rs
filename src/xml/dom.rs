@@ -5,6 +5,7 @@
 //! canonicalisation concerns — verification is delegated to bergshamra).
 
 use crate::error::{xml_err, ResourceLimit, SamlError};
+use crate::xml::name::is_ncname;
 use crate::xml::{is_xml_char, utf8_bom_len};
 use quick_xml::escape::resolve_predefined_entity;
 use quick_xml::events::{BytesRef, Event};
@@ -209,6 +210,7 @@ fn push_child<N, A>(
 #[derive(Clone, Copy)]
 enum ParseMode {
     Document,
+    StandaloneElement,
     Roots,
     Fragment,
 }
@@ -223,9 +225,9 @@ fn is_xml_whitespace(text: &str) -> bool {
 
 fn reject_non_document_content(mode: ParseMode) -> Result<(), SamlError> {
     match mode {
-        ParseMode::Document | ParseMode::Fragment => Err(SamlError::xml(
-            "content is not allowed outside the document element",
-        )),
+        ParseMode::Document | ParseMode::StandaloneElement | ParseMode::Fragment => Err(
+            SamlError::xml("content is not allowed outside the document element"),
+        ),
         ParseMode::Roots => Ok(()),
     }
 }
@@ -254,6 +256,23 @@ fn push_general_ref(
 /// document element, within `limits`.
 pub(crate) fn parse_document(xml: &str, limits: XmlLimits) -> Result<Document, SamlError> {
     parse_single_root(xml, limits, ParseMode::Document)
+}
+
+pub(crate) fn parse_standalone_element(
+    xml: &str,
+    limits: XmlLimits,
+) -> Result<(Node, String), SamlError> {
+    let mut namespace = None;
+    let roots = parse_roots_inner(
+        xml,
+        limits,
+        ParseMode::StandaloneElement,
+        |_, uri, _| {
+            namespace.get_or_insert_with(|| uri.unwrap_or_default().to_owned());
+        },
+        local_attribute,
+    )?;
+    Ok((single_root(roots)?, namespace.unwrap_or_default()))
 }
 
 /// Parse one element cut out of a larger document, such as an extracted
@@ -401,11 +420,22 @@ fn parse_roots_inner<N, A>(
                     "an XML declaration is allowed only at the start of the input",
                 ));
             }
+            Event::Decl(declaration) if matches!(mode, ParseMode::StandaloneElement) => {
+                element::validate_declaration(&declaration)?;
+            }
             Event::PI(instruction) if instruction.target().eq_ignore_ascii_case("xml") => {
                 return Err(SamlError::xml(format!(
                     "processing instruction target `{}` is reserved",
                     instruction.target()
                 )));
+            }
+            Event::PI(instruction)
+                if matches!(mode, ParseMode::StandaloneElement)
+                    && !is_ncname(instruction.target()) =>
+            {
+                return Err(SamlError::xml(
+                    "processing instruction target must be an XML NCName",
+                ));
             }
             Event::Eof => match stack.last() {
                 Some(node) => {

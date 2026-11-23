@@ -14,11 +14,12 @@ use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::xml::dom::parse_document;
 use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, AuthnStatement, EntityId, FormField,
-    IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive,
-    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery, ReplayPolicy,
-    RequestedAuthnContext, RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoResponse, StartSso,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, AuthnStatement, EntityId,
+    ExtensionElement, FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    Inbound, IsPassive, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery,
+    ReplayPolicy, RequestedAuthnContext, RespondSso, SamlError, SamlValidationContext,
+    ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
+    SsoResponse, StartSso,
 };
 
 const SP: &str = "https://sp.example.com";
@@ -226,6 +227,106 @@ fn signed_requests_round_trip_context_passive_and_provider_for_all_bindings(
         assert!(!xml.contains("ProviderName="));
     }
     Ok(())
+}
+
+#[test]
+fn signed_requests_write_extensions_in_schema_order_for_all_bindings(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let sp_type = ExtensionElement::from_xml(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><!-- before --><eidas:SPType xmlns:eidas="http://eidas.europa.eu/saml-extensions">public</eidas:SPType><!-- after -->"#,
+    )?;
+    let requested_attributes = ExtensionElement::from_xml(
+        r#"<RequestedAttributes xmlns="http://eidas.europa.eu/saml-extensions"><RequestedAttribute Name="http://eidas.europa.eu/attributes/naturalperson/PersonIdentifier" isRequired="true"/></RequestedAttributes>"#,
+    )?;
+
+    for (start, signature) in [
+        (StartSso::redirect(), None),
+        (StartSso::post(), Some("Signature")),
+        (StartSso::simple_sign(), None),
+    ] {
+        let started = sp.start_sso(
+            &idp_descriptor,
+            start
+                .extension(sp_type.clone())
+                .extension(requested_attributes.clone()),
+        )?;
+        let xml = request_xml(&started.outbound)?;
+        let document = roxmltree::Document::parse(&xml)?;
+        let children: Vec<_> = document
+            .root_element()
+            .children()
+            .filter(roxmltree::Node::is_element)
+            .collect();
+        assert_eq!(
+            children
+                .iter()
+                .map(|node| node.tag_name().name())
+                .collect::<Vec<_>>(),
+            ["Issuer"]
+                .into_iter()
+                .chain(signature)
+                .chain(["Extensions", "NameIDPolicy"])
+                .collect::<Vec<_>>()
+        );
+        let extensions = children[children.len() - 2];
+        assert!(extensions.has_tag_name((saml_rs::constants::namespace::PROTOCOL, "Extensions")));
+        let mut items = extensions.children();
+        let sp_type = items.next().ok_or("missing SPType")?;
+        assert!(sp_type.has_tag_name(("http://eidas.europa.eu/saml-extensions", "SPType")));
+        assert_eq!(sp_type.text(), Some("public"));
+        let attributes = items.next().ok_or("missing RequestedAttributes")?;
+        assert!(attributes.has_tag_name((
+            "http://eidas.europa.eu/saml-extensions",
+            "RequestedAttributes"
+        )));
+        let attribute = attributes
+            .first_element_child()
+            .ok_or("missing RequestedAttribute")?;
+        assert_eq!(
+            attribute.attribute("Name"),
+            Some("http://eidas.europa.eu/attributes/naturalperson/PersonIdentifier")
+        );
+        assert_eq!(attribute.attribute("isRequired"), Some("true"));
+        assert_eq!(items.next(), None);
+
+        idp.receive_sso(
+            &sp_descriptor,
+            request_input(&started.outbound)?,
+            validation(),
+        )?;
+    }
+    Ok(())
+}
+
+#[test]
+fn extension_requires_one_xml_element_in_a_foreign_namespace() {
+    for xml in [
+        "<Hint/>",
+        r#"<Hint xmlns="urn:oasis:names:tc:SAML:2.0:protocol"/>"#,
+        r#"<Hint xmlns="urn:oasis:names:tc:SAML:2.0:assertion"/>"#,
+        r#"<Hint xmlns="urn:oasis:names:tc:SAML:2.0:metadata"/>"#,
+    ] {
+        assert!(
+            matches!(ExtensionElement::from_xml(xml), Err(SamlError::Invalid(_))),
+            "{xml}"
+        );
+    }
+    let malformed = [
+        "<undeclared:Hint/>",
+        r#"<Hint xmlns="urn:test"/><Hint xmlns="urn:test"/>"#,
+        r#"<Hint xmlns="urn:test"><xmlns:Child/></Hint>"#,
+        r#"<Hint xmlns="urn:test"><?1instruction?></Hint>"#,
+        r#"<Hint xmlns="urn:test"><?example:instruction?></Hint>"#,
+        r#"<?xml encoding="UTF-8"?><Hint xmlns="urn:test"/>"#,
+        r#"<?xml version="1.0"standalone="yes"?><Hint xmlns="urn:test"/>"#,
+        r#"<?xml version="1.0" standalone="yes" encoding="UTF-8"?><Hint xmlns="urn:test"/>"#,
+    ];
+    let accepted: Vec<_> = malformed
+        .into_iter()
+        .filter(|xml| !matches!(ExtensionElement::from_xml(xml), Err(SamlError::Xml { .. })))
+        .collect();
+    assert!(accepted.is_empty(), "{accepted:?}");
 }
 
 #[test]

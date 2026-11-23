@@ -182,6 +182,7 @@ impl Engine {
             is_passive: preferences.is_passive,
             provider_name: preferences.provider_name,
             requested_authn_context: preferences.requested_authn_context,
+            extensions: preferences.extensions,
             issuer: &issuer,
             name_id_format,
             allow_create: self.setting.allow_create,

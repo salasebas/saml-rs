@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use quick_xml::events::BytesStart;
+use quick_xml::events::{BytesDecl, BytesStart};
 use quick_xml::name::{
     Namespace, NamespaceError, NamespaceResolver, PrefixDeclaration, QName, ResolveResult,
 };
@@ -76,7 +76,11 @@ pub(super) fn read_element<N, A>(
 
     let (namespace, local_name) = resolver.resolve_element(e.name());
     check_prefix_declared(&namespace, mode)?;
-    let namespace = element_namespace(namespace_uri(&namespace), local_name.into_inner());
+    let namespace = namespace_uri(&namespace);
+    if matches!(mode, ParseMode::StandaloneElement) && namespace == Some(XMLNS_NAMESPACE) {
+        return Err(SamlError::xml("element names cannot use the xmlns prefix"));
+    }
+    let namespace = element_namespace(namespace, local_name.into_inner());
     let mut expanded_names = Vec::with_capacity(attrs.len());
     let mut attributes = Vec::with_capacity(attrs.len());
     for (name, value) in attrs {
@@ -170,6 +174,46 @@ fn check_qname(name: &str) -> Result<(), SamlError> {
     }
 }
 
+pub(super) fn validate_declaration(declaration: &BytesDecl<'_>) -> Result<(), SamlError> {
+    let error = || SamlError::xml("malformed XML declaration");
+    let declaration = BytesStart::from_content(declaration.as_ref(), "xml".len());
+    check_attribute_separation(declaration.attributes_raw())?;
+    let mut previous = 0;
+    for attribute in declaration.attributes() {
+        let attribute = attribute.map_err(xml_err)?;
+        let order = match (attribute.key.into_inner(), attribute.value.as_ref()) {
+            ("version", version)
+                if version.strip_prefix("1.").is_some_and(|minor| {
+                    !minor.is_empty() && minor.bytes().all(|byte| byte.is_ascii_digit())
+                }) =>
+            {
+                1
+            }
+            ("encoding", encoding) => {
+                let mut bytes = encoding.bytes();
+                if !bytes.next().is_some_and(|byte| byte.is_ascii_alphabetic())
+                    || !bytes.all(|byte| {
+                        byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')
+                    })
+                {
+                    return Err(error());
+                }
+                2
+            }
+            ("standalone", "yes" | "no") => 3,
+            _ => return Err(error()),
+        };
+        if order <= previous || (previous == 0 && order != 1) {
+            return Err(error());
+        }
+        previous = order;
+    }
+    if previous == 0 {
+        return Err(error());
+    }
+    Ok(())
+}
+
 fn check_attribute_separation(attributes: &str) -> Result<(), SamlError> {
     let mut open_quote = None;
     let mut after_value = false;
@@ -193,9 +237,12 @@ fn check_attribute_separation(attributes: &str) -> Result<(), SamlError> {
 
 fn check_prefix_declared(resolved: &ResolveResult<'_>, mode: ParseMode) -> Result<(), SamlError> {
     match (resolved, mode) {
-        (ResolveResult::Unknown(prefix), ParseMode::Document | ParseMode::Roots) => Err(
-            SamlError::xml(format!("namespace prefix `{prefix}` is not declared")),
-        ),
+        (
+            ResolveResult::Unknown(prefix),
+            ParseMode::Document | ParseMode::StandaloneElement | ParseMode::Roots,
+        ) => Err(SamlError::xml(format!(
+            "namespace prefix `{prefix}` is not declared"
+        ))),
         (ResolveResult::Unknown(_), ParseMode::Fragment)
         | (ResolveResult::Unbound | ResolveResult::Bound(_), _) => Ok(()),
     }

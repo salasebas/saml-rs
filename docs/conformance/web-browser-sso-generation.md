@@ -24,6 +24,8 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Refuse to build an unsigned request when the identity provider publishes `WantAuthnRequestsSigned` as `true` or `1` | Library policy: E7 does not require the refusal, but the service provider can reasonably expect the identity provider to reject an unsigned request. | Metadata §2.4.3, E7 | `SpValidationPolicy::authn_requests` |
 | Write `ForceAuthn` | Optional | Core §3.4.1 | `StartSso::force_authn` |
 | Write `IsPassive` | Optional | Core §3.4.1 | `StartSso::passive` |
+| Write supplied elements in call order inside `Extensions`, after `Issuer` and any embedded signature, before `NameIDPolicy` | Optional | Core §3.2.1, `RequestAbstractType`, `AuthnRequestType` | `StartSso::extension` |
+| Require each extension's root to use a namespace other than SAML protocol, assertion, or metadata | Mandatory | Core §3.2.1, `ExtensionsType` | `ExtensionElement::from_xml` |
 | Write `ProviderName` | Optional | Core §3.4.1, `AuthnRequestType` | `StartSso::provider_name` |
 | Reject a `ProviderName` with a character XML 1.0 forbids | Library policy: the XML writer cannot represent the character. | `AuthnRequestType` | Always |
 | Write `RequestedAuthnContext` with an explicit `Comparison`, after `NameIDPolicy`, with the references in the order given | Optional | Core §3.3.2.2.1, §3.4.1, E45 | `StartSso::requested_authn_context` |
