@@ -239,8 +239,13 @@ pub struct SignatureConfig {
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case.
     pub prefix: String,
-    /// `local-name()` XPath of the reference element; `None` keeps the default
-    /// (after the signed target's `<Issuer>`).
+    /// Element used as the anchor for signature placement.
+    ///
+    /// Use one or more literal `/*[local-name(.)='NCName']` steps, starting at
+    /// the document element. Each step after the first selects direct children
+    /// by local name. The first complete match in document order is used.
+    /// The builders reject unsupported syntax. Signing fails if nothing matches.
+    /// With `None`, the signature is placed after the signed target's `<Issuer>`.
     pub reference: Option<String>,
     /// Placement relative to `reference`.
     pub action: SignatureAction,

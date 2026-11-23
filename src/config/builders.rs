@@ -11,6 +11,7 @@ use crate::metadata::MetadataLifetime;
 use crate::sp;
 use crate::template::validate_tag_prefixes;
 use crate::xml::name::validate_namespace_prefix;
+use crate::xml::signature_placement::signature_reference_path;
 
 use super::algorithms::{NameIdFormat, SignatureAlgorithm};
 use super::credentials::Credentials;
@@ -304,6 +305,7 @@ impl SpConfigBuilder {
     ///   RSA-OAEP digest and mask generation function;
     /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
     ///   begins with `xml` in any case, or the two tag prefixes are equal;
+    /// - the `SignatureConfig` reference uses unsupported path syntax;
     /// - generating SP metadata fails: a NameID format or an endpoint URL that
     ///   is not an absolute URI reference, such as a URL with `[` in its path,
     ///   two ACS endpoints with the same index, more ACS endpoints than
@@ -630,6 +632,7 @@ impl IdpConfigBuilder {
     ///   RSA-OAEP digest and mask generation function;
     /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
     ///   begins with `xml` in any case, or the two tag prefixes are equal;
+    /// - the `SignatureConfig` reference uses unsupported path syntax;
     /// - generating IdP metadata fails: a NameID format or an endpoint URL
     ///   that is not an absolute URI reference, such as a URL with `[` in its
     ///   path, two artifact resolution endpoints with the same index, or a
@@ -663,6 +666,9 @@ fn validate_shared_policy(
     )?;
     if let Some(signature) = &templates.signature_config {
         validate_namespace_prefix("SignatureConfig.prefix XML prefix", &signature.prefix)?;
+        if let Some(reference) = &signature.reference {
+            signature_reference_path(reference)?;
+        }
     }
     Ok(())
 }

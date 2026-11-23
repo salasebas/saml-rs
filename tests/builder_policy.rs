@@ -431,6 +431,50 @@ fn config_builders_reject_a_tag_prefix_that_is_not_an_ncname(
     Ok(())
 }
 
+#[test]
+fn config_builders_validate_signature_references() -> Result<(), Box<dyn std::error::Error>> {
+    let cases = [
+        ("/*[local-name(.)='LogoutResponse']/*[local-name(.)='Issuer']", true),
+        ("/*[local-name(.)='LogoutRequest']/*[local-name(.)='SessionIndex'][2]", false),
+        ("/*[local-name(.)='Response']/*[local-name(.)='Issuer' and namespace-uri(.)='urn:example']", false),
+        ("/*[local-name(.)='Response']/foo/*[local-name(.)='Issuer']", false),
+        ("//*[local-name(.)='Issuer']", false),
+        ("/samlp:Response/saml:Issuer", false),
+        ("/*[local-name(.)='saml:Issuer']", false),
+        ("", false),
+    ];
+    for (reference, supported) in cases {
+        let mut signature = SignatureConfig::default();
+        signature.reference = Some(reference.into());
+        let mut templates = TemplatePolicy::default();
+        templates.signature_config = Some(signature);
+        let sp = SpConfig::builder(
+            EntityId::try_new("https://sp.example.com/metadata")?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .validation(sp_validation_without_crypto())
+        .templates(templates.clone())
+        .build();
+        let idp = IdpConfig::builder(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .templates(templates)
+        .build();
+        for (role, result) in [("SP", sp.map(drop)), ("IdP", idp.map(drop))] {
+            if supported {
+                assert!(result.is_ok(), "{role} rejected {reference:?}: {result:?}");
+            } else {
+                assert!(
+                    matches!(result, Err(SamlError::Invalid(_))),
+                    "{role} should reject {reference:?} with SamlError::Invalid: {result:?}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(crypto)]
 #[test]
 fn config_builders_reject_a_credential_that_cannot_be_used(
