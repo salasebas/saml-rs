@@ -3,8 +3,6 @@ use crate::error::SamlError;
 use crate::model::{
     Attribute, AttributeNameFormat, AuthnContextReference, AuthnContextReferenceKind, Status,
 };
-use crate::xml::any_uri::is_absolute_uri_reference;
-use crate::xml::name::is_name;
 use crate::xml::write::XmlWriter;
 use crate::xml::OutboundNameIdQualifiers;
 
@@ -242,23 +240,8 @@ fn write_attribute_statement(
     ];
     writer.start(&statement_name, &[]);
     for attribute in attributes {
+        attribute.check_writable()?;
         let name_format = attribute.name_format().map(AttributeNameFormat::as_uri);
-        if let Some(name_format) = name_format {
-            if !is_absolute_uri_reference(name_format) {
-                return Err(SamlError::Invalid(format!(
-                    "attribute `{}` NameFormat must be an absolute URI reference with at least one non-whitespace character",
-                    attribute.name()
-                )));
-            }
-        }
-        if attribute.name_format() == Some(&AttributeNameFormat::Basic)
-            && !is_name(attribute.name())
-        {
-            return Err(SamlError::Invalid(format!(
-                "basic attribute name `{}` is not an XML name",
-                attribute.name()
-            )));
-        }
         let mut attrs = vec![("Name", attribute.name())];
         if let Some(name_format) = name_format {
             attrs.push(("NameFormat", name_format));

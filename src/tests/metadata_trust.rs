@@ -547,6 +547,27 @@ fn entities_descriptor_require_signature_accepts_the_profile_shape(
 }
 
 #[test]
+fn signed_aggregate_import_reads_the_group_entity_attributes(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let cert = CertificatePem::new(CERT);
+    let document = format!(
+        r#"<EntitiesDescriptor ID="_group1" xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ds="{dsig}"><Extensions><mdattr:EntityAttributes xmlns:mdattr="urn:oasis:names:tc:SAML:metadata:attribute" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"><saml:Attribute Name="urn:oasis:names:tc:SAML:attribute:assurance-certification" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:uri"><saml:AttributeValue>https://refeds.org/sirtfi</saml:AttributeValue></saml:Attribute></mdattr:EntityAttributes></Extensions><EntityDescriptor entityID="https://idp.example.com/metadata">{role}</EntityDescriptor></EntitiesDescriptor>"#,
+        dsig = namespace::DSIG,
+        role = idp_role(),
+    );
+    let signed = sign_metadata_root(&document, "EntitiesDescriptor", &[])?;
+
+    let descriptor = import_idp(&signed, trust(std::slice::from_ref(&cert)))?;
+
+    assert!(descriptor.signed_metadata_xml().is_some());
+    assert_eq!(
+        descriptor.entity_attributes()?.assurance_certifications(),
+        ["https://refeds.org/sirtfi"]
+    );
+    Ok(())
+}
+
+#[test]
 fn entities_descriptor_is_held_to_the_same_signature_rules(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cert = CertificatePem::new(CERT);

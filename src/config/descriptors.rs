@@ -177,6 +177,7 @@ pub struct SpMetadataConfig {
     pub(super) organization: Option<crate::metadata::Organization>,
     pub(super) contacts: Vec<crate::metadata::ContactPerson>,
     pub(super) error_url: Option<String>,
+    pub(super) entity_attributes: Vec<crate::Attribute>,
 }
 
 impl SpMetadataConfig {
@@ -190,6 +191,7 @@ impl SpMetadataConfig {
             organization: None,
             contacts: Vec::new(),
             error_url: None,
+            entity_attributes: Vec::new(),
         }
     }
 
@@ -232,6 +234,11 @@ impl SpMetadataConfig {
     pub fn error_url(&self) -> Option<&str> {
         self.error_url.as_deref()
     }
+
+    /// Entity attributes, in publication order.
+    pub fn entity_attributes(&self) -> &[crate::Attribute] {
+        &self.entity_attributes
+    }
 }
 
 /// Local IdP metadata inputs used by typed configuration.
@@ -249,6 +256,7 @@ pub struct IdpMetadataConfig {
     pub(super) organization: Option<crate::metadata::Organization>,
     pub(super) contacts: Vec<crate::metadata::ContactPerson>,
     pub(super) error_url: Option<String>,
+    pub(super) entity_attributes: Vec<crate::Attribute>,
 }
 
 impl IdpMetadataConfig {
@@ -263,6 +271,7 @@ impl IdpMetadataConfig {
             organization: None,
             contacts: Vec::new(),
             error_url: None,
+            entity_attributes: Vec::new(),
         }
     }
 
@@ -322,6 +331,11 @@ impl IdpMetadataConfig {
     /// Error information URI on the SSO role descriptor. `None` omits it.
     pub fn error_url(&self) -> Option<&str> {
         self.error_url.as_deref()
+    }
+
+    /// Entity attributes, in publication order.
+    pub fn entity_attributes(&self) -> &[crate::Attribute] {
+        &self.entity_attributes
     }
 }
 
@@ -456,6 +470,16 @@ impl IdpDescriptor {
     /// Returns [`SamlError::Invalid`] for a missing or unknown `contactType`.
     pub fn contacts(&self) -> Result<Vec<crate::metadata::ContactPerson>, SamlError> {
         self.raw_metadata().contacts()
+    }
+
+    /// Attributes that the imported metadata binds to this entity, including
+    /// those of the enclosing `EntitiesDescriptor` elements.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for an attribute without `Name`.
+    pub fn entity_attributes(&self) -> Result<crate::metadata::EntityAttributes, SamlError> {
+        self.raw_metadata().entity_attributes()
     }
 
     /// First non-empty logout request location for this peer's SAML 2.0 role and binding.
@@ -636,6 +660,16 @@ impl SpDescriptor {
     /// Returns [`SamlError::Invalid`] for a missing or unknown `contactType`.
     pub fn contacts(&self) -> Result<Vec<crate::metadata::ContactPerson>, SamlError> {
         self.raw_metadata().contacts()
+    }
+
+    /// Attributes that the imported metadata binds to this entity, including
+    /// those of the enclosing `EntitiesDescriptor` elements.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for an attribute without `Name`.
+    pub fn entity_attributes(&self) -> Result<crate::metadata::EntityAttributes, SamlError> {
+        self.raw_metadata().entity_attributes()
     }
 
     /// First non-empty logout request location for this peer's SAML 2.0 role and binding.

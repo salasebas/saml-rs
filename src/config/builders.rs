@@ -219,6 +219,26 @@ impl SpConfigBuilder {
         self
     }
 
+    /// Append an entity attribute, published in the entity's
+    /// `mdattr:EntityAttributes`.
+    ///
+    /// Build one from a name in [`crate::constants::entity_attribute`] with
+    /// [`crate::AttributeNameFormat::Uri`], or convert a
+    /// [`crate::SubjectIdRequirement`].
+    pub fn entity_attribute(mut self, attribute: crate::Attribute) -> Self {
+        self.metadata.entity_attributes.push(attribute);
+        self
+    }
+
+    /// Append entity attributes, in iteration order.
+    pub fn entity_attributes(
+        mut self,
+        attributes: impl IntoIterator<Item = crate::Attribute>,
+    ) -> Self {
+        self.metadata.entity_attributes.extend(attributes);
+        self
+    }
+
     /// Set `validUntil`, `cacheDuration`, or both on generated metadata.
     /// Without this setting, generation writes a one-day `cacheDuration`.
     pub fn metadata_lifetime(mut self, lifetime: MetadataLifetime) -> Self {
@@ -263,7 +283,8 @@ impl SpConfigBuilder {
     /// Returns [`SamlError`] when:
     ///
     /// - the entity ID is not an absolute URI reference of at most 1024
-    ///   characters, or the organization, contacts, or error URI are invalid;
+    ///   characters, or the organization, contacts, error URI, or entity
+    ///   attributes are invalid;
     /// - the selected policy needs a credential that is not set, or crypto
     ///   that a build without a crypto provider lacks;
     /// - the crypto provider does not support the selected combination of
@@ -508,6 +529,26 @@ impl IdpConfigBuilder {
         self
     }
 
+    /// Append an entity attribute, published in the entity's
+    /// `mdattr:EntityAttributes`.
+    ///
+    /// Build one from a name in [`crate::constants::entity_attribute`] with
+    /// [`crate::AttributeNameFormat::Uri`], or convert a
+    /// [`crate::SubjectIdRequirement`].
+    pub fn entity_attribute(mut self, attribute: crate::Attribute) -> Self {
+        self.metadata.entity_attributes.push(attribute);
+        self
+    }
+
+    /// Append entity attributes, in iteration order.
+    pub fn entity_attributes(
+        mut self,
+        attributes: impl IntoIterator<Item = crate::Attribute>,
+    ) -> Self {
+        self.metadata.entity_attributes.extend(attributes);
+        self
+    }
+
     /// Set `validUntil`, `cacheDuration`, or both on generated metadata.
     /// Without this setting, generation writes a one-day `cacheDuration`.
     pub fn metadata_lifetime(mut self, lifetime: MetadataLifetime) -> Self {
@@ -561,7 +602,8 @@ impl IdpConfigBuilder {
     /// Returns [`SamlError`] when:
     ///
     /// - the entity ID is not an absolute URI reference of at most 1024
-    ///   characters, or the organization, contacts, or error URI are invalid;
+    ///   characters, or the organization, contacts, error URI, or entity
+    ///   attributes are invalid;
     /// - two `ArtifactResolutionService` endpoints share an index;
     /// - the issuance lifetime is zero or outside the internal supported
     ///   range;
