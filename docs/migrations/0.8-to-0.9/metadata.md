@@ -69,8 +69,8 @@ let config = IdpConfig::builder(entity_id, sso)
 
 Add an endpoint to every `SpMetadataInput` and `IdpMetadataInput` you pass
 to the generators. Write each `Endpoint::location` as an absolute URI
-reference, and give each `ArtifactResolutionService` its own index. In an
-endpoint URL, percent-encode a character that the error names, such as
+reference, and give each `ArtifactResolutionService` its own index. For the
+`a[b]` path above, encode `[` as `%5B` and `]` as `%5D`, giving
 `https://sp.example.com/a%5Bb%5D`:
 
 ```rust
