@@ -56,9 +56,12 @@ impl ServiceProvider {
     /// for an `http` identity-provider endpoint unless
     /// [`StartNameIdManagement::allow_http`] is selected.
     /// Returns [`SamlError::Invalid`] when the NameID format is not an
-    /// absolute URI reference. Returns another [`SamlError`] when relay state
-    /// is invalid, the signing key is missing, or no crypto provider is
-    /// enabled.
+    /// absolute URI reference. With
+    /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers),
+    /// returns [`SamlError::MissingMetadata`] when the identity provider
+    /// publishes no encryption certificate. Returns another [`SamlError`] when
+    /// relay state is invalid, the signing key is missing, or no crypto
+    /// provider is enabled.
     ///
     /// # Examples
     ///
@@ -118,7 +121,10 @@ impl ServiceProvider {
     /// [`SamlError::ProtocolProfile`] when a refused request would be answered
     /// at an `http` endpoint and
     /// [`ReceiveNameIdManagement::allow_http`] is not
-    /// selected.
+    /// selected. Returns [`SamlError::TimeWindowInvalid`] when
+    /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
+    /// selected and `validation` has no
+    /// [`SamlValidationContext::with_replay_retention`].
     pub fn receive_name_id_management_redirect(
         &self,
         idp: &IdpDescriptor,
@@ -172,7 +178,11 @@ impl ServiceProvider {
     /// only after the signature, issuer, `InResponseTo`, and `Destination`
     /// checks pass. Returns another [`SamlError`] when the response does not
     /// answer `pending`, its RelayState differs from one the request carried,
-    /// or any of those checks or replay validation fails.
+    /// or any of those checks or replay validation fails. Returns
+    /// [`SamlError::TimeWindowInvalid`] when
+    /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
+    /// selected and `validation` has no
+    /// [`SamlValidationContext::with_replay_retention`].
     pub fn finish_name_id_management_redirect(
         &self,
         idp: &IdpDescriptor,
@@ -219,9 +229,12 @@ impl IdentityProvider {
     /// [`StartNameIdManagement::allow_http`] is selected.
     /// Returns [`SamlError::Invalid`] when a persistent value is longer than
     /// 256 characters or the NameID format is not an absolute URI reference.
-    /// Returns another [`SamlError`] when relay state is
-    /// invalid, the signing key is missing, or no crypto provider is
-    /// enabled.
+    /// With
+    /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers),
+    /// returns [`SamlError::MissingMetadata`] when the service provider
+    /// publishes no encryption certificate. Returns another [`SamlError`] when
+    /// relay state is invalid, the signing key is missing, or no crypto
+    /// provider is enabled.
     ///
     /// # Examples
     ///

@@ -76,6 +76,7 @@ impl ServiceProvider {
     ///
     /// A request must carry exactly one `<BaseID>`, `<NameID>`, or
     /// `<EncryptedID>` as a direct child in the SAML assertion namespace.
+    /// Any other count returns [`SamlError::ProtocolProfile`].
     ///
     /// # Errors
     ///
@@ -94,7 +95,8 @@ impl ServiceProvider {
     /// A decrypted `<NameID>` is available through [`LogoutRequest::name_id`].
     /// If no configured key decrypts the `<EncryptedID>`, or it contains a
     /// `<BaseID>`, the request has no `NameID`. You can still answer it with
-    /// [`Self::respond_slo`].
+    /// [`Self::respond_slo`]. If decryption succeeds, plaintext other than
+    /// one `<NameID>` or `<BaseID>` returns [`SamlError::ProtocolProfile`].
     pub fn receive_slo(
         &self,
         idp: &IdpDescriptor,

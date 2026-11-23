@@ -143,6 +143,9 @@ impl ServiceProvider {
     /// with the selected binding, a requested authentication reference is not an absolute URI,
     /// `ProviderName` contains invalid XML characters, or request creation fails
     /// because required metadata, signing keys, or supported bindings are unavailable.
+    /// Returns [`SamlError::Invalid`] for [`StartSso::simple_sign`] when the
+    /// service provider's [`AuthnRequestSigningPolicy`](crate::AuthnRequestSigningPolicy)
+    /// is `DoNotSign`.
     ///
     /// # Examples
     ///
@@ -244,7 +247,10 @@ impl ServiceProvider {
     /// response can omit `InResponseTo`. If present, it must match the pending
     /// request ID. An error response does not need a signature. Only a
     /// validated success reaches the comparison with the pending request's
-    /// `RelayState`.
+    /// `RelayState`. An HTTP-Artifact response with no XML signature on the
+    /// `Response` or on each assertion returns [`SamlError::SignatureMissing`].
+    /// An `Attribute` without an unqualified `Name` returns
+    /// [`SamlError::ProtocolProfile`].
     ///
     /// # Examples
     ///
@@ -338,7 +344,8 @@ impl ServiceProvider {
     /// the issuer and destination checks pass. An error response does not need
     /// a signature. Returns [`SamlError::RecipientEndpointNotPublished`] when
     /// the supplied recipient endpoint is not an assertion consumer published
-    /// for the incoming binding.
+    /// for the incoming binding. An `Attribute` without an unqualified `Name`
+    /// returns [`SamlError::ProtocolProfile`].
     pub fn accept_unsolicited_sso(
         &self,
         idp: &IdpDescriptor,

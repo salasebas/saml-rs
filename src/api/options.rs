@@ -32,6 +32,11 @@ impl StartSso {
     }
 
     /// Start SSO with HTTP-POST-SimpleSign AuthnRequest dispatch.
+    ///
+    /// The binding needs `SigAlg` and `Signature`. With
+    /// [`AuthnRequestSigningPolicy::DoNotSign`](crate::AuthnRequestSigningPolicy::DoNotSign),
+    /// [`ServiceProvider::start_sso`](crate::ServiceProvider::start_sso)
+    /// returns [`SamlError::Invalid`](crate::SamlError::Invalid).
     pub fn simple_sign() -> Self {
         Self::new(SsoRequestBinding::SimpleSign)
     }

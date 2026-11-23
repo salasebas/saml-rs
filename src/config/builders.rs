@@ -179,12 +179,20 @@ impl SpConfigBuilder {
     }
 
     /// Append an advertised NameID format.
+    ///
+    /// With none configured, the service provider advertises and requests
+    /// `emailAddress`. The first configured format is the one its
+    /// `AuthnRequest` requests.
     pub fn name_id_format(mut self, format: NameIdFormat) -> Self {
         self.metadata.name_id_formats.push(format);
         self
     }
 
     /// Append advertised NameID formats, in iteration order.
+    ///
+    /// With none configured, the service provider advertises and requests
+    /// `emailAddress`. The first configured format is the one its
+    /// `AuthnRequest` requests.
     pub fn name_id_formats(mut self, formats: impl IntoIterator<Item = NameIdFormat>) -> Self {
         self.metadata.name_id_formats.extend(formats);
         self
@@ -286,7 +294,9 @@ impl SpConfigBuilder {
     ///   characters, or the organization, contacts, error URI, or entity
     ///   attributes are invalid;
     /// - the selected policy needs a credential that is not set, or crypto
-    ///   that a build without a crypto provider lacks;
+    ///   that a build without a crypto provider lacks. For
+    ///   [`XmlEncryptionPolicy`](crate::XmlEncryptionPolicy), a missing
+    ///   decryption credential returns [`SamlError::MissingKey`];
     /// - with a crypto provider, a key or certificate in the credentials does
     ///   not load, a key holds only a public key, or a key does not match its
     ///   certificate ([`SamlError::Crypto`]);

@@ -188,7 +188,8 @@ impl IdentityProvider {
     /// name is not an XML name, its format is not an absolute URI, a
     /// `subject-id` or `pairwise-id` attribute breaks the rules of
     /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes), the
-    /// persistent or transient `NameId` is longer than 256 characters, the
+    /// persistent or transient `NameId` is longer than 256 characters, also
+    /// when the format is the first configured NameID format, the
     /// NameID format is not an absolute URI reference,
     /// [`SsoAssertion::with_authn_context`](crate::SsoAssertion::with_authn_context) does not meet an exact
     /// `RequestedAuthnContext`,

@@ -45,14 +45,16 @@ impl IdentityProvider {
     /// # Errors
     ///
     /// Returns [`SamlError::ProtocolProfile`] when
-    /// [`StartNameIdManagement::relay_state`] is set. Returns
+    /// [`StartNameIdManagement::relay_state`] is set, or when `name_id` is
+    /// transient, including a `NameId` without a format whose default format
+    /// is transient. Returns
     /// [`SamlError::MissingMetadata`] when this identity provider publishes no
     /// SOAP `ManageNameIDService`, or the service provider's metadata has
     /// none. Returns [`SamlError::SoapChannelProtection`] when `channel` does
     /// not authenticate both parties and protect integrity. Returns
-    /// [`SamlError::Invalid`] when a persistent or transient new value is
-    /// longer than 256 characters, or when the NameID format is not an
-    /// absolute URI reference. With
+    /// [`SamlError::Invalid`] when the persistent `name_id` value or a new
+    /// value is longer than 256 characters, or when the NameID format is not
+    /// an absolute URI reference. With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers), returns
     /// [`SamlError::MissingMetadata`] when the service provider publishes no
     /// encryption certificate.
@@ -111,8 +113,10 @@ impl IdentityProvider {
     /// A [`NameIdManagementReceipt::Request`] is ready for the caller to
     /// apply. Answer it with [`Self::respond_name_id_management`]. A
     /// [`NameIdManagementReceipt::Refused`] already carries the SOAP response
-    /// to return, including when the authenticated request falls outside the
-    /// configured age window.
+    /// to return. The responder refuses an authenticated newer version with
+    /// `VersionMismatch` and adds `RequestVersionTooHigh` for a newer major
+    /// version. It also refuses a request outside the configured age window
+    /// or with an `EncryptedID` or `NewEncryptedID` that cannot be decrypted.
     ///
     /// `sp` is the service provider the deployment authenticated on
     /// `channel`. `validation` selects the receiving endpoint when this
@@ -128,8 +132,13 @@ impl IdentityProvider {
     /// authenticate both parties and protect integrity. Returns another
     /// [`SamlError`] when the envelope is not a SOAP 1.1
     /// `ManageNameIDRequest` from `sp`, its `Destination` is not the receiving
-    /// endpoint, the request version is too low for a SAML 2.0 response, or
-    /// replay validation detects a duplicate.
+    /// endpoint, or the request version is too low for a SAML 2.0 response.
+    /// A repeated request `ID` returns [`SamlError::ReplayDetected`]. Returns
+    /// [`SamlError::TimeWindowInvalid`] when
+    /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
+    /// selected and `validation` has no
+    /// [`SamlValidationContext::with_replay_retention`]. The deployment can
+    /// answer those with an HTTP error or a SOAP fault.
     pub fn receive_name_id_management(
         &self,
         sp: &SpDescriptor,

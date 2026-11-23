@@ -145,7 +145,8 @@ impl SsoSession {
     ///
     /// When the request carried RelayState, this is the same value. When it
     /// carried none, this is whatever the identity provider supplied, which
-    /// the caller interprets by prior agreement.
+    /// the caller interprets by prior agreement. A caller that redirects to a
+    /// URL taken from this value sanitizes the URL first.
     pub fn relay_state(&self) -> Option<&RelayState> {
         self.relay_state.as_ref()
     }
