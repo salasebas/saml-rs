@@ -125,7 +125,8 @@ impl ServiceProvider {
         Self { config }
     }
 
-    /// Local SP metadata XML.
+    /// Local SP metadata XML, signed when the credentials hold a
+    /// [metadata signing credential](crate::Credentials::with_metadata_signing_credential).
     pub fn metadata_xml(&self) -> &str {
         self.engine().metadata_xml()
     }

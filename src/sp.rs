@@ -11,7 +11,9 @@ use crate::flow::{
     SignatureCheck, SignedMessageDestination,
 };
 use crate::idp;
-use crate::metadata::{generate_sp_metadata, SpMetadata, SpMetadataInput};
+use crate::metadata::SpMetadata;
+#[cfg(test)]
+use crate::metadata::{generate_sp_metadata, SpMetadataInput};
 use crate::model::{validate_name_id_format, ClockSkew};
 use std::time::SystemTime;
 
@@ -120,6 +122,7 @@ impl Engine {
     /// Returns the errors of [`generate_sp_metadata`], or an error if the
     /// generated metadata cannot be parsed back into SP metadata, including
     /// invalid endpoint or certificate declarations.
+    #[cfg(test)]
     pub fn from_config(
         config: &SpMetadataInput,
         setting: EntitySetting,

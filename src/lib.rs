@@ -270,6 +270,12 @@
 //! [`MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms`]
 //! accepts them when the provider supports them.
 //!
+//! To publish signed metadata, add
+//! [`Credentials::with_metadata_signing_credential`]: `metadata_xml()` then
+//! returns the generated metadata signed with that key, for peers that pin
+//! its certificate. `metadata::sign_metadata` signs a document the application
+//! assembled, such as an `EntitiesDescriptor` aggregate.
+//!
 //! The documented modules and crate-root re-exports are the supported public API.
 //!
 //! # Artifact resolution

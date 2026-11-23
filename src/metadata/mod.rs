@@ -8,6 +8,8 @@ mod generate;
 mod idp;
 mod lifetime;
 mod role;
+#[cfg(crypto)]
+mod sign;
 mod sp;
 mod validity;
 mod write;
@@ -19,6 +21,8 @@ pub use generate::{
 };
 pub use idp::{ArtifactResolutionServiceEndpoint, IdpMetadata};
 pub use lifetime::MetadataLifetime;
+#[cfg(crypto)]
+pub use sign::sign_metadata;
 pub(crate) use sp::DefaultMarking;
 pub use sp::SpMetadata;
 pub(crate) use validity::MetadataValidity;

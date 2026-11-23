@@ -43,7 +43,8 @@ impl IdentityProvider {
         Self { config }
     }
 
-    /// Local IdP metadata XML.
+    /// Local IdP metadata XML, signed when the credentials hold a
+    /// [metadata signing credential](crate::Credentials::with_metadata_signing_credential).
     pub fn metadata_xml(&self) -> &str {
         self.engine().metadata_xml()
     }

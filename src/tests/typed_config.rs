@@ -131,8 +131,18 @@ fn typed_config_credentials_debug_redacts_every_secret() -> Result<(), Box<dyn s
     let service_provider = ServiceProvider::new(sp.clone());
     let identity_provider = IdentityProvider::new(idp.clone());
 
+    let with_metadata_signing = credentials.with_metadata_signing_credential(
+        X509Credential::new(
+            CertificatePem::new("dummy-metadata-certificate-for-credentials-debug-test"),
+            PrivateKeyPem::new("dummy-metadata-key-for-credentials-debug-test"),
+        )
+        .with_passphrase(Passphrase::new(
+            "dummy-metadata-pass-for-credentials-debug-test",
+        )),
+    );
+
     for debug in [
-        format!("{credentials:?}"),
+        format!("{with_metadata_signing:?}"),
         format!("{sp:?}"),
         format!("{idp:?}"),
         format!("{service_provider:?}"),

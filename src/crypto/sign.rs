@@ -136,6 +136,21 @@ pub(crate) fn sign_saml_xml(
     )
 }
 
+pub(crate) fn sign_root_as_first_child(
+    xml: &str,
+    root_local_name: &str,
+    key: &Key,
+    cert: &str,
+    sig_alg: &str,
+) -> Result<String, SamlError> {
+    let placement = SignatureConfig {
+        reference: Some(format!("/*[local-name(.)='{root_local_name}']")),
+        action: SignatureAction::Prepend,
+        ..SignatureConfig::default()
+    };
+    embed_signature(xml, true, key, Some(cert), sig_alg, &[], Some(&placement))
+}
+
 fn embed_signature(
     xml: &str,
     sign_message: bool,

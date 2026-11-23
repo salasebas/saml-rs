@@ -569,9 +569,9 @@ pub struct AlgorithmPolicy {
     /// They apply to responses from `respond_sso` and `initiate_sso`, to an
     /// `AuthnRequest` with an XML signature, and to logout messages signed on
     /// HTTP-POST. Responses from `respond_sso_artifact` and
-    /// `initiate_sso_artifact`, and logout messages over SOAP, keep the
-    /// enveloped-signature and exclusive canonicalization
-    /// transforms. The scope is in
+    /// `initiate_sso_artifact`, logout messages over SOAP, and metadata
+    /// signatures keep the enveloped-signature and exclusive
+    /// canonicalization transforms. The scope is in
     /// `docs/conformance/xml-security-algorithms.md`.
     pub signed_reference_transforms: Vec<TransformAlgorithm>,
 }

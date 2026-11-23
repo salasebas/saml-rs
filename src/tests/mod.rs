@@ -30,6 +30,7 @@ mod index_conformance;
 mod issues_conformance;
 mod logout_session_index;
 mod metadata_role_keys;
+mod metadata_signing;
 mod metadata_trust;
 mod name_id_management_encryption;
 mod name_id_management_redirect;

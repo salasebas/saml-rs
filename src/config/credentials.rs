@@ -140,6 +140,7 @@ pub struct Credentials {
     additional_signing_certificates: Vec<CertificatePem>,
     hmac_secret: Option<HmacSecret>,
     decryption: Vec<X509Credential>,
+    metadata_signing: Option<X509Credential>,
 }
 
 impl Credentials {
@@ -199,6 +200,21 @@ impl Credentials {
         self
     }
 
+    /// Replace the key that signs this entity's metadata and the certificate
+    /// peers pin to verify it.
+    ///
+    /// With it, the config builders sign the metadata they generate under
+    /// [`crate::AlgorithmPolicy::signature`], and `metadata_xml()` returns the
+    /// signed document. A peer imports it with
+    /// [`crate::MetadataTrustPolicy::RequireSignature`] pinned to this
+    /// certificate. The certificate is not published in a `KeyDescriptor`.
+    /// With a key other than the signing credential's, the signing key can roll
+    /// over while peers keep the certificate they pinned for metadata.
+    pub fn with_metadata_signing_credential(mut self, credential: X509Credential) -> Self {
+        self.metadata_signing = Some(credential);
+        self
+    }
+
     /// The signing key, its certificate, and its passphrase.
     pub fn signing_credential(&self) -> Option<&X509Credential> {
         self.signing.as_ref()
@@ -217,6 +233,11 @@ impl Credentials {
     /// The decryption credentials, in decryption and publication order.
     pub fn decryption_credentials(&self) -> &[X509Credential] {
         &self.decryption
+    }
+
+    /// The key that signs this entity's metadata, and its certificate.
+    pub fn metadata_signing_credential(&self) -> Option<&X509Credential> {
+        self.metadata_signing.as_ref()
     }
 }
 

@@ -108,7 +108,7 @@ cargo run -p saml-rs --example sso
 | --- | --- |
 | Web SSO | The SP sends `AuthnRequest` over HTTP-POST, HTTP-Redirect, or HTTP-POST-SimpleSign. The IdP sends `Response` over HTTP-POST, HTTP-POST-SimpleSign, or HTTP-Artifact |
 | Single Logout | HTTP-POST, HTTP-Redirect, HTTP-POST-SimpleSign, and SOAP |
-| Metadata | Parse peer metadata, generate SP and IdP metadata, verify signed metadata |
+| Metadata | Parse peer metadata, generate and sign SP and IdP metadata, verify signed metadata |
 | Artifact resolution | SOAP `ArtifactResolve` and `ArtifactResponse` |
 | Name identifier management | HTTP-Redirect for both roles, SOAP for the identity provider |
 | Identity Provider Discovery | The `_saml_idp` cookie |

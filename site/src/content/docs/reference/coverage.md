@@ -8,7 +8,7 @@ description: "`ServiceProvider` and `IdentityProvider` implement this surface."
 | Area | Support |
 | --- | --- |
 | Web SSO | The service provider can send a signed `AuthnRequest` over HTTP-POST, HTTP-Redirect, or HTTP-POST-SimpleSign. The identity provider can send a signed `Response` over HTTP-POST, HTTP-POST-SimpleSign, or HTTP-Artifact |
-| Metadata | Parse peer metadata, generate SP and IdP descriptors, verify signed metadata |
+| Metadata | Parse peer metadata, generate and sign SP and IdP descriptors, verify signed metadata |
 | Single Logout | Create and parse `LogoutRequest` and `LogoutResponse` over HTTP-Redirect, HTTP-POST, HTTP-POST-SimpleSign, or SOAP for the identity provider and service provider. The deployment sends the SOAP HTTP request |
 | Identity Provider Discovery | `common_domain_cookie` returns the `_saml_idp` cookie for the caller to write. Service providers do not set or read it |
 | Identifiers | Every attribute name format on `SsoAssertion::with_attributes` and on an accepted `Attribute`. `NameId::generate_transient`, `NameId::generate_persistent`, and `NameId::persistent` for the identifiers an identity provider issues. `SubjectId` and `PairwiseId` for the `subject-id` and `pairwise-id` attributes. The library writes the `ID` of every generated message and assertion |

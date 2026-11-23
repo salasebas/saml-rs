@@ -298,7 +298,9 @@ impl SpConfigBuilder {
     ///   is not an absolute URI reference, such as a URL with `[` in its path,
     ///   two ACS endpoints with the same index, more ACS endpoints than
     ///   `unsignedShort` indexes, or a `validUntil` outside the years 0001
-    ///   through 9999.
+    ///   through 9999;
+    /// - the metadata signing algorithm is HMAC-SHA1 or the crypto provider
+    ///   cannot sign metadata with the selected algorithm.
     pub fn build(self) -> Result<SpConfig, SamlError> {
         let engine = self.engine()?;
         validate_sp_policy(&self)?;
@@ -622,7 +624,9 @@ impl IdpConfigBuilder {
     ///   begins with `xml` in any case, or the two tag prefixes are equal;
     /// - generating IdP metadata fails: a NameID format or an endpoint URL
     ///   that is not an absolute URI reference, such as a URL with `[` in its
-    ///   path, or a `validUntil` outside the years 0001 through 9999.
+    ///   path, or a `validUntil` outside the years 0001 through 9999;
+    /// - the metadata signing algorithm is HMAC-SHA1 or the crypto provider
+    ///   cannot sign metadata with the selected algorithm.
     pub fn build(self) -> Result<IdpConfig, SamlError> {
         let issuance_lifetime = validated_idp_issuance_lifetime(self.issuance_lifetime)?;
         let engine = self.engine()?;

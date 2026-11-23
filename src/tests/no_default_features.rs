@@ -18,10 +18,11 @@ use saml_rs::tests::policies_without_crypto::sp_validation_without_crypto;
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
     AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, CertificatePem, EntityId, IdentityProvider, IdpConfig,
-    IdpDescriptor, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, RelayState, ReplayPolicy,
-    ResponseSignaturePolicy, SamlError, SamlValidationContext, ServiceProvider, SloEndpoint,
-    SpConfig, SpDescriptor, SsoEndpoint, StartSlo, StartSso, XmlPolicy,
+    AuthnRequestValidationPolicy, CertificatePem, Credentials, EntityId, IdentityProvider,
+    IdpConfig, IdpDescriptor, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, PrivateKeyPem,
+    RelayState, ReplayPolicy, ResponseSignaturePolicy, SamlError, SamlValidationContext,
+    ServiceProvider, SloEndpoint, SpConfig, SpDescriptor, SsoEndpoint, StartSlo, StartSso,
+    X509Credential, XmlPolicy,
 };
 use std::time::SystemTime;
 
@@ -189,6 +190,22 @@ fn typed_metadata_require_signature_is_unsupported_without_default_crypto(
             trusted_certificates: std::slice::from_ref(&cert),
         },
     ));
+    Ok(())
+}
+
+#[test]
+fn metadata_signing_is_unsupported_without_default_crypto() -> Result<(), SamlError> {
+    let credentials = Credentials::default().with_metadata_signing_credential(X509Credential::new(
+        CertificatePem::new("placeholder"),
+        PrivateKeyPem::new("placeholder"),
+    ));
+
+    assert_unsupported(
+        sp_config_builder()?
+            .credentials(credentials.clone())
+            .build(),
+    );
+    assert_unsupported(idp_config_builder()?.credentials(credentials).build());
     Ok(())
 }
 

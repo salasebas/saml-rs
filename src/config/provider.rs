@@ -2,27 +2,66 @@
 
 use crate::error::SamlError;
 use crate::idp;
-use crate::metadata::{IdpMetadataInput, SpMetadataInput};
+#[cfg(crypto)]
+use crate::metadata::sign_metadata;
+use crate::metadata::{
+    generate_idp_metadata, generate_sp_metadata, IdpMetadataInput, SpMetadataInput,
+};
 use crate::sp;
 
 use super::algorithms::name_id_format_uris;
+#[cfg(not(crypto))]
+use super::algorithms::SignatureAlgorithm;
 use super::builders::{IdpConfigBuilder, SpConfigBuilder};
 use super::credentials::{Credentials, X509Credential};
 use super::descriptors::ManageNameIdService;
 use super::policies::{
     assertion_signature_required, authn_request_signature_required, authn_request_signing_enabled,
+    AlgorithmPolicy,
 };
 
 impl SpConfigBuilder {
     pub(super) fn engine(&self) -> Result<sp::Engine, SamlError> {
-        sp::Engine::from_config(&sp_metadata_input(self), self.entity_setting())
+        let metadata_xml = published_metadata(
+            generate_sp_metadata(&sp_metadata_input(self))?,
+            &self.credentials,
+            &self.algorithms,
+        )?;
+        sp::Engine::from_metadata(&metadata_xml, self.entity_setting())
     }
 }
 
 impl IdpConfigBuilder {
     pub(super) fn engine(&self) -> Result<idp::Engine, SamlError> {
-        idp::Engine::from_config(&idp_metadata_input(self), self.entity_setting())
+        let metadata_xml = published_metadata(
+            generate_idp_metadata(&idp_metadata_input(self))?,
+            &self.credentials,
+            &self.algorithms,
+        )?;
+        idp::Engine::from_metadata(&metadata_xml, self.entity_setting())
     }
+}
+
+fn published_metadata(
+    metadata_xml: String,
+    credentials: &Credentials,
+    algorithms: &AlgorithmPolicy,
+) -> Result<String, SamlError> {
+    match credentials.metadata_signing_credential() {
+        Some(credential) => sign_metadata(&metadata_xml, credential, &algorithms.signature),
+        None => Ok(metadata_xml),
+    }
+}
+
+#[cfg(not(crypto))]
+fn sign_metadata(
+    _metadata_xml: &str,
+    _credential: &X509Credential,
+    _algorithm: &SignatureAlgorithm,
+) -> Result<String, SamlError> {
+    Err(SamlError::Unsupported(
+        "metadata signing requires a crypto provider feature".into(),
+    ))
 }
 
 fn sp_metadata_input(config: &SpConfigBuilder) -> SpMetadataInput {

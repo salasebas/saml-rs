@@ -7,7 +7,9 @@ use crate::entity::{
 };
 use crate::error::SamlError;
 use crate::flow::{FlowOptions, FlowResultWithSignatureEvidence, HttpRequest, SignatureCheck};
-use crate::metadata::{generate_idp_metadata, IdpMetadata, IdpMetadataInput};
+use crate::metadata::IdpMetadata;
+#[cfg(test)]
+use crate::metadata::{generate_idp_metadata, IdpMetadataInput};
 use crate::model::{
     validate_issued_name_id_length, validate_name_id_format, Attribute, AuthnContextReference,
     ClockSkew, NameIdPolicy, RequestedAuthnContext, RequestedSubject, SessionIndex, Status,
@@ -150,6 +152,7 @@ impl Engine {
     /// missing, or a configured
     /// `<NameIDFormat>` is not an absolute URI reference, or if the generated metadata
     /// cannot be parsed back into IdP metadata.
+    #[cfg(test)]
     pub fn from_config(
         config: &IdpMetadataInput,
         setting: EntitySetting,
