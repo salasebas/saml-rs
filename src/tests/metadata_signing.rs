@@ -256,7 +256,10 @@ fn sign_metadata_rejects_inputs_it_cannot_sign() -> Result<(), Box<dyn std::erro
         &metadata_credential(),
         &SignatureAlgorithm::RsaSha256,
     )?;
-    let empty_id = metadata.replace("<EntityDescriptor ", "<EntityDescriptor ID=\"\" ");
+    let fragment_id = metadata.replace(
+        "<EntityDescriptor ",
+        "<EntityDescriptor ID=\"xpointer(/)\" ",
+    );
     let request = r#"<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_request" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"/>"#;
     let cases = [
         (
@@ -265,8 +268,8 @@ fn sign_metadata_rejects_inputs_it_cannot_sign() -> Result<(), Box<dyn std::erro
             SignatureAlgorithm::RsaSha256,
         ),
         (
-            "empty root ID",
-            empty_id.as_str(),
+            "root ID that is not an NCName",
+            fragment_id.as_str(),
             SignatureAlgorithm::RsaSha256,
         ),
         ("protocol message", request, SignatureAlgorithm::RsaSha256),

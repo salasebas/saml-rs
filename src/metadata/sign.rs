@@ -11,6 +11,7 @@ use crate::crypto::sign::sign_root_as_first_child;
 use crate::entity::generate_id;
 use crate::error::{xml_err, SamlError};
 use crate::xml::dom::{self, Node, XmlLimits};
+use crate::xml::name::is_ncname;
 
 /// Sign a metadata document with an enveloped XML signature over its root.
 ///
@@ -23,15 +24,17 @@ use crate::xml::dom::{self, Node, XmlLimits};
 /// gets a generated one. The digest algorithm matches `algorithm`, such as
 /// SHA-256 for [`SignatureAlgorithm::RsaSha256`].
 ///
-/// A peer verifies the result with
 /// [`MetadataTrustPolicy::RequireSignature`](crate::MetadataTrustPolicy::RequireSignature)
-/// pinned to the credential's certificate.
+/// pinned to the credential's certificate verifies the result when the
+/// document carries no other signature and the key passes that policy's
+/// algorithm and key-size checks.
 ///
 /// # Errors
 ///
 /// Returns [`SamlError::Invalid`] when the root is not an `EntityDescriptor`
-/// or `EntitiesDescriptor`, when the root already has a signature or an empty
-/// `ID`, or when `algorithm` is [`SignatureAlgorithm::HmacSha1`]. Returns [`SamlError::Xml`]
+/// or `EntitiesDescriptor`, when the root already has a signature or an `ID`
+/// that is not an XML NCName, or when `algorithm` is
+/// [`SignatureAlgorithm::HmacSha1`]. Returns [`SamlError::Xml`]
 /// or [`SamlError::LimitExceeded`] when `xml` is not well-formed or exceeds the
 /// default [`XmlLimits`](crate::XmlLimits). Returns [`SamlError::Crypto`] when
 /// the key cannot be read or the crypto provider cannot sign with `algorithm`.
@@ -59,7 +62,11 @@ pub fn sign_metadata(
         return Err(SamlError::Invalid("metadata root is already signed".into()));
     }
     let xml = match root.attr("ID") {
-        Some("") => return Err(SamlError::Invalid("metadata root has an empty ID".into())),
+        Some(id) if !is_ncname(id) => {
+            return Err(SamlError::Invalid(format!(
+                "metadata root ID `{id}` is not an XML NCName"
+            )))
+        }
         Some(_) => Cow::Borrowed(xml),
         None => Cow::Owned(with_generated_root_id(xml, &root)?),
     };
