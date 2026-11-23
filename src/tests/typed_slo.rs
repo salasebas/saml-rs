@@ -2466,6 +2466,55 @@ fn typed_session_authority_custom_logout_template_preserves_valid_extensions(
 }
 
 #[test]
+fn typed_session_authority_custom_logout_template_rejects_misplaced_child_elements(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let with_example_namespace = SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace(
+        "xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"",
+        "xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" xmlns:ext=\"urn:example:logout\"",
+    );
+    let leaf_child =
+        "LogoutRequest Issuer, NameID, and SessionIndex must not contain child elements";
+    let saml_extension = "Extensions direct children must use a namespace not defined by SAML";
+    let cases = [
+        (
+            with_example_namespace.replace("{Issuer}</saml:Issuer>", "{Issuer}<ext:Note/></saml:Issuer>"),
+            leaf_child,
+        ),
+        (
+            with_example_namespace.replace("{NameID}</saml:NameID>", "{NameID}<ext:Note/></saml:NameID>"),
+            leaf_child,
+        ),
+        (
+            with_example_namespace.replace(
+                "{SessionIndex}</samlp:SessionIndex>",
+                "{SessionIndex}<ext:Note/></samlp:SessionIndex>",
+            ),
+            leaf_child,
+        ),
+        (
+            SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace(
+                "    <saml:NameID",
+                "    <samlp:Extensions><saml:Audience>https://sp.example.com</saml:Audience></samlp:Extensions>\n    <saml:NameID",
+            ),
+            saml_extension,
+        ),
+    ];
+    for (template, expected) in cases {
+        match start_idp_slo_with_template(template)? {
+            StartedSloResult::Failed(SamlError::ProtocolProfile(message))
+                if message == expected => {}
+            StartedSloResult::Failed(error) => {
+                return Err(format!("expected `{expected}`, got {error:?}").into())
+            }
+            StartedSloResult::Succeeded => {
+                return Err(format!("expected `{expected}`, got a started logout").into())
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn typed_session_authority_custom_logout_template_allows_omitted_unspecified_name_id_format(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let template =
