@@ -181,10 +181,11 @@ If you implement `ReplayCache`, return `SamlError::ReplayCacheUnavailable`
 with the cause when your store cannot retain an assertion ID through its
 deadline. `InMemoryReplayCache` now returns that error for a new assertion
 ID whose deadline its clock has passed. Before, it accepted the ID without
-storing it. A deadline that the validation clock has passed returns
-`TimeWindowInvalid` before the cache is called, so the cache error appears
-only when the cache clock is ahead of the validation clock. To avoid it,
-give the cache the same time source as your `SamlValidationContext`.
+storing it. An assertion deadline at or before the validation instant
+returns `TimeWindowInvalid` before the cache is called. The cache reads its
+clock later, so an assertion whose deadline falls between the two readings
+gets `ReplayCacheUnavailable`. A cache clock that runs ahead of the
+validation clock widens that gap.
 
 ## Update replay keys and cache access
 
