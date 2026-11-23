@@ -22,7 +22,8 @@ work in the repo, not restate the README.
 
 ## Working Rules
 
-- Use English for all repository content and collaboration.
+- Use English for all repository content and for project communication:
+  issues, pull requests, and reviews.
 - Before implementing an issue, check its claims against the code and tests
   on the latest `main`. If the problem is already solved, report the evidence.
   If it remains, judge the proposed fix against the behavior callers need.
