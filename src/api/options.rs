@@ -323,7 +323,7 @@ impl StartSlo {
     /// reference such as `urn:oasis:names:tc:SAML:2.0:logout:user`. The writer
     /// collapses XML whitespace, and `start_slo` returns [`crate::SamlError::Invalid`]
     /// for an invalid reference.
-    pub fn with_reason(mut self, reason: impl Into<String>) -> Self {
+    pub fn reason(mut self, reason: impl Into<String>) -> Self {
         self.reason = Some(reason.into());
         self
     }
@@ -420,7 +420,7 @@ impl RespondSlo {
     /// default. A later call replaces the previous message.
     /// The text must contain only XML 1.0 characters.
     #[must_use]
-    pub fn with_status_message(mut self, message: impl Into<String>) -> Self {
+    pub fn status_message(mut self, message: impl Into<String>) -> Self {
         self.status_message = Some(message.into());
         self
     }

@@ -46,7 +46,7 @@ impl<'a> RememberIdentityProvider<'a> {
     /// `common_domain` is the deployment common domain, without a leading
     /// period: `example.org` becomes the cookie domain `.example.org`.
     /// `lifetime` is the browser session, or a persistent `Max-Age`. Call
-    /// [`Self::with_existing_cookie`] when the browser already sent
+    /// [`Self::existing_cookie`] when the browser already sent
     /// `_saml_idp`.
     pub fn new(common_domain: &'a str, lifetime: CommonDomainCookieLifetime) -> Self {
         Self {
@@ -56,12 +56,12 @@ impl<'a> RememberIdentityProvider<'a> {
         }
     }
 
-    /// Keep the identity providers already listed in this `_saml_idp` value.
+    /// Set the existing `_saml_idp` value to keep the identity providers it lists.
     ///
     /// An empty value starts a new list. Any other value is the cookie value:
     /// percent-encoded, or already decoded with a real space between entries.
     /// A `+` inside a base64 entry stays a `+`.
-    pub fn with_existing_cookie(mut self, value: &'a str) -> Self {
+    pub fn existing_cookie(mut self, value: &'a str) -> Self {
         self.existing_cookie = Some(value);
         self
     }

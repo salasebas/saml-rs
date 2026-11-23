@@ -83,7 +83,7 @@ impl IdpMetadata {
                     "SingleSignOnService",
                 ],
             )
-            .with_context(),
+            .capture_source(),
             ExtractorField::new(
                 "artifactResolutionService",
                 &[
@@ -92,7 +92,7 @@ impl IdpMetadata {
                     "ArtifactResolutionService",
                 ],
             )
-            .with_context(),
+            .capture_source(),
             ExtractorField::new(
                 "manageNameIDService",
                 &[
@@ -101,7 +101,7 @@ impl IdpMetadata {
                     "ManageNameIDService",
                 ],
             )
-            .with_context(),
+            .capture_source(),
         ];
         let mut inner = Metadata::parse_role_with_policy(
             xml,

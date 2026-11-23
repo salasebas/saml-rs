@@ -28,7 +28,7 @@ fn remember(
 ) -> Result<CommonDomainCookie, SamlError> {
     let mut request = RememberIdentityProvider::new(common_domain, lifetime);
     if let Some(value) = existing_cookie {
-        request = request.with_existing_cookie(value);
+        request = request.existing_cookie(value);
     }
     identity_provider(entity_id)?.common_domain_cookie(request)
 }

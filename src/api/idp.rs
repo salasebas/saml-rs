@@ -187,13 +187,13 @@ impl IdentityProvider {
     /// For an assertion, it also returns [`SamlError`] when a basic attribute
     /// name is not an XML name, its format is not an absolute URI, a
     /// `subject-id` or `pairwise-id` attribute breaks the rules of
-    /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes), the
+    /// [`SsoAssertion::attributes`](crate::SsoAssertion::attributes), the
     /// persistent or transient `NameId` is longer than 256 characters, also
     /// when the format is the first configured NameID format, the
     /// NameID format is not an absolute URI reference,
-    /// [`SsoAssertion::with_authn_context`](crate::SsoAssertion::with_authn_context) does not meet an exact
+    /// [`SsoAssertion::authn_context`](crate::SsoAssertion::authn_context) does not meet an exact
     /// `RequestedAuthnContext`,
-    /// [`SsoAssertion::with_authn_instant`](crate::SsoAssertion::with_authn_instant) is
+    /// [`SsoAssertion::authn_instant`](crate::SsoAssertion::authn_instant) is
     /// later than the response `IssueInstant`,
     /// or is before year 1, the `NameId`
     /// `SPNameQualifier` is not the one the request's `NameIDPolicy` asks for
@@ -258,8 +258,8 @@ impl IdentityProvider {
     /// For an assertion, it also returns [`SamlError`] when a basic attribute
     /// name is not an XML name, its format is not an absolute URI, a
     /// `subject-id` or `pairwise-id` attribute breaks the rules of
-    /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes),
-    /// [`SsoAssertion::with_authn_instant`](crate::SsoAssertion::with_authn_instant) is
+    /// [`SsoAssertion::attributes`](crate::SsoAssertion::attributes),
+    /// [`SsoAssertion::authn_instant`](crate::SsoAssertion::authn_instant) is
     /// later than the response `IssueInstant`,
     /// or is before year 1, or the persistent or transient `NameId` is longer
     /// than 256 characters.

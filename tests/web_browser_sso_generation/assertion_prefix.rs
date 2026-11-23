@@ -69,7 +69,7 @@ fn assertion_prefix_preserves_attribute_value_namespaces() -> Result<(), Box<dyn
         let role = Attribute::new("role", vec![AttributeValue::new("staff")]);
         let response = idp.initiate_sso(
             &sp_descriptor,
-            SsoAssertion::new(principal()).with_attributes(Attributes::new([role])),
+            SsoAssertion::new(principal()).attributes(Attributes::new([role])),
             RespondSso::post(),
         )?;
         let xml = response_xml(&response)?;

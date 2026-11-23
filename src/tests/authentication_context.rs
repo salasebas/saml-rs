@@ -352,7 +352,7 @@ fn respond_and_finish_sso_preserve_class_and_declaration_references(
         let response = idp.respond_sso(
             &sp_descriptor,
             &received,
-            SsoAssertion::new(principal()).with_authn_context(reference.clone()),
+            SsoAssertion::new(principal()).authn_context(reference.clone()),
             RespondSso::post(),
         )?;
         let session = sp.finish_sso(
@@ -384,7 +384,7 @@ fn unsolicited_sso_exposes_the_asserted_context() -> Result<(), Box<dyn std::err
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()).with_authn_context(AuthnContextReference::class(MFA)?),
+        SsoAssertion::new(principal()).authn_context(AuthnContextReference::class(MFA)?),
         RespondSso::post(),
     )?;
     let session = sp.accept_unsolicited_sso(
@@ -608,7 +608,7 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()).with_authn_context(AuthnContextReference::class(MFA)?),
+        SsoAssertion::new(principal()).authn_context(AuthnContextReference::class(MFA)?),
         RespondSso::post(),
     )?;
     let xml = String::from_utf8(

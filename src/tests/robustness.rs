@@ -38,7 +38,7 @@ fn malformed_xml_inputs_never_panic() {
     ];
     let fields = [
         ExtractorField::new("x", &["a"]),
-        ExtractorField::new("r", &["Response", "Assertion"]).with_context(),
+        ExtractorField::new("r", &["Response", "Assertion"]).capture_source(),
     ];
     for input in nasty {
         let _ = parse_document(input, saml_rs::XmlLimits::default());

@@ -57,7 +57,7 @@ impl ExtractorField {
     }
 
     /// Capture the whole node source.
-    pub fn with_context(mut self) -> Self {
+    pub fn capture_source(mut self) -> Self {
         self.context = true;
         self
     }
@@ -80,7 +80,7 @@ impl ExtractorField {
     }
 
     /// Parse `xml` instead of the root document for this field.
-    pub fn with_shortcut(mut self, xml: &str) -> Self {
+    pub fn source_xml(mut self, xml: &str) -> Self {
         self.shortcut = Some(xml.to_string());
         self
     }
@@ -281,7 +281,7 @@ mod tests {
     const SPMETA: &str = include_str!("../../tests/fixtures/misc/spmeta.xml");
 
     fn assertion_of(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
-        let field = ExtractorField::new("a", &["Response", "Assertion"]).with_context();
+        let field = ExtractorField::new("a", &["Response", "Assertion"]).capture_source();
         let value = extract(xml, std::slice::from_ref(&field))?;
         Ok(value.get_str("a").ok_or("assertion present")?.to_string())
     }
@@ -352,8 +352,8 @@ mod tests {
         let ctx = extract(
             RESPONSE,
             &[
-                ExtractorField::new("status", &["Response", "Status"]).with_context(),
-                ExtractorField::new("sig", &["Response", "Signature"]).with_context(),
+                ExtractorField::new("status", &["Response", "Status"]).capture_source(),
+                ExtractorField::new("sig", &["Response", "Signature"]).capture_source(),
             ],
         )?;
         assert!(ctx
@@ -383,7 +383,7 @@ mod tests {
         );
         let result = extract(
             xml,
-            &[ExtractorField::new("assertion", &["Response", "Assertion"]).with_context()],
+            &[ExtractorField::new("assertion", &["Response", "Assertion"]).capture_source()],
         )?;
 
         assert_eq!(result.get_str("assertion"), Some(expected));
@@ -538,14 +538,14 @@ mod tests {
             &[
                 ExtractorField::new("sharedId", &["Assertion"])
                     .attrs(&["ID"])
-                    .with_shortcut(shared),
+                    .source_xml(shared),
                 ExtractorField::new("sharedName", &["Assertion", "NameID"])
-                    .with_shortcut(&shared_again),
-                ExtractorField::new("otherName", &["Assertion", "NameID"]).with_shortcut(other),
+                    .source_xml(&shared_again),
+                ExtractorField::new("otherName", &["Assertion", "NameID"]).source_xml(other),
                 ExtractorField::new("issuer", &["Response", "Issuer"]),
                 ExtractorField::new("sharedContext", &["Assertion"])
-                    .with_context()
-                    .with_shortcut(shared),
+                    .capture_source()
+                    .source_xml(shared),
             ],
         )?;
 
@@ -567,11 +567,11 @@ mod tests {
             &[
                 ExtractorField::new("id", &["Assertion"])
                     .attrs(&["ID"])
-                    .with_shortcut(&owned),
+                    .source_xml(&owned),
                 ExtractorField::new("name", &["Assertion", "NameID"]),
                 ExtractorField::new("context", &["Assertion"])
-                    .with_context()
-                    .with_shortcut(&owned),
+                    .capture_source()
+                    .source_xml(&owned),
             ],
         )?;
 
@@ -589,7 +589,7 @@ mod tests {
         };
         let result = extract_with_limits(
             "<R/>",
-            &[ExtractorField::new("name", &["Assertion", "NameID"]).with_shortcut("<Assertion/>")],
+            &[ExtractorField::new("name", &["Assertion", "NameID"]).source_xml("<Assertion/>")],
             limits,
         );
 

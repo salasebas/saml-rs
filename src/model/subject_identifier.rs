@@ -128,7 +128,7 @@ scoped_identifier!(
     /// assert_eq!(subject_id, SubjectId::try_new("IDM123456789@EXAMPLE.COM")?);
     ///
     /// let assertion = SsoAssertion::new(NameId::generate_transient())
-    ///     .with_attributes(Attributes::new([Attribute::from(subject_id)]));
+    ///     .attributes(Attributes::new([Attribute::from(subject_id)]));
     /// # let _ = assertion;
     /// # Ok(())
     /// # }

@@ -218,7 +218,7 @@ fn identity_provider_produces_and_service_provider_consumes_each_attribute_name_
     ]);
 
     let exchange = exchange(
-        SsoAssertion::new(alice()).with_attributes(attributes),
+        SsoAssertion::new(alice()).attributes(attributes),
         RespondSso::post(),
     )?;
 
@@ -288,7 +288,7 @@ fn signed_sso_preserves_xml_characters_in_attribute_names_formats_and_values(
             "urn:groups:research&design".into(),
         ));
     let exchange = exchange(
-        SsoAssertion::new(alice()).with_attributes(Attributes::new([attribute.clone()])),
+        SsoAssertion::new(alice()).attributes(Attributes::new([attribute.clone()])),
         RespondSso::post().sign_response(),
     )?;
     assert_eq!(exchange.xml.matches("<saml:AttributeValue ").count(), 1);
@@ -308,7 +308,7 @@ fn unsolicited_response_carries_attribute_name_formats_and_a_generated_identifie
 
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(name_id.clone()).with_attributes(Attributes::new(vec![mail.clone()])),
+        SsoAssertion::new(name_id.clone()).attributes(Attributes::new(vec![mail.clone()])),
         RespondSso::post(),
     )?;
     let session = sp.accept_unsolicited_sso(
@@ -327,7 +327,7 @@ fn response_without_typed_attributes_has_no_attribute_statement(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for assertion in [
         SsoAssertion::new(alice()),
-        SsoAssertion::new(alice()).with_attributes(Attributes::default()),
+        SsoAssertion::new(alice()).attributes(Attributes::default()),
     ] {
         let exchange = exchange(assertion, RespondSso::post())?;
         assert!(!exchange.xml.contains("AttributeStatement"));
@@ -344,7 +344,7 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
             Attribute::new(name, values(&["x"])).with_name_format(AttributeNameFormat::Basic)
         ]);
         match respond(
-            SsoAssertion::new(alice()).with_attributes(attributes),
+            SsoAssertion::new(alice()).attributes(attributes),
             RespondSso::post(),
         ) {
             Err(SamlError::Invalid(message)) if message.contains("basic") => {}
@@ -358,7 +358,7 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
         .with_name_format(AttributeNameFormat::Custom(BASIC.to_string()));
     assert_eq!(spelled_out.name_format(), Some(&AttributeNameFormat::Basic));
     match respond(
-        SsoAssertion::new(alice()).with_attributes(Attributes::new([spelled_out])),
+        SsoAssertion::new(alice()).attributes(Attributes::new([spelled_out])),
         RespondSso::post(),
     ) {
         Err(SamlError::Invalid(message)) if message.contains("basic") => {}
@@ -369,7 +369,7 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
             Attribute::new(name, values(&["x"])).with_name_format(AttributeNameFormat::Basic)
         ]);
         respond(
-            SsoAssertion::new(alice()).with_attributes(attributes),
+            SsoAssertion::new(alice()).attributes(attributes),
             RespondSso::post(),
         )?;
     }
@@ -383,7 +383,7 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
             Attribute::new("given name", values(&["x"])).with_name_format(format)
         ]);
         respond(
-            SsoAssertion::new(alice()).with_attributes(attributes),
+            SsoAssertion::new(alice()).attributes(attributes),
             RespondSso::post(),
         )?;
     }
@@ -526,7 +526,7 @@ fn service_provider_keeps_every_value_of_repeated_attribute_elements(
     ]);
 
     let exchange = exchange(
-        SsoAssertion::new(alice()).with_attributes(attributes),
+        SsoAssertion::new(alice()).attributes(attributes),
         RespondSso::post(),
     )?;
 
@@ -559,7 +559,7 @@ fn identity_provider_does_not_generate_a_name_format_that_is_not_an_absolute_uri
         let attribute = Attribute::new("role", values(&["admin"]))
             .with_name_format(AttributeNameFormat::Custom(name_format.to_string()));
         match respond(
-            SsoAssertion::new(alice()).with_attributes(Attributes::new([attribute])),
+            SsoAssertion::new(alice()).attributes(Attributes::new([attribute])),
             RespondSso::post(),
         ) {
             Err(SamlError::Invalid(message)) if message.contains("NameFormat") => {}

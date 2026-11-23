@@ -59,7 +59,7 @@ configuration uses custom XML, see how to
 **Upgrade:** remove the producer-rule setters, `StartSlo::signing` and the
 `LogoutSigning` import. Supply signing credentials and enable a document-crypto
 provider. Pass the actual authentication context with
-`SsoAssertion::with_authn_context` and the authentication instant when known.
+`SsoAssertion::authn_context` and the authentication instant when known.
 Issue a failure response when the request cannot be satisfied. Use the session
 from SSO to start logout and publish HTTPS endpoints for browser logout.
 

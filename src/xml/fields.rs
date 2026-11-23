@@ -154,7 +154,7 @@ pub fn login_request_fields() -> Vec<ExtractorField> {
             authn_request::REQUESTED_SUBJECT,
             &["AuthnRequest", "Subject"],
         )
-        .with_context(),
+        .capture_source(),
         ExtractorField::new(
             authn_request::REQUESTED_NAME_ID,
             &["AuthnRequest", "Subject", "NameID"],
@@ -183,22 +183,22 @@ pub fn login_request_fields() -> Vec<ExtractorField> {
             authn_request::REQUESTED_BASE_ID,
             &["AuthnRequest", "Subject", "BaseID"],
         )
-        .with_context(),
+        .capture_source(),
         ExtractorField::new(
             authn_request::REQUESTED_ENCRYPTED_ID,
             &["AuthnRequest", "Subject", "EncryptedID"],
         )
-        .with_context(),
+        .capture_source(),
         ExtractorField::new(
             authn_request::REQUESTED_SUBJECT_CONFIRMATION,
             &["AuthnRequest", "Subject", "SubjectConfirmation"],
         )
-        .with_context(),
+        .capture_source(),
         ExtractorField::new(
             authn_request::REQUESTED_AUTHN_CONTEXT,
             &["AuthnRequest", "RequestedAuthnContext"],
         )
-        .with_context(),
+        .capture_source(),
         ExtractorField::new(
             authn_request::REQUESTED_AUTHN_CONTEXT_COMPARISON,
             &["AuthnRequest", "RequestedAuthnContext"],
@@ -220,7 +220,7 @@ pub fn login_request_fields() -> Vec<ExtractorField> {
                 "AuthnContextDeclRef",
             ],
         ),
-        ExtractorField::new(SIGNATURE, &["AuthnRequest", "Signature"]).with_context(),
+        ExtractorField::new(SIGNATURE, &["AuthnRequest", "Signature"]).capture_source(),
     ]
 }
 
@@ -262,10 +262,10 @@ pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(login_response::ASSERTION, &["Assertion"])
             .attrs(&["ID", "IssueInstant"])
-            .with_shortcut(assertion),
+            .source_xml(assertion),
         ExtractorField::new(login_response::CONDITIONS, &["Assertion", "Conditions"])
             .attrs(&["NotBefore", "NotOnOrAfter"])
-            .with_shortcut(assertion),
+            .source_xml(assertion),
         ExtractorField::new(response::KEY, &["Response"]).attrs(&[
             "ID",
             "IssueInstant",
@@ -276,48 +276,48 @@ pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
             login_response::AUDIENCE,
             &["Assertion", "Conditions", "AudienceRestriction", "Audience"],
         )
-        .with_shortcut(assertion),
+        .source_xml(assertion),
         ExtractorField::new(
             login_response::AUDIENCE_RESTRICTION,
             &["Assertion", "Conditions", "AudienceRestriction"],
         )
-        .with_context()
-        .with_shortcut(assertion),
+        .capture_source()
+        .source_xml(assertion),
         ExtractorField::new(login_response::ASSERTION_ISSUER, &["Assertion", "Issuer"])
-            .with_shortcut(assertion),
+            .source_xml(assertion),
         ExtractorField::new(name_id::VALUE, &["Assertion", "Subject", "NameID"])
-            .with_shortcut(assertion),
+            .source_xml(assertion),
         ExtractorField::new(name_id::FORMAT, &["Assertion", "Subject", "NameID"])
             .attrs(&["Format"])
-            .with_shortcut(assertion),
+            .source_xml(assertion),
         ExtractorField::new(name_id::QUALIFIERS, &["Assertion", "Subject", "NameID"])
             .attrs(&["NameQualifier", "SPNameQualifier", "SPProvidedID"])
-            .with_shortcut(assertion),
+            .source_xml(assertion),
         ExtractorField::new(
             login_response::SUBJECT_CONFIRMATION,
             &["Assertion", "Subject", "SubjectConfirmation"],
         )
-        .with_context()
-        .with_shortcut(assertion),
+        .capture_source()
+        .source_xml(assertion),
         ExtractorField::new(
             login_response::AUTHN_STATEMENTS,
             &["Assertion", "AuthnStatement"],
         )
         .attrs(&["AuthnInstant", "SessionNotOnOrAfter", "SessionIndex"])
-        .with_shortcut(assertion),
+        .source_xml(assertion),
         ExtractorField::new(
             login_response::ATTRIBUTES,
             &["Assertion", "AttributeStatement", "Attribute"],
         )
         .aggregate(&["Name"], &["AttributeValue"])
-        .with_shortcut(assertion),
+        .source_xml(assertion),
         ExtractorField::new(
             login_response::ATTRIBUTE_ELEMENTS,
             &["Assertion", "AttributeStatement", "Attribute"],
         )
         .attrs(&["Name", "NameFormat", "FriendlyName"])
         .child_texts(&["AttributeValue"])
-        .with_shortcut(assertion),
+        .source_xml(assertion),
     ]
 }
 
@@ -343,7 +343,7 @@ pub fn logout_request_fields() -> Vec<ExtractorField> {
             logout_request::SESSION_INDEXES,
             &["LogoutRequest", "SessionIndex"],
         ),
-        ExtractorField::new(SIGNATURE, &["LogoutRequest", "Signature"]).with_context(),
+        ExtractorField::new(SIGNATURE, &["LogoutRequest", "Signature"]).capture_source(),
     ]
 }
 
@@ -408,6 +408,6 @@ pub fn logout_response_fields() -> Vec<ExtractorField> {
             &["LogoutResponse", "Status", "StatusCode", "StatusCode"],
         )
         .attrs(&["Value"]),
-        ExtractorField::new(SIGNATURE, &["LogoutResponse", "Signature"]).with_context(),
+        ExtractorField::new(SIGNATURE, &["LogoutResponse", "Signature"]).capture_source(),
     ]
 }

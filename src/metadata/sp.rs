@@ -82,12 +82,12 @@ impl SpMetadata {
         let limits = policy.limits;
         let extra = vec![
             ExtractorField::new("spRoleContext", &["EntityDescriptor", "SPSSODescriptor"])
-                .with_context(),
+                .capture_source(),
             ExtractorField::new(
                 "manageNameIDService",
                 &["EntityDescriptor", "SPSSODescriptor", "ManageNameIDService"],
             )
-            .with_context(),
+            .capture_source(),
             ExtractorField::new(
                 "assertionConsumerService",
                 &[
@@ -96,7 +96,7 @@ impl SpMetadata {
                     "AssertionConsumerService",
                 ],
             )
-            .with_context(),
+            .capture_source(),
         ];
         let mut inner = Metadata::parse_role_with_policy(
             xml,
@@ -243,7 +243,7 @@ fn saml2_role_acs(role: &str, limits: XmlLimits) -> Result<Value, SamlError> {
         "assertionConsumerService",
         &["SPSSODescriptor", "AssertionConsumerService"],
     )
-    .with_context();
+    .capture_source();
     let extracted = extract_with_limits(role, &[field], limits)?;
     super::endpoints::parse_endpoint_fragments(
         extracted

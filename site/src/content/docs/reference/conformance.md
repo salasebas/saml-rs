@@ -14,7 +14,7 @@ Normative text is SAML Core 2.0, Profiles 2.0, Bindings 2.0, and Metadata 2.0, a
 - [SSO generation](conformance/web-browser-sso-generation.md) for `start_sso`, `respond_sso`, and `initiate_sso`.
 - [Logout](conformance/single-logout.md) for `start_slo`, `start_async_slo`, `respond_slo`, `receive_slo`, and `finish_slo`.
 - [Identity Provider Discovery](conformance/identity-provider-discovery.md) for `common_domain_cookie`.
-- [SAML-defined identifiers](conformance/identifiers.md) for `SsoAssertion::with_attributes`, `AttributeNameFormat`, the persistent and transient `NameId` constructors, the `subject-id` and `pairwise-id` attributes, and the `ID` of every generated message and assertion.
+- [SAML-defined identifiers](conformance/identifiers.md) for `SsoAssertion::attributes`, `AttributeNameFormat`, the persistent and transient `NameId` constructors, the `subject-id` and `pairwise-id` attributes, and the `ID` of every generated message and assertion.
 - [Metadata and replay](conformance/metadata-and-replay.md) for `MetadataTrustPolicy` and `ReplayPolicy`.
 - [HTTP-Artifact response](conformance/web-browser-sso-artifact.md) for `respond_sso_artifact`, `initiate_sso_artifact`, and `finish_sso` with `Inbound::artifact`.
 - [Artifact resolution](conformance/artifact-resolution.md) for `issue_artifact`, `resolve_artifact`, and `answer_artifact_resolve`.

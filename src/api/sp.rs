@@ -101,8 +101,8 @@ impl ResponseParseInput {
         expected_recipient: &'a str,
     ) -> LoginResponseParseOptions<'a> {
         LoginResponseParseOptions::at(validation.now(), validation.clock_skew())
-            .with_signed_destination(self.signed_destination)
-            .with_expected_recipient(expected_recipient)
+            .signed_destination(self.signed_destination)
+            .expected_recipient(expected_recipient)
     }
 }
 

@@ -299,7 +299,7 @@ fn typed_sso_response_writes_the_caller_authentication_instant(
         idp.respond_sso(
             &sp_descriptor,
             &received,
-            SsoAssertion::new(principal()).with_authn_instant(authn_instant),
+            SsoAssertion::new(principal()).authn_instant(authn_instant),
             RespondSso::post(),
         )
     };

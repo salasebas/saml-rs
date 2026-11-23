@@ -48,8 +48,8 @@ The validation policies expose their recommended settings through `Default`.
 
 Fields stay public while the struct guarantees nothing about their values. The
 operation that consumes the struct, such as `build()`, checks them. A struct
-that keeps an invariant itself has private fields and `with_` setters, as
-[Method names](#method-names) describes.
+that keeps an invariant itself has private fields and exposes methods that
+preserve the invariant.
 
 Leave exhaustive a closed shape from the standard with no extension point,
 such as `LocalizedValue`. A new field there is a breaking change.
@@ -94,12 +94,16 @@ These rules apply when an API is added or redesigned.
   siblings' names, use the precise name: `PendingAuthnRequest::idp_entity_id()`
   next to `PendingLogoutRequest::peer_entity_id()`.
 - A value the crate cannot guarantee or never reads is deleted, not renamed.
-- A value that is not a dedicated builder configures with
-  `with_foo(self, value) -> Self`, which leaves `foo()` for reading.
-- A single-valued setter replaces its value. For a repeated element, the
-  singular method appends one value and the plural appends an
-  `impl IntoIterator<Item = T>`. Their doc comments start with `Replace`,
-  `Set`, or `Append`.
+- Name fluent methods on builders and operation inputs after the option or
+  action, such as `StartSlo::reason` or `RespondSso::sign_response`.
+- Use `with_foo(self, value) -> Self` to return a configured model or reusable
+  configuration value, such as `NameId::with_format`. Keep `foo()` for reading
+  the property when the type exposes it. Constructor variants may also use
+  `with_`, as in `InMemoryReplayCache::with_clock`.
+- A method that takes a complete field value replaces it, even when the value
+  is a collection. A method that takes one repeated element appends it, as
+  `StartSso::extension` does. A bulk append takes an `IntoIterator` and appends
+  in iteration order. Start the doc comment with `Replace`, `Set`, or `Append`.
 
 ## Configuration types
 

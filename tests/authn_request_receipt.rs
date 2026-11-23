@@ -772,7 +772,7 @@ fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_reques
     );
     let other_class = respond(
         assertion()
-            .with_authn_context(AuthnContextReference::class(PASSWORD_PROTECTED_TRANSPORT)?)
+            .authn_context(AuthnContextReference::class(PASSWORD_PROTECTED_TRANSPORT)?)
             .into(),
     );
     assert!(
@@ -780,7 +780,7 @@ fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_reques
     );
     let declaration_with_the_class_uri = respond(
         assertion()
-            .with_authn_context(AuthnContextReference::declaration(SMARTCARD)?)
+            .authn_context(AuthnContextReference::declaration(SMARTCARD)?)
             .into(),
     );
     assert!(matches!(
@@ -790,7 +790,7 @@ fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_reques
 
     let met = response_xml(&respond(
         assertion()
-            .with_authn_context(AuthnContextReference::class(SMARTCARD)?)
+            .authn_context(AuthnContextReference::class(SMARTCARD)?)
             .into(),
     )?)?;
     assert!(met.contains(&format!(
@@ -825,7 +825,7 @@ fn respond_sso_leaves_a_comparison_other_than_exact_to_the_caller(
             &receipt.sp_descriptor,
             &receipt.received,
             SsoAssertion::new(NameId::new("alice@example.com"))
-                .with_authn_context(AuthnContextReference::declaration(DECLARATION)?),
+                .authn_context(AuthnContextReference::declaration(DECLARATION)?),
             RespondSso::post(),
         )?,
     )?;
@@ -843,7 +843,7 @@ fn respond_sso_writes_the_context_when_the_request_specifies_none(
         &receipt.sp_descriptor,
         &receipt.received,
         SsoAssertion::new(NameId::new("alice@example.com"))
-            .with_authn_context(AuthnContextReference::class(SMARTCARD)?),
+            .authn_context(AuthnContextReference::class(SMARTCARD)?),
         RespondSso::post(),
     )?;
     assert!(response_xml(&response)?.contains(&format!(

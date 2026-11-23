@@ -15,9 +15,9 @@ fn typed_slo_writes_reason_in_signed_requests_for_both_roles(
         let from_sp = sp.start_slo(
             &idp_descriptor,
             subject()?,
-            options.clone().with_reason(USER_REASON),
+            options.clone().reason(USER_REASON),
         )?;
-        let from_idp = idp.start_slo(&sp_descriptor, subject()?, options.with_reason(REASON))?;
+        let from_idp = idp.start_slo(&sp_descriptor, subject()?, options.reason(REASON))?;
         for (outbound, expected) in [
             (&from_sp.outbound, USER_REASON),
             (&from_idp.outbound, REASON),
@@ -47,7 +47,7 @@ fn typed_slo_rejects_invalid_reason_uris() -> Result<(), Box<dyn std::error::Err
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
     for reason in ["logout/admin", " \t\n", "urn:example:bad%zz"] {
-        let options = StartSlo::redirect().with_reason(reason);
+        let options = StartSlo::redirect().reason(reason);
         for result in [
             sp.start_slo(&idp_descriptor, subject()?, options.clone()),
             idp.start_slo(&sp_descriptor, subject()?, options),
@@ -66,7 +66,7 @@ fn typed_slo_omits_reason_by_default_and_collapses_supplied_whitespace(
     for (options, expected) in [
         (StartSlo::post(), None),
         (
-            StartSlo::post().with_reason(format!(" \t{REASON}\n")),
+            StartSlo::post().reason(format!(" \t{REASON}\n")),
             Some(REASON),
         ),
     ] {
