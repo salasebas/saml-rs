@@ -182,7 +182,7 @@ fn sso_session() -> Result<SsoSession, SamlError> {
 }
 
 fn authn_request() -> Result<AuthnRequest, SamlError> {
-    AuthnRequest::from_flow(FlowResult {
+    AuthnRequest::from_flow(&FlowResult {
         saml_content: "<samlp:AuthnRequest/>".to_string(),
         sig_alg: None,
         extract: value_object(vec![
@@ -286,7 +286,7 @@ fn typed_validation_context_repeated_session_applies_skew_after_raw_minimum(
         assert_eq!(
             session
                 .session_not_on_or_after()
-                .map(|value| value.as_str()),
+                .map(saml_rs::SamlInstant::as_str),
             Some(deadline)
         );
     }
@@ -329,13 +329,11 @@ fn typed_validation_context_invalid_timestamp_fails_closed_at_fixed_clock(
 }
 
 #[test]
-fn typed_validation_context_clock_skew_exposes_named_millis(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn typed_validation_context_clock_skew_exposes_named_millis() {
     let clock_skew = ClockSkew::from_millis(-30_000, 120_000);
 
     assert_eq!(clock_skew.not_before_millis(), -30_000);
     assert_eq!(clock_skew.not_on_or_after_millis(), 120_000);
-    Ok(())
 }
 
 #[test]

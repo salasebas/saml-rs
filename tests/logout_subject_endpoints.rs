@@ -314,7 +314,10 @@ fn slo_destination_matches_the_actual_published_receiving_endpoint(
         validation().with_recipient_endpoint(saml_rs::EndpointUrl::try_new(IDP_SLO_SECOND)?),
     )?;
     assert_eq!(
-        accepted.message().destination().map(|url| url.as_str()),
+        accepted
+            .message()
+            .destination()
+            .map(saml_rs::EndpointUrl::as_str),
         Some(IDP_SLO_SECOND)
     );
 

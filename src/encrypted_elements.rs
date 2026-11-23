@@ -37,6 +37,10 @@ pub(crate) fn carries_encrypted_elements(saml_content: &str) -> Result<bool, Sam
 }
 
 #[cfg(not(crypto))]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "The provider parses XML and can fail through this interface"
+)]
 pub(crate) fn carries_encrypted_elements(_saml_content: &str) -> Result<bool, SamlError> {
     Ok(false)
 }
@@ -175,6 +179,10 @@ pub(crate) fn decrypt_detached_signed_assertions(
 }
 
 #[cfg(not(crypto))]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "The provider can fail during decryption through this interface"
+)]
 pub(crate) fn decrypt_detached_signed_assertions(
     _xml: &str,
     _root: &crate::xml::dom::Node,

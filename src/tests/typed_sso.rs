@@ -547,7 +547,10 @@ fn typed_builder_authn_request_escapes_hostile_values_for_all_bindings(
         )?;
         assert_eq!(received.message().issuer().as_str(), HOSTILE_SP_ENTITY_ID);
         assert_eq!(
-            started.outbound.relay_state().map(|state| state.as_str()),
+            started
+                .outbound
+                .relay_state()
+                .map(saml_rs::RelayState::as_str),
             Some("typed-state")
         );
     }
@@ -665,7 +668,10 @@ fn typed_detached_authn_requests_parse_with_relay_state() -> Result<(), Box<dyn 
 
         assert_eq!(received.message().id(), started.pending.request_id());
         assert_eq!(
-            started.outbound.relay_state().map(|state| state.as_str()),
+            started
+                .outbound
+                .relay_state()
+                .map(saml_rs::RelayState::as_str),
             Some("signed-state")
         );
     }
@@ -2696,7 +2702,7 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations(
             post_validation(&mut Default::default()),
         )?;
         assert_eq!(
-            session.not_on_or_after().map(|value| value.as_str()),
+            session.not_on_or_after().map(saml_rs::SamlInstant::as_str),
             Some(conditions)
         );
     }

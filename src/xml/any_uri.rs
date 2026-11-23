@@ -4,7 +4,7 @@
 //! collapse, then the XLink 1.0 §5.4 escaping, then a URI reference of RFC 2396
 //! as amended by RFC 2732.
 
-use std::net::Ipv6Addr;
+use std::{fmt::Write as _, net::Ipv6Addr};
 
 use super::is_xml_char;
 
@@ -42,7 +42,7 @@ fn escape_disallowed(value: &str) -> String {
         if is_disallowed(character) {
             let mut buffer = [0; 4];
             for byte in character.encode_utf8(&mut buffer).bytes() {
-                escaped.push_str(&format!("%{byte:02X}"));
+                let _ = write!(escaped, "%{byte:02X}");
             }
         } else {
             escaped.push(character);

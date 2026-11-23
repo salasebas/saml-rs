@@ -2,7 +2,7 @@ use crate::binding::sign_message;
 use crate::config::IdentifierEncryptionPolicy;
 use crate::constants::{Binding, ParserType};
 use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting};
-use crate::error::{utf8_err, SamlError};
+use crate::error::SamlError;
 use crate::metadata::Metadata;
 use crate::model::{validate_name_id_format, Status};
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
@@ -49,7 +49,7 @@ pub(crate) struct LogoutRequestInput<'a> {
 }
 
 pub(crate) fn create_logout_request_for_subject_inner(
-    input: LogoutRequestInput<'_>,
+    input: &LogoutRequestInput<'_>,
 ) -> Result<CreatedLogoutRequest, SamlError> {
     let LogoutRequestInput {
         init_setting,
@@ -65,7 +65,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
         asynchronous,
         validation,
         name_id_encryption,
-    } = input;
+    } = *input;
 
     reject_soap_relay_state(binding, relay_state)?;
     validate_name_id_format(name_id_format)?;
@@ -91,7 +91,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
     let xml = render_logout_request(
         init_setting,
         &issuer,
-        LogoutRequestAttributes {
+        &LogoutRequestAttributes {
             id: &id,
             destination: &destination,
             issue_instant,
@@ -199,7 +199,7 @@ impl LogoutResponseInput<'_> {
         let issuer = issuer_of(init_setting, init_meta);
         let xml = render_logout_response(
             init_setting,
-            LogoutResponseAttributes {
+            &LogoutResponseAttributes {
                 id: &id,
                 issue_instant: &issue_instant,
                 destination: destination.as_deref(),
@@ -228,7 +228,7 @@ impl LogoutResponseInput<'_> {
 }
 
 pub(crate) fn create_logout_response_inner(
-    input: LogoutResponseInput<'_>,
+    input: &LogoutResponseInput<'_>,
 ) -> Result<BindingContext, SamlError> {
     let RenderedLogoutResponse {
         id,
@@ -262,9 +262,7 @@ pub(crate) fn create_logout_response_inner(
 /// The signed XML an embedded-signature binding carries.
 fn embedded_signed_xml(binding: Binding, context: &str) -> Result<Option<String>, SamlError> {
     match binding {
-        Binding::Post => String::from_utf8(crate::binding::decode_base64(context)?)
-            .map(Some)
-            .map_err(utf8_err),
+        Binding::Post => crate::xml::decode_utf8(crate::binding::decode_base64(context)?).map(Some),
         Binding::Soap => Ok(Some(context.to_string())),
         Binding::Redirect | Binding::SimpleSign | Binding::Artifact => Ok(None),
     }

@@ -118,7 +118,7 @@ fn form_with_object(
         .collect()
 }
 
-fn assert_object_rejected<T: std::fmt::Debug>(result: Result<T, SamlError>) {
+fn assert_object_rejected<T: std::fmt::Debug>(result: &Result<T, SamlError>) {
     assert!(
         matches!(result, Err(SamlError::SignedReferenceMismatch)),
         "{result:?}"
@@ -143,7 +143,7 @@ fn post_authn_request_with_object_is_rejected_unless_weak_algorithms_are_allowed
     ] {
         let parties = parties(profile)?;
         let form = post_authn_request_with_object(&parties)?;
-        assert_object_rejected(parties.idp.receive_sso(
+        assert_object_rejected(&parties.idp.receive_sso(
             &parties.sp_descriptor,
             Inbound::post(form),
             validation(),
@@ -177,7 +177,7 @@ fn post_response_with_object_is_rejected() -> Result<(), Box<dyn std::error::Err
             respond,
         )?;
         let form = form_with_object(response.post_form()?.fields(), "SAMLResponse")?;
-        assert_object_rejected(parties.sp.finish_sso(
+        assert_object_rejected(&parties.sp.finish_sso(
             &parties.idp_descriptor,
             &started.pending,
             Inbound::post(form),
@@ -196,7 +196,7 @@ fn post_logout_request_and_response_with_object_are_rejected(
             .sp
             .start_slo(&parties.idp_descriptor, logout_subject()?, StartSlo::post())?;
     let request = started.outbound.post_form()?.fields().to_vec();
-    assert_object_rejected(parties.idp.receive_slo(
+    assert_object_rejected(&parties.idp.receive_slo(
         &parties.sp_descriptor,
         Inbound::post(form_with_object(&request, "SAMLRequest")?),
         validation(),
@@ -212,7 +212,7 @@ fn post_logout_request_and_response_with_object_are_rejected(
         &Status::success(),
         RespondSlo::post(),
     )?;
-    assert_object_rejected(parties.sp.finish_slo(
+    assert_object_rejected(&parties.sp.finish_slo(
         &parties.idp_descriptor,
         &started.pending,
         Inbound::post(form_with_object(
@@ -233,7 +233,7 @@ fn soap_logout_request_and_response_with_object_are_rejected(
             .sp
             .start_slo(&parties.idp_descriptor, logout_subject()?, StartSlo::soap())?;
     let request = started.outbound.soap_request()?.envelope().to_string();
-    assert_object_rejected(parties.idp.receive_slo(
+    assert_object_rejected(&parties.idp.receive_slo(
         &parties.sp_descriptor,
         Inbound::soap(with_object(&request)?, SoapChannel::unattested()),
         validation(),
@@ -250,7 +250,7 @@ fn soap_logout_request_and_response_with_object_are_rejected(
         &Status::success(),
         RespondSlo::soap(),
     )?;
-    assert_object_rejected(parties.sp.finish_slo(
+    assert_object_rejected(&parties.sp.finish_slo(
         &parties.idp_descriptor,
         &started.pending,
         Inbound::soap(

@@ -51,9 +51,9 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
-fn assert_rejected<T: std::fmt::Debug>(result: Result<T, SamlError>) {
+fn assert_rejected<T: std::fmt::Debug>(result: &Result<T, SamlError>) {
     assert!(
-        matches!(result, Err(SamlError::Invalid(ref reason)) if reason == REJECTED),
+        matches!(result, Err(SamlError::Invalid(reason)) if reason == REJECTED),
         "expected schema rejection, got {result:?}"
     );
 }
@@ -63,13 +63,13 @@ fn configured_schema_validator_rejects_typed_peer_metadata(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp()?;
     let idp = idp(Some(reject_xml))?;
-    assert_rejected(IdpDescriptor::from_metadata_xml_with_xml_policy(
+    assert_rejected(&IdpDescriptor::from_metadata_xml_with_xml_policy(
         EntityId::try_new(IDP)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::Unverified,
         &policy(Some(reject_xml)),
     ));
-    assert_rejected(SpDescriptor::from_metadata_xml_with_xml_policy(
+    assert_rejected(&SpDescriptor::from_metadata_xml_with_xml_policy(
         EntityId::try_new(SP)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::Unverified,
@@ -105,9 +105,9 @@ fn typed_schema_policy_is_isolated_and_can_be_disabled() -> Result<(), Box<dyn s
     )?;
     let started = sp.start_sso(&destination, StartSso::post())?;
     let fields: Vec<FormField> = started.outbound.post_form()?.fields().to_vec();
-    assert_rejected(rejecting.receive_sso(&peer, Inbound::post(fields.clone()), validation()));
+    assert_rejected(&rejecting.receive_sso(&peer, Inbound::post(fields.clone()), validation()));
     accepting.receive_sso(&peer, Inbound::post(fields.clone()), validation())?;
-    assert_rejected(rejecting.receive_sso(&peer, Inbound::post(fields), validation()));
+    assert_rejected(&rejecting.receive_sso(&peer, Inbound::post(fields), validation()));
     Ok(())
 }
 

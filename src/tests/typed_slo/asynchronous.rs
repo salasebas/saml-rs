@@ -22,14 +22,13 @@ fn async_slo_places_the_marker_inside_the_signed_request() -> Result<(), Box<dyn
             ][..],
         ),
     ] {
-        let ordinary =
-            sp.start_slo(&idp_descriptor, subject()?, start_slo_for_binding(binding)?)?;
+        let ordinary = sp.start_slo(&idp_descriptor, subject()?, start_slo_for_binding(binding))?;
         let ordinary_xml = outbound_xml(&ordinary.outbound, "SAMLRequest")?;
         let ordinary_root = parse_document(&ordinary_xml, Default::default())?.root;
         assert!(ordinary_root.child_named("Extensions").is_none());
 
         let outbound =
-            sp.start_async_slo(&idp_descriptor, subject()?, start_slo_for_binding(binding)?)?;
+            sp.start_async_slo(&idp_descriptor, subject()?, start_slo_for_binding(binding))?;
         let xml = outbound_xml(&outbound, "SAMLRequest")?;
         let root = parse_qualified_document(&xml, Default::default())?;
         assert_eq!(
@@ -70,7 +69,7 @@ fn async_slo_rejects_soap_and_simple_sign() -> Result<(), Box<dyn std::error::Er
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
     for binding in [LogoutBinding::Soap, LogoutBinding::SimpleSign] {
         let result =
-            sp.start_async_slo(&idp_descriptor, subject()?, start_slo_for_binding(binding)?);
+            sp.start_async_slo(&idp_descriptor, subject()?, start_slo_for_binding(binding));
         assert!(matches!(
             result,
             Err(SamlError::UnsupportedBinding { binding: actual, .. }) if actual == binding.into()

@@ -379,7 +379,7 @@ fn soap_outbound<Message>(
     }
     reject_detached_signature_for_post(&raw_context)?;
     Ok(Outbound {
-        id: MessageId::try_new(raw_context.id.clone())?,
+        id: MessageId::try_new(raw_context.id)?,
         relay_state: None,
         action,
         session_index: None,
@@ -415,44 +415,33 @@ fn outbound_from_context<Message>(
         .clone()
         .map(relay_state)
         .transpose()?;
-    match raw_context.binding {
+    let action = match raw_context.binding {
         Binding::Redirect => {
             EndpointUrl::try_new(raw_context.context.clone())?;
             validate_redirect_message_kind(&raw_context.context, expected_message)?;
-            Ok(Outbound {
-                id,
-                relay_state,
-                action: OutboundAction::Redirect(raw_context.context.clone()),
-                session_index: None,
-                _message: PhantomData,
-            })
+            OutboundAction::Redirect(raw_context.context)
         }
         Binding::Post => {
             reject_detached_signature_for_post(&raw_context)?;
             let form = post_form_from_context(&raw_context, None)?;
-            Ok(Outbound {
-                id,
-                relay_state,
-                action: OutboundAction::Post(form),
-                session_index: None,
-                _message: PhantomData,
-            })
+            OutboundAction::Post(form)
         }
         Binding::SimpleSign => {
             let signature = detached_signature_fields(&raw_context)?;
             let form = post_form_from_context(&raw_context, Some(signature))?;
-            Ok(Outbound {
-                id,
-                relay_state,
-                action: OutboundAction::SimpleSignPost(form),
-                session_index: None,
-                _message: PhantomData,
-            })
+            OutboundAction::SimpleSignPost(form)
         }
         binding @ (Binding::Artifact | Binding::Soap) => {
-            Err(SamlError::UnsupportedBinding { binding })
+            return Err(SamlError::UnsupportedBinding { binding });
         }
-    }
+    };
+    Ok(Outbound {
+        id,
+        relay_state,
+        action,
+        session_index: None,
+        _message: PhantomData,
+    })
 }
 
 fn validate_context_message_kind(

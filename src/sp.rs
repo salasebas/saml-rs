@@ -50,6 +50,7 @@ enum LoginResponseCorrelation<'a> {
     MessageId(&'a str),
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct LoginResponseParseOptions<'a> {
     expected_recipient: Option<&'a str>,
     now: Option<SystemTime>,

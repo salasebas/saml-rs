@@ -67,6 +67,10 @@ fn decrypted(
 }
 
 #[cfg(not(crypto))]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "The provider implementation can fail and shares this interface"
+)]
 fn decrypted(
     _flow: &FlowResult,
     _setting: &EntitySetting,

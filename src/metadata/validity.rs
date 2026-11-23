@@ -69,7 +69,7 @@ mod tests {
         SystemTime::UNIX_EPOCH + Duration::from_secs(unix_seconds)
     }
 
-    fn is_valid_until_error(result: Result<(), SamlError>) -> bool {
+    fn is_valid_until_error(result: &Result<(), SamlError>) -> bool {
         matches!(
             result,
             Err(SamlError::TimeWindowInvalid {
@@ -104,11 +104,11 @@ mod tests {
 
             descriptor.ensure_valid_at(at(expires_at - 1))?;
             assert!(
-                is_valid_until_error(descriptor.ensure_valid_at(at(expires_at))),
+                is_valid_until_error(&descriptor.ensure_valid_at(at(expires_at))),
                 "{value}"
             );
             assert!(
-                is_valid_until_error(descriptor.ensure_valid_at(at(expires_at + 1))),
+                is_valid_until_error(&descriptor.ensure_valid_at(at(expires_at + 1))),
                 "{value}"
             );
         }
@@ -121,7 +121,7 @@ mod tests {
         let validity = IdpMetadata::from_xml(&xml)?.as_metadata().validity()?;
 
         validity.ensure_valid_at(at(Y2030 - 1))?;
-        assert!(is_valid_until_error(validity.ensure_valid_at(at(Y2030))));
+        assert!(is_valid_until_error(&validity.ensure_valid_at(at(Y2030))));
         Ok(())
     }
 
@@ -146,7 +146,7 @@ mod tests {
             let validity = IdpMetadata::from_xml(&xml)?.as_metadata().validity()?;
             validity.ensure_valid_at(at(Y2030 - 1))?;
             assert!(
-                is_valid_until_error(validity.ensure_valid_at(at(Y2030))),
+                is_valid_until_error(&validity.ensure_valid_at(at(Y2030))),
                 "{xml}"
             );
         }
@@ -162,7 +162,7 @@ mod tests {
             .validity()?
             .ensure_valid_at(at(Y2030))?;
         assert!(is_valid_until_error(
-            SpMetadata::from_xml(&xml)?
+            &SpMetadata::from_xml(&xml)?
                 .as_metadata()
                 .validity()?
                 .ensure_valid_at(at(Y2030))

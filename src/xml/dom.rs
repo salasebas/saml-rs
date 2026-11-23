@@ -141,6 +141,10 @@ pub struct Document {
     pub root: Node,
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "The shared parser also accepts projections that drop an attribute"
+)]
 fn local_attribute(name: &str, _: Option<&str>, value: String) -> Option<(String, String)> {
     Some((name.to_owned(), value))
 }
@@ -234,7 +238,7 @@ fn reject_non_document_content(mode: ParseMode) -> Result<(), SamlError> {
 
 fn push_general_ref(
     text_content: &mut String,
-    e: BytesRef,
+    e: &BytesRef,
     limits: XmlLimits,
 ) -> Result<(), SamlError> {
     if let Some(ch) = e.resolve_char_ref().map_err(xml_err)? {
@@ -400,7 +404,7 @@ fn parse_roots_inner<N, A>(
             }
             Event::GeneralRef(e) => {
                 if let Some(top) = stack.last_mut() {
-                    push_general_ref(&mut top.text, e, limits)?;
+                    push_general_ref(&mut top.text, &e, limits)?;
                 } else {
                     reject_non_document_content(mode)?;
                 }
@@ -456,6 +460,7 @@ fn parse_roots_inner<N, A>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fmt::Write as _;
 
     #[test]
     fn document_and_root_list_parsers_apply_their_limits() -> Result<(), Box<dyn std::error::Error>>
@@ -818,8 +823,8 @@ mod tests {
         Ok(())
     }
 
-    fn limit_hit<T>(result: Result<T, SamlError>, expected: ResourceLimit) -> bool {
-        matches!(result, Err(SamlError::LimitExceeded { limit, .. }) if limit == expected)
+    fn limit_hit<T>(result: &Result<T, SamlError>, expected: ResourceLimit) -> bool {
+        matches!(result, Err(SamlError::LimitExceeded { limit, .. }) if *limit == expected)
     }
 
     #[test]
@@ -830,7 +835,7 @@ mod tests {
         };
 
         assert!(limit_hit(
-            parse_document("<Root/>", limits),
+            &parse_document("<Root/>", limits),
             ResourceLimit::XmlBytes
         ));
     }
@@ -843,7 +848,7 @@ mod tests {
         };
 
         assert!(limit_hit(
-            parse_document("<a><b><c/></b></a>", limits),
+            &parse_document("<a><b><c/></b></a>", limits),
             ResourceLimit::XmlDepth
         ));
     }
@@ -877,7 +882,7 @@ mod tests {
         };
 
         assert!(limit_hit(
-            parse_document("<a x=\"1\" y=\"2\"/>", limits),
+            &parse_document("<a x=\"1\" y=\"2\"/>", limits),
             ResourceLimit::XmlAttributesPerElement
         ));
     }
@@ -886,12 +891,12 @@ mod tests {
     fn rejects_xml_over_default_attribute_count_limit() {
         let mut xml = String::from("<Response");
         for index in 0..=DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT {
-            xml.push_str(&format!(" attr{index}=\"value{index}\""));
+            let _ = write!(xml, " attr{index}=\"value{index}\"");
         }
         xml.push_str("/>");
 
         assert!(limit_hit(
-            parse_document(&xml, XmlLimits::default()),
+            &parse_document(&xml, XmlLimits::default()),
             ResourceLimit::XmlAttributesPerElement
         ));
     }
@@ -900,12 +905,12 @@ mod tests {
     fn rejects_xml_over_default_namespace_declaration_count_limit() {
         let mut xml = String::from("<Response");
         for index in 0..=DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT {
-            xml.push_str(&format!(" xmlns:p{index}=\"urn:test:{index}\""));
+            let _ = write!(xml, " xmlns:p{index}=\"urn:test:{index}\"");
         }
         xml.push_str("/>");
 
         assert!(limit_hit(
-            parse_document(&xml, XmlLimits::default()),
+            &parse_document(&xml, XmlLimits::default()),
             ResourceLimit::XmlAttributesPerElement
         ));
     }
@@ -913,10 +918,10 @@ mod tests {
     fn nested_namespace_bindings(levels: usize) -> String {
         let mut xml = String::new();
         for index in 0..levels {
-            xml.push_str(&format!("<e{index} xmlns:p{index}=\"urn:test:{index}\">"));
+            let _ = write!(xml, "<e{index} xmlns:p{index}=\"urn:test:{index}\">");
         }
         for index in (0..levels).rev() {
-            xml.push_str(&format!("</e{index}>"));
+            let _ = write!(xml, "</e{index}>");
         }
         xml
     }
@@ -929,7 +934,7 @@ mod tests {
         )?;
 
         assert!(limit_hit(
-            parse_document(
+            &parse_document(
                 &nested_namespace_bindings(DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT + 1),
                 XmlLimits::default()
             ),
@@ -956,7 +961,7 @@ mod tests {
         };
 
         assert!(limit_hit(
-            parse_document("<a x=\"1234\"/>", limits),
+            &parse_document("<a x=\"1234\"/>", limits),
             ResourceLimit::XmlAttributeValueBytes
         ));
     }

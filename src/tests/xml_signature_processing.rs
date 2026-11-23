@@ -132,8 +132,7 @@ fn assertion_only_sso_signature_still_returns_the_assertion(
 }
 
 #[test]
-fn all_signature_processing_preflights_extension_references(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn all_signature_processing_preflights_extension_references() {
     let extra = signature("Cargo.toml");
     let xml = message(
         "Response",
@@ -156,7 +155,6 @@ fn all_signature_processing_preflights_extension_references(
             "{profile:?}: {result:?}"
         );
     }
-    Ok(())
 }
 
 #[cfg(unix)]
@@ -212,8 +210,7 @@ fn extension_signature_cannot_open_a_local_pipe_before_authentication(
 }
 
 #[test]
-fn first_signature_processing_checks_an_extension_before_an_assertion_candidate(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn first_signature_processing_checks_an_extension_before_an_assertion_candidate() {
     let xml = message("Response", "", &format!("<samlp:Extensions>{}</samlp:Extensions><saml:Assertion ID=\"_assertion\">{}</saml:Assertion>", signature("Cargo.toml"), signature("#_assertion")));
     let result = verify_signature(&xml, &[CERT.to_string()]);
     assert!(
@@ -225,7 +222,6 @@ fn first_signature_processing_checks_an_extension_before_an_assertion_candidate(
         ),
         "{result:?}"
     );
-    Ok(())
 }
 
 #[test]
@@ -257,8 +253,7 @@ fn first_signature_processing_does_not_process_later_extension_signatures(
 }
 
 #[test]
-fn strict_profile_preflights_transforms_on_invalid_extension_signatures(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn strict_profile_preflights_transforms_on_invalid_extension_signatures() {
     for transform in [
         r#"<ds:Transform Algorithm="http://www.w3.org/TR/1999/REC-xpath-19991116"><ds:XPath>0</ds:XPath></ds:Transform>"#,
         r#"<Transform xmlns="urn:example:other" Algorithm="http://www.w3.org/TR/1999/REC-xpath-19991116"><XPath>0</XPath></Transform>"#,
@@ -276,12 +271,10 @@ fn strict_profile_preflights_transforms_on_invalid_extension_signatures(
             "{result:?}"
         );
     }
-    Ok(())
 }
 
 #[test]
-fn error_response_signature_checks_preflight_extension_references(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn error_response_signature_checks_preflight_extension_references() {
     let xml = message(
         "Response",
         &signature("#_root"),
@@ -305,7 +298,6 @@ fn error_response_signature_checks_preflight_extension_references(
             "{profile:?}: {result:?}"
         );
     }
-    Ok(())
 }
 
 #[test]

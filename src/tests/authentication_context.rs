@@ -535,7 +535,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
     assert_eq!(
         sessions
             .iter()
-            .map(|session| session.session_index().map(|index| index.as_str()))
+            .map(|session| session.session_index().map(saml_rs::SessionIndex::as_str))
             .collect::<Vec<_>>(),
         [Some("first"), Some("second"), Some("third")]
     );

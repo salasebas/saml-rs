@@ -30,6 +30,7 @@ use super::{
 };
 
 /// The receiving endpoint and clock for an inbound message.
+#[derive(Clone, Copy)]
 pub(crate) struct InboundValidation<'a> {
     pub(crate) expected_recipient: &'a str,
     pub(crate) peer_hmac_secret: Option<&'a HmacSecret>,

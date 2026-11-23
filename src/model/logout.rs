@@ -297,7 +297,7 @@ impl LogoutResponse {
 
 impl LogoutResponse {
     pub(crate) fn from_flow(
-        raw_flow: FlowResult,
+        raw_flow: &FlowResult,
         status_message: Option<StatusMessage>,
     ) -> Result<Self, SamlError> {
         let id = MessageId::try_new(required_str(&raw_flow.extract, response::ID)?)?;

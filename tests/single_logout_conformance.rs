@@ -180,7 +180,7 @@ fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
         received
             .message()
             .destination()
-            .map(|endpoint| endpoint.as_str()),
+            .map(saml_rs::EndpointUrl::as_str),
         Some(IDP_SLO_HTTP)
     );
     Ok(())
@@ -210,7 +210,7 @@ fn session_authority_keeps_expiration_and_does_not_gain_participant_duties(
         received
             .message()
             .destination()
-            .map(|endpoint| endpoint.as_str()),
+            .map(saml_rs::EndpointUrl::as_str),
         Some(SP_SLO_HTTP)
     );
 

@@ -242,7 +242,7 @@ fn verified_algorithms(session: &SsoSession) -> Vec<&str> {
     session
         .verified_xml_signatures()
         .iter()
-        .map(|signature| signature.algorithm_uri())
+        .map(saml_rs::VerifiedXmlSignature::algorithm_uri)
         .collect()
 }
 

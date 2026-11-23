@@ -121,49 +121,49 @@ fn authn_request_xml(
 }
 
 fn insert_root_attribute(
-    xml: String,
+    mut xml: String,
     name: &str,
     value: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let needle = "<samlp:AuthnRequest ";
     let position = xml.find(needle).ok_or("missing AuthnRequest start tag")?;
     let insert_at = position + needle.len();
-    Ok(format!(
-        "{}{name}=\"{value}\" {}",
-        &xml[..insert_at],
-        &xml[insert_at..]
-    ))
+    xml.insert_str(insert_at, &format!("{name}=\"{value}\" "));
+    Ok(xml)
 }
 
 fn insert_before_name_id_policy(
-    xml: String,
+    mut xml: String,
     element: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let needle = "<samlp:NameIDPolicy";
     let position = xml.find(needle).ok_or("missing NameIDPolicy")?;
-    Ok(format!("{}{element}{}", &xml[..position], &xml[position..]))
+    xml.insert_str(position, element);
+    Ok(xml)
 }
 
 fn insert_after_name_id_policy(
-    xml: String,
+    mut xml: String,
     element: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let position = xml
         .find("<samlp:NameIDPolicy")
         .ok_or("missing NameIDPolicy")?;
     let end = position + xml[position..].find("/>").ok_or("unclosed NameIDPolicy")? + 2;
-    Ok(format!("{}{element}{}", &xml[..end], &xml[end..]))
+    xml.insert_str(end, element);
+    Ok(xml)
 }
 
 fn replace_name_id_policy(
-    xml: String,
+    mut xml: String,
     element: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let position = xml
         .find("<samlp:NameIDPolicy")
         .ok_or("missing NameIDPolicy")?;
     let end = position + xml[position..].find("/>").ok_or("unclosed NameIDPolicy")? + 2;
-    Ok(format!("{}{element}{}", &xml[..position], &xml[end..]))
+    xml.replace_range(position..end, element);
+    Ok(xml)
 }
 
 fn requested_authn_context(comparison: &str, references: &str) -> String {
@@ -411,8 +411,7 @@ fn unsigned_authn_request_fields_are_accepted_under_default_policy(
 }
 
 #[test]
-fn received_authn_request_rejects_a_non_boolean_flag_or_a_non_integer_index(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn received_authn_request_rejects_a_non_boolean_flag_or_a_non_integer_index() {
     let force_authn = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
         insert_root_attribute(xml, "ForceAuthn", "maybe")
     });
@@ -435,7 +434,6 @@ fn received_authn_request_rejects_a_non_boolean_flag_or_a_non_integer_index(
         padded_inner_space,
         Err(error) if error.to_string().contains("assertionConsumerServiceIndex")
     ));
-    Ok(())
 }
 
 #[test]
@@ -462,8 +460,7 @@ fn received_authn_request_collapses_xml_schema_whitespace_in_booleans_and_index(
 }
 
 #[test]
-fn received_authn_request_rejects_two_identifiers_or_two_subjects(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn received_authn_request_rejects_two_identifiers_or_two_subjects() {
     let two_identifiers = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
         insert_before_name_id_policy(
             xml,
@@ -488,7 +485,6 @@ fn received_authn_request_rejects_two_identifiers_or_two_subjects(
         two_subjects,
         Err(error) if error.to_string().contains("Subject must occur once")
     ));
-    Ok(())
 }
 
 #[test]
@@ -596,8 +592,7 @@ fn received_authn_request_keeps_the_name_id_policy_sp_name_qualifier(
 }
 
 #[test]
-fn received_authn_request_rejects_a_qualified_flag_and_a_foreign_subject(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn received_authn_request_rejects_a_qualified_flag_and_a_foreign_subject() {
     let qualified = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
         let needle = "<samlp:AuthnRequest ";
         let position = xml.find(needle).ok_or("missing AuthnRequest start tag")?;
@@ -637,7 +632,6 @@ fn received_authn_request_rejects_a_qualified_flag_and_a_foreign_subject(
         Err(error) if error.to_string().contains("EncryptedID")
             && error.to_string().contains("namespace")
     ));
-    Ok(())
 }
 
 #[test]

@@ -6,7 +6,7 @@ use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
 use crate::flow::MessageAuthentication;
 use crate::idp::{self, LoginResponseOptions, LoginResponseOverrides};
 use crate::model::{
-    AuthnRequest, Received, RelayState, ReplayKey, SamlValidationContext, SsoResponse,
+    AuthnRequest, EndpointUrl, Received, RelayState, ReplayKey, SamlValidationContext, SsoResponse,
 };
 use std::time::SystemTime;
 
@@ -121,7 +121,7 @@ impl IdentityProvider {
             &self.engine().setting,
             authentication,
         )?;
-        let authn = AuthnRequest::from_flow(flow)?;
+        let authn = AuthnRequest::from_flow(&flow)?;
         if authn.destination().is_some() || authentication == MessageAuthentication::Authenticated {
             let locations = self
                 .engine()
@@ -131,7 +131,7 @@ impl IdentityProvider {
                 return Err(SamlError::MissingMetadata("SingleSignOnService".into()));
             }
             let expected = validation.resolve_recipient_endpoint(&locations)?;
-            let actual = authn.destination().map(|destination| destination.as_str());
+            let actual = authn.destination().map(EndpointUrl::as_str);
             if actual != Some(expected.as_str()) {
                 return Err(SamlError::destination_mismatch(&expected, actual));
             }

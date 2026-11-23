@@ -146,14 +146,14 @@ fn sso_time_bounds_are_reported_with_whitespace_collapsed() -> Result<(), Box<dy
 
     assert_eq!(
         (
-            session.not_before().map(|instant| instant.as_str()),
-            session.not_on_or_after().map(|instant| instant.as_str()),
+            session.not_before().map(saml_rs::SamlInstant::as_str),
+            session.not_on_or_after().map(saml_rs::SamlInstant::as_str),
             session
                 .authn_statements()
                 .iter()
                 .map(|statement| statement
                     .session_not_on_or_after()
-                    .map(|instant| instant.as_str()))
+                    .map(saml_rs::SamlInstant::as_str))
                 .collect::<Vec<_>>(),
         ),
         (

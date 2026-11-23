@@ -321,7 +321,7 @@ fn unrecognized_condition_name(
     let mut stack = Vec::new();
     loop {
         let (resolved, event) = reader.read_resolved_event().map_err(reader_err)?;
-        let namespace = element_namespace(resolved);
+        let namespace = element_namespace(&resolved);
         match event {
             Event::Start(element) => {
                 let local = element_local_name(&element);
@@ -352,7 +352,7 @@ fn unrecognized_condition_name(
     Ok(None)
 }
 
-fn element_namespace(resolved: quick_xml::name::ResolveResult<'_>) -> ElementNamespace {
+fn element_namespace(resolved: &quick_xml::name::ResolveResult<'_>) -> ElementNamespace {
     match resolved {
         quick_xml::name::ResolveResult::Bound(bound)
             if bound.into_inner() == namespace::PROTOCOL =>

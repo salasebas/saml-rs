@@ -500,7 +500,7 @@ fn observe_start(
 ) -> Result<(), SamlError> {
     let (namespace, local_name) = reader.resolver().resolve_element(element.name());
     let local_name = local_name.as_ref().to_string();
-    let namespace = bound_namespace(namespace);
+    let namespace = bound_namespace(&namespace);
 
     if depth == 1 {
         if local_name != "Envelope" || namespace != Some(SOAP_NAMESPACE) {
@@ -573,7 +573,7 @@ fn requires_local_processing(
         if !matches!(local_name.as_ref(), "actor" | "mustUnderstand") {
             continue;
         }
-        let Some(uri) = bound_namespace(namespace) else {
+        let Some(uri) = bound_namespace(&namespace) else {
             continue;
         };
         if quick_xml::escape::unescape(uri).map_err(xml_err)? != SOAP_NAMESPACE {
@@ -600,9 +600,9 @@ fn requires_local_processing(
     Ok(must_understand)
 }
 
-fn bound_namespace(result: ResolveResult<'_>) -> Option<&str> {
+fn bound_namespace<'xml>(result: &ResolveResult<'xml>) -> Option<&'xml str> {
     match result {
-        ResolveResult::Bound(Namespace(uri)) => Some(uri),
+        ResolveResult::Bound(Namespace(uri)) => Some(*uri),
         ResolveResult::Unbound | ResolveResult::Unknown(_) => None,
     }
 }

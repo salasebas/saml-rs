@@ -14,10 +14,6 @@ use quick_xml::name::ResolveResult;
 use quick_xml::NsReader;
 use url::form_urlencoded::byte_serialize;
 
-fn url_encode(value: &str) -> String {
-    byte_serialize(value.as_bytes()).collect()
-}
-
 /// Build the unsigned query string for the SAML HTTP-Redirect binding.
 ///
 /// `saml_param` is `SAMLRequest` or `SAMLResponse`; `b64_value` is the
@@ -28,11 +24,11 @@ pub(crate) fn redirect_binding_query(
     b64_value: &str,
     relay_state: Option<&str>,
 ) -> String {
-    let value = url_encode(b64_value);
-    let mut query = format!("{saml_param}={value}");
+    let mut query = format!("{saml_param}=");
+    query.extend(byte_serialize(b64_value.as_bytes()));
     if let Some(state) = relay_state {
-        let state = url_encode(state);
-        query.push_str(&format!("&RelayState={state}"));
+        query.push_str("&RelayState=");
+        query.extend(byte_serialize(state.as_bytes()));
     }
     query
 }
@@ -85,7 +81,8 @@ pub(crate) fn build_redirect_octet(
     let deflated = deflate_raw_encode(xml.as_bytes())?;
     let encoded = encode_base64(&deflated);
     let mut octet = redirect_binding_query(parser_type.query_param(), &encoded, relay_state);
-    octet.push_str(&format!("&SigAlg={}", url_encode(sig_alg)));
+    octet.push_str("&SigAlg=");
+    octet.extend(byte_serialize(sig_alg.as_bytes()));
     Ok(octet)
 }
 
@@ -119,7 +116,7 @@ fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError>
     loop {
         let tag = {
             let (resolved, event) = reader.read_resolved_event().map_err(reader_err)?;
-            RedirectTag::from_event(resolved, &event)
+            RedirectTag::from_event(&resolved, &event)
         };
         let end = bom_len + reader.buffer_position() as usize;
         match tag {
@@ -165,7 +162,7 @@ fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError>
     Ok(spans)
 }
 
-fn is_protocol_signature(resolved: ResolveResult<'_>, local_name: &[u8]) -> bool {
+fn is_protocol_signature(resolved: &ResolveResult<'_>, local_name: &[u8]) -> bool {
     local_name == b"Signature"
         && matches!(resolved, ResolveResult::Bound(value) if value.into_inner() == namespace::DSIG)
 }
@@ -180,7 +177,7 @@ enum RedirectTag {
 }
 
 impl RedirectTag {
-    fn from_event(resolved: ResolveResult<'_>, event: &Event<'_>) -> Self {
+    fn from_event(resolved: &ResolveResult<'_>, event: &Event<'_>) -> Self {
         match event {
             Event::DocType(_) => Self::DocType,
             Event::Start(element) => Self::Start {
@@ -230,7 +227,8 @@ fn remove_spans(xml: &str, spans: &[(usize, usize)]) -> String {
 /// fragment. `octet` is added unchanged.
 #[cfg(any(crypto, test))]
 pub(crate) fn append_signature(base_url: &str, octet: &str, signature_b64: &str) -> String {
-    let signed = format!("{octet}&Signature={}", url_encode(signature_b64));
+    let mut signed = format!("{octet}&Signature=");
+    signed.extend(byte_serialize(signature_b64.as_bytes()));
     append_redirect_query(base_url, &signed)
 }
 

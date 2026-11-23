@@ -241,7 +241,7 @@ fn typed_sso_response_carries_profile_authentication_statement(
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
     assert_eq!(
-        session.in_response_to().map(|id| id.as_str()),
+        session.in_response_to().map(saml_rs::MessageId::as_str),
         Some(received.message().id().as_str())
     );
     Ok(())

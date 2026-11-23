@@ -621,11 +621,6 @@ pub(crate) fn xml_err(source: impl std::error::Error + Send + Sync + 'static) ->
     }
 }
 
-/// Report bytes that are not UTF-8 text, keeping the offset and not the bytes.
-pub(crate) fn utf8_err(error: std::string::FromUtf8Error) -> SamlError {
-    xml_err(error.utf8_error())
-}
-
 /// Wrap an error from the XML security backend.
 #[cfg(crypto)]
 pub(crate) fn crypto_err(source: impl std::error::Error + Send + Sync + 'static) -> SamlError {

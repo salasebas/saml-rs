@@ -54,7 +54,7 @@ fn typed_logout_round_trips_with_swapped_prefixes() -> Result<(), Box<dyn std::e
         let mut children = document
             .root_element()
             .children()
-            .filter(|node| node.is_element());
+            .filter(roxmltree::Node::is_element);
         assert_eq!(
             children.next().map(|node| node.tag_name().name()),
             Some("Issuer")

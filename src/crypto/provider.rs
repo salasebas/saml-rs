@@ -66,7 +66,7 @@ impl CryptoProviderInfo {
     }
 }
 
-fn provider_info(info: bergshamra::BackendInfo) -> CryptoProviderInfo {
+fn provider_info(info: &bergshamra::BackendInfo) -> CryptoProviderInfo {
     let provider = match info.document {
         bergshamra::BackendId::RustCrypto => CryptoProvider::RustCrypto,
         bergshamra::BackendId::AwsLc => CryptoProvider::AwsLc,
@@ -102,7 +102,7 @@ fn provider_error(
 /// Returns [`SamlError::Crypto`] if Bergshamra cannot report provider state.
 pub fn crypto_provider_info() -> Result<CryptoProviderInfo, SamlError> {
     bergshamra::backend_info()
-        .map(provider_info)
+        .map(|info| provider_info(&info))
         .map_err(|error| provider_error("inspection", error))
 }
 
@@ -122,7 +122,7 @@ pub fn crypto_provider_info() -> Result<CryptoProviderInfo, SamlError> {
 /// attestation fails.
 pub fn initialize_crypto_provider() -> Result<CryptoProviderInfo, SamlError> {
     bergshamra::initialize_backend()
-        .map(provider_info)
+        .map(|info| provider_info(&info))
         .map_err(|error| provider_error("initialization", error))
 }
 

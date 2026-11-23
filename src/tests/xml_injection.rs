@@ -92,7 +92,7 @@ fn direct_children<'a>(node: &'a Node, local_name: &'a str) -> impl Iterator<Ite
         .filter(move |child| child.local_name == local_name)
 }
 
-fn assert_invalid(result: Result<String, SamlError>) {
+fn assert_invalid(result: &Result<String, SamlError>) {
     assert!(
         matches!(result, Err(SamlError::Invalid(_))),
         "expected invalid input to fail before crypto rendering, got {result:?}"
@@ -134,7 +134,7 @@ fn crypto_signature_prefix_rejects_invalid_ncname() -> TestResult {
             action: SignatureAction::After,
         };
 
-        assert_invalid(sign_saml_xml(
+        assert_invalid(&sign_saml_xml(
             AUTHN_REQUEST,
             true,
             &key,
@@ -211,9 +211,9 @@ fn crypto_encrypt_assertion_prefix_still_round_trips() -> TestResult {
 }
 
 #[test]
-fn crypto_encrypt_assertion_prefix_rejects_invalid_ncname() -> TestResult {
+fn crypto_encrypt_assertion_prefix_rejects_invalid_ncname() {
     for prefix in ["", "saml enc", "saml:enc", "1saml", "xml", "xmlns"] {
-        assert_invalid(encrypt_assertion(
+        assert_invalid(&encrypt_assertion(
             RESPONSE,
             CERT,
             AES_256,
@@ -221,11 +221,10 @@ fn crypto_encrypt_assertion_prefix_rejects_invalid_ncname() -> TestResult {
             prefix,
         ));
     }
-    Ok(())
 }
 
 #[test]
-fn crypto_encrypt_assertion_escapes_algorithm_attributes() -> TestResult {
+fn crypto_encrypt_assertion_escapes_algorithm_attributes() {
     let malicious_data_alg = "urn:example:data\" injected=\"yes\"><xenc:CipherData>";
     let malicious_key_alg = "urn:example:key\" key_injected=\"yes\"><xenc:CipherValue>";
 
@@ -241,7 +240,6 @@ fn crypto_encrypt_assertion_escapes_algorithm_attributes() -> TestResult {
         matches!(result, Err(SamlError::Crypto { source: Some(ref source), .. }) if !source.to_string().contains("XML parsing error") && !source.to_string().contains("Mismatched end tag")),
         "expected escaped algorithms to fail closed without XML parser structure errors, got {result:?}"
     );
-    Ok(())
 }
 
 #[test]

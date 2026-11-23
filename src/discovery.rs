@@ -1,5 +1,6 @@
 //! Common domain cookie for Identity Provider Discovery.
 
+use std::fmt::Write as _;
 use std::net::Ipv4Addr;
 use std::time::Duration;
 
@@ -118,7 +119,7 @@ impl CommonDomainCookie {
         );
         if let CommonDomainCookieLifetime::Persistent { max_age } = self.lifetime {
             let seconds = max_age.as_secs();
-            header.push_str(&format!("; Max-Age={seconds}"));
+            let _ = write!(header, "; Max-Age={seconds}");
         }
         header
     }
@@ -298,6 +299,7 @@ fn encode_percent(raw: &str) -> String {
     encoded
 }
 
+#[derive(Clone, Copy)]
 enum PlusSign {
     Keep,
     Space,

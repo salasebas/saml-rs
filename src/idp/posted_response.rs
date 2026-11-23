@@ -3,7 +3,7 @@
 use super::{Engine, LoginResponseOptions, LoginResponseOverrides, RenderedLoginResponse};
 use crate::constants::Binding;
 use crate::entity::User;
-use crate::error::{utf8_err, SamlError};
+use crate::error::SamlError;
 use crate::sp;
 
 impl Engine {
@@ -30,7 +30,7 @@ impl Engine {
             overrides,
         )?;
         let xml = crate::binding::decode_base64(&issued.context.context)?;
-        let xml = String::from_utf8(xml).map_err(utf8_err)?;
+        let xml = crate::xml::decode_utf8(xml)?;
         Ok(RenderedLoginResponse {
             id: issued.context.id,
             xml,

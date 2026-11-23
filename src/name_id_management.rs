@@ -627,9 +627,6 @@ mod tests {
     #[test]
     fn schema_callback_participates_in_name_id_management_equality(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        fn validate(_: &str) -> Result<(), String> {
-            Ok(())
-        }
         let unchecked = StartedNameIdManagement {
             request: SoapRequest::try_new(
                 EndpointUrl::try_new("https://sp.example.com/manage")?,
@@ -644,7 +641,7 @@ mod tests {
             schema_validator: None,
         };
         let checked = StartedNameIdManagement {
-            schema_validator: Some(validate),
+            schema_validator: Some(|_| Ok(())),
             ..unchecked.clone()
         };
         assert_ne!(unchecked, checked);

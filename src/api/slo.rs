@@ -53,6 +53,10 @@ impl ServiceProvider {
     /// # let _ = (form, snapshot);
     /// # Ok(()) }
     /// ```
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "This public operation takes ownership of the logout subject"
+    )]
     pub fn start_slo(
         &self,
         idp: &IdpDescriptor,
@@ -64,7 +68,7 @@ impl ServiceProvider {
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
             peer,
-            subject,
+            &subject,
             options,
             StartSloRole::SessionParticipant {
                 asynchronous: false,
@@ -83,6 +87,10 @@ impl ServiceProvider {
     ///
     /// Applies the request and peer checks of [`Self::start_slo`].
     /// Returns [`SamlError::UnsupportedBinding`] for SOAP or HTTP-POST-SimpleSign.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "This public operation takes the subject and options by value, as start_slo does"
+    )]
     pub fn start_async_slo(
         &self,
         idp: &IdpDescriptor,
@@ -102,7 +110,7 @@ impl ServiceProvider {
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
             peer,
-            subject,
+            &subject,
             &options,
             StartSloRole::SessionParticipant { asynchronous: true },
         )?;
@@ -335,6 +343,10 @@ impl IdentityProvider {
     /// # let _ = (form, snapshot);
     /// # Ok(()) }
     /// ```
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "This public operation takes ownership of the logout subject"
+    )]
     pub fn start_slo(
         &self,
         sp: &SpDescriptor,
@@ -346,7 +358,7 @@ impl IdentityProvider {
             &self.engine().setting,
             self.engine().metadata.as_metadata(),
             peer,
-            subject,
+            &subject,
             options,
             StartSloRole::SessionAuthority {
                 issuance_lifetime: self.issuance_lifetime(),
@@ -578,7 +590,7 @@ fn start_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
     peer: Peer<'_>,
-    subject: LogoutSubject,
+    subject: &LogoutSubject,
     options: StartSlo,
     role: StartSloRole,
 ) -> Result<Started<LogoutRequest>, SamlError> {
@@ -587,7 +599,7 @@ fn start_slo_impl(
     let outbound = Outbound::<LogoutRequest>::from_context(created.context)?;
     let pending = PendingLogoutRequest::new(
         outbound.id().clone(),
-        outbound.relay_state().cloned(),
+        options.relay_state,
         peer.entity_id.clone(),
         options.binding,
         created
@@ -602,7 +614,7 @@ fn issue_logout_request(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
     peer: Peer<'_>,
-    subject: LogoutSubject,
+    subject: &LogoutSubject,
     options: &StartSlo,
     role: StartSloRole,
 ) -> Result<CreatedLogoutRequest, SamlError> {
@@ -651,7 +663,7 @@ fn issue_logout_request(
             .map(SessionIndex::as_str)
             .collect(),
     };
-    create_logout_request_for_subject_inner(LogoutRequestInput {
+    create_logout_request_for_subject_inner(&LogoutRequestInput {
         init_setting: local_setting,
         init_meta: local_metadata,
         target_meta: peer.metadata,
@@ -722,6 +734,7 @@ fn receive_slo_impl(
     Ok(Received::new(logout, relay_state))
 }
 
+#[derive(Clone, Copy)]
 enum LogoutResponseTo<'a> {
     Request {
         request: &'a Received<LogoutRequest>,
@@ -764,7 +777,8 @@ fn respond_slo_impl(
             EndpointDirection::Response,
         )?;
     }
-    let context = create_logout_response_inner(LogoutResponseInput {
+    let status_message = options.status_message;
+    let context = create_logout_response_inner(&LogoutResponseInput {
         init_setting: local_setting,
         init_meta: local_metadata,
         target_meta: peer.metadata,
@@ -772,7 +786,7 @@ fn respond_slo_impl(
         in_response_to: Some(in_response_to.as_str()),
         relay_state: relay_state.map(RelayState::as_str),
         status,
-        status_message: options.status_message.as_deref(),
+        status_message: status_message.as_deref(),
     })?;
     Outbound::<LogoutResponse>::echoing_received_relay_state(context)
 }
@@ -818,7 +832,7 @@ fn finish_slo_impl(
             peer.hmac_secret,
         ),
     )?;
-    let response = LogoutResponse::from_flow(parsed.flow, parsed.status_message)?;
+    let response = LogoutResponse::from_flow(&parsed.flow, parsed.status_message)?;
     validation.check_and_store_message_replay(ReplayKey::LogoutResponse(response.id().clone()))?;
     Ok(LogoutCompleted::new(response, relay_state))
 }

@@ -40,7 +40,7 @@ impl ExpandedName {
     }
 }
 
-fn classify_namespace(resolved: ResolveResult<'_>) -> NamespaceKind {
+fn classify_namespace(resolved: &ResolveResult<'_>) -> NamespaceKind {
     match resolved {
         ResolveResult::Bound(value) if value.into_inner() == namespace::PROTOCOL => {
             NamespaceKind::Protocol
@@ -282,7 +282,7 @@ fn validate_outbound_stream<E, S: Default>(
     let mut state = S::default();
     loop {
         let (resolved, event) = reader.read_resolved_event().map_err(reader_err)?;
-        let element_namespace = classify_namespace(resolved);
+        let element_namespace = classify_namespace(&resolved);
         let in_structural = stack.last().is_some_and(&is_structural);
         match event {
             Event::Start(element) => {
@@ -614,7 +614,7 @@ pub(crate) fn validate_protocol_profile(
 
     loop {
         let (resolved, event) = reader.read_resolved_event().map_err(reader_err)?;
-        let element_namespace = classify_namespace(resolved);
+        let element_namespace = classify_namespace(&resolved);
         match event {
             Event::Start(ref element) | Event::Empty(ref element) => {
                 validate_element(&reader, element, element_namespace, &stack, parser_type)?;
@@ -675,7 +675,7 @@ mod tests {
         }
     }
 
-    fn namespace_binding_limit(result: Result<(), SamlError>) -> bool {
+    fn namespace_binding_limit(result: &Result<(), SamlError>) -> bool {
         matches!(
             result,
             Err(SamlError::LimitExceeded {
@@ -703,7 +703,7 @@ mod tests {
         );
 
         assert!(validate_protocol_profile(&siblings, ParserType::SamlRequest, limits).is_ok());
-        assert!(namespace_binding_limit(validate_protocol_profile(
+        assert!(namespace_binding_limit(&validate_protocol_profile(
             &nested,
             ParserType::SamlRequest,
             limits,

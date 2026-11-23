@@ -73,7 +73,11 @@ impl OutstandingLogout {
                 "outstanding logout NotOnOrAfter cannot be represented as a UTC instant".into(),
             )
         })?;
-        let not_on_or_after = SamlInstant::try_new(normalized)?;
+        let not_on_or_after = if normalized == not_on_or_after.as_str() {
+            not_on_or_after
+        } else {
+            SamlInstant::try_new(normalized)?
+        };
         Ok(Self {
             name_id,
             session_indexes,

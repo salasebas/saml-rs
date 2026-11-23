@@ -192,7 +192,7 @@ fn shibboleth_idp5_redirect_logout_request_is_authenticated_and_parsed_by_sp(
 
     assert_eq!(message.issuer().as_str(), SHIBBOLETH_IDP_ENTITY_ID);
     assert_eq!(
-        message.destination().map(|value| value.as_str()),
+        message.destination().map(saml_rs::EndpointUrl::as_str),
         Some(SP_SLO_REDIRECT)
     );
     assert_eq!(message.id().as_str(), SHIBBOLETH_REQUEST_ID);
@@ -212,7 +212,7 @@ fn shibboleth_idp5_redirect_logout_request_is_authenticated_and_parsed_by_sp(
         message
             .session_indexes()
             .iter()
-            .map(|index| index.as_str())
+            .map(saml_rs::SessionIndex::as_str)
             .collect::<Vec<_>>(),
         [SHIBBOLETH_SESSION_INDEX]
     );
@@ -264,7 +264,7 @@ fn simplesamlphp_sp_redirect_logout_request_is_consumed_by_idp(
 
     assert_eq!(message.issuer().as_str(), SIMPLESAMLPHP_SP_ENTITY_ID);
     assert_eq!(
-        message.destination().map(|value| value.as_str()),
+        message.destination().map(saml_rs::EndpointUrl::as_str),
         Some(IDP_SLO_REDIRECT)
     );
     assert_eq!(message.id().as_str(), SIMPLESAMLPHP_REQUEST_ID);
@@ -273,14 +273,14 @@ fn simplesamlphp_sp_redirect_logout_request_is_consumed_by_idp(
         SIMPLESAMLPHP_ISSUE_INSTANT
     );
     assert_eq!(
-        message.name_id().map(|name_id| name_id.value()),
+        message.name_id().map(saml_rs::NameId::value),
         Some(SIMPLESAMLPHP_NAME_ID)
     );
     assert_eq!(
         message
             .session_indexes()
             .iter()
-            .map(|index| index.as_str())
+            .map(saml_rs::SessionIndex::as_str)
             .collect::<Vec<_>>(),
         SIMPLESAMLPHP_SESSION_INDEXES
     );
