@@ -63,7 +63,8 @@ impl IdentityProvider {
     /// provider's metadata has no SOAP `ArtifactResolutionService` at the
     /// delivery's index, or [`Self::respond_sso`] would fail, including
     /// [`SamlError::Invalid`] for an [`SsoOutcome::Failure`] with a top-level
-    /// `Success` status.
+    /// `Success` status. Returns [`SamlError::ProtocolProfile`] when
+    /// [`RespondSso::relay_state`] is set and `request` carried `RelayState`.
     ///
     /// # Examples
     ///
@@ -135,14 +136,19 @@ impl IdentityProvider {
     /// The protocol message is included only when `presenter` is the service
     /// provider the artifact was issued to and `channel` supplies the protection
     /// that message requires. [`AnsweredArtifact::release`] says whether the
-    /// response includes the message. A request with a newer version receives
-    /// `VersionMismatch`.
+    /// response includes the message. An unknown artifact, a different
+    /// destination or presenter, or insufficient channel protection gets
+    /// `Success` without the message. An unsupported newer version gets
+    /// `VersionMismatch`, with `RequestVersionTooHigh` for a newer major version.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when `request_envelope` is not a SOAP 1.1
-    /// `ArtifactResolve` with the required protocol attributes, or when its
-    /// version is too low for a SAML 2.0 response.
+    /// Returns [`SamlError`] when `request_envelope` cannot be read as a SOAP
+    /// 1.1 envelope. Returns [`SamlError::ProtocolProfile`] when the body is
+    /// not one `ArtifactResolve`, the request lacks exactly one `Artifact`
+    /// value or has a second `Issuer`, or the required `ID`, `Version`, or UTC
+    /// `IssueInstant` fails validation. A version below 2.0 also returns
+    /// [`SamlError::ProtocolProfile`].
     ///
     /// # Examples
     ///

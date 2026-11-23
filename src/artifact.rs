@@ -259,7 +259,12 @@ impl ArtifactResolution {
     ///
     /// Returns [`SamlError`] when the envelope is not an `ArtifactResponse`
     /// from the identity provider, the status is not success, or the response
-    /// does not contain one SAML protocol element.
+    /// does not contain one SAML protocol element. Returns
+    /// [`SamlError::InResponseToMismatch`] when `InResponseTo` is not the
+    /// `ArtifactResolve` ID, and [`SamlError::IssuerMismatch`] when the
+    /// `Issuer` is absent or differs from the identity provider's entity ID.
+    /// Returns [`SamlError::ArtifactNotReturned`] when a `Success` response
+    /// carries no protocol message.
     pub fn finish(&self, response_envelope: &str) -> Result<ResolvedProtocolMessage, SamlError> {
         let body = read_soap_body(response_envelope, self.xml_limits)?;
         crate::schema::validate(response_envelope, self.schema_validator)?;

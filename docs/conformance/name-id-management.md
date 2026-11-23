@@ -1,232 +1,210 @@
 # Name identifier management
 
-Rules for typed name identifier management. Over SOAP, at the identity
-provider: `IdentityProvider::start_name_id_management`,
-`StartedNameIdManagement::finish`, `IdentityProvider::receive_name_id_management`,
-and `IdentityProvider::respond_name_id_management`. Over HTTP-Redirect, at the
-identity provider and the service provider: `start_name_id_management_redirect`,
-`receive_name_id_management_redirect`, `respond_name_id_management_redirect`,
-and `finish_name_id_management_redirect` on `IdentityProvider` and `ServiceProvider`. Both
-bindings carry one change, `NameIdChange::NewId` or `NameIdChange::Terminate`,
-and return a received request as `ManageNameIdRequest`. Both bindings take
-`StartNameIdManagement` to send a request. On both bindings, the responder
-passes the response `Status` as an argument. `ReceiveNameIdManagement` and
-`RespondNameIdManagement` apply to HTTP-Redirect only.
+Rules for typed name identifier management, over SOAP at the identity provider (`IdentityProvider::start_name_id_management`, `StartedNameIdManagement::finish`, `receive_name_id_management`, `respond_name_id_management`) and over HTTP-Redirect at either provider (`start_name_id_management_redirect`, `receive_name_id_management_redirect`, `respond_name_id_management_redirect`, `finish_name_id_management_redirect` on `IdentityProvider` and `ServiceProvider`). Normative text is Core §§3.2 and 3.6, Profiles §4.5, Bindings §§3.2 and 3.4, and Metadata §2.4.2, as corrected by Approved Errata 05 (E8, E11, E12, E14, E19, E43, E55). Conformance Requirements Table 2 makes HTTP-Redirect `MUST` for the IdP and SP, SOAP `MUST` for the IdP and `OPTIONAL` for the SP, and every cell `MUST NOT` for IdP Lite and SP Lite, and this record does not claim the IdP or SP operational mode. SOAP envelope, header, and transport rules are in [Artifact resolution](artifact-resolution.md#soap-envelope-rules). `NameID` format and length rules are in [Identifiers](identifiers.md#name-identifier-formats).
 
-SAML V2.0 Conformance Requirements Table 2, with the labels from Approved
-Errata 05 E11, has four rows for this protocol. Name Identifier Management,
-HTTP-Redirect, IdP-initiated and SP-initiated, is `MUST` for the IdP and the
-SP. Name Identifier Management, SOAP, IdP-initiated and SP-initiated, is
-`MUST` for the IdP and `OPTIONAL` for the SP. The SP SOAP cells stay off:
-`ServiceProvider` has no SOAP name identifier management. Every cell is `MUST NOT`
-for IdP Lite and SP Lite. Name identifier mapping is not implemented. This
-record does not claim the IdP or SP operational mode.
-
-Normative text is SAML Core 2.0 §§3.2 and 3.6, Profiles 2.0 §4.5, Bindings 2.0
-§§3.2 and 3.4, and Metadata 2.0 §2.4.2, as corrected by Approved Errata 05.
-Errata that change this flow are E8, E11, E12, E14, E19, E43, and E55. Schema
-citations are the OASIS protocol and metadata schemas.
-
-For SOAP, the deployment POSTs the envelope. TLS, HTTP authentication, and an
-HTTP 500 SOAP fault stay there. Conformance Requirements §3.5 and §5 are those
-deployment duties. `SoapChannel` records the protection the deployment
-provided, as in [Artifact resolution](artifact-resolution.md). For
-HTTP-Redirect, the deployment sends the browser redirect that carries each
-message.
+Both bindings use the shared [issuer](identifiers.md#entity-identifiers)
+and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 
 ## Turning the protocol on
 
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Publish a `ManageNameIDService` | Identity provider or service provider | Generate metadata | Metadata §2.4.2 allows zero or more. `manage_name_id_service` on `IdpConfigBuilder` takes `ManageNameIdService::soap` or `ManageNameIdService::redirect`. `SpConfigBuilder::manage_name_id_redirect_service` takes the `EndpointUrl` of an HTTP-Redirect endpoint; saml-rs does not implement SOAP name identifier management for a service provider. The generators write these endpoints after any `SingleLogoutService` and before any `NameIDFormat` or role-specific endpoints, as `SSODescriptorType` and its role types require |
-| Without a published `ManageNameIDService` for the binding, neither send nor accept the protocol on it | Identity provider or service provider | Local API | Library policy. Table 2 prohibits the protocol for IdP Lite and SP Lite. A provider without the endpoint is that configuration: the start and receive operations for that binding return `SamlError::MissingMetadata`. A SOAP requester does not need its own endpoint; the looser rule cannot be applied because the endpoint is the only setting that tells a full configuration from a Lite one. An HTTP-Redirect requester needs it to receive the response |
-| The service provider has no SOAP name identifier management | Service provider | Local API | Table 2 marks the SP SOAP cells `OPTIONAL`. They stay off. SP Lite is `MUST NOT` |
-| The peer's endpoint comes from the peer's role descriptor | Requester and responder | Generate a message | Optional. Profiles §4.5.3.1 and §4.5.3.2. `Binding`, `Location`, and `ResponseLocation` are read from the `SPSSODescriptor` for a service provider and the `IDPSSODescriptor` for an identity provider, so an entity with both roles is addressed in the right one. The first endpoint for the binding is used. A peer without one is `SamlError::MissingMetadata` |
-| The protocol is not used with a transient identifier | Requester | Generate ManageNameIDRequest | Mandatory prohibition. Core §3.6 as amended by Errata 05 E14. A transient `NameId`, or an unformatted one whose identity-provider default format is transient, is `SamlError::ProtocolProfile` on every binding. The format is compared after the `xs:anyURI` whitespace collapse, so a padded transient URI is transient |
-| A received transient `NameID` is returned to the caller | Responder | Inbound ManageNameIDRequest | No receiver rule. E14 binds the requester, and Core §3.6.2 still requires an answer. The caller answers with an error status |
+| Publish a `ManageNameIDService` per configured endpoint | Optional | Metadata §2.4.2 | `IdpConfigBuilder::manage_name_id_service`, `SpConfigBuilder::manage_name_id_redirect_service` |
+| Write `ManageNameIDService` after `SingleLogoutService` and before `NameIDFormat` | Mandatory | `SSODescriptorType` | Always |
+| Neither send nor accept the protocol on a binding without a published `ManageNameIDService` for it | Library policy: Table 2 prohibits the protocol for IdP Lite and SP Lite, and only the endpoint tells a full configuration from a Lite one. | Conformance Table 2 | `IdpConfigBuilder::manage_name_id_service`, `SpConfigBuilder::manage_name_id_redirect_service` |
+| Address the peer by its role descriptor: `Binding`, `Location`, and `ResponseLocation` of its first endpoint for the binding | Optional | Profiles §4.5.3.1, §4.5.3.2 | Always |
+| Reject a request for a transient identifier, including an unformatted `NameId` whose identity-provider default format is transient | Mandatory | Core §3.6, E14 | Always |
+| Return a received transient `NameID` to the caller, who answers with an error status | Library policy: E14 binds the requester, and Core §3.6.2 still requires an answer. | E14, Core §3.6.2 | Always |
 
 ## SOAP: ManageNameIDRequest from the identity provider
 
-`IdentityProvider::start_name_id_management` is this actor, with
-`StartNameIdManagement`. Core §3.6.1 and §3.6.3, Profiles §4.5.3.1 and
-§4.5.4.1. `StartNameIdManagement::allow_http` has no effect on this binding:
-the deployment sends the request.
+`IdentityProvider::start_name_id_management` is the requester.
 
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Send the request on a synchronous binding | Requester | Generate ManageNameIDRequest | Optional binding choice. Profiles §4.5.3.1. The binding is SOAP 1.1 |
-| `ID`, `Version` `2.0`, and UTC `IssueInstant` are present | Requester | Generate ManageNameIDRequest | Mandatory. Protocol schema `RequestAbstractType`; Core §1.3.3 |
-| `Destination` is the service provider's endpoint | Requester | Generate ManageNameIDRequest | Optional in Core §3.2.1. Set to the metadata location |
-| `Issuer` is present and omits `Format` | Requester | Generate ManageNameIDRequest | Mandatory. Profiles §4.5.4.1 allows an omitted `Format` or `entity`. Generation omits it |
-| The `NameID` is the identifier as both providers know it | Requester | Generate ManageNameIDRequest | Mandatory. Core §3.6.3. The caller passes the established `NameId`. `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` are sent as given. A `NameId` without a format takes the first configured NameID format, the one `respond_sso` writes. A `Format` that is not an absolute URI reference is `SamlError::Invalid` (Core §1.3.2, as read in [identifiers](identifiers.md#name-identifier-formats)) |
-| A persistent identifier carries `SPNameQualifier` | Requester | Generate ManageNameIDRequest | Mandatory. Core §3.6.3. It is the service provider, or the affiliation the caller passes. When the caller passes none, the service provider's entity ID is written |
-| A persistent identifier carries `NameQualifier` | Requester | Generate ManageNameIDRequest | Core §3.6.3: it must be the identity provider that created the identifier. It may be omitted when it equals `Issuer`, which is not recommended. When the caller passes none, this identity provider's entity ID is written. There is no switch to omit it |
-| `NewID` carries the new value only | Requester | Generate ManageNameIDRequest | Mandatory. Errata 05 E12: format and qualifiers cannot be changed once established. `NameIdChange::NewId` holds the value |
-| A persistent or transient identifier is at most 256 characters | Requester | Generate ManageNameIDRequest | Mandatory. Core §§8.3.7 and 8.3.8. The current `NameID` value and the new value are checked. A longer value is `SamlError::Invalid`. This rule and the persistent qualifier rules compare the format after the `xs:anyURI` whitespace collapse |
-| `Terminate` ends the identifier | Requester | Generate ManageNameIDRequest | Core §3.6.3, as amended by E55. `NameIdChange::Terminate` writes an empty `Terminate` |
-| A `LogoutRequest` meant to end activity comes before the termination | Requester | Application | Mandatory ordering. Errata 05 E8: the requester must not send `LogoutRequest` after the `ManageNameIDRequest`. The method documentation states it. saml-rs does not track sessions |
-| Authenticate the requester and protect integrity | Requester | SOAP exchange | Mandatory. Profiles §4.5.3.1 and §4.5.4.1 allow a signature or a binding mechanism. The mechanism is `SoapChannel`: mutual authentication and integrity, or `SamlError::SoapChannelProtection` before a request is built. The request is not signed. Core §3.6.1 recommends a signature or binding protection; the channel is that protection |
-| The SOAP body contains exactly one SAML request | Requester | SOAP envelope | Mandatory. Bindings §3.2.2.1, as left by Errata 05 E19 |
-| No `RelayState` | Requester | Generate ManageNameIDRequest | Library policy. RelayState is defined by the HTTP bindings, Bindings §3.4.3 and §3.5.3. The SOAP binding, Bindings §3.2, has no place to carry it, so a set `StartNameIdManagement::relay_state` is `SamlError::ProtocolProfile` rather than dropped, as for SOAP Single Logout |
-| `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Requester | HTTP | Recommendation. Bindings §3.2.3.2. `SoapRequest::headers` includes those values |
+| Send the request over SOAP 1.1 | Optional | Profiles §4.5.3.1, Bindings §3.2.2 | `start_name_id_management` |
+| Put one `ManageNameIDRequest` in the SOAP body | Mandatory | Bindings §3.2.2.1 | Always |
+| Write `ID`, `Version` `2.0`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §1.3.3 | Always |
+| Set `Destination` to the service provider's endpoint | Optional | Core §3.2.1 | Always |
+| Write the requesting entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.1 | Always |
+| Write the `NameID` as both providers know it, preserving supplied attributes. For an omitted `Format`, the IdP uses its configured default and the SP leaves it absent | Mandatory | Core §3.6.3 | Always |
+| For a persistent identifier, write each qualifier whose established value differs from `Issuer`. `NameQualifier` identifies the originating IdP and `SPNameQualifier` identifies the SP or affiliation | Mandatory | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
+| Also write each qualifier whose established value equals `Issuer` | Recommended | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
+| Write `NewID` with the new value only, or an empty `Terminate` | Mandatory | E12, E55, `TerminateType` | `NameIdChange` |
+| Reject a persistent `NameID` value or `NewID` value over 256 characters | Mandatory | Core §8.3.7 | Always |
+| Authenticate the sending party and protect message integrity. The crate uses a mutually authenticated, integrity-protected `SoapChannel` | Mandatory | Profiles §4.5.3.1, §4.5.4.1 | `SoapChannel` |
+| Reject a `RelayState` | Library policy: the SOAP binding has no place to carry `RelayState`, so it is rejected rather than dropped. | Bindings §3.2, §3.4.3 | `StartNameIdManagement::relay_state` |
+| Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Recommended | Bindings §3.2.3.2 | Always |
 
 ## SOAP: ManageNameIDResponse from the service provider
 
-`StartedNameIdManagement::finish` is this actor. Core §3.2.2 and §3.6.2,
-Profiles §4.5.3.2 and §4.5.4.2.
+`StartedNameIdManagement::finish` is the requester.
 
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| The SOAP body is one `ManageNameIDResponse` | Requester | Inbound ManageNameIDResponse | Bindings §3.2.2.1; Core §3.6.2 |
-| `Version` is `2.0`, `ID` is present, and `IssueInstant` is a UTC `xs:dateTime` | Requester | Inbound ManageNameIDResponse | Protocol schema `StatusResponseType`; Core §1.3.3 |
-| `InResponseTo` is present and equals the request `ID` | Requester | Inbound ManageNameIDResponse | Mandatory. Core §3.2.1 and §3.2.2 |
-| One `Status` with one `StatusCode` | Requester | Inbound ManageNameIDResponse | Protocol schema `StatusResponseType` and `StatusType`. A second `Status` or a second direct `StatusCode` is malformed |
-| A status other than Success is returned to the caller | Requester | Inbound ManageNameIDResponse | Core §3.6.3: an unrecognized identifier is an error status, optionally `UnknownPrincipal`. `finish` returns `SamlError::StatusNotSuccess` with both codes read using [XML Schema whitespace collapse](web-browser-sso-acceptance.md#service-provider). `Ok` means Success |
-| `Issuer` is present, equals the service provider, and omits `Format` or sets it to `entity` | Requester | Inbound ManageNameIDResponse | Library policy. Profiles §4.5.4.2 requires the responder to send that `Issuer` and does not require the requester to reject another response. The looser rule cannot be applied because the requester attributes the response by that `Issuer` together with `SoapChannel`. Without it, `finish` would report a change that is not attributed to the service provider. The `Issuer` content is compared exactly, as [entity identifiers](identifiers.md#entity-identifiers) records, and `Format` is compared after the `xs:anyURI` whitespace collapse |
-| The responder authenticates itself and protects integrity | Responder | SOAP exchange | Mandatory. Profiles §4.5.3.2 and §4.5.4.2. Satisfied by the `SoapChannel` attested on `start_name_id_management`. A response signature is not verified |
-| A `Destination` on the response is not compared | Requester | Inbound ManageNameIDResponse | Core §3.2.2 compares `Destination` with the location where the message was received. A synchronous SOAP response is read from the requester's own HTTP exchange and has no receiving location |
+| Accept exactly one `ManageNameIDResponse` in the SOAP body | Mandatory | Bindings §3.2.2.1 | Always |
+| Require `ID`, `Version`, and a UTC `IssueInstant` | Mandatory | `StatusResponseType`, Core §1.3.3, §3.2.2 | Always |
+| Accept only response version `2.0` | Library policy: reason not recorded. | Core §4.1.3.2 | Always |
+| Require the response `InResponseTo` to equal the pending request ID, including on an error response | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2 | Always |
+| Require one `Status` with one direct `StatusCode` | Mandatory | `StatusResponseType`, `StatusType` | Always |
+| Report a status other than `Success` as an error | Library policy: only `Success` confirms the change, and the caller needs the peer's refusal status. | Core §3.6.3 | Always |
+| Require an `Issuer` equal to the service provider, with `Format` omitted or `entity` | Library policy: Profiles §4.5.4.2 binds the responder, and the requester attributes the response to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.2 | Always |
+| Authenticate the sending party and protect message integrity. The crate uses a mutually authenticated, integrity-protected `SoapChannel`, attested at start | Mandatory | Profiles §4.5.3.2, §4.5.4.2 | `SoapChannel` |
 
 ## SOAP: ManageNameIDRequest from the service provider
 
-`IdentityProvider::receive_name_id_management` is this actor. Core §§3.2.1, 3.6.1,
-and 3.6.3, Profiles §4.5.3.2 and §4.5.4.1.
+`IdentityProvider::receive_name_id_management` is the responder. See [EncryptedID and NewEncryptedID](#encryptedid-and-newencryptedid) for encrypted identifiers.
 
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| The SOAP body is one `ManageNameIDRequest` | Responder | Inbound ManageNameIDRequest | Bindings §3.2.2.1. Another body, a second body element, an unsupported mandatory SOAP header addressed to the receiver, or a `Header` that is not one element before the `Body` is `SamlError`, as in artifact resolution. The deployment can answer it with a SOAP fault |
-| `ID` is present and `IssueInstant` is a UTC `xs:dateTime` | Responder | Inbound ManageNameIDRequest | Protocol schema `RequestAbstractType`; Core §1.3.3 |
-| Refuse an unsupported request version | Responder | Generate ManageNameIDResponse | Core §§4.1.3.1–4.1.3.2 and Profiles §4.5.3.2. After checking the channel, issuer, and destination, answer newer versions with `VersionMismatch`. A newer major version also gets `RequestVersionTooHigh`. A version below 2.0 returns an error because a 2.0 response is forbidden |
-| The requester authenticated itself and protected integrity | Requester | SOAP exchange | Mandatory. Profiles §4.5.4.1. The check is `SoapChannel`: mutual authentication and integrity, or `SamlError::SoapChannelProtection` before the envelope is read. A request signature is not verified. Refusing a signed request on a channel that does not authenticate the requester is library policy: Profiles §4.5.3.1 also accepts a signature. The looser rule cannot be applied because this identity provider does not verify signatures on this message, so the request would be processed without any authentication |
-| `Issuer` is present, equals the service provider, and omits `Format` or sets it to `entity` | Responder | Inbound ManageNameIDRequest | Library policy. Profiles §4.5.4.1 requires the requester to send that `Issuer` and does not require the responder to reject another request. The looser rule cannot be applied because the responder ties the change to the service provider by that `Issuer` together with `SoapChannel`. A missing or different `Issuer` is `SamlError::IssuerMismatch`. The `Issuer` content is compared exactly, as [entity identifiers](identifiers.md#entity-identifiers) records, and `Format` is compared after the `xs:anyURI` whitespace collapse. A second `Issuer` is malformed |
-| A present `Destination` is the receiving endpoint | Responder | Inbound ManageNameIDRequest | Mandatory. Core §3.2.1: a request whose `Destination` is not the receiving location is discarded. The receiving location is this identity provider's SOAP `ManageNameIDService`. With more than one, `SamlValidationContext::with_recipient_endpoint` selects it. `Destination` is compared after the `xs:anyURI` whitespace collapse. An absent `Destination` is accepted |
-| At most one `Issuer`, `ds:Signature`, and `Extensions`, in that order, then one `NameID` or `EncryptedID`, then one `NewID`, `NewEncryptedID`, or `Terminate` | Responder | Inbound ManageNameIDRequest | Protocol schema `RequestAbstractType` and `ManageNameIDRequestType`. Another element, a missing one, a second one, or another order is malformed. `NameID` and `NewID` are `xs:string` content and `Terminate` is empty, so a child element, or text in `Terminate`, is malformed |
-| `EncryptedID` and `NewEncryptedID` are decrypted | Responder | Inbound ManageNameIDRequest | Mandatory. Conformance §3.4. See [EncryptedID and NewEncryptedID](#encryptedid-and-newencryptedid) |
-| Limit `IssueInstant` to a caller-chosen maximum age | Responder | Inbound ManageNameIDRequest | Library policy, off by default. The bound limits acceptance of requests after their replay entry expires. An authenticated request outside the configured window returns `NameIdManagementReceipt::Refused` with `Requester`. The request ID stays out of the replay cache |
-| The request `ID` is recorded for replay detection | Responder | Inbound ManageNameIDRequest | Library policy, active when the caller selects `ReplayPolicy::RequireCache`. The key is `ReplayKey::ManageNameIdRequest`. A repeated `ID` is `SamlError::ReplayDetected` |
-| The `NameID` is returned as sent | Responder | Inbound ManageNameIDRequest | Core §3.6.3 makes the requester send the most recent identifier. `ManageNameIdRequest::name_id` carries the value, `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`. A persistent identifier without its qualifiers is not rejected: the qualifier rule binds the requester |
+| Accept exactly one `ManageNameIDRequest` in the SOAP body | Mandatory | Bindings §3.2.2.1 | Always |
+| Require `ID`, `Version`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §1.3.3 | Always |
+| Reject an unsupported major request version | Mandatory | Core §4.1.3.1 | Always |
+| Reject a higher minor request version | Optional | Core §4.1.3.1 | Always |
+| Answer a newer authenticated request version with `VersionMismatch`. Add `RequestVersionTooHigh` for a newer major version | Mandatory | Core §4.1.3.2 | `NameIdManagementRefusal::VersionMismatch` |
+| Return an error for an older request version that forbids a SAML 2.0 response | Mandatory | Core §4.1.3.2 | Always |
+| Authenticate the sending party and protect message integrity. The crate uses a mutually authenticated, integrity-protected `SoapChannel` | Mandatory | Profiles §4.5.4.1 | `SoapChannel` |
+| Refuse a request when the `SoapChannel` does not authenticate the requester, even if it is signed. A present XML signature is not verified | Library policy: Profiles §4.5.3.1 also accepts a signature, but this identity provider verifies none on this message. | Profiles §4.5.3.1, §4.5.4.1 | `SoapChannel` |
+| Require an `Issuer` equal to the service provider, with `Format` omitted or `entity` | Library policy: Profiles §4.5.4.1 binds the requester, and the responder ties the change to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.1 | Always |
+| Compare a present `Destination` with the receiving SOAP `ManageNameIDService` after collapsing XML whitespace. Accept an absent value | Mandatory | Core §3.2.1, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
+| Require at most one `Issuer`, `ds:Signature`, and `Extensions` in that order, then one `NameID` or `EncryptedID`, then one `NewID`, `NewEncryptedID`, or `Terminate`, with text-only `NameID` and `NewID` and an empty `Terminate` | Mandatory | `RequestAbstractType`, `ManageNameIDRequestType`, `TerminateType` | Always |
+| Answer an authenticated request outside the configured age window with `Requester` and leave its ID out of the replay cache | Library policy: the age window limits acceptance after replay storage expires. | Core §1.3.3 | `SamlValidationContext::with_manage_name_id_request_age`. Disabled by default |
+| Reject a repeated request `ID` | Library policy: retaining the ID prevents the same message from being accepted twice during the retention period. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
+| Accept a persistent `NameID` without its qualifiers | Library policy: the receiver preserves the identifier as sent, including absent qualifiers. | Core §3.6.3 | Always |
 
 ## SOAP: ManageNameIDResponse from the identity provider
 
-`IdentityProvider::respond_name_id_management` is this actor. Core §3.6.2 and
-§3.6.3, Profiles §4.5.3.2 and §4.5.4.2.
+`IdentityProvider::respond_name_id_management` is the responder.
 
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Answer every processed request with `ManageNameIDResponse` | Responder | Generate ManageNameIDResponse | Mandatory. Core §3.6.2 and Profiles §4.5.3.2. `respond_name_id_management` answers a `NameIdManagementReceipt::Request`. A refused request already carries its response |
-| An unrecognized identifier is an error status | Responder | Generate ManageNameIDResponse | Mandatory. Core §3.6.3. The caller recognizes the identifier and passes the status to `respond_name_id_management`: `Status::requester` or `Status::responder`, optionally with `SubordinateStatusCode::unknown_principal`. There is no default status |
-| `ID`, `Version` `2.0`, UTC `IssueInstant`, and `InResponseTo` the request `ID` | Responder | Generate ManageNameIDResponse | Mandatory. Protocol schema `StatusResponseType`; Core §3.2.2. `InResponseTo` comes from the received request |
-| `Issuer` is present and omits `Format` | Responder | Generate ManageNameIDResponse | Mandatory. Profiles §4.5.4.2 allows an omitted `Format` or `entity`. Generation omits it |
-| The request came from the service provider being answered | Responder | Generate ManageNameIDResponse | Library policy. A request received from another `SpDescriptor` is `SamlError::IssuerMismatch` |
-| The responder authenticates itself and protects integrity | Responder | SOAP exchange | Mandatory. Profiles §4.5.4.2. The mechanism is the `SoapChannel` the request arrived on. The response is not signed |
-| `Cache-Control: no-cache, no-store, must-revalidate, private` and `Pragma: no-cache` | Responder | HTTP | Recommendation. Bindings §3.2.3.2. `SoapResponse::headers` includes those values |
+| Answer every processed request with a `ManageNameIDResponse` | Mandatory | Core §3.6.2, Profiles §4.5.3.2 | `respond_name_id_management` |
+| For a `2.0` request, write `ID`, `Version` `2.0`, a UTC `IssueInstant`, and `InResponseTo` equal to the request `ID` | Mandatory | `StatusResponseType`, Core §3.2.2, §4.1.3.2 | Always |
+| Write the responding entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.2 | Always |
+| Answer only a request received from the given service provider | Library policy: reason not recorded. | — | Always |
+| Authenticate the sending party and protect message integrity. The crate uses a mutually authenticated, integrity-protected `SoapChannel`, the one the request arrived on | Mandatory | Profiles §4.5.3.2, §4.5.4.2 | `SoapChannel` |
+| Send `Cache-Control: no-cache, no-store, must-revalidate, private` and `Pragma: no-cache` | Recommended | Bindings §3.2.3.2 | Always |
 
 ## HTTP-Redirect: ManageNameIDRequest
 
-`start_name_id_management_redirect` on either role. Core §3.6.1 and §3.6.3,
-Profiles §4.5.3.1 and §4.5.4.1, Bindings §3.4.
+`start_name_id_management_redirect` on either role is the requester.
 
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| `ID`, `Version` `2.0`, and UTC `IssueInstant` are present | Requester | Generate ManageNameIDRequest | Mandatory. Protocol schema `RequestAbstractType`; Core §1.3.3 |
-| `Issuer` is the requester's entity ID and omits `Format` | Requester | Generate ManageNameIDRequest | Mandatory. Profiles §4.5.4.1 |
-| `NameID` carries the identifier as both providers know it, with its `SPProvidedID` | Requester | Generate ManageNameIDRequest | Mandatory. Core §3.6.1 and §3.6.3. Same rules as the SOAP rows, on both roles. A service provider sends a `NameId` without a format as given. A persistent identifier without `NameQualifier` or `SPNameQualifier` gets the identity provider's and the service provider's entity IDs |
-| `NewID` carries only the new value | Requester | Generate ManageNameIDRequest | Mandatory. Errata 05 E12 |
-| A new identity-provider value for a persistent or transient identifier is at most 256 characters | Identity provider | Generate ManageNameIDRequest | Mandatory. Core §§8.3.7 and 8.3.8. A service provider's `NewID` becomes `SPProvidedID`, which has no length rule |
-| Sign the message | Requester | Generate ManageNameIDRequest | Mandatory for this binding. Profiles §4.5.3.1. The request is always signed, with no off switch |
-| `Destination` is the peer's `ManageNameIDService` | Requester | Generate ManageNameIDRequest | Bindings §3.4.5.2 requires `Destination` on a signed message. It is the peer's first HTTP-Redirect `Location` |
-| Send the user agent over TLS | Requester | Generate ManageNameIDRequest | Recommendation. Profiles §4.5.3.1. The peer endpoint must be `https`. `StartNameIdManagement::allow_http` relaxes that recommendation alone and leaves the request signed |
-| `RelayState` does not exceed 80 bytes and reveals as little as possible | Requester | Generate ManageNameIDRequest | Mandatory length, Bindings §3.4.3. The content is a recommendation, Profiles §4.5.3.1, and the caller chooses it with `StartNameIdManagement::relay_state` |
-| Send no `LogoutRequest` after a `ManageNameIDRequest` | Requester | Sequence of exchanges | Mandatory prohibition. Errata 05 E8. A logout, if intended, goes first. One call is one request, so the order belongs to the caller |
-| `EncryptedID` and `NewEncryptedID` | Requester | Generate ManageNameIDRequest | Optional. Core §3.6.1. See [EncryptedID and NewEncryptedID](#encryptedid-and-newencryptedid) |
-| `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Requester | HTTP | Recommendation. Bindings §3.4.5.1. `Outbound::headers` includes those values. saml-rs does not send the HTTP response |
+| Write `ID`, `Version` `2.0`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §1.3.3 | Always |
+| Write the requesting entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.1 | Always |
+| Write the `NameID` as both providers know it, preserving supplied attributes. For an omitted `Format`, the IdP uses its configured default and the SP leaves it absent | Mandatory | Core §3.6.1, §3.6.3 | Always |
+| For a persistent identifier, write each qualifier whose established value differs from `Issuer`. `NameQualifier` identifies the originating IdP and `SPNameQualifier` identifies the SP or affiliation | Mandatory | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
+| Also write each qualifier whose established value equals `Issuer` | Recommended | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
+| Write `NewID` with the new value only, or an empty `Terminate` | Mandatory | E12, E55, `TerminateType` | `NameIdChange` |
+| Reject an identity provider's persistent `NameID` value or `NewID` over 256 characters. A service provider's `NewID` sets `SPProvidedID` and has no 256-character limit | Mandatory | Core §8.3.7 | Always |
+| Reject a service provider's persistent `NameID` value over 256 characters | Library policy: reason not recorded. | Core §8.3.7 | Always |
+| Sign the request | Mandatory | Profiles §4.5.3.1 | Always |
+| Set `Destination` to the peer's first HTTP-Redirect `ManageNameIDService` `Location` | Mandatory | Bindings §3.4.5.2 | Always |
+| Send only to an `https` peer endpoint | Recommended | Profiles §4.5.3.1 | `StartNameIdManagement::allow_http` |
+| Reject a `RelayState` over 80 bytes | Mandatory | Bindings §3.4.3 | `StartNameIdManagement::relay_state` |
+| Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Recommended | Bindings §3.4.5.1 | Always |
 
 ## HTTP-Redirect: receiving a ManageNameIDRequest
 
-`receive_name_id_management_redirect` on either role. Core §§3.2.1, 3.6.1, and
-3.6.3, Profiles §4.5.3.1 and §4.5.4.1.
+`receive_name_id_management_redirect` on either role is the responder. See [EncryptedID and NewEncryptedID](#encryptedid-and-newencryptedid) for encrypted identifiers.
 
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Authenticate the request by requiring its signature | Responder | Inbound ManageNameIDRequest | Mandatory for this binding. Profiles §4.5.3.1 and §4.5.4.1. An unsigned request is `SamlError::SignatureMissing`. An HMAC signature is verified with the secret set by `with_hmac_secret` on the peer descriptor |
-| `Issuer` is the peer descriptor's entity ID | Responder | Inbound ManageNameIDRequest | Library policy. Profiles §4.5.4.1 requires the requester to send `Issuer` and does not name the descriptor. The looser rule cannot be applied because the signature is verified with that descriptor's keys, and the change is attributed to it |
-| A signed message carries `Destination`, and it is the receiving `ManageNameIDService` | Responder | Inbound ManageNameIDRequest | Mandatory. Core §3.2.1 and Bindings §3.4.5.2. `Destination` is compared after the `xs:anyURI` whitespace collapse. With several published endpoints, `SamlValidationContext::with_recipient_endpoint` selects it |
-| UTC `IssueInstant` | Responder | Inbound ManageNameIDRequest | Mandatory. Protocol schema; Core §1.3.3 |
-| At most one `Issuer`, `ds:Signature`, and `Extensions`, in that order, then one `NameID` or `EncryptedID`, then one `NewID`, `NewEncryptedID`, or `Terminate` | Responder | Inbound ManageNameIDRequest | Mandatory. Protocol schema `RequestAbstractType` and `ManageNameIDRequestType`, checked by the same reader as SOAP. Another count, another order, another element, a child element in `NameID` or `NewID`, or content in `Terminate` is `SamlError::ProtocolProfile` |
-| Refuse an unsupported request version | Responder | Generate ManageNameIDResponse | Core §§4.1.3.1–4.1.3.2 and Profiles §4.5.3.2. After checking the signature, issuer, and destination, use the same version rules as SOAP. An in-window request still takes replay validation before the signed response |
-| `EncryptedID` and `NewEncryptedID` are decrypted | Responder | Inbound ManageNameIDRequest | Mandatory. Conformance §3.4. See [EncryptedID and NewEncryptedID](#encryptedid-and-newencryptedid). The refusal for one that does not decrypt is signed and goes to the requester's `ManageNameIDService` |
-| Limit `IssueInstant` to a caller-chosen maximum age | Responder | Inbound ManageNameIDRequest | Library policy, off by default. The bound limits acceptance after replay storage expires. The window uses the [AuthnRequest age rules](web-browser-sso-acceptance.md). An authenticated 2.0 request outside the window gets a signed `Requester` refusal before replay storage and decryption |
-| The request ID is stored for replay detection | Responder | Inbound ManageNameIDRequest | Library policy, active with `ReplayPolicy::RequireCache`. The key is `ReplayKey::ManageNameIdRequest` |
-| A received `RelayState` longer than 80 bytes is accepted | Responder | Inbound ManageNameIDRequest | Bindings §3.4.3 forbids the entity creating the message from exceeding 80 bytes and has no receiver rule. The response returns the exact value. Library policy for the bound: a value longer than `MAX_RECEIVED_RELAY_STATE_BYTES`, 4096 bytes, returns `SamlError::LimitExceeded`. It is a resource limit on unauthenticated input, not an OASIS rule |
-| At most one `RelayState` value | Responder | Inbound ManageNameIDRequest | Library policy. Bindings §3.4.3 defines one `RelayState` value per message and has no receiver rule for a repeat. The looser rule is not applied because saml-rs compares, reports, or echoes only one value, and a caller's framework may read another. A second `RelayState`, matched by its decoded name, returns `SamlError::DuplicateBindingParameter` |
+| Reject an unsigned request | Library policy: the Redirect signature authenticates the peer and protects the message across the browser redirect. | Profiles §4.5.3.1, §4.5.4.1 | Always. An HMAC signature uses the secret from `with_hmac_secret` on the peer descriptor |
+| Require an `Issuer` equal to the peer descriptor's entity ID | Library policy: Profiles §4.5.4.1 requires an `Issuer` and does not name the descriptor, and the signature is verified with that descriptor's keys, so the change is attributed to it. | Profiles §4.5.4.1 | Always |
+| Require `Destination` on the signed request. Compare it with the receiving `ManageNameIDService` after collapsing XML whitespace | Mandatory | Core §3.2.1, Bindings §3.4.5.2, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
+| Require `ID`, `Version`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §1.3.3 | Always |
+| Require at most one `Issuer`, `ds:Signature`, and `Extensions` in that order, then one `NameID` or `EncryptedID`, then one `NewID`, `NewEncryptedID`, or `Terminate`, with text-only `NameID` and `NewID` and an empty `Terminate` | Mandatory | `RequestAbstractType`, `ManageNameIDRequestType`, `TerminateType` | Always |
+| Reject an unsupported major request version | Mandatory | Core §4.1.3.1 | Always |
+| Reject a higher minor request version | Optional | Core §4.1.3.1 | Always |
+| Answer a newer authenticated request version with signed `VersionMismatch`. Add `RequestVersionTooHigh` for a newer major version | Mandatory | Core §4.1.3.2, Profiles §4.5.3.2 | `NameIdManagementRefusal::VersionMismatch` |
+| Return an error for an older request version that forbids a SAML 2.0 response | Mandatory | Core §4.1.3.2 | Always |
+| Answer an authenticated 2.0 request outside the configured age window with signed `Requester`, before replay storage and decryption | Library policy: the age window limits acceptance after replay storage expires. | Core §1.3.3 | `SamlValidationContext::with_manage_name_id_request_age`. Disabled by default |
+| Accept a persistent `NameID` without its qualifiers | Library policy: the receiver preserves the identifier as sent, including absent qualifiers. | Core §3.6.3 | Always |
+| Reject a repeated request `ID` | Library policy: retaining the ID prevents the same message from being accepted twice during the retention period. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
+| Accept a received `RelayState` over 80 bytes, up to 4096 bytes | Library policy: Bindings §3.4.3 binds the creator and gives the receiver no rule, and the 4096-byte bound limits unauthenticated input. | Bindings §3.4.3 | `MAX_RECEIVED_RELAY_STATE_BYTES` |
+| Reject a repeated `RelayState` parameter | Library policy: Bindings §3.4.3 defines one value per message and no receiver rule, and saml-rs compares and echoes one value while a caller's framework may read another. | Bindings §3.4.3 | Always |
+
+With an enabled age window, retain request IDs for at least `max_age` plus
+both clock-skew tolerances to cover the full window on either binding.
 
 ## HTTP-Redirect: ManageNameIDResponse
 
-`respond_name_id_management_redirect` and the automatic refusal. Core §3.6.2,
-Profiles §4.5.3.2 and §4.5.4.2, Bindings §3.4.
+`respond_name_id_management_redirect` and the refusal that `receive_name_id_management_redirect` returns are the responder.
 
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Answer every processed request | Responder | Generate ManageNameIDResponse | Mandatory. Core §3.6.2 and Profiles §4.5.3.2 |
-| An unrecognized identifier gets an error status, which may carry `UnknownPrincipal` | Responder | Generate ManageNameIDResponse | Mandatory error status, optional subordinate code. Core §3.6.3. The caller recognizes the identifier and passes the status to `respond_name_id_management_redirect`. There is no default status |
-| `ID`, `Version` `2.0`, UTC `IssueInstant`, and `InResponseTo` the request ID | Responder | Generate ManageNameIDResponse | Mandatory. Protocol schema `StatusResponseType`; Core §3.2.2 |
-| `Issuer` is the responder's entity ID and omits `Format` | Responder | Generate ManageNameIDResponse | Mandatory. Profiles §4.5.4.2 |
-| The request came from the peer being answered | Responder | Generate ManageNameIDResponse | Library policy. A request received from another descriptor is `SamlError::IssuerMismatch`, so no response is built for another party's endpoint |
-| Sign the message | Responder | Generate ManageNameIDResponse | Mandatory for this binding. Profiles §4.5.3.2. Always signed |
-| Send the response to `ResponseLocation` when present, otherwise `Location` | Responder | Generate ManageNameIDResponse | Metadata §2.2.2. The peer's first HTTP-Redirect `ManageNameIDService` supplies it, and it is `Destination` |
-| Return the exact `RelayState` received with the request | Responder | Generate ManageNameIDResponse | Mandatory. Bindings §3.4.3. The response always echoes it. A responder may add `RelayState` to a request that had none; that is not implemented |
-| Send the user agent over TLS | Responder | Generate ManageNameIDResponse | Recommendation. Profiles §4.5.3.2. Same `https` rule, relaxed alone by `RespondNameIdManagement::allow_http`, and for the automatic refusal by `ReceiveNameIdManagement::allow_http` |
-| `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Responder | HTTP | Recommendation. Bindings §3.4.5.1. `Outbound::headers` includes those values. saml-rs does not send the HTTP response |
+| Answer every processed request with a `ManageNameIDResponse` | Mandatory | Core §3.6.2, Profiles §4.5.3.2 | `respond_name_id_management_redirect` |
+| For a `2.0` request, write `ID`, `Version` `2.0`, a UTC `IssueInstant`, and `InResponseTo` equal to the request `ID` | Mandatory | `StatusResponseType`, Core §3.2.2, §4.1.3.2 | Always |
+| Write the responding entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.2 | Always |
+| Answer only a request received from the given peer | Library policy: no response is built for another party's endpoint. | — | Always |
+| Sign the response | Mandatory | Profiles §4.5.3.2 | Always |
+| Take the response endpoint from the peer's first HTTP-Redirect `ManageNameIDService`: `ResponseLocation`, else `Location` | Optional | Metadata §2.2.2, E41, Profiles §4.5.3.2 | Always |
+| Set `Destination` to that endpoint | Mandatory | Bindings §3.4.5.2 | Always |
+| Return the exact `RelayState` received with the request | Mandatory | Bindings §3.4.3 | Always |
+| Send only to an `https` peer endpoint | Recommended | Profiles §4.5.3.2 | `RespondNameIdManagement::allow_http`, `ReceiveNameIdManagement::allow_http` for a refusal |
+| Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Recommended | Bindings §3.4.5.1 | Always |
 
 ## HTTP-Redirect: receiving a ManageNameIDResponse
 
-`finish_name_id_management_redirect` on either role. Profiles §4.5.3.2 and
-§4.5.4.2.
+`finish_name_id_management_redirect` on either role is the requester.
 
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Authenticate the response by requiring its signature | Requester | Inbound ManageNameIDResponse | Mandatory for this binding. Profiles §4.5.3.2 and §4.5.4.2 |
-| `InResponseTo` is the pending request ID | Requester | Inbound ManageNameIDResponse | Mandatory. Core §3.2.2. `PendingManageNameIdRequest` is the source of the expected ID. It restores from a `PendingManageNameIdRequestSnapshot` |
-| The response comes from the peer the request went to, with the `RelayState` the request carried | Requester | Inbound ManageNameIDResponse | The requester checks the peer identity and any saved `RelayState` against the pending transaction so another peer or another transaction's state cannot complete it. Both checks are library policy. Bindings §3.4.3 requires the responder to echo a supplied value. The POST discussion in §3.5.5.2 concerns the association between a form and its state. Here, the Redirect signature covers a present `RelayState`. Errata 05 E90 separately requires sanitizing permitted URL schemes when using state in redirects or response content. A present empty value must also round-trip. When the request carried none, Bindings §3.4.3 lets the responder include one, empty or not; it is accepted, and `finish_name_id_management_redirect` returns it. A received value longer than 80 bytes is accepted up to `MAX_RECEIVED_RELAY_STATE_BYTES`, as for the request |
-| At most one `RelayState` value | Requester | Inbound ManageNameIDResponse | Library policy, as for the request. Bindings §3.4.3 defines one `RelayState` value per message and has no receiver rule for a repeat. The looser rule is not applied because saml-rs compares, reports, or echoes only one value, and a caller's framework may read another. A second `RelayState`, matched by its decoded name, returns `SamlError::DuplicateBindingParameter` |
-| A signed message carries `Destination`, and it is this provider's response location | Requester | Inbound ManageNameIDResponse | Mandatory. Core §3.2.2 and Bindings §3.4.5.2. `Destination` is compared after the `xs:anyURI` whitespace collapse |
-| One `Status` with one `StatusCode` | Requester | Inbound ManageNameIDResponse | Protocol schema `StatusResponseType` and `StatusType`. A second `Status` or a second direct `StatusCode` is `SamlError::ProtocolProfile`, so a later error status is never hidden behind a first `Success` |
-| A status other than `Success` is returned as an error | Requester | Inbound ManageNameIDResponse | `SamlError::StatusNotSuccess` with both codes read using [XML Schema whitespace collapse](web-browser-sso-acceptance.md#service-provider). Library policy: the status is read only after the signature, `Issuer`, `InResponseTo`, and `Destination` checks pass, so an unauthenticated or unrelated error response returns that check's error. Web SSO runs the same checks without requiring a signature, as recorded in [acceptance](web-browser-sso-acceptance.md) |
-| The response ID is stored for replay detection | Requester | Inbound ManageNameIDResponse | Library policy, active with `ReplayPolicy::RequireCache`. The key is `ReplayKey::ManageNameIdResponse` |
+| Reject an unsigned response | Library policy: the Redirect signature authenticates the peer and protects the message across the browser redirect. | Profiles §4.5.3.2, §4.5.4.2 | Always. An HMAC signature uses the secret from `with_hmac_secret` on the peer descriptor |
+| Require the response `InResponseTo` to equal the pending request ID, including on an error response | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2 | `PendingManageNameIdRequest` |
+| Require the response to come from the peer the request went to | Library policy: another peer must not complete the pending transaction. | Profiles §4.5.4.2 | Always |
+| Require the `RelayState` the request carried, and accept any when it carried none | Library policy: Bindings §3.4.3 binds the responder, and another transaction's state must not complete this one. | Bindings §3.4.3 | Always |
+| Accept a received `RelayState` over 80 bytes, up to 4096 bytes | Library policy: Bindings §3.4.3 binds the creator and gives the receiver no rule, and the 4096-byte bound limits unauthenticated input. | Bindings §3.4.3 | `MAX_RECEIVED_RELAY_STATE_BYTES` |
+| Reject a repeated `RelayState` parameter | Library policy: Bindings §3.4.3 defines one value per message and no receiver rule, and saml-rs compares and echoes one value while a caller's framework may read another. | Bindings §3.4.3 | Always |
+| Require `Destination` on the signed response. Compare it with this provider's response location after collapsing XML whitespace | Mandatory | Core §3.2.2, Bindings §3.4.5.2, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
+| Require one `Status` with one direct `StatusCode` | Mandatory | `StatusResponseType`, `StatusType` | Always |
+| Report a status other than `Success` after verifying the signature, issuer, request ID, and destination | Library policy: failed authentication or correlation takes precedence over a reported status. | Core §3.2.2.2 | Always |
+| Reject a repeated response `ID` | Library policy: retaining the ID prevents the same message from being accepted twice during the retention period. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
 
 ## EncryptedID and NewEncryptedID
 
-Both bindings, at the identity provider and the service provider. Core
-§3.6.1, Conformance Requirements §3.4, and Profiles §4.5.5, as corrected by
-Approved Errata 05 E12, E19, and E43.
+Both bindings, at the identity provider and the service provider.
 
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Send `EncryptedID` in place of `NameID`, and `NewEncryptedID` in place of `NewID` | Requester | Generate ManageNameIDRequest | Optional. Core §3.6.1 allows either form. Conformance §3.4 requires the capability, which stays off until the caller selects `IdentifierEncryptionPolicy::EncryptIdentifiers` for one request with `StartNameIdManagement::identifier_encryption`, for `start_name_id_management` or `start_name_id_management_redirect`, as `StartSlo::identifier_encryption` does for logout. `XmlEncryptionPolicy::identifiers` does not select it. `Terminate` is not encrypted. Unselected, the request carries `NameID` and `NewID` |
-| `NewEncryptedID` carries a `NewID` with the new value only | Requester | Generate ManageNameIDRequest | Mandatory. Errata 05 E12 |
-| Encrypt for the responder | Requester | Generate ManageNameIDRequest | Optional. Profiles §4.5.5: the requester can use the responder's `KeyDescriptor` with `use="encryption"`. The first encryption certificate the peer's metadata publishes is the recipient. None is `SamlError::MissingMetadata`. `AlgorithmPolicy::data_encryption` and `key_encryption` choose the algorithms. The encrypted element is its inclusive canonical form, and the `EncryptedKey` is in the `ds:KeyInfo` of `EncryptedData` |
-| Decrypt `EncryptedID` and `NewEncryptedID` | Responder | Inbound ManageNameIDRequest | Mandatory. Conformance §3.4: every operational mode processes the encrypted form wherever it processes `NameID`, and Table 2 makes this protocol such a context. Decryption does not depend on `XmlEncryptionPolicy::identifiers`. The key is the receiver's `Credentials::with_decryption_credential` key. It runs after the request is authenticated: by `SoapChannel` over SOAP, by the signature over HTTP-Redirect. On both bindings it also runs after the `Issuer` check and, when the caller enables them, the `IssueInstant` age check and replay storage, so a request those checks reject is not decrypted. `ManageNameIdRequest::name_id` and `ManageNameIdRequest::change` return the plaintext |
-| Find the `EncryptedKey` | Responder | Inbound ManageNameIDRequest | Core §6.2 as replaced by Errata 05 E43. A key embedded in `EncryptedData`, or beside it and named by a `ds:RetrievalMethod`, is resolved, as for the assertion `EncryptedID` |
-| The `EncryptedID` plaintext is one `NameID`, and the `NewEncryptedID` plaintext one `NewID`, each with text content only | Responder | Inbound ManageNameIDRequest | Library policy. Core §3.6.1 and Errata 05 E12 require that content of the requester. Other content is treated as an element that does not decrypt |
-| A plaintext `NameID` or `NewID` is accepted | Responder | Inbound ManageNameIDRequest | No receiver rule. Core §3.6.1 allows either form, whatever this provider's `XmlEncryptionPolicy` |
-| An element that does not decrypt is answered with an error status | Responder | Generate ManageNameIDResponse | Core §3.6.2 requires an answer. Errata 05 E19 recommends a SAML status, not a SOAP fault, for a SAML-domain error. The codes are library policy, as the Shibboleth SP answers: `EncryptedID` gets `Requester` with `UnknownPrincipal`, which Core §3.6.3 names for an unrecognized principal, and `NewEncryptedID` gets `Requester`. `NameIdManagementReceipt::Refused` carries the response, with `NameIdManagementRefusal::UndecryptableIdentifier` or `UndecryptableNewIdentifier`. A missing decryption key, a key that does not match, and an unsupported algorithm are such elements. `RefusedNameIdManagement::decryption_error` returns that cause to the caller; the response carries only the status |
+| Send either representation of each value: `NameID` or `EncryptedID`, and `NewID` or `NewEncryptedID`. `Terminate` is never encrypted | Optional | Core §3.6.1, §3.6.3, E12 | `StartNameIdManagement::identifier_encryption`, `IdentifierEncryptionPolicy::EncryptIdentifiers` |
+| Write `NewEncryptedID` as a `NewID` with the new value only | Mandatory | E12 | Always |
+| Encrypt for the responder's first X.509 certificate published for encryption or with no key use specified | Optional | Profiles §4.5.5 | `AlgorithmPolicy::data_encryption`, `AlgorithmPolicy::key_encryption` |
+| Support `EncryptedID` wherever the operational mode requires `NameID` support | Mandatory | Conformance §3.4 | `IdentifierEncryptionPolicy::EncryptIdentifiers`, `Credentials::with_decryption_credential` |
+| Find an `EncryptedKey` embedded in `EncryptedData`, or beside it and named by a `ds:RetrievalMethod` | Optional | Core §6.2, E43 | Always |
+| Require the `EncryptedID` plaintext to be one `NameID` and the `NewEncryptedID` plaintext one `NewID`, each text-only, and treat other content as undecryptable | Library policy: reason not recorded. | Core §3.6.1, E12 | Always |
+| With a crypto provider and decryption credentials, accept `NameID` or `EncryptedID` and `NewID` or `NewEncryptedID` in any combination, whatever `XmlEncryptionPolicy::identifiers` says | Mandatory | Core §3.6.3 | `Credentials::with_decryption_credential` |
+| For a SAML-domain decryption error over SOAP, return a SAML error status in the response | Recommended | Bindings §§3.2.2.1, 3.2.3.3, E19 | Always |
+| Answer an element that does not decrypt, including a missing key, with `Requester` and `UnknownPrincipal` for `EncryptedID` and `Requester` for `NewEncryptedID` | Library policy: the crate follows the Shibboleth SP's status mapping for decryption failures. | Core §3.6.2, §3.6.3, E19 | `NameIdManagementRefusal::UndecryptableIdentifier`, `NameIdManagementRefusal::UndecryptableNewIdentifier` |
 
 ## After the exchange
 
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| After the service provider's `NewID`, send that value as `SPProvidedID` | Identity provider | Generate Response | Mandatory. Core §3.6.3, as amended by E55, and Core §8.3.7. The caller stores the value. `respond_sso` and `respond_sso_artifact` write the subject `NameId` `SPProvidedID`. |
-| After the identity provider's `NewID`, issue the new value | Identity provider | Generate Response | Core §3.6.3. The caller passes the new value in later responses |
-| After the identity provider's `NewID`, use the new value | Service provider | Later messages | Mandatory. Core §3.6.3, as amended by E55. The service provider stores it and sends it as the `NameID` content, for example in a later `LogoutSubject` |
-| After a termination, remove state kept for the identifier | Responder | Application | Recommendation. Core §3.6.3 as amended by E14: later operations should behave as if that state never existed. saml-rs keeps no identifier state |
-| After a termination, stop issuing assertions with that identifier | Identity provider | Application | Core §3.6.3, as amended by E55. The caller's account store owns the relationship |
-| A termination does not end sessions | Responder | Application | Recommendation. Errata 05 E8: the receiver should not invalidate active sessions, and an identity provider should not end the principal's sessions at other service providers. saml-rs does not track sessions and ends none |
-| Accept either identifier while a change propagates | Both providers | Application | Optional. Core §3.6.3. Left to the caller |
+| When the IdP next uses that primary identifier with the requesting SP, include the SP's new value as `SPProvidedID` | Mandatory | Core §3.6.3, §8.3.7, E55 | `NameId::with_sp_provided_id` |
+
+The caller owns these rules, and the crate keeps no identifier state or sessions.
+
+- When the application does not recognize the identifier, it supplies an error status to the response builder, and may include `UnknownPrincipal`. Mandatory, Core §3.6.3. See `Status::requester`, `Status::responder`, and `SubordinateStatusCode::unknown_principal`.
+- If logout is intended as part of identifier termination, send the `LogoutRequest` before the terminating `ManageNameIDRequest`. Mandatory, E8.
+- After an identity provider's `NewID`, write the new value as the `NameID` content in later assertions. Mandatory, Core §3.6.1.
+- When the SP next communicates with the requesting IdP, use the new `NameID` wherever the changed identifier would have been used. Mandatory, Core §3.6.3, E55.
+- After a termination, stop issuing assertions with that identifier. Mandatory, Core §3.6.3, E55.
+- After a termination, delete or mark obsolete the state kept for the identifier, and act as if it never existed. Recommended, Core §3.6.3, E14.
+- After a termination, do not invalidate the principal's active sessions, and an identity provider does not end sessions with other service providers. Recommended, E8.
+- Accept either identifier while a change propagates. Optional, Core §3.6.3.
+- Sanitize the permitted URL schemes of a `RelayState` that is used in a redirect or in response content. Mandatory, E90.
+- Keep the `RelayState` value free of information beyond what the exchange needs. Recommended, Profiles §4.5.3.1.
 
 ## Outside this flow
 
-- Name identifier management over HTTP-POST and HTTP-Artifact.
-- SOAP name identifier management at the service provider.
-- Signing or verifying `ManageNameIDRequest` and `ManageNameIDResponse` over
-  SOAP.
-- Name identifier mapping.
+- Name identifier management over HTTP-POST and HTTP-Artifact. Optional, Profiles §4.5.3.1.
+- SOAP name identifier management at the service provider. Optional, Conformance Table 2.
+- Signing outbound SOAP management messages. Optional, Profiles §§4.5.3.1-2.
+- Verifying an XML signature present on an inbound SOAP `ManageNameIDRequest` or `ManageNameIDResponse`. Optional, Profiles §§4.5.3.1-2. The signature is ignored.
+- A responder that adds `RelayState` to a request that had none. Optional, Bindings §3.4.3.
+- Checking a present `Destination` on a SOAP `ManageNameIDResponse`. Mandatory, Core §3.2.2. The synchronous `finish` API has no receiving URL and skips this check.
+- Name identifier mapping over SOAP. Mandatory for the Extended IdP and SP, Conformance Table 3.
 - The IdP operational mode and the SP operational mode.

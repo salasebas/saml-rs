@@ -179,12 +179,20 @@ impl SpConfigBuilder {
     }
 
     /// Append an advertised NameID format.
+    ///
+    /// With none configured, the service provider advertises and requests
+    /// `emailAddress`. The first configured format is the one its
+    /// `AuthnRequest` requests.
     pub fn name_id_format(mut self, format: NameIdFormat) -> Self {
         self.metadata.name_id_formats.push(format);
         self
     }
 
     /// Append advertised NameID formats, in iteration order.
+    ///
+    /// With none configured, the service provider advertises and requests
+    /// `emailAddress`. The first configured format is the one its
+    /// `AuthnRequest` requests.
     pub fn name_id_formats(mut self, formats: impl IntoIterator<Item = NameIdFormat>) -> Self {
         self.metadata.name_id_formats.extend(formats);
         self
@@ -286,7 +294,9 @@ impl SpConfigBuilder {
     ///   characters, or the organization, contacts, error URI, or entity
     ///   attributes are invalid;
     /// - the selected policy needs a credential that is not set, or crypto
-    ///   that a build without a crypto provider lacks;
+    ///   that a build without a crypto provider lacks. For
+    ///   [`XmlEncryptionPolicy`](crate::XmlEncryptionPolicy), a missing
+    ///   decryption credential returns [`SamlError::MissingKey`];
     /// - with a crypto provider, a key or certificate in the credentials does
     ///   not load, a key holds only a public key, or a key does not match its
     ///   certificate ([`SamlError::Crypto`]);
@@ -622,7 +632,8 @@ impl IdpConfigBuilder {
     ///   begins with `xml` in any case, or the two tag prefixes are equal;
     /// - generating IdP metadata fails: a NameID format or an endpoint URL
     ///   that is not an absolute URI reference, such as a URL with `[` in its
-    ///   path, or a `validUntil` outside the years 0001 through 9999.
+    ///   path, two artifact resolution endpoints with the same index, or a
+    ///   `validUntil` outside the years 0001 through 9999.
     pub fn build(self) -> Result<IdpConfig, SamlError> {
         let issuance_lifetime = validated_idp_issuance_lifetime(self.issuance_lifetime)?;
         let engine = self.engine()?;

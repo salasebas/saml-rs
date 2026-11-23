@@ -1,9 +1,9 @@
 ---
 title: "Conformance"
-description: "Each record is a table for one flow. A row names the rule, the obligated actor, the direction, and the level: mandatory, recommendation, optional, or library policy."
+description: "Each record covers one flow. A row names the rule, its level (mandatory, recommended, optional, or library policy), the section that states it, and the option that controls it."
 ---
 
-Each record is a table for one flow. A row names the rule, the obligated actor, the direction, and the level: mandatory, recommendation, optional, or library policy.
+Each record covers one flow. Its headings name the actor and the APIs. A row names the rule, its level (mandatory, recommended, optional, or library policy), the section that states it, and the option that controls it. A library-policy row also gives its reason.
 
 The default validation policies select the settings recorded for each flow. Each conformance claim covers the role, flow, and binding in its record. A producer requirement does not, by itself, become a receiver rejection. Optional capabilities stay off until you select them by name.
 

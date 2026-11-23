@@ -76,6 +76,7 @@ impl ServiceProvider {
     ///
     /// A request must carry exactly one `<BaseID>`, `<NameID>`, or
     /// `<EncryptedID>` as a direct child in the SAML assertion namespace.
+    /// Any other count returns [`SamlError::ProtocolProfile`].
     ///
     /// # Errors
     ///
@@ -90,11 +91,13 @@ impl ServiceProvider {
     /// validation detects a duplicate or unusable expiration.
     /// Returns [`SamlError::LogoutRequestRefused`] for an authenticated newer
     /// version. Send its refusal with [`Self::respond_slo_refusal`].
+    /// A version below 2.0 returns [`SamlError::ProtocolProfile`].
     ///
     /// A decrypted `<NameID>` is available through [`LogoutRequest::name_id`].
     /// If no configured key decrypts the `<EncryptedID>`, or it contains a
     /// `<BaseID>`, the request has no `NameID`. You can still answer it with
-    /// [`Self::respond_slo`].
+    /// [`Self::respond_slo`]. If decryption succeeds, plaintext other than
+    /// one `<NameID>` or `<BaseID>` returns [`SamlError::ProtocolProfile`].
     pub fn receive_slo(
         &self,
         idp: &IdpDescriptor,
@@ -153,7 +156,9 @@ impl ServiceProvider {
 
     /// Answer an authenticated IdP LogoutRequest with a version mismatch.
     ///
-    /// The response uses the built-in XML and the request's RelayState.
+    /// The response uses the built-in XML and the request's RelayState. It
+    /// carries `VersionMismatch`, with `RequestVersionTooHigh` for a newer
+    /// major version.
     ///
     /// # Errors
     ///
@@ -331,6 +336,7 @@ impl IdentityProvider {
     /// `<EncryptedID>` as described in [`ServiceProvider::receive_slo`].
     /// Returns [`SamlError::LogoutRequestRefused`] for an authenticated newer
     /// version. Send its refusal with [`Self::respond_slo_refusal`].
+    /// A version below 2.0 returns [`SamlError::ProtocolProfile`].
     ///
     /// # Examples
     ///
@@ -430,7 +436,8 @@ impl IdentityProvider {
 
     /// Answer an authenticated SP LogoutRequest with a version mismatch.
     ///
-    /// The response uses the built-in XML and the request's RelayState.
+    /// The response uses the built-in XML and the request's RelayState. Its
+    /// status codes are the same as for [`ServiceProvider::respond_slo_refusal`].
     ///
     /// # Errors
     ///

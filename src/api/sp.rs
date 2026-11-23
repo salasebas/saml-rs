@@ -143,6 +143,9 @@ impl ServiceProvider {
     /// with the selected binding, a requested authentication reference is not an absolute URI,
     /// `ProviderName` contains invalid XML characters, or request creation fails
     /// because required metadata, signing keys, or supported bindings are unavailable.
+    /// Returns [`SamlError::Invalid`] for [`StartSso::simple_sign`] when the
+    /// service provider's [`AuthnRequestSigningPolicy`](crate::AuthnRequestSigningPolicy)
+    /// is `DoNotSign`.
     ///
     /// # Examples
     ///
@@ -238,13 +241,19 @@ impl ServiceProvider {
     /// provider; when XML, signature, certificate trust,
     /// audience, condition, or time validation fails; when the assertions do
     /// not share one issuer and one principal; or when replay validation
-    /// returns `ReplayDetected` or `TimeWindowInvalid`. A status other than
-    /// `Success` returns [`SamlError::StatusNotSuccess`] once all present
+    /// fails. See [`crate::ReplayCache`] for replay storage errors. A status
+    /// other than `Success` returns [`SamlError::StatusNotSuccess`] once all present
     /// signatures verify and the issuer and destination checks pass. An error
     /// response can omit `InResponseTo`. If present, it must match the pending
     /// request ID. An error response does not need a signature. Only a
     /// validated success reaches the comparison with the pending request's
-    /// `RelayState`.
+    /// `RelayState`. A successful HTTP-Artifact response with no XML signature
+    /// on the `Response` or on each assertion returns [`SamlError::SignatureMissing`].
+    /// An `Attribute` without an unqualified `Name` returns
+    /// [`SamlError::ProtocolProfile`]. The `Conditions` time window returns
+    /// [`SamlError::TimeWindowInvalid`] when both bounds are present and
+    /// `NotBefore` is at or after `NotOnOrAfter`. The same bounds in bearer
+    /// `SubjectConfirmationData` leave that confirmation unsatisfied.
     ///
     /// # Examples
     ///
@@ -338,7 +347,9 @@ impl ServiceProvider {
     /// the issuer and destination checks pass. An error response does not need
     /// a signature. Returns [`SamlError::RecipientEndpointNotPublished`] when
     /// the supplied recipient endpoint is not an assertion consumer published
-    /// for the incoming binding.
+    /// for the incoming binding. An `Attribute` without an unqualified `Name`
+    /// returns [`SamlError::ProtocolProfile`]. The assertion time window rules
+    /// are the same as for [`Self::finish_sso`].
     pub fn accept_unsolicited_sso(
         &self,
         idp: &IdpDescriptor,

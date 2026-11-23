@@ -178,7 +178,8 @@ impl Credentials {
     /// it.
     ///
     /// Decryption tries the keys in the order added and keeps the first that
-    /// decrypts. Metadata publishes each certificate in its own encryption
+    /// decrypts. When none decrypts, the error comes from the first key.
+    /// Metadata publishes each certificate in its own encryption
     /// `KeyDescriptor`, in the same order, so a peer may encrypt for any of
     /// them. To roll over the encryption key, append the next credential and
     /// wait until every peer has refreshed this entity's metadata. Then list
