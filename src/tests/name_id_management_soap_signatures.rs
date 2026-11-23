@@ -49,7 +49,7 @@ fn providers() -> Result<(IdentityProvider, SpDescriptor, SpDescriptor), Box<dyn
         SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP)?,
             &metadata,
-            MetadataTrustPolicy::AllowUnsigned,
+            MetadataTrustPolicy::Unverified,
         )
     };
     Ok((

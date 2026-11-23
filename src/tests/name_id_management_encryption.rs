@@ -123,7 +123,7 @@ fn sp_descriptor(sp: &saml_rs::ServiceProvider) -> Result<SpDescriptor, SamlErro
     SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )
 }
 
@@ -131,7 +131,7 @@ fn idp_descriptor_from(metadata: &str) -> Result<IdpDescriptor, SamlError> {
     IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         metadata,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )
 }
 
@@ -377,7 +377,7 @@ fn identity_provider_encrypts_a_soap_request_and_decrypts_one_over_soap() -> Tes
             r#"<ManageNameIDService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://sp.example.com/manage-name-id/soap"/><ManageNameIDService "#,
             1,
         ),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     // The service provider reads the elements the identity provider sends over SOAP.

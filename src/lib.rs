@@ -263,12 +263,14 @@
 //! Pin the metadata publisher's certificate independently of the document and
 //! import with [`MetadataTrustPolicy::RequireSignature`]. If your application
 //! authenticates the document through another trusted channel, such as a locally
-//! provisioned file, [`MetadataTrustPolicy::AllowUnsigned`] skips signature verification.
-//! [`MetadataTrustPolicy::RequireSignatureAllowingOtherCanonicalization`]
-//! also accepts inclusive canonicalization. Both reject MD5 and RIPEMD-160
-//! signatures and RSA keys shorter than 2048 bits;
-//! [`MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms`]
-//! accepts them when the provider supports them.
+//! provisioned file, [`MetadataTrustPolicy::Unverified`] skips signature
+//! verification.
+//! [`MetadataTrustPolicy::RequireSignatureAllowingInclusiveCanonicalization`]
+//! also accepts inclusive Canonical XML 1.0 and 1.1 reference transforms, with
+//! or without comments. Both signature policies reject MD5 and RIPEMD-160
+//! signatures and RSA keys shorter than 2048 bits.
+//! [`MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms`] accepts them
+//! when the provider supports them.
 //!
 //! The documented modules and crate-root re-exports are the supported public API.
 //!

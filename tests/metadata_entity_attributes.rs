@@ -65,12 +65,8 @@ fn sp_document(extensions: &str) -> String {
 }
 
 fn sp_entity_attributes(xml: &str) -> Result<EntityAttributes, SamlError> {
-    SpDescriptor::from_metadata_xml(
-        EntityId::try_new(SP)?,
-        xml,
-        MetadataTrustPolicy::AllowUnsigned,
-    )?
-    .entity_attributes()
+    SpDescriptor::from_metadata_xml(EntityId::try_new(SP)?, xml, MetadataTrustPolicy::Unverified)?
+        .entity_attributes()
 }
 
 #[test]
@@ -138,7 +134,7 @@ fn imported_idp_reads_category_support_and_assurance_certification() -> TestResu
     let attributes = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP)?,
         &xml,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?
     .entity_attributes()?;
 
@@ -354,7 +350,7 @@ fn typed_builders_publish_entity_attributes_to_peers() -> TestResult {
     let idp_peer = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?
     .entity_attributes()?;
 

@@ -62,12 +62,12 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let relay_state = RelayState::try_new("return")?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post().relay_state(relay_state))?;

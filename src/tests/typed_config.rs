@@ -301,7 +301,7 @@ fn typed_config_idp_descriptor_accepts_expected_unsigned_metadata(
     let descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         IDP_METADATA,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     assert_eq!(
@@ -318,7 +318,7 @@ fn typed_config_idp_descriptor_rejects_unexpected_entity_id(
     let result = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://unexpected.example.com/metadata")?,
         IDP_METADATA,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     );
 
     assert!(
@@ -340,7 +340,7 @@ fn typed_config_sp_descriptor_accepts_expected_unsigned_metadata(
     let descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.org/metadata")?,
         SP_METADATA,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     assert_eq!(
@@ -361,12 +361,12 @@ fn typed_config_descriptors_import_a_peer_entity_id_that_is_not_a_uri(
     let idp = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("idp.example.com")?,
         &idp_metadata,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let sp = SpDescriptor::from_metadata_xml(
         EntityId::try_new("sp.example.org")?,
         &sp_metadata,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     assert_eq!(idp.entity_id().as_str(), "idp.example.com");
@@ -383,12 +383,12 @@ fn typed_config_descriptors_return_the_imported_metadata_xml_unchanged(
     let idp = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &idp_metadata,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let sp = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.org/metadata")?,
         &sp_metadata,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     assert_eq!(idp.metadata_xml(), idp_metadata);

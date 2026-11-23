@@ -18,7 +18,7 @@ use super::policies::XmlSignatureProfile;
 /// For signed metadata, obtain the publisher's signing certificate independently
 /// of the document and pin it as shown below. When the application authenticates
 /// the metadata through another trusted channel, such as a file provisioned by
-/// the operator, it can explicitly select [`Self::AllowUnsigned`].
+/// the operator, it can explicitly select [`Self::Unverified`].
 ///
 /// # Examples
 ///
@@ -46,7 +46,7 @@ pub enum MetadataTrustPolicy<'a> {
     /// Import metadata without verifying a signature, even when one is present.
     ///
     /// The caller establishes the document's origin and integrity.
-    AllowUnsigned,
+    Unverified,
     /// Require a valid metadata signature from one of the pinned certificates.
     ///
     /// The signature must be an enveloped `#id` signature over the metadata
@@ -59,13 +59,13 @@ pub enum MetadataTrustPolicy<'a> {
         /// Caller-pinned certificates trusted to sign the metadata.
         trusted_certificates: &'a [CertificatePem],
     },
-    /// Require a pinned metadata signature, and also accept inclusive
-    /// canonicalization.
+    /// Require a pinned metadata signature and also accept inclusive
+    /// Canonical XML 1.0 and 1.1 reference transforms, with or without comments.
     ///
     /// The identifier, single `#id` reference, algorithm, and key-size checks
     /// of [`Self::RequireSignature`] stay on. See
     /// `docs/conformance/metadata-and-replay.md`.
-    RequireSignatureAllowingOtherCanonicalization {
+    RequireSignatureAllowingInclusiveCanonicalization {
         /// Caller-pinned certificates trusted to sign the metadata.
         trusted_certificates: &'a [CertificatePem],
     },
@@ -112,7 +112,7 @@ pub(super) fn ensure_metadata_trust(
     limits: XmlLimits,
 ) -> Result<AppliedMetadataTrust, SamlError> {
     match trust {
-        MetadataTrustPolicy::AllowUnsigned => Ok(AppliedMetadataTrust::Unverified),
+        MetadataTrustPolicy::Unverified => Ok(AppliedMetadataTrust::Unverified),
         MetadataTrustPolicy::RequireSignature {
             trusted_certificates,
         } => verify_pinned_metadata_signature(
@@ -122,12 +122,12 @@ pub(super) fn ensure_metadata_trust(
             XmlSignatureProfile::ExcludeWeakAlgorithms,
             limits,
         ),
-        MetadataTrustPolicy::RequireSignatureAllowingOtherCanonicalization {
+        MetadataTrustPolicy::RequireSignatureAllowingInclusiveCanonicalization {
             trusted_certificates,
         } => verify_pinned_metadata_signature(
             metadata,
             trusted_certificates,
-            MetadataSignatureTransforms::AllowOtherCanonicalization,
+            MetadataSignatureTransforms::AllowInclusiveCanonicalization,
             XmlSignatureProfile::ExcludeWeakAlgorithms,
             limits,
         ),

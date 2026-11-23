@@ -72,10 +72,10 @@ fn trust<'a>(certificates: &'a [CertificatePem]) -> MetadataTrustPolicy<'a> {
     }
 }
 
-fn trust_allowing_other_transforms<'a>(
+fn trust_allowing_inclusive_canonicalization<'a>(
     certificates: &'a [CertificatePem],
 ) -> MetadataTrustPolicy<'a> {
-    MetadataTrustPolicy::RequireSignatureAllowingOtherCanonicalization {
+    MetadataTrustPolicy::RequireSignatureAllowingInclusiveCanonicalization {
         trusted_certificates: certificates,
     }
 }
@@ -226,7 +226,7 @@ fn signed_descriptor_import_honors_the_configured_byte_limit(
     let signed_idp = sign_root_metadata(idp_metadata_xml())?;
     let idp_xml = format!("{padding}{signed_idp}");
     policy.limits.max_bytes = idp_xml.len();
-    let idp = IdpDescriptor::from_metadata_xml_with_policy(
+    let idp = IdpDescriptor::from_metadata_xml_with_xml_policy(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &idp_xml,
         trust(&certificates),
@@ -237,7 +237,7 @@ fn signed_descriptor_import_honors_the_configured_byte_limit(
     let signed_sp = sign_root_metadata(sp_metadata_xml())?;
     let sp_xml = format!("{padding}{signed_sp}");
     policy.limits.max_bytes = sp_xml.len();
-    let sp = SpDescriptor::from_metadata_xml_with_policy(
+    let sp = SpDescriptor::from_metadata_xml_with_xml_policy(
         EntityId::try_new("https://sp.example.com/metadata")?,
         &sp_xml,
         trust(&certificates),
@@ -373,13 +373,12 @@ fn require_signature_rejects_a_transform_other_than_enveloped_and_exclusive_cano
     assert_signature_shape_rejected(&xml, trust(std::slice::from_ref(&cert)))?;
     assert_signature_shape_rejected(
         &xml,
-        trust_allowing_other_transforms(std::slice::from_ref(&cert)),
+        trust_allowing_inclusive_canonicalization(std::slice::from_ref(&cert)),
     )
 }
 
 #[test]
-fn require_signature_allowing_other_transforms_accepts_inclusive_canonicalization(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn relaxed_policy_accepts_inclusive_canonicalization() -> Result<(), Box<dyn std::error::Error>> {
     let cert = CertificatePem::new(CERT);
     let signed = sign_metadata_root(
         idp_metadata_xml(),
@@ -394,7 +393,7 @@ fn require_signature_allowing_other_transforms_accepts_inclusive_canonicalizatio
 
     let descriptor = import_idp(
         &signed,
-        trust_allowing_other_transforms(std::slice::from_ref(&cert)),
+        trust_allowing_inclusive_canonicalization(std::slice::from_ref(&cert)),
     )?;
     assert!(descriptor.signed_metadata_xml().is_some());
     assert!(descriptor
@@ -427,10 +426,10 @@ fn allowing_weak_algorithms_keeps_the_profile_transforms() -> Result<(), Box<dyn
 }
 
 #[test]
-fn allowing_other_transforms_keeps_identifier_and_single_reference_checks(
+fn allowing_inclusive_canonicalization_keeps_identifier_and_single_reference_checks(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cert = CertificatePem::new(CERT);
-    let policy = trust_allowing_other_transforms(std::slice::from_ref(&cert));
+    let policy = trust_allowing_inclusive_canonicalization(std::slice::from_ref(&cert));
     let missing_identifier = entity_document(
         None,
         &signature_xml(
@@ -470,7 +469,7 @@ fn allowing_other_transforms_keeps_identifier_and_single_reference_checks(
 }
 
 #[test]
-fn require_signature_rejects_ds_object_even_when_other_transforms_are_allowed(
+fn require_signature_rejects_ds_object_even_when_inclusive_canonicalization_is_allowed(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cert = CertificatePem::new(CERT);
     let xml = entity_document(
@@ -489,7 +488,7 @@ fn require_signature_rejects_ds_object_even_when_other_transforms_are_allowed(
     assert_signature_shape_rejected(&xml, trust(std::slice::from_ref(&cert)))?;
     assert_signature_shape_rejected(
         &xml,
-        trust_allowing_other_transforms(std::slice::from_ref(&cert)),
+        trust_allowing_inclusive_canonicalization(std::slice::from_ref(&cert)),
     )
 }
 
@@ -626,7 +625,7 @@ fn entities_descriptor_import_rejects_two_entities() -> Result<(), Box<dyn std::
     match IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &xml,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     ) {
         Err(SamlError::Xml { message, .. })
             if message == "metadata has more than one EntityDescriptor" =>
@@ -640,13 +639,13 @@ fn entities_descriptor_import_rejects_two_entities() -> Result<(), Box<dyn std::
 }
 
 #[test]
-fn allow_unsigned_does_not_record_a_metadata_signature_as_verified(
+fn unverified_import_does_not_record_a_metadata_signature_as_verified(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let signed = sign_root_metadata(idp_metadata_xml())?;
     let descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &signed,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     assert!(!descriptor.signed_metadata_xml().is_some());
@@ -735,7 +734,7 @@ fn require_signature_rejects_md5_and_ripemd160_metadata_signatures(
         let signed = sign_idp_metadata_with(signature_method, digest_method, PRIVKEY, CERT)?;
         for policy in [
             trust(certificates),
-            trust_allowing_other_transforms(certificates),
+            trust_allowing_inclusive_canonicalization(certificates),
         ] {
             match import_idp(&signed, policy).map(|idp| idp.signed_metadata_xml().is_some()) {
                 Err(SamlError::AlgorithmUnsupported) => {}
@@ -755,7 +754,7 @@ fn require_signature_rejects_md5_and_ripemd160_metadata_signatures(
     let sha1 = sign_idp_metadata_with(dsig::RSA_SHA1, dsig::SHA1, PRIVKEY, CERT)?;
     for policy in [
         trust(certificates),
-        trust_allowing_other_transforms(certificates),
+        trust_allowing_inclusive_canonicalization(certificates),
     ] {
         assert!(import_idp(&sha1, policy)?.signed_metadata_xml().is_some());
     }
@@ -771,7 +770,7 @@ fn require_signature_does_not_verify_with_a_1024_bit_rsa_key(
     let only_short = std::slice::from_ref(&short);
     for policy in [
         trust(only_short),
-        trust_allowing_other_transforms(only_short),
+        trust_allowing_inclusive_canonicalization(only_short),
     ] {
         match import_idp(&signed, policy).map(|idp| idp.signed_metadata_xml().is_some()) {
             Err(SamlError::Crypto { message, .. }) if message.contains("1024-bit RSA key") => {}

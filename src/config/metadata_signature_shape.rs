@@ -5,13 +5,13 @@ use crate::xml::dom::{self, Node, XmlLimits};
 /// Transform allowlist for a metadata import that requires a signature.
 ///
 /// [`Self::Profile`] is enveloped signature and exclusive canonicalization.
-/// [`Self::AllowOtherCanonicalization`] also accepts inclusive canonicalization.
+/// [`Self::AllowInclusiveCanonicalization`] also accepts inclusive canonicalization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MetadataSignatureTransforms {
     /// Enveloped signature and exclusive canonicalization only.
     Profile,
     /// Also accept inclusive canonicalization.
-    AllowOtherCanonicalization,
+    AllowInclusiveCanonicalization,
 }
 
 /// Reject a signed metadata root whose shape `RequireSignature` does not import.
@@ -93,7 +93,7 @@ fn allowed_transform(algorithm: &str, transforms: MetadataSignatureTransforms) -
     if profile_transform(algorithm) {
         return true;
     }
-    transforms == MetadataSignatureTransforms::AllowOtherCanonicalization
+    transforms == MetadataSignatureTransforms::AllowInclusiveCanonicalization
         && matches!(
             algorithm,
             INCLUSIVE_C14N_10

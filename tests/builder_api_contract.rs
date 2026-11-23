@@ -50,7 +50,7 @@ fn builder_entrypoints_construct_facades_without_raw_mutation(
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     let sso = sp.start_sso(&idp_descriptor, StartSso::post())?;

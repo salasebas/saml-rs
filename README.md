@@ -129,8 +129,8 @@ is out of scope, is in the [conformance records](docs/conformance/).
 - Optional schema validation through `XmlPolicy::schema_validator`, scoped to
   each local role. It covers received protocol XML, SOAP envelopes,
   and decrypted protocol documents. Import peer metadata with
-  `IdpDescriptor::from_metadata_xml_with_policy` or
-  `SpDescriptor::from_metadata_xml_with_policy` to apply it there too. The
+  `IdpDescriptor::from_metadata_xml_with_xml_policy` or
+  `SpDescriptor::from_metadata_xml_with_xml_policy` to apply it there too. The
   callback runs after baseline parsing and can run multiple times per operation.
   No schema validator is installed by default. See
   [schema validation scope](docs/conformance/xml-schema-validation.md) and the

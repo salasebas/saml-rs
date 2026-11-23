@@ -237,12 +237,12 @@ fn descriptors(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     Ok((sp_descriptor, idp_descriptor))
 }
@@ -978,7 +978,7 @@ fn typed_slo_rejects_peer_without_requested_logout_binding(
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     match sp.start_slo(&idp_descriptor, subject()?, StartSlo::redirect()) {
@@ -2237,7 +2237,7 @@ fn typed_facade_rejects_slo_pending_peer_mismatch() -> Result<(), Box<dyn std::e
     let other_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://other-idp.example.com/metadata")?,
         other_idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     match exchange.sp.finish_slo(
@@ -2942,7 +2942,7 @@ fn typed_logout_response_targets_a_peer_slo_location_the_url_parser_accepts(
         let sp_descriptor = SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             sp.metadata_xml(),
-            MetadataTrustPolicy::AllowUnsigned,
+            MetadataTrustPolicy::Unverified,
         )?;
         let idp_descriptor = IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -2950,7 +2950,7 @@ fn typed_logout_response_targets_a_peer_slo_location_the_url_parser_accepts(
                 &format!(r#"Location="{IDP_SLO_POST}""#),
                 &format!(r#"Location="{location}""#),
             ),
-            MetadataTrustPolicy::AllowUnsigned,
+            MetadataTrustPolicy::Unverified,
         )?;
         let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
         let received = sp.receive_slo(

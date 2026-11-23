@@ -127,12 +127,12 @@ fn descriptors(
         SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             sp.metadata_xml(),
-            MetadataTrustPolicy::AllowUnsigned,
+            MetadataTrustPolicy::Unverified,
         )?,
         IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
             idp.metadata_xml(),
-            MetadataTrustPolicy::AllowUnsigned,
+            MetadataTrustPolicy::Unverified,
         )?,
     ))
 }
@@ -390,7 +390,7 @@ fn exchange_encrypted_for(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &metadata_publishing(encryption_cert)?,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)
 }

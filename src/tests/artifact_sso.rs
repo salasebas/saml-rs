@@ -115,12 +115,12 @@ fn build_parties(idp: IdpConfigBuilder, sp: SpConfigBuilder) -> Result<Parties, 
     let idp_metadata = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let sp_metadata = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     Ok(Parties {
         idp,
@@ -898,7 +898,7 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
     let other_metadata = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://other-idp.example.com/metadata")?,
         other.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
@@ -1027,7 +1027,7 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
     let sp_metadata = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
@@ -1201,12 +1201,12 @@ fn encrypted_assertion_parties(
         idp_metadata: IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
             idp.metadata_xml(),
-            MetadataTrustPolicy::AllowUnsigned,
+            MetadataTrustPolicy::Unverified,
         )?,
         sp_metadata: SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             sp.metadata_xml(),
-            MetadataTrustPolicy::AllowUnsigned,
+            MetadataTrustPolicy::Unverified,
         )?,
         idp,
         sp,

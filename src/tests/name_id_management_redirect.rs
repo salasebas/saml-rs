@@ -85,7 +85,7 @@ fn sp_descriptor(sp: &saml_rs::ServiceProvider) -> Result<SpDescriptor, SamlErro
     SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )
 }
 
@@ -93,7 +93,7 @@ fn idp_descriptor(idp: &saml_rs::IdentityProvider) -> Result<IdpDescriptor, Saml
     IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )
 }
 
@@ -958,7 +958,7 @@ fn http_name_identifier_management_endpoint_needs_an_explicit_relaxation() -> Te
     let sp_peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         HTTP_SP_METADATA,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     match idp.start_name_id_management_redirect(
         &sp_peer,
@@ -1094,7 +1094,7 @@ fn request_goes_to_the_service_provider_role_of_a_dual_role_peer() -> TestResult
     let sp_peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &dual_role,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let started = idp()?.start_name_id_management_redirect(
         &sp_peer,

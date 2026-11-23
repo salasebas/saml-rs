@@ -74,7 +74,7 @@ fn idp_descriptor(idp: &saml_rs::IdentityProvider) -> Result<IdpDescriptor, Saml
     IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )
 }
 
@@ -82,7 +82,7 @@ fn sp_descriptor(sp: &saml_rs::ServiceProvider) -> Result<SpDescriptor, SamlErro
     SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )
 }
 
@@ -99,7 +99,7 @@ fn soap_name_id_sp_descriptor(sp: &saml_rs::ServiceProvider) -> Result<SpDescrip
     SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &metadata,
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )
 }
 
@@ -307,7 +307,7 @@ fn import_checks_only_unqualified_valid_until() -> Result<(), Box<dyn std::error
         IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
             &xml,
-            MetadataTrustPolicy::AllowUnsigned,
+            MetadataTrustPolicy::Unverified,
         )
     };
 

@@ -8,7 +8,7 @@ document defines this callback.
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Run the callback on received protocol XML, SOAP envelopes, and decrypted protocol documents after the baseline parse | Library policy: the application owns its schema set, so a rejection can go beyond OASIS receiver rules. | Core §1.1 | `XmlPolicy::schema_validator` |
-| Run it on the original metadata document only when the import names a policy | Library policy: metadata is imported before the role configuration exists. | Core §1.1 | `XmlPolicy::schema_validator` on `IdpDescriptor::from_metadata_xml_with_policy`, `SpDescriptor::from_metadata_xml_with_policy`, `metadata::IdpMetadata::from_xml_with_policy`, `metadata::SpMetadata::from_xml_with_policy`, and `metadata::Metadata::parse_with_policy` |
+| Run it on the original metadata document only when the import names a policy | Library policy: metadata is imported before the role configuration exists. | Core §1.1 | `XmlPolicy::schema_validator` on `IdpDescriptor::from_metadata_xml_with_xml_policy`, `SpDescriptor::from_metadata_xml_with_xml_policy`, `metadata::IdpMetadata::from_xml_with_policy`, `metadata::SpMetadata::from_xml_with_policy`, and `metadata::Metadata::parse_with_policy` |
 | Keep every other check | Library policy: a valid schema does not prove signature, trust, correlation, audience, time, or replay. | — | Always |
 
 Parser limits and DOCTYPE rejection run before the callback. The callback does

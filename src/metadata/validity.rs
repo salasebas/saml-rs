@@ -99,7 +99,7 @@ mod tests {
             let descriptor = IdpDescriptor::from_metadata_xml(
                 EntityId::try_new("https://idp.example.com/metadata")?,
                 &xml,
-                MetadataTrustPolicy::AllowUnsigned,
+                MetadataTrustPolicy::Unverified,
             )?;
 
             descriptor.ensure_valid_at(at(expires_at - 1))?;

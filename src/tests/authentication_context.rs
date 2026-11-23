@@ -75,12 +75,12 @@ fn parties_with(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::AllowUnsigned,
+        MetadataTrustPolicy::Unverified,
     )?;
     Ok((sp, idp, sp_descriptor, idp_descriptor))
 }

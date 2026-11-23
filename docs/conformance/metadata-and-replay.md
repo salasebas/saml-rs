@@ -12,16 +12,16 @@ The caller passes `MetadataTrustPolicy` to the descriptor import. The import rea
 | --- | --- | --- | --- |
 | Count the members of a metadata group as its direct `md:EntityDescriptor` children and those of its direct `md:EntitiesDescriptor` groups. `Extensions` content adds none | Mandatory | Metadata §2.3.1, `EntitiesDescriptorType` | Always |
 | Import a document with exactly one entity | Library policy: the import returns a single entity. | Metadata §2.3.1 | Always |
-| Import metadata without a signature | Optional | Metadata §3 | `MetadataTrustPolicy::AllowUnsigned` |
-| Leave a signature that is present unverified, and report no signed metadata | Library policy: the caller selected `AllowUnsigned` after authenticating the document through another channel. | Metadata §4.3.3.2 | `MetadataTrustPolicy::AllowUnsigned` |
+| Import metadata without a signature | Optional | Metadata §3 | `MetadataTrustPolicy::Unverified` |
+| Leave a signature that is present unverified, and report no signed metadata | Library policy: the caller selected `Unverified` after authenticating the document through another channel. | Metadata §4.3.3.2 | `MetadataTrustPolicy::Unverified` |
 | Have some means to establish trust in metadata before relying on it. The caller supplies it as `MetadataTrustPolicy` | Recommended | Metadata §4 | `MetadataTrustPolicy` |
 | Verify the root signature against caller-pinned certificates, and reject unsigned metadata or a signature that no pinned certificate verifies | Optional | Metadata §4.3.3.2 | `MetadataTrustPolicy::RequireSignature` |
 | Accept an otherwise valid signature without `ds:KeyInfo` | Optional | Core §5.4.6, Metadata §3.1.6, E91 | Always |
 | Verify metadata signatures with caller-pinned certificates. For certificate-based message signatures, verify with the peer role's signing keys. An embedded certificate neither selects nor restricts the key, and a certificate in a `KeyDescriptor` is no trust anchor | Library policy: reason not recorded. | Metadata §3.1.6 (E91), E69 | `MetadataTrustPolicy::RequireSignature` for metadata |
 | A signed metadata element has an enveloped signature and an `ID`. Its single `ds:Reference` names that `ID` and covers the element and its children | Mandatory | Metadata §3.1.1, §3.1.2 | `MetadataTrustPolicy::RequireSignature` |
 | Import signed metadata only when a single signature is a direct child of the document root and covers that root | Library policy: reason not recorded. | Metadata §3.1.2 | `MetadataTrustPolicy::RequireSignature` |
-| Reject a transform other than enveloped signature or exclusive canonicalization, with or without comments | Optional | Metadata §3.1.4 | `MetadataTrustPolicy::RequireSignatureAllowingOtherCanonicalization` also accepts inclusive canonicalization |
-| Reject a `ds:Object` in a metadata signature | Recommended | Metadata §3.1.5 (E91) | All `RequireSignature` variants. `AllowUnsigned` skips the check |
+| Reject a transform other than enveloped signature or exclusive canonicalization, with or without comments | Optional | Metadata §3.1.4 | `MetadataTrustPolicy::RequireSignatureAllowingInclusiveCanonicalization` also accepts inclusive canonicalization |
+| Reject a `ds:Object` in a metadata signature | Recommended | Metadata §3.1.5 (E91) | All `RequireSignature` variants. `Unverified` skips the check |
 | Reject an MD5 or RIPEMD-160 signature or digest algorithm and an RSA signing key under 2048 bits. See [weak algorithms and keys](xml-security-algorithms.md#weak-algorithms-and-keys) | Library policy: the certificates a verified document publishes are then trusted for its messages, so the trust root must not use weak algorithms. | Metadata §3.1.1 (E81) | `MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms` |
 | Reject a `ds:Object` in a message signature that authenticates the accepted message | Recommended | Core §5.4.5 (E91) | `XmlSignatureProfile::AllowWeakAlgorithms` |
 
