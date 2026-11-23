@@ -183,3 +183,92 @@ pub(super) fn verify_detached(
         _ => Err(detached_signature_verification()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::constants::signature_algorithm::RSA_SHA256;
+
+    #[test]
+    fn detached_verification_preserves_provider_error() {
+        let certificates = vec!["not a certificate".to_string()];
+        let options = FlowOptions {
+            signing_certs: &certificates,
+            ..Default::default()
+        };
+        let octet = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("SAMLRequest", "payload")
+            .append_pair("SigAlg", RSA_SHA256)
+            .finish();
+        let request = HttpRequest {
+            query: vec![
+                ("SAMLRequest".into(), "payload".into()),
+                ("SigAlg".into(), RSA_SHA256.into()),
+                ("Signature".into(), "AA==".into()),
+            ],
+            octet_string: Some(octet),
+            ..Default::default()
+        };
+
+        assert!(matches!(
+            verify_detached(
+                Binding::Redirect,
+                ParserType::SamlRequest,
+                &request,
+                &options,
+                "<samlp:AuthnRequest/>",
+            ),
+            Err(SamlError::Crypto { .. })
+        ));
+    }
+
+    #[test]
+    fn detached_rolling_cert_unloadable_peer_keeps_invalid_verdict(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        const SP_PRIVKEY: &str =
+            include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+        const SP_CERT: &str =
+            include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+
+        let key = crate::crypto::keys::read_private_key(SP_PRIVKEY, None)?;
+        let signature = crate::crypto::sign_octet_string("SAMLRequest=other", &key, RSA_SHA256)?;
+        let octet = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("SAMLRequest", "payload")
+            .append_pair("SigAlg", RSA_SHA256)
+            .finish();
+        let request = HttpRequest {
+            query: vec![
+                ("SAMLRequest".into(), "payload".into()),
+                ("SigAlg".into(), RSA_SHA256.into()),
+                ("Signature".into(), signature),
+            ],
+            octet_string: Some(octet),
+            ..Default::default()
+        };
+        let garbage = "not a certificate".to_string();
+        let signer = SP_CERT.to_string();
+
+        for certificates in [vec![garbage.clone(), signer.clone()], vec![signer, garbage]] {
+            let options = FlowOptions {
+                signing_certs: &certificates,
+                ..Default::default()
+            };
+            assert!(
+                matches!(
+                    verify_detached(
+                        Binding::Redirect,
+                        ParserType::SamlRequest,
+                        &request,
+                        &options,
+                        "<samlp:AuthnRequest/>",
+                    ),
+                    Err(SamlError::SignatureVerification {
+                        reason: SignatureVerificationReason::BindingSignature,
+                    })
+                ),
+                "unloadable leftover must not replace detached-invalid with Crypto"
+            );
+        }
+        Ok(())
+    }
+}

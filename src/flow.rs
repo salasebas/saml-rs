@@ -8,8 +8,6 @@ use crate::binding::{
 use crate::config::{AssertionElementEncryption, XmlSignatureProfile};
 use crate::config::{HmacSecret, X509Credential};
 use crate::constants::{Binding, ParserType};
-#[cfg(crypto)]
-use crate::error::SignatureVerificationReason;
 use crate::error::{utf8_err, SamlError};
 use crate::model::ClockSkew;
 use crate::util::Value;
@@ -23,11 +21,15 @@ use time::OffsetDateTime;
 
 #[cfg(crypto)]
 mod detached;
+#[cfg(crypto)]
+mod embedded;
 mod error_response;
 mod response_issuer;
 
 #[cfg(crypto)]
 use detached::verify_detached;
+#[cfg(crypto)]
+use embedded::{verify_and_prepare, verify_present_signatures};
 
 /// Decoded HTTP request inputs for a binding.
 #[derive(Debug, Default, Clone)]
@@ -224,6 +226,26 @@ struct PreparedMessage {
     verified_xml_signatures: Vec<VerifiedXmlSignatureEvidence>,
 }
 
+impl PreparedMessage {
+    fn received(
+        xml: String,
+        parser_type: ParserType,
+        limits: XmlLimits,
+    ) -> Result<Self, SamlError> {
+        let assertion = if parser_type == ParserType::SamlResponse {
+            first_login_assertion_xml(&xml, limits)?
+        } else {
+            None
+        };
+        Ok(Self {
+            saml_content: xml,
+            assertion,
+            message_authenticated: false,
+            verified_xml_signatures: Vec::new(),
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct VerifiedXmlSignatureEvidence {
     algorithm_uri: String,
@@ -243,17 +265,6 @@ impl VerifiedXmlSignatureEvidence {
     pub(crate) fn response_covered(&self) -> bool {
         self.response_covered
     }
-}
-
-#[cfg(crypto)]
-#[derive(Debug)]
-struct EmbeddedSignatureEvidence {
-    signature_present: bool,
-    verified: bool,
-    verified_node: Option<String>,
-    assertion_directly_covered: bool,
-    response_covered: bool,
-    verified_xml_signatures: Vec<VerifiedXmlSignatureEvidence>,
 }
 
 /// Result of a successful low-level flow.
@@ -347,277 +358,11 @@ fn decode_message(
     String::from_utf8(bytes).map_err(utf8_err)
 }
 
-#[cfg(crypto)]
-fn verified_content_not_covered() -> SamlError {
-    SamlError::SignedReferenceMismatch
-}
-
-#[cfg(crypto)]
-fn required_xml_signature_failed(signature_present: bool) -> SamlError {
-    if signature_present {
-        SamlError::SignatureVerification {
-            reason: SignatureVerificationReason::XmlSignature,
-        }
-    } else {
-        SamlError::SignatureMissing
-    }
-}
-
-#[cfg(crypto)]
-fn verify_embedded_signature(
-    xml: &str,
-    opts: &FlowOptions<'_>,
-) -> Result<EmbeddedSignatureEvidence, SamlError> {
-    let verification = crate::crypto::verify::verify_signatures_detailed_with_profile(
-        xml,
-        opts.signing_certs,
-        opts.hmac_secret,
-        opts.xml_limits,
-        opts.xml_signatures,
-    )?;
-    let verified_xml_signatures = verification
-        .verified_embedded_signatures()
-        .iter()
-        .map(|signature| VerifiedXmlSignatureEvidence {
-            algorithm_uri: signature.algorithm_uri().to_string(),
-            assertion_directly_covered: signature.assertion_directly_covered(),
-            response_covered: signature.response_covered(),
-        })
-        .collect();
-    Ok(EmbeddedSignatureEvidence {
-        signature_present: verification.signature_present(),
-        verified: verification.verified(),
-        assertion_directly_covered: verification.assertion_directly_covered(),
-        response_covered: verification.response_covered(),
-        verified_node: verification.into_signed_content(),
-        verified_xml_signatures,
-    })
-}
-
-#[cfg(crypto)]
-fn verify_present_signatures(xml: &str, opts: &FlowOptions<'_>) -> Result<(), SamlError> {
-    crate::crypto::verify::verify_present_signatures(
-        xml,
-        opts.signing_certs,
-        opts.hmac_secret,
-        opts.xml_limits,
-        opts.xml_signatures,
-    )
-}
-
 #[cfg(not(crypto))]
 fn verify_present_signatures(_xml: &str, _opts: &FlowOptions<'_>) -> Result<(), SamlError> {
     Err(SamlError::Unsupported(
         "signature verification requires a crypto provider feature".into(),
     ))
-}
-
-/// Verify the signature over each decrypted `<Assertion>`, which must cover
-/// that assertion directly, and return the evidence of the first decrypted
-/// assertion equal to `consumed_assertion`.
-#[cfg(crypto)]
-fn verify_decrypted_assertions(
-    assertions: &[String],
-    consumed_assertion: Option<&str>,
-    opts: &FlowOptions<'_>,
-) -> Result<Vec<VerifiedXmlSignatureEvidence>, SamlError> {
-    let consumed = assertions
-        .iter()
-        .position(|assertion| Some(assertion.as_str()) == consumed_assertion);
-    let mut verified_xml_signatures = Vec::new();
-    for (index, assertion) in assertions.iter().enumerate() {
-        let evidence = verify_embedded_signature(assertion, opts)?;
-        if !evidence.verified {
-            return Err(required_xml_signature_failed(evidence.signature_present));
-        }
-        require_direct_assertion_coverage(
-            AssertionSignatureRequirement::Direct,
-            evidence.assertion_directly_covered,
-        )?;
-        if consumed == Some(index) {
-            verified_xml_signatures.extend(evidence.verified_xml_signatures);
-        }
-    }
-    Ok(verified_xml_signatures)
-}
-
-#[cfg(crypto)]
-fn require_direct_assertion_coverage(
-    assertion_signature: AssertionSignatureRequirement,
-    assertion_directly_covered: bool,
-) -> Result<(), SamlError> {
-    if assertion_signature == AssertionSignatureRequirement::Direct && !assertion_directly_covered {
-        return Err(SamlError::AssertionSignatureRequired);
-    }
-    Ok(())
-}
-
-#[cfg(crypto)]
-fn require_response_coverage(
-    response_signature_required: bool,
-    response_covered: bool,
-) -> Result<(), SamlError> {
-    if response_signature_required && !response_covered {
-        return Err(SamlError::SignedReferenceMismatch);
-    }
-    Ok(())
-}
-
-#[cfg(crypto)]
-fn response_signature_is_required(
-    requirement: ResponseSignatureRequirement,
-    xml: &str,
-) -> Result<bool, SamlError> {
-    match requirement {
-        ResponseSignatureRequirement::Optional => Ok(false),
-        ResponseSignatureRequirement::RequiredForEncryptedCbc => {
-            crate::crypto::enc::response_uses_cbc_encrypted_assertion(xml)
-        }
-        ResponseSignatureRequirement::Required => Ok(true),
-    }
-}
-
-/// Verify and optionally decrypt the message, returning the authenticated
-/// `(saml_content, assertion)`. Requires a crypto provider.
-#[cfg(crypto)]
-fn verify_and_prepare(
-    xml: String,
-    root: &crate::xml::dom::Node,
-    parser_type: ParserType,
-    opts: &FlowOptions<'_>,
-    assertion_signature: AssertionSignatureRequirement,
-    response_signature: ResponseSignatureRequirement,
-) -> Result<PreparedMessage, SamlError> {
-    use crate::crypto::{
-        enc::{decrypt_assertions_with_limits, AssertionDecryptionOptions},
-        keys::load_decryption_keys,
-    };
-
-    let evidence = verify_embedded_signature(&xml, opts)?;
-    let response_signature_required = response_signature_is_required(response_signature, &xml)?;
-    if response_signature_required {
-        if !evidence.verified {
-            return Err(required_xml_signature_failed(evidence.signature_present));
-        }
-        require_response_coverage(response_signature_required, evidence.response_covered)?;
-    }
-    if let Some(key) = crate::encrypted_elements::encrypted_assertion_key(root, parser_type, opts) {
-        let decrypt_options = AssertionDecryptionOptions {
-            allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
-            max_decryption_work: opts.max_decryption_work,
-        };
-        let load_keys =
-            || load_decryption_keys(key, opts.decrypt_key_pass, opts.additional_decrypt_keys);
-        if !evidence.verified {
-            // encrypted-then-signed: decrypt first, then verify the result.
-            let (content, _) = decrypt_assertions_with_limits(
-                &xml,
-                &load_keys()?,
-                decrypt_options,
-                opts.xml_limits,
-            )?;
-            crate::schema::document(&content, opts.xml_limits, opts.schema_validator)?;
-            validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
-            let re_evidence = verify_embedded_signature(&content, opts)?;
-            if !re_evidence.verified {
-                return Err(required_xml_signature_failed(re_evidence.signature_present));
-            }
-            require_direct_assertion_coverage(
-                assertion_signature,
-                re_evidence.assertion_directly_covered,
-            )?;
-            return Ok(PreparedMessage {
-                saml_content: content,
-                assertion: re_evidence.verified_node,
-                message_authenticated: false,
-                verified_xml_signatures: re_evidence.verified_xml_signatures,
-            });
-        }
-        if let Some(node) = evidence.verified_node.as_deref() {
-            // signed-then-encrypted
-            let signed_content = if evidence.response_covered {
-                &xml
-            } else {
-                node
-            };
-            let (content, assertions) = decrypt_assertions_with_limits(
-                signed_content,
-                &load_keys()?,
-                decrypt_options,
-                opts.xml_limits,
-            )?;
-            crate::schema::document(&content, opts.xml_limits, opts.schema_validator)?;
-            validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
-            let assertion = first_login_assertion_xml(&content, opts.xml_limits)?;
-            let mut verified_xml_signatures = evidence.verified_xml_signatures.clone();
-            let consumed_was_decrypted = assertions
-                .iter()
-                .any(|decrypted| Some(decrypted.as_str()) == assertion.as_deref());
-            if consumed_was_decrypted {
-                for signature in &mut verified_xml_signatures {
-                    signature.assertion_directly_covered = false;
-                }
-            }
-            if assertion_signature == AssertionSignatureRequirement::Direct {
-                let carries_plaintext_assertion = root
-                    .children
-                    .iter()
-                    .any(|child| child.local_name == "Assertion");
-                if carries_plaintext_assertion {
-                    require_direct_assertion_coverage(
-                        assertion_signature,
-                        evidence.assertion_directly_covered,
-                    )?;
-                }
-                verified_xml_signatures.extend(verify_decrypted_assertions(
-                    &assertions,
-                    assertion.as_deref(),
-                    opts,
-                )?);
-            } else {
-                for decrypted in &assertions {
-                    verify_present_signatures(decrypted, opts)?;
-                }
-            }
-            return Ok(PreparedMessage {
-                assertion,
-                saml_content: content,
-                message_authenticated: evidence.response_covered,
-                verified_xml_signatures,
-            });
-        }
-    }
-    if evidence.verified {
-        require_direct_assertion_coverage(
-            assertion_signature,
-            evidence.assertion_directly_covered,
-        )?;
-        if matches!(
-            parser_type,
-            ParserType::SamlRequest
-                | ParserType::LogoutRequest
-                | ParserType::LogoutResponse
-                | ParserType::ManageNameIdRequest
-                | ParserType::ManageNameIdResponse
-        ) {
-            let content = evidence
-                .verified_node
-                .ok_or_else(verified_content_not_covered)?;
-            return Ok(PreparedMessage {
-                saml_content: content,
-                assertion: None,
-                message_authenticated: true,
-                verified_xml_signatures: evidence.verified_xml_signatures,
-            });
-        }
-        return Ok(PreparedMessage {
-            saml_content: xml,
-            assertion: evidence.verified_node,
-            message_authenticated: evidence.response_covered,
-            verified_xml_signatures: evidence.verified_xml_signatures,
-        });
-    }
-    Err(required_xml_signature_failed(evidence.signature_present))
 }
 
 #[cfg(not(crypto))]
@@ -771,6 +516,89 @@ fn signature_is_present(
     detached || !saml_signature_candidates(root).is_empty()
 }
 
+fn prepare_after_detached_signature(
+    xml: String,
+    root: &crate::xml::dom::Node,
+    parser_type: ParserType,
+    opts: &FlowOptions<'_>,
+    assertion_signature: AssertionSignatureRequirement,
+) -> Result<PreparedMessage, SamlError> {
+    let signed_request =
+        parser_type == ParserType::SamlRequest && !saml_signature_candidates(root).is_empty();
+    let direct_assertion_signature = parser_type == ParserType::SamlResponse
+        && assertion_signature == AssertionSignatureRequirement::Direct;
+    if signed_request || direct_assertion_signature {
+        return verify_and_prepare(
+            xml,
+            root,
+            parser_type,
+            opts,
+            assertion_signature,
+            ResponseSignatureRequirement::Optional,
+        );
+    }
+    if parser_type == ParserType::SamlResponse {
+        verify_present_signatures(&xml, opts)?;
+    }
+    let Some((saml_content, assertions)) =
+        crate::encrypted_elements::decrypt_detached_signed_assertions(
+            &xml,
+            root,
+            parser_type,
+            opts,
+        )?
+    else {
+        return PreparedMessage::received(xml, parser_type, opts.xml_limits);
+    };
+    for decrypted in &assertions {
+        verify_present_signatures(decrypted, opts)?;
+    }
+    Ok(PreparedMessage {
+        assertion: first_login_assertion_xml(&saml_content, opts.xml_limits)?,
+        saml_content,
+        message_authenticated: false,
+        verified_xml_signatures: Vec::new(),
+    })
+}
+
+fn decrypt_assertion_elements(
+    prepared: PreparedMessage,
+    parser_type: ParserType,
+    signature_verified: bool,
+    opts: &FlowOptions<'_>,
+) -> Result<PreparedMessage, SamlError> {
+    let decrypt = parser_type == ParserType::SamlResponse
+        && (opts.assertion_elements.is_selected()
+            || (signature_verified
+                && opts.decrypt_key.is_some()
+                && crate::encrypted_elements::carries_encrypted_elements(&prepared.saml_content)?));
+    if !decrypt {
+        return Ok(prepared);
+    }
+    if !signature_verified {
+        return Err(SamlError::SignatureMissing);
+    }
+    let key_pem = opts
+        .decrypt_key
+        .ok_or_else(|| SamlError::MissingKey("decryption_key".into()))?;
+    crate::encrypted_elements::require_one_assertion_unless_message_authenticated(
+        &prepared.saml_content,
+        prepared.message_authenticated,
+        opts.xml_limits,
+    )?;
+    let (saml_content, assertion) = crate::encrypted_elements::decrypt_verified_assertion_elements(
+        &prepared.saml_content,
+        prepared.assertion.as_deref(),
+        key_pem,
+        opts,
+    )?;
+    Ok(PreparedMessage {
+        saml_content,
+        assertion,
+        ..prepared
+    })
+}
+
 fn flow_inner(
     opts: &FlowOptions<'_>,
     request: &HttpRequest,
@@ -815,128 +643,52 @@ fn flow_inner(
         SignatureCheck::VerifyIfPresent => signature_is_present(binding, request, &document.root),
         SignatureCheck::Require => true,
     };
-    let (saml_content, assertion, sig_alg, message_authenticated, verified_xml_signatures) =
-        if verify_signature {
-            match binding {
-                Binding::Redirect | Binding::SimpleSign => {
-                    let sig_alg = verify_detached(binding, parser_type, request, opts, &xml)?;
-                    let signed_request = parser_type == ParserType::SamlRequest
-                        && !saml_signature_candidates(&document.root).is_empty();
-                    let prepared = if signed_request
-                        || (parser_type == ParserType::SamlResponse
-                            && assertion_signature == AssertionSignatureRequirement::Direct)
-                    {
-                        verify_and_prepare(
-                            xml,
-                            &document.root,
-                            parser_type,
-                            opts,
-                            assertion_signature,
-                            ResponseSignatureRequirement::Optional,
-                        )?
-                    } else {
-                        if parser_type == ParserType::SamlResponse {
-                            verify_present_signatures(&xml, opts)?;
-                        }
-                        if let Some((saml_content, assertions)) =
-                            crate::encrypted_elements::decrypt_detached_signed_assertions(
-                                &xml,
-                                &document.root,
-                                parser_type,
-                                opts,
-                            )?
-                        {
-                            for decrypted in &assertions {
-                                verify_present_signatures(decrypted, opts)?;
-                            }
-                            PreparedMessage {
-                                assertion: first_login_assertion_xml(
-                                    &saml_content,
-                                    opts.xml_limits,
-                                )?,
-                                saml_content,
-                                message_authenticated: false,
-                                verified_xml_signatures: Vec::new(),
-                            }
-                        } else {
-                            let assertion = if parser_type == ParserType::SamlResponse {
-                                first_login_assertion_xml(&xml, opts.xml_limits)?
-                            } else {
-                                None
-                            };
-                            PreparedMessage {
-                                saml_content: xml,
-                                assertion,
-                                message_authenticated: false,
-                                verified_xml_signatures: Vec::new(),
-                            }
-                        }
-                    };
-                    (
-                        prepared.saml_content,
-                        prepared.assertion,
-                        Some(sig_alg),
-                        true,
-                        prepared.verified_xml_signatures,
-                    )
-                }
-                _ => {
-                    let prepared = verify_and_prepare(
-                        xml,
-                        &document.root,
-                        parser_type,
-                        opts,
-                        assertion_signature,
-                        response_signature,
-                    )?;
-                    (
-                        prepared.saml_content,
-                        prepared.assertion,
-                        None,
-                        prepared.message_authenticated,
-                        prepared.verified_xml_signatures,
-                    )
-                }
-            }
-        } else {
-            let assertion = if parser_type == ParserType::SamlResponse {
-                first_login_assertion_xml(&xml, opts.xml_limits)?
-            } else {
-                None
-            };
-            (xml, assertion, None, false, Vec::new())
-        };
+    let (prepared, sig_alg) = match (verify_signature, binding) {
+        (false, _) => (
+            PreparedMessage::received(xml, parser_type, opts.xml_limits)?,
+            None,
+        ),
+        (true, Binding::Redirect | Binding::SimpleSign) => {
+            let sig_alg = verify_detached(binding, parser_type, request, opts, &xml)?;
+            let prepared = prepare_after_detached_signature(
+                xml,
+                &document.root,
+                parser_type,
+                opts,
+                assertion_signature,
+            )?;
+            (
+                PreparedMessage {
+                    message_authenticated: true,
+                    ..prepared
+                },
+                Some(sig_alg),
+            )
+        }
+        (true, Binding::Post | Binding::Artifact | Binding::Soap) => (
+            verify_and_prepare(
+                xml,
+                &document.root,
+                parser_type,
+                opts,
+                assertion_signature,
+                response_signature,
+            )?,
+            None,
+        ),
+    };
     if opts.require_encrypted_assertions && document.root.child_named("Assertion").is_some() {
         return Err(SamlError::EncryptionRequired {
             element: "Assertion",
         });
     }
     drop(document);
-    let decrypt_elements = parser_type == ParserType::SamlResponse
-        && (opts.assertion_elements.is_selected()
-            || (verify_signature
-                && opts.decrypt_key.is_some()
-                && crate::encrypted_elements::carries_encrypted_elements(&saml_content)?));
-    let (saml_content, assertion) = match (decrypt_elements, verify_signature) {
-        (true, true) => {
-            let key_pem = opts
-                .decrypt_key
-                .ok_or_else(|| SamlError::MissingKey("decryption_key".into()))?;
-            crate::encrypted_elements::require_one_assertion_unless_message_authenticated(
-                &saml_content,
-                message_authenticated,
-                opts.xml_limits,
-            )?;
-            crate::encrypted_elements::decrypt_verified_assertion_elements(
-                &saml_content,
-                assertion.as_deref(),
-                key_pem,
-                opts,
-            )?
-        }
-        (true, false) => return Err(SamlError::SignatureMissing),
-        (false, _) => (saml_content, assertion),
-    };
+    let PreparedMessage {
+        saml_content,
+        assertion,
+        message_authenticated,
+        verified_xml_signatures,
+    } = decrypt_assertion_elements(prepared, parser_type, verify_signature, opts)?;
 
     let fields = default_fields(parser_type, assertion.as_deref())?;
     let extracted = extract_with_limits(&saml_content, &fields, opts.xml_limits)?;
@@ -994,92 +746,4 @@ pub(crate) fn flow_with_expected_recipient_and_signature_evidence(
         response_signature,
         signed_destination,
     )
-}
-
-#[cfg(all(test, crypto))]
-mod tests {
-    use super::*;
-    use crate::constants::signature_algorithm::RSA_SHA256;
-
-    #[test]
-    fn detached_verification_preserves_provider_error() {
-        let certificates = vec!["not a certificate".to_string()];
-        let options = FlowOptions {
-            signing_certs: &certificates,
-            ..Default::default()
-        };
-        let octet = url::form_urlencoded::Serializer::new(String::new())
-            .append_pair("SAMLRequest", "payload")
-            .append_pair("SigAlg", RSA_SHA256)
-            .finish();
-        let request = HttpRequest {
-            query: vec![
-                ("SAMLRequest".into(), "payload".into()),
-                ("SigAlg".into(), RSA_SHA256.into()),
-                ("Signature".into(), "AA==".into()),
-            ],
-            octet_string: Some(octet),
-            ..Default::default()
-        };
-
-        assert!(matches!(
-            verify_detached(
-                Binding::Redirect,
-                ParserType::SamlRequest,
-                &request,
-                &options,
-                "<samlp:AuthnRequest/>",
-            ),
-            Err(SamlError::Crypto { .. })
-        ));
-    }
-
-    #[test]
-    fn detached_rolling_cert_unloadable_peer_keeps_invalid_verdict(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        const SP_PRIVKEY: &str =
-            include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-        const SP_CERT: &str = include_str!("../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-
-        let key = crate::crypto::keys::read_private_key(SP_PRIVKEY, None)?;
-        let signature = crate::crypto::sign_octet_string("SAMLRequest=other", &key, RSA_SHA256)?;
-        let octet = url::form_urlencoded::Serializer::new(String::new())
-            .append_pair("SAMLRequest", "payload")
-            .append_pair("SigAlg", RSA_SHA256)
-            .finish();
-        let request = HttpRequest {
-            query: vec![
-                ("SAMLRequest".into(), "payload".into()),
-                ("SigAlg".into(), RSA_SHA256.into()),
-                ("Signature".into(), signature),
-            ],
-            octet_string: Some(octet),
-            ..Default::default()
-        };
-        let garbage = "not a certificate".to_string();
-        let signer = SP_CERT.to_string();
-
-        for certificates in [vec![garbage.clone(), signer.clone()], vec![signer, garbage]] {
-            let options = FlowOptions {
-                signing_certs: &certificates,
-                ..Default::default()
-            };
-            assert!(
-                matches!(
-                    verify_detached(
-                        Binding::Redirect,
-                        ParserType::SamlRequest,
-                        &request,
-                        &options,
-                        "<samlp:AuthnRequest/>",
-                    ),
-                    Err(SamlError::SignatureVerification {
-                        reason: SignatureVerificationReason::BindingSignature,
-                    })
-                ),
-                "unloadable leftover must not replace detached-invalid with Crypto"
-            );
-        }
-        Ok(())
-    }
 }
