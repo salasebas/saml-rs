@@ -242,11 +242,24 @@ impl SsoSession {
     /// The `NotOnOrAfter` of the assertion `Conditions`, when present.
     ///
     /// An accepted value is a UTC `xs:dateTime` ending in `Z`, normalized
-    /// according to XML Schema whitespace rules. The `SessionNotOnOrAfter` of
-    /// a statement is
-    /// [`AuthnStatement::session_not_on_or_after`].
+    /// according to XML Schema whitespace rules. Use
+    /// [`Self::session_not_on_or_after`] for the application session deadline.
     pub fn not_on_or_after(&self) -> Option<&SamlInstant> {
         self.not_on_or_after.as_ref()
+    }
+
+    /// The earliest `SessionNotOnOrAfter` in the consumed assertion.
+    ///
+    /// Returns `None` when its authentication statements specify no deadline.
+    /// Use this deadline to cap the application's session lifetime. The value
+    /// retains the precision sent by the identity provider, before clock skew.
+    pub fn session_not_on_or_after(&self) -> Option<&SamlInstant> {
+        // Acceptance restricts these values to fixed-width RFC 3339 UTC date
+        // and time fields. Removing Z lets a whole second sort before fractions.
+        self.authn_statements
+            .iter()
+            .filter_map(AuthnStatement::session_not_on_or_after)
+            .min_by_key(|deadline| deadline.as_str().trim_end_matches('Z'))
     }
 
     /// The `SigAlg` URI of the verified binding signature, when the response

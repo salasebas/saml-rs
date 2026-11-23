@@ -12,14 +12,15 @@ use super::SamlError;
 /// Inputs for the assertion a successful login response carries.
 ///
 /// The caller chooses the subject `NameId` and, optionally, the attributes,
-/// the authentication context, and the authentication instant. The library
-/// writes the rest of the assertion.
+/// the authentication context, the authentication instant, and the session
+/// deadline. The library writes the rest of the assertion.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SsoAssertion {
     name_id: NameId,
     attributes: Attributes,
     authn_context: Option<AuthnContextReference>,
     authn_instant: Option<SystemTime>,
+    session_not_on_or_after: Option<SystemTime>,
 }
 
 impl SsoAssertion {
@@ -33,6 +34,7 @@ impl SsoAssertion {
             attributes: Attributes::default(),
             authn_context: None,
             authn_instant: None,
+            session_not_on_or_after: None,
         }
     }
 
@@ -88,6 +90,18 @@ impl SsoAssertion {
         self.authn_instant = Some(authn_instant);
         self
     }
+
+    /// Set `SessionNotOnOrAfter` on the assertion's `AuthnStatement`.
+    ///
+    /// Pass the latest time the service provider's application session may
+    /// last. The identity provider writes the deadline in UTC, independently
+    /// of the assertion's validity window. By default it omits the attribute.
+    /// Issuance returns [`SamlError::Invalid`] if the deadline is outside
+    /// years 1 through 9999.
+    pub fn session_not_on_or_after(mut self, deadline: SystemTime) -> Self {
+        self.session_not_on_or_after = Some(deadline);
+        self
+    }
 }
 
 /// What a login `<Response>` reports.
@@ -116,6 +130,7 @@ pub(super) struct OutcomeParts<'a> {
     pub(super) typed_attributes: &'a [Attribute],
     pub(super) authn_context: Option<&'a AuthnContextReference>,
     pub(super) authn_instant: Option<SystemTime>,
+    pub(super) session_not_on_or_after: Option<SystemTime>,
 }
 
 impl SsoOutcome {
@@ -129,6 +144,7 @@ impl SsoOutcome {
                 typed_attributes: assertion.attributes.as_slice(),
                 authn_context: assertion.authn_context.as_ref(),
                 authn_instant: assertion.authn_instant,
+                session_not_on_or_after: assertion.session_not_on_or_after,
             }),
             Self::Failure(status) if status.top_level() == TopLevelStatusCode::Success => Err(
                 SamlError::Invalid("a failure response requires an error status".into()),
@@ -141,6 +157,7 @@ impl SsoOutcome {
                 typed_attributes: &[],
                 authn_context: None,
                 authn_instant: None,
+                session_not_on_or_after: None,
             }),
         }
     }

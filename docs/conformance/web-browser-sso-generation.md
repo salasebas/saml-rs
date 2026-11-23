@@ -61,6 +61,8 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Write the assertion ID as the `SessionIndex` | Recommended | Core §2.7.2 | Always |
 | Write `AuthnInstant` and an `AuthnContext` on the `AuthnStatement` | Mandatory | Core §2.7.2, `AuthnStatementType` | Always |
 | Write the caller's authentication time in UTC as `AuthnInstant` | Mandatory | Core §2.7.2, §1.3.3 | `SsoAssertion::authn_instant` |
+| Write the caller's session deadline in UTC as `SessionNotOnOrAfter`. Omit it when unset | Optional | Core §1.3.3, §2.7.2, `AuthnStatementType`, E79 | `SsoAssertion::session_not_on_or_after` |
+| Reject a supplied session deadline outside years 1 through 9999 | Library policy: this is the date range supported by the session time parser. | Core §1.3.3 | `SsoAssertion::session_not_on_or_after` |
 | Write the assertion `IssueInstant` as `AuthnInstant` when the caller sets none | Library policy: reason not recorded. | Core §2.7.2 | `SsoAssertion::authn_instant` |
 | Reject an `AuthnInstant` later than the response `IssueInstant` | Library policy: an assertion cannot report an authentication after it was issued. | Core §2.7.2 | `SsoAssertion::authn_instant` |
 | Reject an `AuthnInstant` before year 1 | Library policy: the formatter writes a four-digit non-negative year. | Core §1.3.3 | `SsoAssertion::authn_instant` |
