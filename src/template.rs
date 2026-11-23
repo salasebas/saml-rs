@@ -160,8 +160,8 @@ enum OptionalElement {
 /// the elements whose only content is one `absent` text node.
 fn omit_absent_markup(raw_xml: &str, absent: impl Fn(&str) -> bool) -> Result<String, SamlError> {
     let mut output = String::with_capacity(raw_xml.len());
-    // quick-xml skips a leading byte order mark and leaves it out of its
-    // positions.
+    // quick-xml skips one leading byte order mark and counts its positions
+    // from the byte after it.
     let markup = match raw_xml.strip_prefix('\u{feff}') {
         Some(markup) => {
             output.push('\u{feff}');
@@ -169,7 +169,7 @@ fn omit_absent_markup(raw_xml: &str, absent: impl Fn(&str) -> bool) -> Result<St
         }
         None => raw_xml,
     };
-    let mut reader = Reader::from_str(markup);
+    let mut reader = Reader::from_str(raw_xml);
     let mut element = None;
     loop {
         let start = position(&reader)?;
@@ -608,6 +608,9 @@ mod tests {
         let rendered =
             replace_tags_by_optional_value("\u{feff}<a x=\"{X}\">v</a>", &[("X", None)])?;
         assert_eq!(rendered, "\u{feff}<a>v</a>");
+        let rendered =
+            replace_tags_by_optional_value("\u{feff}\u{feff}<a x=\"{X}\">v</a>", &[("X", None)])?;
+        assert_eq!(rendered, "\u{feff}\u{feff}<a>v</a>");
         Ok(())
     }
 
