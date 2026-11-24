@@ -3,8 +3,7 @@ use crate::constants::{Binding, ParserType};
 use std::time::{Duration, SystemTime};
 
 #[test]
-fn confirmation_attributes_with_the_same_local_name_use_the_first_value(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn confirmation_checks_read_the_unqualified_attributes() -> Result<(), Box<dyn std::error::Error>> {
     let xml = r#"<Response><Assertion><Subject>
         <SubjectConfirmation xmlns:extra="urn:extra"
             Method="urn:oasis:names:tc:SAML:2.0:cm:bearer" extra:Method="other">
@@ -26,12 +25,7 @@ fn confirmation_attributes_with_the_same_local_name_use_the_first_value(
         "Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\" extra:Method=\"other\"",
         "extra:Method=\"other\" Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"",
     );
-    assert!(matches!(
-        accept_response_assertions(&reversed, &opts, Some("https://sp/acs")),
-        Err(SamlError::SubjectConfirmationInvalid {
-            reason: SubjectConfirmationReason::InvalidMethod
-        })
-    ));
+    accept_response_assertions(&reversed, &opts, Some("https://sp/acs"))?;
     Ok(())
 }
 

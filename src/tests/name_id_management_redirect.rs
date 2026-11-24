@@ -1188,16 +1188,27 @@ fn error_status_is_reported_only_for_an_authenticated_matching_response() -> Tes
         other => return Err(format!("expected InResponseToMismatch, got {other:?}").into()),
     }
 
-    let matching = signed_response_input(&sp_error_response_xml(request_id))?;
-    match idp.finish_name_id_management_redirect(&sp_peer, &started.pending, matching, validation())
-    {
-        Err(SamlError::StatusNotSuccess { status, .. })
-            if status.top_level().as_uri() == status_code::REQUESTER =>
-        {
-            Ok(())
+    let padded = sp_error_response_xml(request_id).replacen(
+        &format!("InResponseTo=\"{request_id}\""),
+        &format!(
+            "xmlns:InResponseTo=\"urn:example:prefix\" InResponseTo=\"&#10; {request_id}&#9;\""
+        ),
+        1,
+    );
+    for xml in [sp_error_response_xml(request_id), padded] {
+        let matching = signed_response_input(&xml)?;
+        match idp.finish_name_id_management_redirect(
+            &sp_peer,
+            &started.pending,
+            matching,
+            validation(),
+        ) {
+            Err(SamlError::StatusNotSuccess { status, .. })
+                if status.top_level().as_uri() == status_code::REQUESTER => {}
+            other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
         }
-        other => Err(format!("expected StatusNotSuccess, got {other:?}").into()),
     }
+    Ok(())
 }
 
 #[test]

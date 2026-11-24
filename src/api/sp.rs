@@ -435,8 +435,8 @@ impl ServiceProvider {
     /// [`SamlError::InResponseToMismatch`] when a successful response carries an
     /// `InResponseTo` attribute, including an empty one. A bearer
     /// `SubjectConfirmationData` that carries one leaves its confirmation
-    /// unsatisfied. When no other bearer confirmation of the assertion is
-    /// satisfied, returns [`SamlError::SubjectConfirmationInvalid`] with the
+    /// unsatisfied. When no other bearer confirmation of the selected assertion
+    /// is satisfied, returns [`SamlError::SubjectConfirmationInvalid`] with the
     /// reason of the last confirmation checked. A status
     /// other than `Success` returns
     /// [`SamlError::StatusNotSuccess`] once all present signatures verify and

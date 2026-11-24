@@ -37,7 +37,7 @@ not parse, it is stored until the replay deadline of the session's assertion.
 On `accept_unsolicited_sso`, a bearer `SubjectConfirmationData` that carries
 `InResponseTo`, even an empty one, now leaves only its own confirmation
 unsatisfied. The response is accepted when another bearer confirmation of the
-assertion is satisfied. Otherwise, the result is
+selected assertion is satisfied. Otherwise, the result is
 `SamlError::SubjectConfirmationInvalid`, as `finish_sso` returns for a bearer
 `InResponseTo` that does not match. Its reason is the failure of the last
 confirmation checked: `SubjectConfirmationReason::InResponseToMismatch` when
@@ -76,6 +76,6 @@ value without the whitespace. The service provider reads the SSO `Response`
 `ID`, `IssueInstant`, `Destination`, and `InResponseTo`, and the assertion
 `ID` and `IssueInstant`, only from unqualified attributes. Both providers do
 the same for the `ID`, `IssueInstant`, `Destination`, and `InResponseTo` of a
-`LogoutResponse` or `ManageNameIDResponse`. Before, a namespace declaration or
-a namespace-qualified attribute with the same local name could supply the
-value.
+`LogoutResponse` or `ManageNameIDResponse`, and read a `SubjectConfirmation`
+`Method` the same way. Before, a namespace declaration with the same local
+name, such as `xmlns:InResponseTo`, could supply the value.

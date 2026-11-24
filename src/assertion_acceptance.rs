@@ -160,7 +160,7 @@ fn node_has_bearer(assertion: &Node) -> bool {
 
 fn is_bearer_confirmation(confirmation: &Node) -> bool {
     confirmation
-        .attr("Method")
+        .unqualified_attr("Method")
         .is_some_and(|method| collapse_whitespace(method) == BEARER_SUBJECT_CONFIRMATION_METHOD)
 }
 

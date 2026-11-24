@@ -141,3 +141,21 @@ fn assertions_with_distinct_ids_are_accepted_when_each_declares_a_prefix_named_i
     assert_eq!(stored, expected);
     Ok(())
 }
+
+#[test]
+fn a_bearer_confirmation_is_found_when_it_declares_a_prefix_named_method(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_simple_sign(SpValidationPolicy::default())?;
+    let xml = strip_embedded_signatures(&response_xml(&exchange.response_fields)?)?;
+    let declared = xml.replacen(
+        "<saml:SubjectConfirmation Method=",
+        "<saml:SubjectConfirmation xmlns:Method=\"urn:example:prefix\" Method=",
+        1,
+    );
+    assert_ne!(declared, xml);
+
+    let session = accept_simple_sign(&exchange, &declared)?;
+
+    assert_eq!(session.name_id().value(), "alice@example.com");
+    Ok(())
+}
