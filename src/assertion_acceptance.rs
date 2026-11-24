@@ -262,7 +262,7 @@ fn principal_of(assertion: &Node) -> Result<Principal, SamlError> {
         name_id: name_id.text.clone(),
         format: name_id
             .attr("Format")
-            .map(str::to_string)
+            .map(collapse_whitespace)
             .unwrap_or_else(|| crate::constants::name_id_format::UNSPECIFIED.to_string()),
         name_qualifier: name_id.attr("NameQualifier").map(str::to_string),
         sp_name_qualifier: name_id.attr("SPNameQualifier").map(str::to_string),

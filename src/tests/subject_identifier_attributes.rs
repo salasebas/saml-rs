@@ -185,6 +185,23 @@ fn service_provider_reads_an_identifier_with_the_uri_or_unspecified_name_format_
 }
 
 #[test]
+fn service_provider_reads_an_identifier_by_the_schema_value_of_its_name_format(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let session = accept_peer_attribute_statement(&statement(&format!(
+        "<saml:Attribute Name=\"{SUBJECT_ID}\" NameFormat=\" {URI}&#9;\">\
+         <saml:AttributeValue>alice@example.org</saml:AttributeValue></saml:Attribute>\
+         <saml:Attribute Name=\" {PAIRWISE_ID}\" NameFormat=\"{URI}\">\
+         <saml:AttributeValue>HA2TKNZZ=@example.org</saml:AttributeValue></saml:Attribute>"
+    )))?;
+    assert_eq!(
+        session.subject_id()?,
+        Some(SubjectId::try_new("alice@example.org")?)
+    );
+    assert_eq!(session.pairwise_id()?, None);
+    Ok(())
+}
+
+#[test]
 fn service_provider_strips_xml_whitespace_around_an_identifier(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let session = accept_peer_attribute_statement(&statement(&format!(

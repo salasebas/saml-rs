@@ -97,7 +97,9 @@ pub(super) fn name_id_from_extract(extract: &Value, value: &str) -> NameId {
     let qualifier = |field| extract.get_str(field).map(str::to_owned);
     NameId::received(
         value,
-        extract.get_str(name_id::FORMAT).map(NameIdFormat::from_uri),
+        extract
+            .get_str(name_id::FORMAT)
+            .map(|format| NameIdFormat::from_uri(&collapse_whitespace(format))),
         qualifier(name_id::NAME_QUALIFIER),
         qualifier(name_id::SP_NAME_QUALIFIER),
         qualifier(name_id::SP_PROVIDED_ID),
@@ -155,14 +157,16 @@ pub(super) fn attributes_from_extract(extract: &Value) -> Result<Attributes, Sam
         ));
     }
     let mut attributes: Vec<Attribute> = Vec::new();
-    let mut positions: HashMap<(&str, &str), usize> = HashMap::new();
+    let mut positions: HashMap<(&str, String), usize> = HashMap::new();
     for element in elements {
         let name = element.get_str(attribute::NAME).ok_or_else(|| {
             SamlError::ProtocolProfile(
                 "Attribute is missing required unqualified attribute Name".into(),
             )
         })?;
-        let name_format = element.get_str(attribute::NAME_FORMAT);
+        let name_format = element
+            .get_str(attribute::NAME_FORMAT)
+            .map(collapse_whitespace);
         let friendly_name = element.get_str(attribute::FRIENDLY_NAME);
         let values = element
             .get(attribute::VALUES)
@@ -174,7 +178,9 @@ pub(super) fn attributes_from_extract(extract: &Value) -> Result<Attributes, Sam
             .map(AttributeValue::new);
         let identity = (
             name,
-            name_format.unwrap_or(attribute_name_format::UNSPECIFIED),
+            name_format
+                .clone()
+                .unwrap_or_else(|| attribute_name_format::UNSPECIFIED.to_string()),
         );
         match positions.get(&identity) {
             Some(&position) => attributes[position].extend_values(values),
@@ -182,7 +188,7 @@ pub(super) fn attributes_from_extract(extract: &Value) -> Result<Attributes, Sam
                 positions.insert(identity, attributes.len());
                 attributes.push(Attribute::received(
                     name,
-                    name_format,
+                    name_format.as_deref(),
                     friendly_name,
                     values.collect(),
                 ));
