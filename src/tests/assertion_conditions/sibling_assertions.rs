@@ -106,3 +106,23 @@ fn assertions_that_share_an_id_are_rejected_without_an_embedded_signature(
         |error| matches!(error, SamlError::PotentialWrappingAttack),
     )
 }
+
+#[test]
+fn assertions_with_distinct_ids_are_accepted_when_each_declares_a_prefix_named_id(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_simple_sign(SpValidationPolicy::default())?;
+    let original = strip_embedded_signatures(&response_xml(&exchange.response_fields)?)?;
+    let xml = duplicate_assertion(&original, "_second_assertion")?.replace(
+        "<saml:Assertion ",
+        "<saml:Assertion xmlns:ID=\"urn:example:shared\" ",
+    );
+    assert_eq!(xml.matches("xmlns:ID=").count(), 2);
+
+    let session = accept_simple_sign(&exchange, &xml)?;
+
+    assert_eq!(
+        session.assertion_id().as_str(),
+        assertion_ids(&original)?[0]
+    );
+    Ok(())
+}

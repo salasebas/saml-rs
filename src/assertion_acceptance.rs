@@ -54,7 +54,7 @@ pub(crate) fn accept_response_assertions(
         let mut ids = HashSet::new();
         if assertions
             .iter()
-            .filter_map(|assertion| assertion.attr("ID"))
+            .filter_map(|assertion| assertion.unqualified_attr("ID"))
             .any(|id| !ids.insert(collapse_whitespace(id)))
         {
             return Err(SamlError::PotentialWrappingAttack);
@@ -136,7 +136,7 @@ pub(crate) fn assertion_replays(
         .into_iter()
         .filter_map(|assertion| {
             Some(AssertionReplayId {
-                id: assertion.attr("ID")?.to_string(),
+                id: assertion.unqualified_attr("ID")?.to_string(),
                 bearer_not_on_or_after: latest_bearer_not_on_or_after(subject_confirmations(
                     assertion,
                 )),

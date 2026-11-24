@@ -28,3 +28,19 @@ fn finish_sso_reads_each_in_response_to_after_whitespace_collapse(
     }
     Ok(())
 }
+
+#[test]
+fn an_unsolicited_session_ignores_a_namespace_prefix_named_in_response_to(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_for(SpValidationPolicy::default(), true)?;
+    let xml = response_xml(&exchange.response_fields)?.replacen(
+        "<samlp:Response ",
+        "<samlp:Response xmlns:InResponseTo=\"urn:example:correlation\" ",
+        1,
+    );
+
+    let session = accept(&exchange, &resigned(&xml)?)?;
+
+    assert_eq!(session.in_response_to(), None);
+    Ok(())
+}

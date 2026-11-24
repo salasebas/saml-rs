@@ -18,18 +18,19 @@ bearer confirmation, `AudienceRestriction`, `Conditions` children or window,
 or `SessionNotOnOrAfter` fails. Before, the response returned
 `SamlError::SubjectConfirmationInvalid`, `SamlError::AudienceMismatch`,
 `SamlError::UnrecognizedCondition`, or `SamlError::TimeWindowInvalid`. The
-`SsoSession` accessors never read that assertion, and they still do not.
+`SsoSession` accessors read only the selected assertion.
 
 Each assertion must still name the same issuer and principal, and each
 signature must still verify. Two assertions with the same `ID`, compared after
-XML whitespace collapse, now return `SamlError::PotentialWrappingAttack` in
-every case. Before, only a response with an embedded signature was checked, so
-a SimpleSign response signed only through its binding signature, or an
-`ID` repeated only after decryption, could give the session the
-`AuthnContext` of another assertion. With `ReplayPolicy::RequireCache`, the cache
-still stores the identifier of every other assertion. When its latest bearer
-`NotOnOrAfter` has passed or does not parse, it is stored until the replay
-deadline of the session's assertion.
+XML whitespace collapse, are now rejected with
+`SamlError::PotentialWrappingAttack`. Before, only a response with an embedded
+signature was checked. A SimpleSign response signed only through its binding
+signature, or an `ID` repeated only after decryption, could give the session
+the `AuthnContext` of another assertion.
+
+With `ReplayPolicy::RequireCache`, the cache still stores the identifier of
+every other assertion. When its latest bearer `NotOnOrAfter` has passed or does
+not parse, it is stored until the replay deadline of the session's assertion.
 
 ## Match the new error for a bearer `InResponseTo` on an unsolicited response
 
@@ -71,4 +72,8 @@ whitespace is now accepted. Before, it returned
 `SamlError::InResponseToMismatch` or `SamlError::SubjectConfirmationInvalid`.
 
 `SsoSession::in_response_to` and `LogoutResponse::in_response_to` return the
-value without the whitespace.
+value without the whitespace. The service provider reads the SSO `Response`
+`ID`, `IssueInstant`, `Destination`, and `InResponseTo`, and the assertion
+`ID` and `IssueInstant`, only from unqualified attributes. Before, a namespace
+declaration or a namespace-qualified attribute with the same local name could
+supply the value.

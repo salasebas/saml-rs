@@ -187,23 +187,23 @@ pub fn login_request_fields() -> Vec<ExtractorField> {
 }
 
 pub(crate) fn login_error_response_fields() -> Vec<ExtractorField> {
-    vec![ExtractorField::new(response::KEY, &["Response"]).attrs(&["Destination", "InResponseTo"])]
+    vec![ExtractorField::new(response::KEY, &["Response"])
+        .attrs(&["Destination", "InResponseTo"])
+        .unqualified_attributes()]
 }
 
 pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(login_response::ASSERTION, &["Assertion"])
             .attrs(&["ID", "IssueInstant"])
+            .unqualified_attributes()
             .source_xml(assertion),
         ExtractorField::new(login_response::CONDITIONS, &["Assertion", "Conditions"])
             .attrs(&["NotBefore", "NotOnOrAfter"])
             .source_xml(assertion),
-        ExtractorField::new(response::KEY, &["Response"]).attrs(&[
-            "ID",
-            "IssueInstant",
-            "Destination",
-            "InResponseTo",
-        ]),
+        ExtractorField::new(response::KEY, &["Response"])
+            .attrs(&["ID", "IssueInstant", "Destination", "InResponseTo"])
+            .unqualified_attributes(),
         ExtractorField::new(
             login_response::AUDIENCE,
             &["Assertion", "Conditions", "AudienceRestriction", "Audience"],
