@@ -31,6 +31,9 @@ A second `Issuer` now returns `SamlError::ProtocolProfile` from
 `ArtifactResolution::finish` and `StartedNameIdManagement::finish`. Before,
 both read the first `Issuer`. The other flows already rejected it.
 
+Only the unqualified `Value` attribute of a `StatusCode` counts. Before, a
+namespace declaration such as `xmlns:Value` on a `StatusCode` could replace
+the code that SSO, logout, and HTTP-Redirect name identifier management read.
 `LogoutResponse::status` now returns the status codes that `finish_slo`
 validated.
 
@@ -108,9 +111,6 @@ match idp.answer_artifact_resolve(&sp, envelope, &received_at, &mut issued, chan
 	Ok(answer) => reply(200, answer.response().envelope()),
 	Err(SamlError::SoapChannelProtection) => reply(403, ""),
 	Err(SamlError::SoapEnvelope { fault, .. }) => reply(500, SoapFault::new(fault).envelope()),
-	Err(SamlError::SignatureVerification { .. }) => {
-		reply(500, SoapFault::new(SoapFaultCode::Client).envelope())
-	}
 	Err(_) => reply(500, SoapFault::new(SoapFaultCode::Server).envelope()),
 }
 ```
