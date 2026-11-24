@@ -144,7 +144,7 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Require a signed `AuthnRequest` | Optional | Metadata §2.4.3, E7 | `AuthnRequestValidationPolicy::RequireSigned` |
-| Reject an unsigned `AuthnRequest` from a service provider when any SAML 2.0 `SPSSODescriptor` for it sets `AuthnRequestsSigned` to true, and do not fulfill it | Mandatory | Metadata §2.4.4, E7 | Always |
+| Refuse an unsigned `AuthnRequest` when any SAML 2.0 `SPSSODescriptor` for the service provider sets `AuthnRequestsSigned` to true. Return only refusal data for an otherwise valid request | Mandatory | Metadata §2.4.4, E7 | Always |
 | Reject MD5, RIPEMD-160, and RSA keys shorter than 2048 bits | Library policy: see [weak algorithms and keys](xml-security-algorithms.md#weak-algorithms-and-keys). | XMLDSig 1.1 §6.2, Conformance §4.1 | `XmlSignatureProfile::AllowWeakAlgorithms` relaxes it |
 | Verify a signature on an `AuthnRequest` against the SP's signing credentials. The request has at most one direct `ds:Signature`. Redirect also verifies the query signature, and SimpleSign the detached signature when present, even when the request also carries an XML signature | Mandatory | Core §3.2.1, Bindings §3.4.4.1, CD-04 §2.4–2.6, §2.10 | Always |
 | Parse a SimpleSign `AuthnRequest` with neither `Signature` nor `SigAlg` as HTTP-POST and apply the same request signature policy. Use the original binding to select the endpoint for the `Destination` check | Optional | CD-04 §2.10 | Always |
@@ -153,7 +153,7 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 | Accept an `AuthnRequest` `IssueInstant` from now − `max_age` − past tolerance through now + future tolerance, inclusive. A positive `NotOnOrAfter` skew supplies the past tolerance, and a negative `NotBefore` skew supplies the future tolerance | Library policy: Core §1.3.3 defines no maximum age, and the limit can reject a conformant request. | Core §1.3.3 | `SamlValidationContext::with_authn_request_age`, `RequestAgePolicy::Bounded` |
 | Compare a present `Destination` with the receiving `SingleSignOnService` `Location` after collapsing XML whitespace. Require it on a signed request. `ResponseLocation` is unused | Mandatory | Core §3.2.1, Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4, Metadata §2.2.2, E41 | `SamlValidationContext::with_recipient_endpoint` |
 | When checking `Destination` in `receive_sso`, reject a supplied receiving URL that is not published for the incoming binding, and several published URLs without an explicit one | Library policy: the URL is caller input, and the restriction keeps a value derived from the request from naming an endpoint this identity provider does not operate for that binding. | Core §3.2.1 | `SamlValidationContext::with_recipient_endpoint` |
-| When issuing a response, require the requested `AssertionConsumerServiceIndex` or `AssertionConsumerServiceURL` to name the SP's assertion consumer. Collapse XML whitespace in the URL before comparing | Mandatory | Profiles §4.1.4.1, `AuthnRequestType`, XML Schema Part 2 §4.3.6 | Always |
+| Verify that a requested ACS URL or index used for delivery names the SP's assertion consumer. Collapse XML whitespace in a requested URL before comparing | Mandatory | Profiles §4.1.4.1, `AuthnRequestType`, XML Schema Part 2 §4.3.6 | Always |
 | Expose `ForceAuthn`, `IsPassive`, `RequestedAuthnContext`, the requested `Subject`, and `NameIDPolicy`. Presence never rejects the request, and the caller decides how to authenticate. A `Subject` with no identifier means the presenter | Optional | Core §3.4.1, §3.4.1.1, §3.4.1.4, E45, E75 | Always |
 | Allow at most one `RequestedAuthnContext`. Require one or more assertion-namespace references, all class or all declaration. Keep them in request order, most preferred first. An optional unqualified `Comparison` is `exact`, `minimum`, `maximum`, or `better`, and defaults to `exact` | Mandatory | Core §3.3.2.2.1, E45, `RequestedAuthnContextType` | Always |
 | Read context references with XML whitespace collapsed, including relative references | Library policy: Core §1.3.2 requires absolute URI references from the producer. | Core §1.3.2, XML Schema Part 2 §4.3.6 | `AuthnRequest::requested_authn_context` |
@@ -170,5 +170,4 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 
 ### Not implemented in the identity provider
 
-- The SAML error response to an unsigned `AuthnRequest` from a service provider when any SAML 2.0 `SPSSODescriptor` for it sets `AuthnRequestsSigned` to true. Mandatory, Metadata §2.4.4, E7.
 - Decoding of a `BaseID` in a requested `Subject`. Optional, Core §3.4.1.

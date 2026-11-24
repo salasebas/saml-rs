@@ -233,10 +233,12 @@ impl RespondSso {
 impl RespondSso<ArtifactDelivery> {
     /// Respond with HTTP-Artifact.
     ///
-    /// [`IdentityProvider::respond_sso_artifact`](crate::IdentityProvider::respond_sso_artifact)
+    /// Pass these options to
+    /// [`IdentityProvider::respond_sso_artifact`](crate::IdentityProvider::respond_sso_artifact),
+    /// [`IdentityProvider::respond_sso_refusal_artifact`](crate::IdentityProvider::respond_sso_refusal_artifact),
     /// and
-    /// [`IdentityProvider::initiate_sso_artifact`](crate::IdentityProvider::initiate_sso_artifact)
-    /// take these options. They store the response until the service
+    /// [`IdentityProvider::initiate_sso_artifact`](crate::IdentityProvider::initiate_sso_artifact).
+    /// These methods store the response until the service
     /// provider resolves the artifact. The stored response is signed the way
     /// an HTTP-POST response is.
     pub fn artifact(delivery: ArtifactDelivery) -> Self {
@@ -323,6 +325,8 @@ impl<Delivery> RespondSso<Delivery> {
     /// value unchanged, up to
     /// [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES),
     /// and setting one here returns [`SamlError::ProtocolProfile`](crate::SamlError::ProtocolProfile).
+    /// A refusal also returns that error when the caller sets RelayState and
+    /// the refused request carried none.
     /// A value set here must not exceed
     /// [`MAX_RELAY_STATE_BYTES`](crate::MAX_RELAY_STATE_BYTES).
     pub fn relay_state(mut self, relay_state: RelayState) -> Self {

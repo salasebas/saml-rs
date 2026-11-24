@@ -93,6 +93,20 @@ pub struct AuthnRequest {
     requested_authn_context: Option<RequestedAuthnContext>,
 }
 
+/// An unsigned authentication request that requires a SAML error response.
+#[derive(Clone)]
+pub struct RefusedAuthnRequest {
+    pub(crate) request: AuthnRequest,
+    pub(crate) relay_state: Option<super::RelayState>,
+}
+
+impl std::fmt::Debug for RefusedAuthnRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RefusedAuthnRequest")
+            .finish_non_exhaustive()
+    }
+}
+
 impl AuthnRequest {
     /// Request ID.
     pub fn id(&self) -> &MessageId {

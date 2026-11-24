@@ -6,8 +6,8 @@
 use crate::config::NameIdFormat;
 use crate::constants::Binding;
 use crate::model::{
-    AuthnContextReference, RefusedLogoutRequest, RelayState, ReplayKey, Status, StatusMessage,
-    SubordinateStatusCode,
+    AuthnContextReference, RefusedAuthnRequest, RefusedLogoutRequest, RelayState, ReplayKey,
+    Status, StatusMessage, SubordinateStatusCode,
 };
 use std::fmt;
 
@@ -518,6 +518,15 @@ pub enum SamlError {
     /// Required signature is absent.
     #[error("signature missing where required")]
     SignatureMissing,
+    /// The SP declared `AuthnRequestsSigned` and the request arrived unsigned.
+    #[error(
+        "unsigned authentication request from a service provider that declares AuthnRequestsSigned"
+    )]
+    #[non_exhaustive]
+    AuthnRequestRefused {
+        /// Data for a correlated SAML error response.
+        refusal: Box<RefusedAuthnRequest>,
+    },
     /// The identity provider's metadata sets `WantAuthnRequestsSigned`, and
     /// this service provider does not sign its `AuthnRequest`.
     #[error("identity provider requires signed AuthnRequests and this service provider does not sign them")]

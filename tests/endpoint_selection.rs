@@ -13,9 +13,9 @@ use saml_rs::constants::Binding;
 use saml_rs::{
     AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, AuthnRequest, EndpointUrl, EntityId,
     FormField, IdentityProvider, IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts,
-    MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, SamlError, SamlValidationContext,
-    ServiceProvider, SpConfig, SpDescriptor, SsoAssertion, SsoEndpoint, SsoResponseBinding,
-    StartSso,
+    MetadataTrustPolicy, NameId, RelayState, ReplayPolicy, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SsoAssertion, SsoEndpoint,
+    SsoOutcome, SsoResponseBinding, StartSso, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -337,6 +337,97 @@ fn protocol_binding_alone_uses_the_binding_default() -> Result<(), Box<dyn std::
                 );
             }
             _ => return Err("unsupported response binding".into()),
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn a_stale_acs_index_allows_a_correlated_error_at_the_current_default(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with_default_acs()?;
+    let idp = idp_with_sso(IDP_SSO_FIRST, &[])?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+    let updated_sp = ServiceProvider::new(
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(DEFAULT_ACS)?.with_index(7).with_default(),
+        )
+        .credentials(signing_credentials())
+        .build()?,
+    );
+    let (updated_descriptor, _) = descriptors(&updated_sp, &idp)?;
+    let started = sp.start_sso(
+        &idp_descriptor,
+        StartSso::post()
+            .acs_index(1)
+            .relay_state(RelayState::try_new("login-42")?),
+    )?;
+    let received = idp.receive_sso(
+        &updated_descriptor,
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    assert!(matches!(
+        idp.respond_sso(
+            &updated_descriptor,
+            &received,
+            SsoAssertion::new(principal()),
+            RespondSso::post(),
+        ),
+        Err(SamlError::MissingMetadata(_))
+    ));
+
+    let status = Status::requester();
+    assert!(matches!(
+        idp.respond_sso(
+            &updated_descriptor,
+            &received,
+            SsoOutcome::Failure(status.clone()),
+            RespondSso::simple_sign(),
+        ),
+        Err(SamlError::Invalid(_))
+    ));
+    let options = RespondSso::post().status_message("The ACS index is no longer published.");
+    let response = idp.respond_sso(
+        &updated_descriptor,
+        &received,
+        SsoOutcome::Failure(status.clone()),
+        options,
+    )?;
+    let form = response.post_form()?;
+    assert_eq!(form.action().as_str(), DEFAULT_ACS);
+    assert_eq!(form.value("RelayState"), Some("login-42"));
+    let xml = STANDARD.decode(form.value("SAMLResponse").ok_or("missing SAMLResponse")?)?;
+    let document = roxmltree::Document::parse(std::str::from_utf8(&xml)?)?;
+    let root = document.root_element();
+    assert_eq!(root.attribute("Destination"), Some(DEFAULT_ACS));
+    assert_eq!(
+        root.attribute("InResponseTo"),
+        Some(started.pending.request_id().as_str())
+    );
+    assert!(!root
+        .children()
+        .any(|child| matches!(child.tag_name().name(), "Assertion" | "EncryptedAssertion")));
+    match sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        Inbound::post(form.fields().to_vec()),
+        validation(),
+    ) {
+        Err(SamlError::StatusNotSuccess {
+            status: actual,
+            status_message,
+            ..
+        }) => {
+            assert_eq!(actual, status);
+            assert_eq!(
+                status_message.as_ref().map(saml_rs::StatusMessage::as_str),
+                Some("The ACS index is no longer published.")
+            );
+        }
+        other => {
+            return Err(format!("expected a correlated requester error, got {other:?}").into())
         }
     }
     Ok(())

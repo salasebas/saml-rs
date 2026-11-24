@@ -601,7 +601,7 @@ impl Engine {
             .as_metadata()
             .x509_certificates(crate::constants::CertUse::Signing);
         let signature_check =
-            if self.metadata.want_authn_requests_signed() || sp.metadata.authn_requests_signed() {
+            if self.metadata.want_authn_requests_signed() && !sp.metadata.authn_requests_signed() {
                 SignatureCheck::Require
             } else {
                 SignatureCheck::VerifyIfPresent
