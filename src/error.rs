@@ -346,8 +346,9 @@ pub enum SamlError {
         /// What prevented lookup of the identity provider.
         reason: IdpResolutionReason,
     },
-    /// A message `Destination` does not match the expected recipient URL, an
-    /// outbound response would go to an unpublished assertion consumer, or
+    /// A message `Destination` does not match the expected recipient URL or is
+    /// missing where required, an outbound response would go to an
+    /// unpublished assertion consumer, or
     /// `finish_sso` received the response at another assertion consumer than
     /// the pending request asked for.
     #[error("destination mismatch: expected {expected}, got {actual:?}")]

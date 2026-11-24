@@ -63,7 +63,8 @@ After the signature checks, a response with `Destination` can now return:
 - `SamlError::MissingMetadata` when the local party publishes no SOAP
   `SingleLogoutService`.
 - `SamlError::RecipientEndpointAmbiguous` when the local party publishes
-  several and you supply none with `with_recipient_endpoint`.
+  several distinct SOAP locations and you supply none with
+  `with_recipient_endpoint`.
 - `SamlError::RecipientEndpointNotPublished` when the local party publishes
   a SOAP `SingleLogoutService` and the URL you supply with
   `with_recipient_endpoint` is not its location, such as a browser logout

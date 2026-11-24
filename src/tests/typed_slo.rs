@@ -3686,10 +3686,16 @@ fn a_soap_requester_without_a_soap_endpoint_checks_only_a_present_destination(
         Err(SamlError::SignatureMissing) => {}
         other => return Err(format!("expected SignatureMissing, got {other:?}").into()),
     }
+    let responder_error = xml.replace(
+        r#"<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>"#,
+        r#"<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Responder"/>
+        <samlp:StatusMessage>logout failed</samlp:StatusMessage>"#,
+    );
+    assert_ne!(responder_error, xml);
     match sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        signed_logout_response_input(&xml, LogoutBinding::Soap)?,
+        signed_logout_response_input(&responder_error, LogoutBinding::Soap)?,
         validation(),
     ) {
         Err(SamlError::MissingMetadata(element)) if element == "SingleLogoutService" => Ok(()),
