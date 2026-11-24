@@ -281,9 +281,9 @@ impl ServiceProvider {
     /// The session reads the assertion that [`SsoSession`] describes. Its
     /// bearer confirmation, audience, conditions, and session expiry decide
     /// whether the response is accepted. Every other assertion must name the
-    /// same issuer and principal and have its own `ID`. Its own bearer confirmation, audience,
-    /// conditions, and session expiry do not reject the response, and the
-    /// session accessors read none of its values.
+    /// same issuer and principal and have its own `ID`. Its own bearer
+    /// confirmation, audience, conditions, and session expiry do not reject
+    /// the response, and the session accessors read none of its values.
     ///
     /// A present `Destination` and the bearer `Recipient` must name the
     /// assertion consumer that received the response, which must be the one
