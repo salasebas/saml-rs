@@ -6,6 +6,7 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
 
 use crate::error::SamlError;
+use crate::xml::any_uri::is_absolute_uri_reference_ascii;
 
 const MAX_ENTITY_IDENTIFIER_CHARACTERS: usize = 1024;
 const MAX_EXISTING_COOKIE_BYTES: usize = 8 * 1024;
@@ -55,11 +56,12 @@ impl<'a> RememberIdentityProvider<'a> {
         }
     }
 
-    /// Set the existing `_saml_idp` value to keep the identity providers it lists.
+    /// Set the existing `_saml_idp` value to keep its valid entity identifiers.
     ///
     /// An empty value starts a new list. Any other value is the cookie value:
     /// percent-encoded, or already decoded with a real space between entries.
-    /// A `+` inside a base64 entry stays a `+`.
+    /// A `+` inside a base64 entry stays a `+`. The writer skips decoded
+    /// entries that are not URI identifiers of at most 1024 characters.
     pub fn existing_cookie(mut self, value: &'a str) -> Self {
         self.existing_cookie = Some(value);
         self
@@ -127,11 +129,15 @@ pub(crate) fn common_domain_cookie(
     entity_id: &str,
     options: RememberIdentityProvider<'_>,
 ) -> Result<CommonDomainCookie, SamlError> {
-    validate_entity_identifier(entity_id)?;
+    if !is_entity_identifier(entity_id) {
+        return Err(invalid(
+            "entity identifier must be a URI of at most 1024 characters",
+        ));
+    }
     let domain = common_domain_attribute(options.common_domain)?;
     let lifetime = validated_lifetime(options.lifetime)?;
     let mut entity_ids = entity_ids_from_existing(options.existing_cookie)?;
-    entity_ids.retain(|existing| existing != entity_id);
+    entity_ids.retain(|existing| existing != entity_id && is_entity_identifier(existing));
     entity_ids.push(entity_id.to_string());
     let mut value = encode_cookie_value(&entity_ids);
     while CommonDomainCookie::NAME.len() + value.len() > MAX_COOKIE_NAME_AND_VALUE_BYTES
@@ -147,31 +153,9 @@ pub(crate) fn common_domain_cookie(
     })
 }
 
-fn validate_entity_identifier(entity_id: &str) -> Result<(), SamlError> {
-    if entity_id.len() > MAX_ENTITY_IDENTIFIER_CHARACTERS || !is_entity_identifier_uri(entity_id) {
-        return Err(invalid(
-            "entity identifier must be a URI of at most 1024 characters",
-        ));
-    }
-    Ok(())
-}
-
-fn is_entity_identifier_uri(entity_id: &str) -> bool {
-    if !entity_id.bytes().all(|byte| byte.is_ascii_graphic()) {
-        return false;
-    }
-    let Some((scheme, rest)) = entity_id.split_once(':') else {
-        return false;
-    };
-    let mut scheme_chars = scheme.chars();
-    let Some(first) = scheme_chars.next() else {
-        return false;
-    };
-    first.is_ascii_alphabetic()
-        && scheme_chars.all(|character| {
-            character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.')
-        })
-        && !rest.is_empty()
+fn is_entity_identifier(entity_id: &str) -> bool {
+    entity_id.len() <= MAX_ENTITY_IDENTIFIER_CHARACTERS
+        && is_absolute_uri_reference_ascii(entity_id)
 }
 
 fn common_domain_attribute(common_domain: &str) -> Result<String, SamlError> {

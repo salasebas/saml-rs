@@ -334,3 +334,12 @@ let cookie = Cookie::build((CommonDomainCookie::NAME, common_domain_cookie.value
 If you call `RememberIdentityProvider::with_existing_cookie` to keep earlier
 entries in the discovery cookie, rename the call to
 `RememberIdentityProvider::existing_cookie`. Pass the same `_saml_idp` value.
+
+When the existing value decodes, `IdentityProvider::common_domain_cookie`
+now skips entries that are not URIs or are longer than 1024 characters.
+Keep passing the browser's cookie value. The next write removes those
+entries and keeps the valid entries in order.
+
+If your own identity provider's identifier contains invalid URI syntax,
+`common_domain_cookie` returns `SamlError::Invalid`. Use a valid URI as the
+entity ID and update the metadata and peer configurations that refer to it.
