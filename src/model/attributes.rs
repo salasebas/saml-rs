@@ -202,6 +202,16 @@ impl Attribute {
                 self.name
             )));
         }
+        if self
+            .values
+            .iter()
+            .any(|value| !value.0.is_empty() && is_blank(&value.0))
+        {
+            return Err(SamlError::Invalid(format!(
+                "attribute `{}` value must be empty or contain a non-whitespace character",
+                self.name
+            )));
+        }
         if let Some(name_format) = self.name_format.as_ref().map(AttributeNameFormat::as_uri) {
             if !is_absolute_uri_reference(name_format) {
                 return Err(SamlError::Invalid(format!(

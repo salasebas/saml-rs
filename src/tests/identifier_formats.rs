@@ -603,6 +603,10 @@ fn identity_provider_does_not_generate_a_blank_attribute_string_or_a_uri_name_th
             Attribute::new(MAIL_OID, values(&["x"])).with_friendly_name("  "),
         ),
         (
+            "whitespace value",
+            Attribute::new(MAIL_OID, values(&["alice@example.com", " \t"])),
+        ),
+        (
             "relative uri Name",
             Attribute::new("mail", values(&["x"])).with_name_format(AttributeNameFormat::Uri),
         ),

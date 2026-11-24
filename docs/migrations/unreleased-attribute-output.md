@@ -6,13 +6,15 @@ for an attribute that SAML Core does not allow in an assertion. Metadata
 generation returns the same error for such an entity attribute, from
 `SpConfigBuilder::build`, `IdpConfigBuilder::build`, `generate_sp_metadata`,
 and `generate_idp_metadata`. Before, these attributes were written, except
-an empty `basic` name.
+a `basic` name that was empty or had only whitespace.
 
 An attribute is rejected in these cases:
 
 - Its `Name` is empty or has only spaces, tabs, carriage returns, and line
   feeds.
 - It has a `FriendlyName` that is empty or has only those characters.
+- It has a value with only those characters. An empty value is still
+  written, as an empty `AttributeValue`.
 - Its `NameFormat` is `AttributeNameFormat::Uri` and its `Name` is not an
   absolute URI reference, such as `mail`, `given name`, or a URN with a
   leading space. The name is checked as written, without trimming.
@@ -22,10 +24,9 @@ the `uri`, `basic`, or `unspecified` URI and surrounding whitespace as that
 variant, and `Attribute::name_format` returns it. The `uri` and `basic` name
 rules then apply to it.
 
-An empty value is still written as an empty `AttributeValue`.
-
-To upgrade, leave the friendly name unset when you have no label, and give a
-`uri` attribute its URI name:
+To upgrade, leave the friendly name unset when you have no label, pass an
+empty value instead of one with only whitespace, and give a `uri` attribute
+its URI name:
 
 ```rust
 use saml_rs::{Attribute, AttributeNameFormat, AttributeValue};

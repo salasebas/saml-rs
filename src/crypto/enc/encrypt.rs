@@ -78,25 +78,29 @@ impl<'a> EncryptionRecipient<'a> {
         )
     }
 
-    /// The key of the first certificate that the data encryption algorithm
-    /// and the key transport can encrypt for.
+    /// Encrypt `plaintext` for the first certificate that the data
+    /// encryption algorithm and the key transport can encrypt for, and
+    /// return that key with the `EncryptedData`.
     ///
     /// A certificate is skipped when it does not load, or when the crypto
     /// provider cannot wrap a data key with its key, such as an EC key or an
     /// RSA key too small for the key transport.
-    pub(super) fn key(&self) -> Result<EncryptionKey<'a>, SamlError> {
+    pub(super) fn encrypt_first(
+        &self,
+        plaintext: &[u8],
+    ) -> Result<(EncryptionKey<'a>, String), SamlError> {
         let mut first_error = None;
         for certificate in &self.certificates {
-            let candidate = load_certificate(certificate).and_then(|key| {
-                let candidate = EncryptionKey {
+            let attempt = load_certificate(certificate).and_then(|key| {
+                let key = EncryptionKey {
                     key,
                     data_algorithm: self.data_algorithm,
                     key_transport: self.key_transport,
                 };
-                encrypted_data_xml(KEY_CHECK_PLAINTEXT, &candidate).map(|_| candidate)
+                encrypted_data_xml(plaintext, &key).map(|encrypted_data| (key, encrypted_data))
             });
-            match candidate {
-                Ok(candidate) => return Ok(candidate),
+            match attempt {
+                Ok(encrypted) => return Ok(encrypted),
                 Err(error) => {
                     first_error.get_or_insert(error);
                 }
@@ -107,8 +111,6 @@ impl<'a> EncryptionRecipient<'a> {
     }
 }
 
-const KEY_CHECK_PLAINTEXT: &[u8] = b"<key-check/>";
-
 /// A peer key with the algorithms that encrypt for it.
 pub(super) struct EncryptionKey<'a> {
     key: Key,
@@ -116,7 +118,7 @@ pub(super) struct EncryptionKey<'a> {
     key_transport: KeyTransport<'a>,
 }
 
-pub(super) fn encrypted_data_xml(
+fn encrypted_data_xml(
     plaintext: &[u8],
     recipient: &EncryptionKey<'_>,
 ) -> Result<String, SamlError> {
@@ -170,7 +172,7 @@ pub(crate) fn encrypt_assertion_with_key_transport(
         .child_named("Assertion")
         .ok_or_else(|| SamlError::MissingMetadata("Assertion to encrypt".into()))?;
     let assertion_xml = standalone_element(xml, assertion.start, assertion.end)?;
-    let encrypted_data = encrypted_data_xml(assertion_xml.as_bytes(), &recipient.key()?)?;
+    let (_, encrypted_data) = recipient.encrypt_first(assertion_xml.as_bytes())?;
 
     let encrypted_assertion = format!(
         "<{prefix}:EncryptedAssertion xmlns:{prefix}=\"{assertion_ns}\">{encrypted_data}</{prefix}:EncryptedAssertion>",
@@ -235,15 +237,25 @@ fn encrypt_selected(
 ) -> Result<String, SamlError> {
     crate::crypto::provider::ensure_crypto_provider_initialized()?;
     let document = parse_xml_document(xml)?;
-    let selected = select(&document)?;
-    if selected.is_empty() {
-        return Ok(xml.to_string());
+    let mut key = None;
+    let mut replacements = Vec::new();
+    for (element, kind) in select(&document)? {
+        let plaintext = namespace_complete(&document, element)?;
+        let encrypted_data = match &key {
+            Some(key) => encrypted_data_xml(&plaintext, key)?,
+            None => {
+                let (selected, encrypted_data) = recipient.encrypt_first(&plaintext)?;
+                key = Some(selected);
+                encrypted_data
+            }
+        };
+        replacements.push(encrypted_element(
+            &document,
+            element,
+            kind,
+            &encrypted_data,
+        )?);
     }
-    let key = recipient.key()?;
-    let replacements = selected
-        .into_iter()
-        .map(|(element, kind)| encrypted_element(&document, element, kind, &key))
-        .collect::<Result<Vec<_>, _>>()?;
     Ok(splice(xml, replacements))
 }
 
@@ -251,10 +263,8 @@ fn encrypted_element(
     document: &XmlDocument<'_>,
     element: NodeId,
     kind: EncryptedElementKind,
-    key: &EncryptionKey<'_>,
+    encrypted_data: &str,
 ) -> Result<(Range<usize>, String), SamlError> {
-    let plaintext = namespace_complete(document, element)?;
-    let encrypted_data = encrypted_data_xml(&plaintext, key)?;
     let wrapper = qualified_name(document, element, kind.encrypted);
     let declaration = match own_prefix_declaration(document, element) {
         Some("") => format!(" xmlns=\"{}\"", kind.namespace),

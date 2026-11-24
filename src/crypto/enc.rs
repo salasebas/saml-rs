@@ -195,7 +195,6 @@ fn splice(xml: &str, mut replacements: Vec<(Range<usize>, impl AsRef<str>)>) -> 
 
 #[cfg(all(test, not(feature = "crypto-fips")))]
 mod tests {
-    use super::encrypt::encrypted_data_xml;
     use super::*;
     use crate::constants::data_encryption_algorithm::AES_256;
     use crate::constants::key_encryption_algorithm::RSA_OAEP_MGF1P;
@@ -331,10 +330,9 @@ mod tests {
         plaintext: &str,
         beside: &str,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        let encrypted_data = encrypted_data_xml(
-            plaintext.as_bytes(),
-            &EncryptionRecipient::new([SP_CERT], AES_256, RSA_OAEP_MGF1P.into()).key()?,
-        )?;
+        let (_, encrypted_data) =
+            EncryptionRecipient::new([SP_CERT], AES_256, RSA_OAEP_MGF1P.into())
+                .encrypt_first(plaintext.as_bytes())?;
         let start = RESPONSE.find("<saml:NameID").ok_or("missing NameID")?;
         let end_tag = "</saml:NameID>";
         let end = RESPONSE.find(end_tag).ok_or("missing NameID end")? + end_tag.len();

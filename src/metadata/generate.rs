@@ -330,8 +330,8 @@ fn bool_str(value: bool) -> &'static str {
 /// when there are more of them than `unsignedShort` indexes. Also returns [`SamlError::Invalid`] for an
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry,
-/// and for an entity attribute whose `Name` or `FriendlyName` has no
-/// non-whitespace character, whose `NameFormat` is not an absolute URI
+/// and for an entity attribute whose `Name`, `FriendlyName`, or nonempty
+/// value has no non-whitespace character, whose `NameFormat` is not an absolute URI
 /// reference, whose [`crate::AttributeNameFormat::Basic`] name is not an XML
 /// name, whose [`crate::AttributeNameFormat::Uri`] name is not an absolute URI
 /// reference, or whose text XML cannot carry.
@@ -394,8 +394,8 @@ fn write_sp_role(w: &mut MetadataWriter, cfg: &SpMetadataInput) -> Result<(), Sa
 /// `ArtifactResolutionService` endpoints share an index. Also returns [`SamlError::Invalid`] for an
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry,
-/// and for an entity attribute whose `Name` or `FriendlyName` has no
-/// non-whitespace character, whose `NameFormat` is not an absolute URI
+/// and for an entity attribute whose `Name`, `FriendlyName`, or nonempty
+/// value has no non-whitespace character, whose `NameFormat` is not an absolute URI
 /// reference, whose [`crate::AttributeNameFormat::Basic`] name is not an XML
 /// name, whose [`crate::AttributeNameFormat::Uri`] name is not an absolute URI
 /// reference, or whose text XML cannot carry.

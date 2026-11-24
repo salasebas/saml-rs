@@ -125,6 +125,8 @@ unsigned request from an SP whose metadata declares `AuthnRequestsSigned`.
 | Take the first certificate of each `X509Data` as that key | Library policy: an `X509Data` can carry a chain in any order, and OpenSAML 5.2.0 falls back to its first certificate as the entity certificate. | XML Signature §4.4.4, Metadata §2.4.1.1 | Always |
 | Look up that certificate only when the response has an element to encrypt | Library policy: a response without such an element uses no encryption key. | Core §2.7.3.2, E68 | Always |
 
+The identity provider does not yet identify in the `EncryptedKey` which service provider key it encrypted for. E68 recommends that the encrypting party do so when possible (Metadata §2.4.1.1).
+
 ## Endpoint selection
 
 | Rule | Level | Section | Option |
@@ -150,7 +152,6 @@ The caller handles these authentication and error decisions. The crate exposes t
 - Return an error `Response` with no assertions when the `NameIDPolicy` cannot be met, optionally with `InvalidNameIDPolicy`. Mandatory, Core §3.4.1.1.
 - Return an error `Response` when `NameIDPolicy` requests both the `entity` format and an `SPNameQualifier`. No issued entity identifier can satisfy both. Mandatory, Core §8.3.6, E15.
 - Provide independent `RelayState` integrity protection for HTTP-POST and unsigned Redirect. Recommended, Bindings §3.4.3, §3.5.3, E1. A signed Redirect or SimpleSign message already protects `RelayState` with the binding signature (CD-04 §2.3).
-- Identify in the `EncryptedKey` which service provider key it was encrypted for. Recommended for the encrypting party when possible, Metadata §2.4.1.1, E68.
 
 The assertion builder emits one bearer `SubjectConfirmation`.
 

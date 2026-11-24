@@ -25,7 +25,7 @@ The identity provider writes `<Attribute>` elements with `SsoAssertion::attribut
 | Reject a written `NameFormat` that is not an absolute URI reference | Mandatory | Core §1.3.2 | Always |
 | Reject a `basic` attribute name that is not an `xs:Name` | Mandatory | Core §8.2.3 | Always |
 | Reject a `uri` attribute name that is not an absolute URI reference, checked as written without whitespace collapse because `Name` is an `xs:string` | Mandatory | Core §1.3.2, §8.2.2 | Always |
-| Reject a written `Name` or `FriendlyName` with no non-whitespace character | Mandatory | Core §1.3.1, `AttributeType` | Always |
+| Reject a written `Name`, `FriendlyName`, or nonempty value with no non-whitespace character | Mandatory | Core §1.3.1, §2.7.3.1.1, `AttributeType` | Always |
 | Omit `AttributeStatement` when the assertion has no attributes | Mandatory | Core §2.7.3, `AttributeStatementType` | Always |
 | Omit `AttributeValue` for an attribute without values | Mandatory | Core §2.7.3.1 | Always |
 | Write each value as its own `AttributeValue` | Recommended | Core §2.7.3.1 | Always |
