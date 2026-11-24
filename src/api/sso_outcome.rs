@@ -62,7 +62,9 @@ impl SsoAssertion {
     /// Set the authentication context of the assertion's `AuthnStatement`.
     ///
     /// Pass the context in which the subject was actually authenticated.
-    /// Omitting the context writes the unspecified class.
+    /// Omitting the context writes the unspecified class. The response is
+    /// rejected when the reference is not an absolute URI reference, as a
+    /// reference read from a received request can be.
     ///
     /// Where the statement is written and the request's
     /// [`crate::RequestedAuthnContext`] uses

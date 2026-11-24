@@ -192,8 +192,10 @@ impl IdentityProvider {
     /// # Errors
     ///
     /// Returns [`SamlError::Invalid`] when `outcome` is
-    /// [`SsoOutcome::Failure`] with a top-level `Success` status or an error
-    /// diagnostic contains characters XML 1.0 forbids. Returns
+    /// [`SsoOutcome::Failure`] with a top-level `Success` status or a
+    /// subordinate code that is not an absolute URI reference, an error
+    /// diagnostic contains characters XML 1.0 forbids or has no
+    /// non-whitespace character. Returns
     /// [`SamlError`] when the request issuer does not match the SP
     /// descriptor, relay state is invalid, the request ACS selection conflicts
     /// with the response binding or SP metadata, required metadata or signing
@@ -325,8 +327,10 @@ impl IdentityProvider {
     /// # Errors
     ///
     /// Returns [`SamlError::Invalid`] when `outcome` is
-    /// [`SsoOutcome::Failure`] with a top-level `Success` status or an error
-    /// diagnostic contains characters XML 1.0 forbids. Returns
+    /// [`SsoOutcome::Failure`] with a top-level `Success` status or a
+    /// subordinate code that is not an absolute URI reference, or an error
+    /// diagnostic contains characters XML 1.0 forbids or has no
+    /// non-whitespace character. Returns
     /// [`SamlError`] when relay state is invalid, SP metadata cannot be
     /// parsed, the metadata default ACS is unsupported or incompatible with
     /// the selected response binding, a signing key is missing, the
@@ -337,6 +341,8 @@ impl IdentityProvider {
     /// name is not an XML name, its format is not an absolute URI, a
     /// `subject-id` or `pairwise-id` attribute breaks the rules of
     /// [`SsoAssertion::attributes`](crate::SsoAssertion::attributes),
+    /// [`SsoAssertion::authn_context`](crate::SsoAssertion::authn_context) is
+    /// not an absolute URI reference,
     /// [`SsoAssertion::authn_instant`](crate::SsoAssertion::authn_instant) is
     /// later than the response `IssueInstant`,
     /// or is before year 1, or the persistent or transient `NameId` is longer

@@ -57,6 +57,8 @@ unsigned request from an SP whose metadata declares `AuthnRequestsSigned`.
 | Use the current metadata default ACS for an absent index mapping only for an error and when its binding matches the chosen delivery | Library policy: the IdP honors the requested index for assertions and uses current metadata to authorize the error route. | Core §3.4.1, Profiles §4.1.4.1, E85 | Always |
 | Write caller-supplied plain text as `StatusMessage` after the complete `StatusCode` in a failed login `Response` before signing. Omit empty or unset text | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType` | `RespondSso::status_message` |
 | Write only characters permitted in XML 1.0 in `StatusMessage` | Mandatory | [XML 1.0 §2.2](https://www.w3.org/TR/xml/#charsets) | Always |
+| Reject a `StatusMessage` with no non-whitespace character | Mandatory | Core §1.3.1, §3.2.2.3 | `RespondSso::status_message` |
+| Reject a subordinate `StatusCode` `Value` that is not an absolute URI reference, including one read from a received response | Mandatory | Core §1.3.2, §3.2.2.2 | `SsoOutcome::Failure` |
 | Write a `Success` response only with an assertion, and reject `SsoOutcome::Failure` with a top-level `Success` status | Mandatory | Profiles §4.1.4.2, E26 | Always |
 | Write an unsolicited error `Response` | Library policy: an identity provider can report the failure of a login it started, or answer a request it could not read. | Profiles §4.1.4.2, §4.1.5 | `initiate_sso`, `initiate_sso_artifact` |
 | Sign an error `Response` over HTTP-POST | Library policy: the profile's signing rule covers assertions, and a signed message carries `Destination`. | Profiles §4.1.3.5, §4.1.4.5, E26, E93, Bindings §3.5.5.2 | Always |
@@ -81,6 +83,7 @@ unsigned request from an SP whose metadata declares `AuthnRequestsSigned`.
 | Reject an `AuthnInstant` before year 1 | Library policy: the formatter writes a four-digit non-negative year. | Core §1.3.3 | `SsoAssertion::authn_instant` |
 | Write the unspecified class as the authentication context when the caller sets none | Library policy: the schema requires a context, and that class is the Authentication Context class for unspecified means. | Core §2.7.2.2 | `SsoAssertion::authn_context` |
 | Reject a success response whose context is not one of the requested references of the same kind, when `Comparison` is `exact` or omitted | Mandatory | Core §3.3.2.2.1 | `SsoAssertion::authn_context` |
+| Reject an authentication context reference that is not an absolute URI reference, including one read from a received request | Mandatory | Core §1.3.2, §2.7.2.2 | `SsoAssertion::authn_context` |
 | Write the issued `NameID` `Format` as an absolute URI reference. If unset, use the first configured format, and omit `Format` when there is none | Mandatory | Core §1.3.2, §2.2.2, E60 | Always |
 | Write `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` from the issued `NameId`, and omit each one that is unset | Optional | `NameIDType` | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier`, `NameId::with_sp_provided_id` |
 | Issue the `NameID` `Format` the `NameIDPolicy` names, when it is a Core §8.3 format other than `unspecified` or `encrypted` | Mandatory | Core §3.4.1.1, E15, `NameIDPolicyType` | Always |

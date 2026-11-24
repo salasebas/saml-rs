@@ -23,5 +23,6 @@ additions.
 - [Import peers from a federation aggregate](unreleased-metadata-aggregate.md)
 - [Check messages against the URL that received them](unreleased-receiving-url-checks.md)
 - [Look up artifact resolution endpoints by role](unreleased-artifact-index-per-role.md)
+- [Handle identity provider response value errors](unreleased-idp-response-values.md)
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)
