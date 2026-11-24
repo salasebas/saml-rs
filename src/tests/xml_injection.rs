@@ -310,12 +310,26 @@ fn login_response_wrapper_fields_escape_xml_markup_before_signing() -> TestResul
         signing(),
     )?;
 
-    let ctx = idp.create_login_response(
+    let hostile_request = idp.create_login_response(
         &sp,
         Binding::Post,
         &User::new("wrapper@example.com"),
         &LoginResponseOptions {
             in_response_to: Some(HOSTILE_REQUEST_ID),
+            ..Default::default()
+        },
+    );
+    assert!(
+        matches!(hostile_request, Err(SamlError::Invalid(_))),
+        "{:?}",
+        hostile_request.err()
+    );
+    let ctx = idp.create_login_response(
+        &sp,
+        Binding::Post,
+        &User::new("wrapper@example.com"),
+        &LoginResponseOptions {
+            in_response_to: Some("_req1"),
             ..Default::default()
         },
     )?;
@@ -336,12 +350,10 @@ fn login_response_wrapper_fields_escape_xml_markup_before_signing() -> TestResul
     assert!(
         xml.contains("Recipient=\"https://sp.example.com/acs&quot; injected=&quot;yes&quot;&gt;")
     );
-    assert!(xml.contains("InResponseTo=\"_req&quot; injected=&quot;yes&quot;&gt;"));
     assert!(xml.contains("Format=\"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress&quot; injected=&quot;yes\""));
 
     let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
-    let parsed =
-        sp.parse_login_response_with_request_id(&idp, Binding::Post, &request, HOSTILE_REQUEST_ID)?;
+    let parsed = sp.parse_login_response_with_request_id(&idp, Binding::Post, &request, "_req1")?;
     assert_eq!(
         parsed.extract.get_str("nameID"),
         Some("wrapper@example.com")

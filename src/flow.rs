@@ -193,9 +193,19 @@ pub(crate) enum SignedMessageDestination {
     Optional,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MessageAuthentication {
+/// Whether a received request was authenticated.
+///
+/// [`Received::authentication`](crate::Received::authentication) reports it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MessageAuthentication {
+    /// A verified signature covers the whole request, or the caller attested
+    /// that the SOAP channel authenticated the peer.
     Authenticated,
+    /// No verified signature covers the request.
+    ///
+    /// Anyone can send such a request in the name of the service provider.
+    /// Treat its content as advice: decide from your own policy how to
+    /// authenticate the user and what to issue.
     Unauthenticated,
 }
 

@@ -109,7 +109,7 @@ impl std::fmt::Debug for RefusedAuthnRequest {
 }
 
 impl AuthnRequest {
-    /// Request ID.
+    /// Request ID, with XML whitespace collapsed as for an `xs:ID`.
     pub fn id(&self) -> &MessageId {
         &self.id
     }
@@ -179,7 +179,10 @@ impl AuthnRequest {
 
 impl AuthnRequest {
     pub(crate) fn from_flow(raw_flow: &FlowResult) -> Result<Self, SamlError> {
-        let id = MessageId::try_new(required_str(&raw_flow.extract, request::ID)?)?;
+        let id = MessageId::try_new(collapse_whitespace(required_str(
+            &raw_flow.extract,
+            request::ID,
+        )?))?;
         let issue_instant = required_saml_utc_instant(
             raw_flow.extract.get_str(request::ISSUE_INSTANT),
             "AuthnRequest",

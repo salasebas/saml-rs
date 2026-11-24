@@ -1,4 +1,4 @@
-use crate::config::{IdentifierEncryptionPolicy, NameIdFormat};
+use crate::config::{validate_entity_id_syntax, IdentifierEncryptionPolicy, NameIdFormat};
 use crate::constants::name_id_format;
 use crate::entity::generate_id;
 use crate::error::SamlError;
@@ -41,6 +41,33 @@ pub(crate) fn validate_issued_name_id_length(
     Ok(())
 }
 
+pub(crate) fn validate_issued_entity_name_id(
+    format_uri: Option<&str>,
+    value: &str,
+    qualifiers: OutboundNameIdQualifiers<'_>,
+) -> Result<(), SamlError> {
+    if !is_name_id_format(format_uri, name_id_format::ENTITY) {
+        return Ok(());
+    }
+    if validate_entity_id_syntax(value).is_err() {
+        return Err(SamlError::Invalid(
+            "an entity NameID must be an absolute URI reference of at most 1024 characters with collapsed whitespace"
+                .into(),
+        ));
+    }
+    let OutboundNameIdQualifiers {
+        name_qualifier,
+        sp_name_qualifier,
+        sp_provided_id,
+    } = qualifiers;
+    if name_qualifier.is_some() || sp_name_qualifier.is_some() || sp_provided_id.is_some() {
+        return Err(SamlError::Invalid(
+            "an entity NameID must omit NameQualifier, SPNameQualifier, and SPProvidedID".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// NameID value, format, and optional qualifier attributes.
 ///
 /// [`Self::new`] leaves the `Format` and the qualifiers unset; the `with_`
@@ -52,8 +79,11 @@ pub(crate) fn validate_issued_name_id_length(
 /// those two formats. [`Self::new`] takes any value, and
 /// [`Self::with_format`] any format. An identity provider response rejects a
 /// persistent or transient value longer than 256 characters, whichever
-/// constructor created it. A message that writes the `NameId` rejects a
-/// format that is not an absolute URI reference.
+/// constructor created it. It also rejects an `entity` value that is not an
+/// absolute URI reference of at most 1024 characters with collapsed
+/// whitespace, and an `entity` `NameId` with any qualifier. A message that
+/// writes the `NameId` rejects a format that is not an absolute URI
+/// reference.
 ///
 /// # Examples
 ///

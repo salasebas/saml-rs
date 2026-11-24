@@ -225,6 +225,19 @@ impl Status {
         self
     }
 
+    pub(crate) fn check_writable(&self) -> Result<(), SamlError> {
+        if self
+            .subordinate
+            .as_ref()
+            .is_some_and(|code| !is_absolute_uri_reference(code.as_uri()))
+        {
+            return Err(SamlError::Invalid(
+                "a subordinate status code must be an absolute URI reference".into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Top-level status code.
     pub fn top_level(&self) -> TopLevelStatusCode {
         self.top_level

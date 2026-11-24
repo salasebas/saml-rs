@@ -8,6 +8,8 @@ mod common;
 mod name_id_policy;
 #[path = "common/tag_prefixes.rs"]
 mod tag_prefixes;
+#[path = "web_browser_sso_generation/written_values.rs"]
+mod written_values;
 
 #[path = "common/post_validation.rs"]
 mod post_validation;

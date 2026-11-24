@@ -7,9 +7,9 @@ use crate::error::SamlError;
 use crate::flow::{FlowOptions, FlowResultWithSignatureEvidence, HttpRequest, SignatureCheck};
 use crate::metadata::{generate_idp_metadata, IdpMetadata, IdpMetadataInput};
 use crate::model::{
-    validate_issued_name_id_length, validate_name_id_format, Attribute, AuthnContextReference,
-    ClockSkew, NameIdPolicy, RequestedAuthnContext, RequestedSubject, SessionIndex, Status,
-    TopLevelStatusCode,
+    validate_issued_entity_name_id, validate_issued_name_id_length, validate_name_id_format,
+    Attribute, AuthnContextReference, ClockSkew, NameIdPolicy, RequestedAuthnContext,
+    RequestedSubject, SessionIndex, Status, TopLevelStatusCode,
 };
 use crate::sp;
 use crate::validator::offset_datetime_from_system_time;
@@ -169,6 +169,7 @@ impl Engine {
             .or_else(|| self.setting.default_name_id_format());
         validate_name_id_format(name_id_format)?;
         validate_issued_name_id_length(name_id_format, &user.name_id)?;
+        validate_issued_entity_name_id(name_id_format, &user.name_id, qualifiers)?;
         let authn_context = rendering
             .authn_context
             .cloned()

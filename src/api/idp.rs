@@ -67,6 +67,12 @@ impl IdentityProvider {
     /// response with [`Self::respond_sso_refusal`] or
     /// [`Self::respond_sso_refusal_artifact`].
     ///
+    /// Unless the identity provider requires signed requests, it also accepts
+    /// an unsigned request. [`Received::authentication`] tells you whether a
+    /// verified signature covered it. Treat the content of an
+    /// [`MessageAuthentication::Unauthenticated`](crate::MessageAuthentication::Unauthenticated)
+    /// request as advice.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the inbound message or relay state is invalid, the
@@ -158,7 +164,12 @@ impl IdentityProvider {
             });
         }
         validation.check_and_store_message_replay(ReplayKey::AuthnRequest(authn.id().clone()))?;
-        Ok(Received::new(authn, binding.into(), relay_state))
+        Ok(Received::new(
+            authn,
+            binding.into(),
+            relay_state,
+            authentication,
+        ))
     }
 
     /// Respond to a received SP AuthnRequest.
@@ -192,9 +203,11 @@ impl IdentityProvider {
     /// # Errors
     ///
     /// Returns [`SamlError::Invalid`] when `outcome` is
-    /// [`SsoOutcome::Failure`] with a top-level `Success` status or an error
-    /// diagnostic contains characters XML 1.0 forbids. Returns
-    /// [`SamlError`] when the request issuer does not match the SP
+    /// [`SsoOutcome::Failure`] with a top-level `Success` status or a
+    /// subordinate code that is not an absolute URI reference, an error
+    /// diagnostic contains characters XML 1.0 forbids or has no
+    /// non-whitespace character, or the request `ID` is not an `xs:NCName`.
+    /// Returns [`SamlError`] when the request issuer does not match the SP
     /// descriptor, relay state is invalid, the request ACS selection conflicts
     /// with the response binding or SP metadata, required metadata or signing
     /// keys are missing, a request without ACS or binding selection has an
@@ -212,9 +225,11 @@ impl IdentityProvider {
     /// `subject-id` or `pairwise-id` attribute breaks the rules of
     /// [`SsoAssertion::attributes`](crate::SsoAssertion::attributes), the
     /// persistent or transient `NameId` is longer than 256 characters, also
-    /// when the format is the first configured NameID format, the
+    /// when the format is the first configured NameID format, an `entity`
+    /// `NameId` breaks the rules of [`NameId`](crate::NameId), the
     /// NameID format is not an absolute URI reference,
-    /// [`SsoAssertion::authn_context`](crate::SsoAssertion::authn_context) does not meet an exact
+    /// [`SsoAssertion::authn_context`](crate::SsoAssertion::authn_context) is
+    /// not an absolute URI reference or does not meet an exact
     /// `RequestedAuthnContext`,
     /// [`SsoAssertion::authn_instant`](crate::SsoAssertion::authn_instant) is
     /// later than the response `IssueInstant`,
@@ -302,7 +317,8 @@ impl IdentityProvider {
     ///
     /// Returns [`SamlError`] when the descriptor or delivery endpoint cannot
     /// be used, the selected binding conflicts with the ACS, the caller sets
-    /// RelayState, or the response cannot be created or signed.
+    /// RelayState, the request `ID` is not an `xs:NCName`, or the response
+    /// cannot be created or signed.
     pub fn respond_sso_refusal(
         &self,
         sp: &SpDescriptor,
@@ -325,8 +341,10 @@ impl IdentityProvider {
     /// # Errors
     ///
     /// Returns [`SamlError::Invalid`] when `outcome` is
-    /// [`SsoOutcome::Failure`] with a top-level `Success` status or an error
-    /// diagnostic contains characters XML 1.0 forbids. Returns
+    /// [`SsoOutcome::Failure`] with a top-level `Success` status or a
+    /// subordinate code that is not an absolute URI reference, or an error
+    /// diagnostic contains characters XML 1.0 forbids or has no
+    /// non-whitespace character. Returns
     /// [`SamlError`] when relay state is invalid, SP metadata cannot be
     /// parsed, the metadata default ACS is unsupported or incompatible with
     /// the selected response binding, a signing key is missing, the
@@ -337,10 +355,13 @@ impl IdentityProvider {
     /// name is not an XML name, its format is not an absolute URI, a
     /// `subject-id` or `pairwise-id` attribute breaks the rules of
     /// [`SsoAssertion::attributes`](crate::SsoAssertion::attributes),
+    /// [`SsoAssertion::authn_context`](crate::SsoAssertion::authn_context) is
+    /// not an absolute URI reference,
     /// [`SsoAssertion::authn_instant`](crate::SsoAssertion::authn_instant) is
     /// later than the response `IssueInstant`,
-    /// or is before year 1, or the persistent or transient `NameId` is longer
-    /// than 256 characters.
+    /// or is before year 1, the persistent or transient `NameId` is longer
+    /// than 256 characters, or an `entity` `NameId` breaks the rules of
+    /// [`NameId`](crate::NameId).
     ///
     /// # Examples
     ///

@@ -7,6 +7,7 @@ use crate::config::{
 use crate::constants::{namespace, Binding, CertUse};
 use crate::entity::{generate_id, EntitySetting};
 use crate::error::SamlError;
+use crate::flow::MessageAuthentication;
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
     EndpointUrl, MessageId, NameId, Received, ReplayKey, RequestVersionMismatch,
@@ -404,6 +405,7 @@ pub(crate) fn receive(
             },
             Binding::Soap,
             None,
+            MessageAuthentication::Authenticated,
         )))),
         Err(undecryptable) => refused(idp, &id, Refusal::Undecryptable(undecryptable)),
     }
