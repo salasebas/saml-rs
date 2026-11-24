@@ -283,6 +283,10 @@ pub struct SoapFault {
 
 impl SoapFault {
     /// Write a SOAP 1.1 fault with `code` and a fixed `faultstring`.
+    ///
+    /// A `Client` or `Server` fault also carries an empty `detail`, which
+    /// says that the `Body` was not processed. A `VersionMismatch` or
+    /// `MustUnderstand` fault carries none.
     pub fn new(code: SoapFaultCode) -> Self {
         let faultcode = format!("soap:{}", code.local_name());
         let mut writer = XmlWriter::new();
@@ -291,6 +295,10 @@ impl SoapFault {
         writer.start("soap:Fault", &[]);
         writer.text_element("faultcode", &[], &faultcode);
         writer.text_element("faultstring", &[], code.fault_string());
+        match code {
+            SoapFaultCode::Client | SoapFaultCode::Server => writer.text_element("detail", &[], ""),
+            SoapFaultCode::VersionMismatch | SoapFaultCode::MustUnderstand => {}
+        }
         writer.end("soap:Fault");
         writer.end("soap:Body");
         writer.end("soap:Envelope");
@@ -609,7 +617,10 @@ fn observe_start(
 ) -> Result<(), SamlError> {
     let (namespace, local_name) = reader.resolver().resolve_element(element.name());
     let local_name = local_name.as_ref().to_string();
-    let namespace = bound_namespace(&namespace);
+    let namespace = bound_namespace(&namespace)
+        .map(|uri| quick_xml::escape::unescape(uri).map_err(xml_err))
+        .transpose()?;
+    let namespace = namespace.as_deref();
 
     if depth == 1 {
         if local_name != "Envelope" {
@@ -796,7 +807,7 @@ mod tests {
     }
 
     #[test]
-    fn soap_envelope_outside_soap_1_1_is_a_version_mismatch() {
+    fn soap_envelope_outside_soap_1_1_is_a_version_mismatch() -> Result<(), SamlError> {
         let body = r#"<Body><samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></Body>"#;
         let soap_1_2 = format!(
             r#"<Envelope xmlns="http://www.w3.org/2003/05/soap-envelope">{body}</Envelope>"#
@@ -805,21 +816,29 @@ mod tests {
             fault_of(SoapBodyElement::from_envelope(&soap_1_2)),
             Some(SoapFaultCode::VersionMismatch)
         );
+        let escaped = format!(
+            r#"<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope&#47;">{body}</Envelope>"#
+        );
+        assert_eq!(
+            SoapBodyElement::from_envelope(&escaped)?.local_name(),
+            "ArtifactResolve"
+        );
         let bare_message =
             r#"<samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/>"#;
         assert_eq!(
             fault_of(SoapBodyElement::from_envelope(bare_message)),
             Some(SoapFaultCode::Client)
         );
+        Ok(())
     }
 
     #[test]
     fn soap_fault_is_the_single_body_entry_with_a_qualified_code() -> Result<(), SamlError> {
-        for (code, faultcode) in [
-            (SoapFaultCode::VersionMismatch, "VersionMismatch"),
-            (SoapFaultCode::MustUnderstand, "MustUnderstand"),
-            (SoapFaultCode::Client, "Client"),
-            (SoapFaultCode::Server, "Server"),
+        for (code, faultcode, entries) in [
+            (SoapFaultCode::VersionMismatch, "VersionMismatch", 2),
+            (SoapFaultCode::MustUnderstand, "MustUnderstand", 2),
+            (SoapFaultCode::Client, "Client", 3),
+            (SoapFaultCode::Server, "Server", 3),
         ] {
             let fault = SoapFault::new(code);
             let body = SoapBodyElement::from_envelope(fault.envelope())?;
@@ -838,7 +857,10 @@ mod tests {
                 ("faultcode", format!("soap:{faultcode}").as_str())
             );
             assert_eq!(children[1].0, "faultstring");
-            assert_eq!(children.len(), 2);
+            assert_eq!(children.len(), entries, "{faultcode}");
+            if entries == 3 {
+                assert_eq!(children[2], ("detail", ""));
+            }
             assert_eq!(fault.headers(), RESPONSE_HEADERS);
         }
         Ok(())

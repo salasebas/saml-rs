@@ -152,7 +152,9 @@ write and read envelopes for artifact resolution,
 | Process the request independently of the `SOAPAction` value | Mandatory | Bindings §3.2.3 | Always |
 | Return a SAML-domain error as a status in a SAML response, not as a SOAP fault | Recommended | Bindings §3.2.2.1, §3.2.3.3, E19 | Always |
 | Report a received `Envelope` outside the SOAP 1.1 namespace as `SamlError::SoapEnvelope` with the `VersionMismatch` fault code | Mandatory | SOAP 1.1 §4.1.2, §4.4.1 | Always |
-| Report a refused local header entry with the `MustUnderstand` fault code, and every other envelope failure with `Client` | Library policy: SOAP 1.1 §4.4.1 defines these codes for these failures, so the peer can tell a header it must drop from a malformed message. | SOAP 1.1 §4.2.3, §4.4.1 | Always |
+| Report a refused local header entry with the `MustUnderstand` fault code | Mandatory | SOAP 1.1 §4.2.3, §4.4.1 | Always |
+| Report every other envelope failure, including an XML limit, with the `Client` fault code | Library policy: SOAP 1.1 §4.4.1 gives `Client` to a message that must change before a resend, and no code fits a limit better. | SOAP 1.1 §4.4.1 | Always |
+| Write an empty `detail` in a `Client` or `Server` fault, and none in a `VersionMismatch` or `MustUnderstand` fault | Library policy: SOAP 1.1 requires `detail` when the `Body` was not processed, and an empty one carries no header information when the failure was elsewhere in the envelope. | SOAP 1.1 §4.4 | `SoapFault::new` |
 | Write a SOAP fault for a SOAP processing failure. The deployment sends it with HTTP 500 | Mandatory | Bindings §3.2.3.3, SOAP 1.1 §6.2 | `SoapFault::new` |
 | Refuse an exchange over a channel without the required protection with `SamlError::SoapChannelProtection`. The deployment answers HTTP 403 | Recommended | Bindings §3.2.3.3 | Always |
 | Send SOAP entity bodies with the `text/xml` media type | Mandatory | SOAP 1.1 §6 | `SoapRequest::headers`, `SoapResponse::headers` |

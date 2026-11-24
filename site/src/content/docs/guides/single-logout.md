@@ -167,24 +167,31 @@ let completed = sp.finish_slo(
 )?;
 ```
 
-The receiving side reads the posted body and returns the response envelope as the HTTP 200 body:
+A responder that cannot process the request answers with HTTP 500 and a SOAP fault. Check the HTTP status before you call `finish_slo`, which reads only a `LogoutResponse`.
+
+The receiving side reads the posted body and returns the response envelope as the HTTP 200 body. A `LogoutResponse` with an error status, including the refusal of an authenticated request with a newer SAML version, also goes back as HTTP 200. Any other error leaves no SAML response to send. Answer it with HTTP 500 and a `SoapFault`. Use the `fault` code of a `SamlError::SoapEnvelope`, `SoapFaultCode::Server` when a retry can succeed, and `SoapFaultCode::Client` otherwise:
 
 ```rust
-let logout_request = idp.receive_slo(&sp, Inbound::soap(body, SoapChannel::unattested()), validation)?;
-let status = logout_status_for(&logout_request)?;
-let logout_response = idp.respond_slo(&sp, &logout_request, &status, RespondSlo::soap())?;
-let reply_body = logout_response.soap_response()?.envelope();
-```
-
-A `LogoutResponse` with an error status also goes back as HTTP 200. When `receive_slo` returns an error, no SAML response exists to send. Answer `SamlError::SoapEnvelope` with HTTP 500 and `SoapFault::new` with its `fault` code. Answer `SamlError::SoapChannelProtection` with HTTP 403. Answer any other error with HTTP 500 and a `SoapFaultCode::Client` fault, or `SoapFaultCode::Server` when a retry can succeed:
-
-```rust
-let fault = match &error {
-	SamlError::SoapEnvelope { fault, .. } => *fault,
-	SamlError::ReplayCacheUnavailable { .. } => SoapFaultCode::Server,
-	_ => SoapFaultCode::Client,
-};
-let reply_body = SoapFault::new(fault).envelope();
+let (http_status, reply_body) =
+	match idp.receive_slo(&sp, Inbound::soap(body, SoapChannel::unattested()), validation) {
+		Ok(logout_request) => {
+			let status = logout_status_for(&logout_request)?;
+			let response = idp.respond_slo(&sp, &logout_request, &status, RespondSlo::soap())?;
+			(200, response.soap_response()?.envelope().to_owned())
+		}
+		Err(SamlError::LogoutRequestRefused { refusal, .. }) => {
+			let response = idp.respond_slo_refusal(&sp, &refusal, RespondSlo::soap())?;
+			(200, response.soap_response()?.envelope().to_owned())
+		}
+		Err(error) => {
+			let fault = match error {
+				SamlError::SoapEnvelope { fault, .. } => fault,
+				SamlError::ReplayCacheUnavailable { .. } => SoapFaultCode::Server,
+				_ => SoapFaultCode::Client,
+			};
+			(500, SoapFault::new(fault).envelope().to_owned())
+		}
+	};
 ```
 
 ## Next
