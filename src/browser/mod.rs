@@ -15,7 +15,7 @@ pub use artifact::{ArtifactDelivery, DeliveredArtifact};
 pub use bindings::{LogoutBinding, NameIdManagementBinding, SsoRequestBinding, SsoResponseBinding};
 pub use endpoints::{AcsEndpoint, SloEndpoint, SsoEndpoint};
 pub use forms::{FormField, PostForm};
-pub(crate) use input::{field_value, parse_form_fields, Transport};
+pub(crate) use input::{deflate_redirect_message_params, field_value, Transport};
 pub use input::{Inbound, PostMessage, RedirectMessage, SoapMessage};
 pub use outbound::{Outbound, OutboundDelivery};
 pub use pending::{

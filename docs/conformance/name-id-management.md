@@ -114,6 +114,7 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | Set `Destination` to that `Location` | Mandatory | Bindings §3.4.5.2 | Always |
 | Send only to an `https` peer endpoint | Recommended | Profiles §4.5.3.1 | `StartNameIdManagement::allow_http` |
 | Reject a `RelayState` over 80 bytes | Mandatory | Bindings §3.4.3 | `StartNameIdManagement::relay_state` |
+| Keep the endpoint's own query parameters before the SAML parameters, and refuse an endpoint query that already has `SAMLRequest`, `SAMLResponse`, `SAMLart`, `RelayState`, `SigAlg`, `Signature`, or `SAMLEncoding`, by decoded name | Library policy: the bindings name these parameters, so a configured one can repeat a message field or be read as one by an endpoint that serves several bindings. | Bindings §3.4.4 | Always |
 | Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Recommended | Bindings §3.4.5.1 | Always |
 
 ## HTTP-Redirect: receiving a ManageNameIDRequest
@@ -136,6 +137,9 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | Reject a repeated request `ID` | Library policy: retaining the ID prevents the same message from being accepted twice during the retention period. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
 | Accept a received `RelayState` over 80 bytes, up to 4096 bytes | Library policy: Bindings §3.4.3 binds the creator and gives the receiver no rule, and the 4096-byte bound limits unauthenticated input. | Bindings §3.4.3 | `MAX_RECEIVED_RELAY_STATE_BYTES` |
 | Reject a repeated `RelayState` parameter | Library policy: Bindings §3.4.3 defines one value per message and no receiver rule, and saml-rs compares and echoes one value while a caller's framework may read another. | Bindings §3.4.3 | Always |
+| Raw-inflate the message when `SAMLEncoding` is absent or names DEFLATE | Mandatory | Bindings §3.4.4 | Always |
+| Reject a repeated `SAMLEncoding`, or one that names another encoding, an empty value included | Library policy: saml-rs implements only DEFLATE, and inflating another encoding misreads the message. | Bindings §3.4.4 | Always |
+| Reject a received HTTP-Redirect `RelayState`, or another SAML parameter the message reads, that is not UTF-8 after percent-decoding | Library policy: `RelayState` is text, and replacing the bytes would change the value the responder returns. | Bindings §3.4.3 | Always |
 
 With an enabled age window, retain request IDs for at least `max_age` plus
 both clock-skew tolerances to cover the full window on either binding.
@@ -156,6 +160,7 @@ both clock-skew tolerances to cover the full window on either binding.
 | Answer at the first of those endpoints that is `https`, or the first under `allow_http` | Library policy: an earlier `http` entry would otherwise hide an advertised `https` one. | Metadata §2.2.2, Profiles §4.5.3.2 | `RespondNameIdManagement::allow_http`, `ReceiveNameIdManagement::allow_http` for a refusal |
 | Set `Destination` to that endpoint | Mandatory | Bindings §3.4.5.2 | Always |
 | Return the exact `RelayState` received with the request | Mandatory | Bindings §3.4.3 | Always |
+| Keep the endpoint's own query parameters before the SAML parameters, and refuse an endpoint query that already has `SAMLRequest`, `SAMLResponse`, `SAMLart`, `RelayState`, `SigAlg`, `Signature`, or `SAMLEncoding`, by decoded name | Library policy: the bindings name these parameters, so a configured one can repeat a message field or be read as one by an endpoint that serves several bindings. | Bindings §3.4.4 | Always |
 | Send only to an `https` peer endpoint | Recommended | Profiles §4.5.3.2 | `RespondNameIdManagement::allow_http`, `ReceiveNameIdManagement::allow_http` for a refusal |
 | Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Recommended | Bindings §3.4.5.1 | Always |
 
@@ -171,6 +176,9 @@ both clock-skew tolerances to cover the full window on either binding.
 | Require the `RelayState` the request carried, and accept any when it carried none | Library policy: Bindings §3.4.3 binds the responder, and another transaction's state must not complete this one. | Bindings §3.4.3 | Always |
 | Accept a received `RelayState` over 80 bytes, up to 4096 bytes | Library policy: Bindings §3.4.3 binds the creator and gives the receiver no rule, and the 4096-byte bound limits unauthenticated input. | Bindings §3.4.3 | `MAX_RECEIVED_RELAY_STATE_BYTES` |
 | Reject a repeated `RelayState` parameter | Library policy: Bindings §3.4.3 defines one value per message and no receiver rule, and saml-rs compares and echoes one value while a caller's framework may read another. | Bindings §3.4.3 | Always |
+| Raw-inflate the message when `SAMLEncoding` is absent or names DEFLATE | Mandatory | Bindings §3.4.4 | Always |
+| Reject a repeated `SAMLEncoding`, or one that names another encoding, an empty value included | Library policy: saml-rs implements only DEFLATE, and inflating another encoding misreads the message. | Bindings §3.4.4 | Always |
+| Reject a received HTTP-Redirect `RelayState`, or another SAML parameter the message reads, that is not UTF-8 after percent-decoding | Library policy: `RelayState` is text, and replacing the bytes would change the value the responder returns. | Bindings §3.4.3 | Always |
 | Require `Destination` on the signed response. Compare it with this provider's response location after collapsing XML whitespace | Mandatory | Core §3.2.2, Bindings §3.4.5.2, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Require one `Status` with one direct `StatusCode` | Mandatory | `StatusResponseType`, `StatusType` | Always |
 | Report a status other than `Success` after verifying the signature, issuer, request ID, and destination | Library policy: failed authentication or correlation takes precedence over a reported status. | Core §3.2.2.2 | Always |

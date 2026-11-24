@@ -1,4 +1,5 @@
 use crate::model::EndpointUrl;
+use crate::xml::is_xml_char;
 
 /// HTML form field emitted or consumed by browser POST bindings.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,4 +63,10 @@ impl PostForm {
             .find(|field| field.name() == name)
             .map(FormField::value)
     }
+}
+
+/// XML cannot represent a character outside its `Char` production, and HTML
+/// form submission sends a CR or LF outside a CRLF pair as CRLF.
+pub(crate) fn form_submits_unchanged(value: &str) -> bool {
+    value.chars().all(is_xml_char) && !value.replace("\r\n", "").contains(['\r', '\n'])
 }

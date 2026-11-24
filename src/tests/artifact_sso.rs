@@ -327,6 +327,70 @@ fn an_artifact_redirect_keeps_the_consumer_fragment_after_the_query(
 }
 
 #[test]
+fn an_artifact_redirect_refuses_a_consumer_query_with_a_saml_parameter(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties_with_consumers(
+        AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+        AcsEndpoint::artifact(format!("{SP_ACS_ARTIFACT}?RelayState=configured"))?,
+        AlgorithmPolicy::default(),
+    )?;
+    let (_, request) = requested(&parties, None)?;
+
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let result = parties.idp.respond_sso_artifact(
+        &parties.sp_metadata,
+        &request,
+        SsoAssertion::new(principal()),
+        RespondSso::artifact(ArtifactDelivery::redirect(0)),
+        &mut issued,
+    );
+    assert!(
+        matches!(&result, Err(SamlError::Invalid(message)) if message.contains("RelayState") && message.contains("endpoint")),
+        "{result:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_artifact_form_refuses_a_relay_state_with_a_lone_line_feed(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let started = parties.sp.start_sso(
+        &parties.idp_metadata,
+        StartSso::redirect().response_binding(SsoResponseBinding::Artifact),
+    )?;
+    let url = Url::parse(started.outbound.redirect_url()?)?;
+    let query = format!(
+        "{}&RelayState=line%0Abreak",
+        url.query().ok_or("missing query")?
+    );
+    let request =
+        parties
+            .idp
+            .receive_sso(&parties.sp_metadata, Inbound::redirect(query), validation())?;
+
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let result = parties.idp.respond_sso_artifact(
+        &parties.sp_metadata,
+        &request,
+        SsoAssertion::new(principal()),
+        RespondSso::artifact(ArtifactDelivery::post_form(0)),
+        &mut issued,
+    );
+    assert!(
+        matches!(
+            result,
+            Err(SamlError::RelayStateNotRepresentable {
+                binding: saml_rs::constants::Binding::Artifact,
+                ..
+            })
+        ),
+        "{result:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_relay_state_the_service_provider_did_not_send_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;

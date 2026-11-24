@@ -9,7 +9,8 @@ use super::forms::FormField;
 use super::MessageField;
 use crate::artifact::ResolvedProtocolMessage;
 use crate::binding::{
-    build_simplesign_octet, decode_base64_with_limit, encode_base64, single_parameter,
+    build_simplesign_octet, decode_base64_with_limit, encode_base64, saml_query_params,
+    single_parameter, SamlQueryParam, REDIRECT_MESSAGE_PARAMETERS,
 };
 use crate::constants::{url_params, Binding};
 use crate::error::SamlError;
@@ -157,6 +158,14 @@ impl<Message> Inbound<Message> {
     ///
     /// Pass the query as received, still URL-encoded: a Redirect signature
     /// covers the encoded parameters.
+    ///
+    /// The receiving operation reads `SAMLRequest`, `SAMLResponse`,
+    /// `RelayState`, `SigAlg`, `Signature`, and `SAMLEncoding` by their
+    /// decoded names and ignores other parameters. It reads `SAMLEncoding`
+    /// first and returns [`SamlError::Unsupported`] when it names an encoding
+    /// other than DEFLATE, before it reads the other parameters. It returns
+    /// [`SamlError::Invalid`] when a parameter it reads is not UTF-8 after
+    /// percent-decoding.
     pub fn redirect(raw_query: impl Into<String>) -> Self
     where
         Message: RedirectMessage,
@@ -386,9 +395,12 @@ fn http_request_from_transport(
 ) -> Result<HttpRequest, SamlError> {
     match transport {
         Transport::Redirect { raw_query } => {
-            let raw_query = raw_query.trim_start_matches('?').to_string();
-            let octet_string = redirect_octet_from_raw_query(&raw_query, expected_message)?;
-            let query = parse_form_pairs(&raw_query);
+            let params = deflate_redirect_message_params(&raw_query)?;
+            let octet_string = redirect_octet(&params, expected_message)?;
+            let query = params
+                .into_iter()
+                .map(|param| (param.name.to_string(), param.value))
+                .collect();
             Ok(HttpRequest {
                 query,
                 octet_string,
@@ -414,29 +426,28 @@ fn http_request_from_transport(
     }
 }
 
-struct RawQueryParam<'a> {
-    name: &'a str,
-    encoded_value: &'a str,
-}
-
-fn raw_query_params(raw_query: &str) -> impl Iterator<Item = RawQueryParam<'_>> {
-    raw_query
-        .split('&')
-        .filter(|segment| !segment.is_empty())
-        .map(|segment| match segment.split_once('=') {
-            Some((name, encoded_value)) => RawQueryParam {
-                name,
-                encoded_value,
-            },
-            None => RawQueryParam {
-                name: segment,
-                encoded_value: "",
-            },
-        })
+pub(crate) fn deflate_redirect_message_params(
+    raw_query: &str,
+) -> Result<Vec<SamlQueryParam<'_>>, SamlError> {
+    let encoding = saml_query_params(raw_query, &[url_params::SAML_ENCODING])?;
+    let encoding = single_parameter(
+        encoding
+            .iter()
+            .map(|param| (param.name, param.value.as_str())),
+        url_params::SAML_ENCODING,
+    )?;
+    match encoding {
+        None | Some(url_params::DEFLATE_ENCODING) => {
+            saml_query_params(raw_query, REDIRECT_MESSAGE_PARAMETERS)
+        }
+        Some(_) => Err(SamlError::Unsupported(
+            "HTTP-Redirect SAMLEncoding other than DEFLATE".into(),
+        )),
+    }
 }
 
 fn unique_encoded_query_value<'a>(
-    params: &'a [RawQueryParam<'a>],
+    params: &'a [SamlQueryParam<'a>],
     name: &'static str,
 ) -> Result<Option<&'a str>, SamlError> {
     single_parameter(
@@ -446,7 +457,7 @@ fn unique_encoded_query_value<'a>(
 }
 
 fn validate_query_message_kind<'a>(
-    params: &'a [RawQueryParam<'a>],
+    params: &'a [SamlQueryParam<'a>],
     expected_message: MessageField,
 ) -> Result<&'a str, SamlError> {
     let expected_name = expected_message.param_name();
@@ -464,16 +475,15 @@ fn validate_query_message_kind<'a>(
     }
 }
 
-fn redirect_octet_from_raw_query(
-    raw_query: &str,
+fn redirect_octet(
+    params: &[SamlQueryParam<'_>],
     expected_message: MessageField,
 ) -> Result<Option<String>, SamlError> {
-    let params: Vec<_> = raw_query_params(raw_query).collect();
     let message_name = expected_message.param_name();
-    let message_value = validate_query_message_kind(&params, expected_message)?;
-    let relay_state = unique_encoded_query_value(&params, url_params::RELAY_STATE)?;
-    let sig_alg = unique_encoded_query_value(&params, url_params::SIG_ALG)?;
-    let signature = unique_encoded_query_value(&params, url_params::SIGNATURE)?;
+    let message_value = validate_query_message_kind(params, expected_message)?;
+    let relay_state = unique_encoded_query_value(params, url_params::RELAY_STATE)?;
+    let sig_alg = unique_encoded_query_value(params, url_params::SIG_ALG)?;
+    let signature = unique_encoded_query_value(params, url_params::SIGNATURE)?;
 
     let sig_alg = match (sig_alg, signature) {
         (Some(sig_alg), Some(_)) => sig_alg,
@@ -491,19 +501,6 @@ fn redirect_octet_from_raw_query(
         }
         None => format!("{message_name}={message_value}&SigAlg={sig_alg}"),
     }))
-}
-
-fn parse_form_pairs(raw: &str) -> Vec<(String, String)> {
-    url::form_urlencoded::parse(raw.as_bytes())
-        .map(|(name, value)| (name.into_owned(), value.into_owned()))
-        .collect()
-}
-
-pub(crate) fn parse_form_fields(raw: &str) -> Vec<FormField> {
-    parse_form_pairs(raw)
-        .into_iter()
-        .map(|(name, value)| FormField::new(name, value))
-        .collect()
 }
 
 fn fields_to_pairs(fields: Vec<FormField>) -> Vec<(String, String)> {

@@ -2,6 +2,7 @@ use std::borrow::Cow;
 
 use super::deflate::deflate_raw_encode;
 use super::encoding::encode_base64;
+use super::query::ensure_endpoint_query_has_no_saml_parameter;
 use crate::constants::namespace;
 use crate::constants::ParserType;
 use crate::error::SamlError;
@@ -43,18 +44,21 @@ pub fn build_redirect_url(
     let deflated = deflate_raw_encode(xml.as_bytes())?;
     let encoded = encode_base64(&deflated);
     let query = redirect_binding_query(parser_type.query_param(), &encoded, relay_state);
-    Ok(append_redirect_query(base_url, &query))
+    append_redirect_query(base_url, &query)
 }
 
-pub(crate) fn append_redirect_query(base_url: &str, query: &str) -> String {
+pub(crate) fn append_redirect_query(base_url: &str, query: &str) -> Result<String, SamlError> {
     let fragment_start = base_url.find('#').unwrap_or(base_url.len());
     let (before_fragment, fragment) = base_url.split_at(fragment_start);
     let separator = match before_fragment.split_once('?') {
         None => "?",
         Some((_, "")) => "",
-        Some(_) => "&",
+        Some((_, endpoint_query)) => {
+            ensure_endpoint_query_has_no_saml_parameter(endpoint_query)?;
+            "&"
+        }
     };
-    format!("{before_fragment}{separator}{query}{fragment}")
+    Ok(format!("{before_fragment}{separator}{query}{fragment}"))
 }
 
 /// Build the octet string to sign for a signed HTTP-Redirect message.
@@ -214,7 +218,11 @@ fn remove_spans(xml: &str, spans: &[(usize, usize)]) -> String {
 }
 
 #[cfg(any(crypto, test))]
-pub(crate) fn append_signature(base_url: &str, octet: &str, signature_b64: &str) -> String {
+pub(crate) fn append_signature(
+    base_url: &str,
+    octet: &str,
+    signature_b64: &str,
+) -> Result<String, SamlError> {
     let mut signed = format!("{octet}&Signature=");
     signed.extend(byte_serialize(signature_b64.as_bytes()));
     append_redirect_query(base_url, &signed)
@@ -300,7 +308,7 @@ mod tests {
             let unsigned = build_redirect_url(&base, ParserType::SamlResponse, REQUEST, None)?;
             assert_eq!(unsigned, format!("{before}{query}{fragment}"), "{base}");
             assert_eq!(
-                append_signature(&base, &octet, "a+b="),
+                append_signature(&base, &octet, "a+b=")?,
                 format!("{before}{signed}{fragment}"),
                 "{base}"
             );

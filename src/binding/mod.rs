@@ -2,6 +2,7 @@ mod deflate;
 mod encoding;
 mod escape;
 mod parameters;
+mod query;
 mod redirect;
 mod signed_message;
 #[cfg(crypto)]
@@ -18,6 +19,9 @@ pub(crate) use encoding::{decode_base64, decode_base64_with_limit, encode_base64
 #[cfg(any(crypto, test))]
 pub(crate) use escape::xml_escape;
 pub(crate) use parameters::single_parameter;
+pub(crate) use query::{
+    saml_query_params, SamlQueryParam, ARTIFACT_PARAMETERS, REDIRECT_MESSAGE_PARAMETERS,
+};
 #[cfg(crypto)]
 pub(crate) use redirect::append_signature;
 #[cfg(any(crypto, test))]

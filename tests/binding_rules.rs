@@ -14,13 +14,15 @@ mod post_validation;
 use post_validation::post_validation;
 use std::time::SystemTime;
 
+use saml_rs::constants::Binding;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, Credentials, EntityId, FormField, IdentityProvider, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat,
-    PrivateKeyPem, RelayState, ReplayPolicy, RespondSso, SamlError, SamlValidationContext,
-    ServiceProvider, SpConfig, SpConfigBuilder, SpDescriptor, SpValidationPolicy, SsoAssertion,
-    SsoEndpoint, StartSso, X509Credential, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
+    AuthnRequestValidationPolicy, Credentials, DeliveredArtifact, EntityId, FormField,
+    IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy,
+    NameId, NameIdFormat, PrivateKeyPem, RelayState, ReplayPolicy, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SpConfig, SpConfigBuilder, SpDescriptor,
+    SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSso, X509Credential,
+    MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -78,12 +80,19 @@ fn sp_with(validation: SpValidationPolicy) -> Result<saml_rs::ServiceProvider, S
 }
 
 fn idp_with(validation: IdpValidationPolicy) -> Result<saml_rs::IdentityProvider, SamlError> {
+    idp_with_redirect_endpoint(validation, IDP_SSO_REDIRECT)
+}
+
+fn idp_with_redirect_endpoint(
+    validation: IdpValidationPolicy,
+    redirect_endpoint: &str,
+) -> Result<saml_rs::IdentityProvider, SamlError> {
     Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
         )
-        .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
+        .sso_endpoint(SsoEndpoint::redirect(redirect_endpoint)?)
         .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_SIMPLESIGN)?)
         .credentials(credentials())
         .validation(validation)
@@ -517,6 +526,309 @@ fn typed_simplesign_reports_a_malformed_signature_encoding(
     assert!(
         matches!(result, Err(SamlError::Base64 { .. })),
         "{result:?}"
+    );
+    Ok(())
+}
+
+fn redirect_query(url: &str) -> Result<&str, Box<dyn std::error::Error>> {
+    Ok(url.split_once('?').ok_or("missing query")?.1)
+}
+
+fn expect_unrepresentable<T: std::fmt::Debug>(
+    result: Result<T, SamlError>,
+    expected: Binding,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match result {
+        Err(SamlError::RelayStateNotRepresentable { binding, .. }) if binding == expected => Ok(()),
+        other => Err(format!(
+            "expected a {expected:?} form to refuse the RelayState, got {other:?}"
+        )
+        .into()),
+    }
+}
+
+#[test]
+fn typed_form_refuses_a_relay_state_it_cannot_send_unchanged(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(signing_sp_validation())?;
+    let idp = idp_with(signed_authn_request_idp_validation())?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+
+    for value in ["line\nbreak", "line\rbreak", "line\n\rbreak"] {
+        let relay_state = RelayState::try_new(value)?;
+        expect_unrepresentable(
+            sp.start_sso(
+                &idp_descriptor,
+                StartSso::post().relay_state(relay_state.clone()),
+            ),
+            Binding::Post,
+        )?;
+        expect_unrepresentable(
+            sp.start_sso(
+                &idp_descriptor,
+                StartSso::simple_sign().relay_state(relay_state),
+            ),
+            Binding::SimpleSign,
+        )?;
+    }
+
+    let crlf = RelayState::try_new("line\r\nbreak")?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::simple_sign().relay_state(crlf))?;
+    assert_eq!(
+        started.outbound.post_form()?.value("RelayState"),
+        Some("line\r\nbreak")
+    );
+
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default())?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+    let query = format!(
+        "{}&RelayState=line%0Abreak",
+        redirect_query(started.outbound.redirect_url()?)?
+    );
+    let received = idp.receive_sso(&sp_descriptor, Inbound::redirect(query), validation())?;
+    assert_eq!(
+        received.relay_state().map(RelayState::as_str),
+        Some("line\nbreak")
+    );
+    expect_unrepresentable(
+        idp.respond_sso(
+            &sp_descriptor,
+            &received,
+            SsoAssertion::new(principal()),
+            RespondSso::post(),
+        ),
+        Binding::Post,
+    )?;
+
+    let query = format!(
+        "{}&RelayState=null%00byte",
+        redirect_query(started.outbound.redirect_url()?)?
+    );
+    let received = idp.receive_sso(&sp_descriptor, Inbound::redirect(query), validation())?;
+    expect_unrepresentable(
+        idp.respond_sso(
+            &sp_descriptor,
+            &received,
+            SsoAssertion::new(principal()),
+            RespondSso::post(),
+        ),
+        Binding::Post,
+    )
+}
+
+#[test]
+fn typed_redirect_refuses_a_relay_state_that_is_not_utf8() -> Result<(), Box<dyn std::error::Error>>
+{
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default())?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+    let query = redirect_query(started.outbound.redirect_url()?)?;
+
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        Inbound::redirect(format!("{query}&RelayState=caf%C3%A9")),
+        validation(),
+    )?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(principal()),
+        RespondSso::post(),
+    )?;
+    assert_eq!(response.post_form()?.value("RelayState"), Some("café"));
+
+    let result = idp.receive_sso(
+        &sp_descriptor,
+        Inbound::redirect(format!("{query}&RelayState=caf%E9")),
+        validation(),
+    );
+    assert!(
+        matches!(&result, Err(SamlError::Invalid(message)) if message.contains("RelayState") && message.contains("UTF-8")),
+        "{result:?}"
+    );
+
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        Inbound::redirect(format!("{query}&SAMLart=caf%E9")),
+        validation(),
+    )?;
+    assert_eq!(received.message().id(), started.pending.request_id());
+
+    let artifact = "AAQAAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJyg%3D";
+    let delivered = DeliveredArtifact::from_query(&format!("SAMLart={artifact}&Signature=caf%E9"))?;
+    assert_eq!(delivered.relay_state(), None);
+    let result = DeliveredArtifact::from_query(&format!("SAMLart={artifact}&RelayState=caf%E9"));
+    assert!(
+        matches!(&result, Err(SamlError::Invalid(message)) if message.contains("RelayState") && message.contains("UTF-8")),
+        "{result:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn typed_redirect_keeps_an_ordinary_endpoint_query_and_refuses_saml_parameters(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let endpoint = format!("{IDP_SSO_REDIRECT}?tenant=a%20b");
+    let sp = sp_with(signing_sp_validation())?;
+    let idp = idp_with_redirect_endpoint(signed_authn_request_idp_validation(), &endpoint)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let relay_state = RelayState::try_new("endpoint-state")?;
+    let started = sp.start_sso(
+        &idp_descriptor,
+        StartSso::redirect().relay_state(relay_state),
+    )?;
+    let url = started.outbound.redirect_url()?;
+    assert_eq!(
+        query_names(url)?,
+        ["tenant", "SAMLRequest", "RelayState", "SigAlg", "Signature"]
+    );
+    assert!(
+        url.starts_with(&format!("{endpoint}&SAMLRequest=")),
+        "{url}"
+    );
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        Inbound::redirect(redirect_query(url)?),
+        validation(),
+    )?;
+    assert_eq!(
+        received.relay_state().map(RelayState::as_str),
+        Some("endpoint-state")
+    );
+
+    let literal = format!("{IDP_SSO_REDIRECT}?%3FRelayState=x");
+    let idp = idp_with_redirect_endpoint(IdpValidationPolicy::default(), &literal)?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+    assert!(
+        started
+            .outbound
+            .redirect_url()?
+            .starts_with(&format!("{literal}&SAMLRequest=")),
+        "{literal}"
+    );
+
+    for (endpoint, name) in [
+        (format!("{IDP_SSO_REDIRECT}??RelayState=x"), "RelayState"),
+        (
+            format!("{IDP_SSO_REDIRECT}?tenant=a&SAMLRequest=x"),
+            "SAMLRequest",
+        ),
+        (
+            format!("{IDP_SSO_REDIRECT}?tenant=a&SAMLResponse=x"),
+            "SAMLResponse",
+        ),
+        (format!("{IDP_SSO_REDIRECT}?tenant=a&SAMLart=x"), "SAMLart"),
+        (
+            format!("{IDP_SSO_REDIRECT}?tenant=a&RelayState=x"),
+            "RelayState",
+        ),
+        (
+            format!("{IDP_SSO_REDIRECT}?tenant=a&Relay%53tate=x"),
+            "RelayState",
+        ),
+        (format!("{IDP_SSO_REDIRECT}?tenant=a&SigAlg=x"), "SigAlg"),
+        (
+            format!("{IDP_SSO_REDIRECT}?tenant=a&Signature=x"),
+            "Signature",
+        ),
+        (
+            format!("{IDP_SSO_REDIRECT}?tenant=a&SAMLEncoding=x"),
+            "SAMLEncoding",
+        ),
+    ] {
+        let idp = idp_with_redirect_endpoint(IdpValidationPolicy::default(), &endpoint)?;
+        let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+        let result = sp.start_sso(&idp_descriptor, StartSso::redirect());
+        assert!(
+            matches!(&result, Err(SamlError::Invalid(message)) if message.contains(name) && message.contains("endpoint")),
+            "{endpoint}: {result:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn typed_redirect_inflates_only_the_deflate_saml_encoding() -> Result<(), Box<dyn std::error::Error>>
+{
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default())?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+    let query = redirect_query(started.outbound.redirect_url()?)?;
+
+    let deflate = "urn%3Aoasis%3Anames%3Atc%3ASAML%3A2.0%3Abindings%3AURL-Encoding%3ADEFLATE";
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        Inbound::redirect(format!("{query}&SAMLEncoding={deflate}")),
+        validation(),
+    )?;
+    assert_eq!(received.message().id(), started.pending.request_id());
+
+    for custom in [
+        "SAMLEncoding=urn%3Aexample%3Acustom&payload=abc",
+        "SAMLEncoding=urn%3Aexample%3Acustom&SAMLRequest=%FF",
+    ] {
+        let result = idp.receive_sso(&sp_descriptor, Inbound::redirect(custom), validation());
+        assert!(
+            matches!(&result, Err(SamlError::Unsupported(message)) if message.contains("SAMLEncoding")),
+            "{custom}: {result:?}"
+        );
+    }
+    for encoding in ["urn%3Aexample%3Aother-encoding", ""] {
+        let result = idp.receive_sso(
+            &sp_descriptor,
+            Inbound::redirect(format!("{query}&SAMLEncoding={encoding}")),
+            validation(),
+        );
+        assert!(
+            matches!(&result, Err(SamlError::Unsupported(message)) if message.contains("SAMLEncoding")),
+            "{encoding}: {result:?}"
+        );
+    }
+    let result = idp.receive_sso(
+        &sp_descriptor,
+        Inbound::redirect(format!(
+            "{query}&SAMLEncoding={deflate}&SAMLEncoding={deflate}"
+        )),
+        validation(),
+    );
+    assert!(
+        matches!(
+            result,
+            Err(SamlError::DuplicateBindingParameter {
+                name: "SAMLEncoding",
+                ..
+            })
+        ),
+        "{result:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn typed_redirect_matches_percent_encoded_parameter_names() -> Result<(), Box<dyn std::error::Error>>
+{
+    let sp = sp_with(signing_sp_validation())?;
+    let idp = idp_with(signed_authn_request_idp_validation())?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let relay_state = RelayState::try_new("encoded-names")?;
+    let started = sp.start_sso(
+        &idp_descriptor,
+        StartSso::redirect().relay_state(relay_state),
+    )?;
+    let query = redirect_query(started.outbound.redirect_url()?)?
+        .replace("SigAlg=", "Sig%41lg=")
+        .replace("RelayState=", "Relay%53tate=");
+
+    let received = idp.receive_sso(&sp_descriptor, Inbound::redirect(query), validation())?;
+    assert_eq!(received.message().id(), started.pending.request_id());
+    assert_eq!(
+        received.relay_state().map(RelayState::as_str),
+        Some("encoded-names")
     );
     Ok(())
 }
