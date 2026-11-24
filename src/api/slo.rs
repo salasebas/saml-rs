@@ -1,4 +1,4 @@
-use crate::browser::{Inbound, LogoutBinding, Outbound, PendingLogoutRequest, Started};
+use crate::browser::{Inbound, LogoutBinding, Outbound, PendingLogoutRequest, Started, Transport};
 use crate::config::{IdpDescriptor, NameIdFormat, SpDescriptor};
 use crate::constants::Binding;
 use crate::entity::{capture_idp_issuance_window, now_iso8601, EntitySetting};
@@ -14,6 +14,7 @@ use crate::model::{
     RefusedLogoutRequest, RelayState, ReplayKey, SamlInstant, SamlValidationContext, SessionIndex,
     Status,
 };
+use crate::soap::read_soap_body;
 use crate::xml::protocol_element::parse_saml_with_limits;
 use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
@@ -239,6 +240,11 @@ impl ServiceProvider {
     /// A request sent over HTTP-Redirect, HTTP-POST, or HTTP-POST-SimpleSign
     /// accepts a response over any of those bindings that the local metadata
     /// publishes. A SOAP request accepts only its SOAP response.
+    ///
+    /// A present `Destination` must name the local `SingleLogoutService` that
+    /// received the response. For a SOAP response, that is the local SOAP
+    /// `SingleLogoutService` location; a SOAP response without `Destination`
+    /// needs no local SOAP endpoint.
     ///
     /// # Errors
     ///
@@ -568,6 +574,11 @@ impl IdentityProvider {
     /// accepts a response over any of those bindings that the local metadata
     /// publishes. A SOAP request accepts only its SOAP response.
     ///
+    /// A present `Destination` must name the local `SingleLogoutService` that
+    /// received the response. For a SOAP response, that is the local SOAP
+    /// `SingleLogoutService` location; a SOAP response without `Destination`
+    /// needs no local SOAP endpoint.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the response does not match the pending
@@ -883,10 +894,10 @@ fn finish_slo_impl(
     let binding = logout_response_binding(input.binding(), pending.request_binding())?;
     let relay_state = relay_state_from_input(&input)?;
     ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
-    // A SOAP response returns on this party's own HTTP exchange, so no local
-    // endpoint received it.
     let expected_recipient = match binding {
-        LogoutBinding::Soap => None,
+        LogoutBinding::Soap => {
+            soap_reply_recipient(&input, local_setting, local_metadata, &validation)?
+        }
         binding @ (LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign) => {
             Some(logout_recipient_endpoint(
                 local_metadata,
@@ -915,6 +926,31 @@ fn finish_slo_impl(
     let response = LogoutResponse::from_flow(&parsed.flow, parsed.status_message)?;
     validation.check_and_store_message_replay(ReplayKey::LogoutResponse(response.id().clone()))?;
     Ok(LogoutCompleted::new(response, relay_state))
+}
+
+fn soap_reply_recipient(
+    input: &Inbound<LogoutResponse>,
+    local_setting: &EntitySetting,
+    local_metadata: &Metadata,
+    validation: &SamlValidationContext<'_>,
+) -> Result<Option<String>, SamlError> {
+    let Transport::Soap { envelope, .. } = &input.transport else {
+        return Err(SamlError::UnsupportedBinding {
+            binding: input.binding(),
+        });
+    };
+    let body = read_soap_body(envelope, local_setting.xml_limits)?;
+    let response = parse_saml_with_limits(&body.xml, local_setting.xml_limits)?;
+    if response.attr("Destination").is_none() {
+        return Ok(None);
+    }
+    logout_recipient_endpoint(
+        local_metadata,
+        LogoutBinding::Soap,
+        EndpointDirection::Request,
+        validation,
+    )
+    .map(Some)
 }
 
 #[derive(Debug, Clone, Copy)]

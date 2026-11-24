@@ -355,9 +355,10 @@ pub enum SamlError {
         /// Actual destination value extracted from the message, when available.
         actual: Option<String>,
     },
-    /// The URL given to
-    /// [`crate::SamlValidationContext::with_recipient_endpoint`] is not
-    /// published in local metadata for the message's binding and direction.
+    /// The receiving URL given to
+    /// [`crate::SamlValidationContext::with_recipient_endpoint`] or
+    /// [`crate::IdentityProvider::answer_artifact_resolve`] is not published
+    /// in local metadata for the message's binding and direction.
     #[error("receiving endpoint is not published for this binding and message direction")]
     RecipientEndpointNotPublished,
     /// Local metadata publishes several endpoints for the message's binding

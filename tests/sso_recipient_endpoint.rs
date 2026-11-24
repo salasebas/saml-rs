@@ -7,12 +7,13 @@ use common::signing_credentials;
 use std::time::{Duration, SystemTime};
 
 use saml_rs::{
-    AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, DeliveredArtifact, EndpointUrl,
-    EntityId, IdentityProvider, IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts,
-    MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, SamlError, SamlValidationContext,
-    ServiceProvider, SoapChannel, SpConfig, SpDescriptor, SsoAssertion, SsoEndpoint,
-    SsoResponseBinding, SsoSession,
+    AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, AuthnRequest, DeliveredArtifact,
+    EndpointUrl, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts,
+    MetadataTrustPolicy, NameId, NameIdFormat, Received, ReplayPolicy, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SoapChannel, SpConfig, SpDescriptor, SsoAssertion,
+    SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso,
 };
+use url::Url;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -80,35 +81,46 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn principal() -> NameId {
-    NameId::new(USER)
+    NameId::new(USER).with_format(NameIdFormat::EmailAddress)
 }
 
-fn accept(
+fn descriptors(
+    sent_to: &ServiceProvider,
+    idp: &IdentityProvider,
+) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
+    Ok((
+        SpDescriptor::from_metadata_xml(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            sent_to.metadata_xml(),
+            MetadataTrustPolicy::Unverified,
+        )?,
+        IdpDescriptor::from_metadata_xml(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            idp.metadata_xml(),
+            MetadataTrustPolicy::Unverified,
+        )?,
+    ))
+}
+
+fn response_input(
     binding: SsoResponseBinding,
-    sent_to: &str,
-    validation: SamlValidationContext<'_>,
-) -> Result<SsoSession, Box<dyn std::error::Error>> {
-    let receiver = sp(binding, ACS_A)?;
-    let sender_view = SpDescriptor::from_metadata_xml(
-        EntityId::try_new(SP_ENTITY_ID)?,
-        sp(binding, sent_to)?.metadata_xml(),
-        MetadataTrustPolicy::Unverified,
-    )?;
-    let idp = idp()?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml(
-        EntityId::try_new(IDP_ENTITY_ID)?,
-        idp.metadata_xml(),
-        MetadataTrustPolicy::Unverified,
-    )?;
-    let input = match binding {
+    receiver: &ServiceProvider,
+    idp: &IdentityProvider,
+    (sender_view, idp_descriptor): (&SpDescriptor, &IdpDescriptor),
+    request: Option<&Received<AuthnRequest>>,
+) -> Result<Inbound<SsoResponse>, Box<dyn std::error::Error>> {
+    let assertion = SsoAssertion::new(principal());
+    Ok(match binding {
         SsoResponseBinding::Post | SsoResponseBinding::SimpleSign => {
             let options = if binding == SsoResponseBinding::SimpleSign {
                 RespondSso::simple_sign()
             } else {
                 RespondSso::post()
             };
-            let response =
-                idp.initiate_sso(&sender_view, SsoAssertion::new(principal()), options)?;
+            let response = match request {
+                Some(request) => idp.respond_sso(sender_view, request, assertion, options)?,
+                None => idp.initiate_sso(sender_view, assertion, options)?,
+            };
             let fields = response.post_form()?.fields().to_vec();
             if binding == SsoResponseBinding::SimpleSign {
                 Inbound::simple_sign(fields)
@@ -118,30 +130,95 @@ fn accept(
         }
         SsoResponseBinding::Artifact => {
             let mut issued = IssuedArtifacts::expire_after(Duration::from_secs(60));
-            let response = idp.initiate_sso_artifact(
-                &sender_view,
-                SsoAssertion::new(principal()),
-                RespondSso::artifact(ArtifactDelivery::post_form(0)),
-                &mut issued,
-            )?;
+            let options = RespondSso::artifact(ArtifactDelivery::post_form(0));
+            let response = match request {
+                Some(request) => {
+                    idp.respond_sso_artifact(sender_view, request, assertion, options, &mut issued)?
+                }
+                None => idp.initiate_sso_artifact(sender_view, assertion, options, &mut issued)?,
+            };
             let delivered = DeliveredArtifact::from_form(response.post_form()?.fields())?;
             let resolution = receiver.resolve_artifact(
-                &idp_descriptor,
+                idp_descriptor,
                 delivered.artifact(),
                 SoapChannel::mutually_authenticated_confidential(),
                 SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache),
             )?;
             let answer = idp.answer_artifact_resolve(
-                &sender_view,
+                sender_view,
                 resolution.request().envelope(),
+                resolution.request().endpoint(),
                 &mut issued,
                 SoapChannel::mutually_authenticated_confidential(),
             )?;
             Inbound::artifact(delivered, resolution.finish(answer.response().envelope())?)
         }
         _ => return Err("unsupported response binding".into()),
-    };
+    })
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Flow {
+    Unsolicited,
+    Solicited,
+}
+
+const FLOWS: [Flow; 2] = [Flow::Unsolicited, Flow::Solicited];
+
+fn receive(
+    flow: Flow,
+    binding: SsoResponseBinding,
+    sent_to: &str,
+    validation: SamlValidationContext<'_>,
+) -> Result<SsoSession, Box<dyn std::error::Error>> {
+    match flow {
+        Flow::Unsolicited => accept(binding, sent_to, validation),
+        Flow::Solicited => finish(binding, sent_to, validation),
+    }
+}
+
+fn accept(
+    binding: SsoResponseBinding,
+    sent_to: &str,
+    validation: SamlValidationContext<'_>,
+) -> Result<SsoSession, Box<dyn std::error::Error>> {
+    let receiver = sp(binding, ACS_A)?;
+    let idp = idp()?;
+    let (sender_view, idp_descriptor) = descriptors(&sp(binding, sent_to)?, &idp)?;
+    let input = response_input(
+        binding,
+        &receiver,
+        &idp,
+        (&sender_view, &idp_descriptor),
+        None,
+    )?;
     Ok(receiver.accept_unsolicited_sso(&idp_descriptor, input, validation)?)
+}
+
+fn finish(
+    binding: SsoResponseBinding,
+    sent_to: &str,
+    validation: SamlValidationContext<'_>,
+) -> Result<SsoSession, Box<dyn std::error::Error>> {
+    let receiver = sp(binding, ACS_A)?;
+    let idp = idp()?;
+    let (sender_view, idp_descriptor) = descriptors(&receiver, &idp)?;
+    let acs_index = if sent_to == ACS_A { 0 } else { 1 };
+    let started = receiver.start_sso(&idp_descriptor, StartSso::redirect().acs_index(acs_index))?;
+    let url = Url::parse(started.outbound.redirect_url()?)?;
+    let request = idp.receive_sso(
+        &sender_view,
+        Inbound::redirect(url.query().unwrap_or_default()),
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache),
+    )?;
+    let input = response_input(
+        binding,
+        &receiver,
+        &idp,
+        (&sender_view, &idp_descriptor),
+        Some(&request),
+    )?;
+    Ok(receiver.finish_sso(&idp_descriptor, &started.pending, input, validation)?)
 }
 
 fn at(location: &str) -> Result<SamlValidationContext<'static>, SamlError> {
@@ -151,7 +228,10 @@ fn at(location: &str) -> Result<SamlValidationContext<'static>, SamlError> {
 #[test]
 fn a_response_to_the_supplied_non_default_consumer_is_accepted(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for binding in BINDINGS {
+    for (flow, binding) in FLOWS
+        .into_iter()
+        .flat_map(|flow| BINDINGS.map(|binding| (flow, binding)))
+    {
         let mut cache = saml_rs::InMemoryReplayCache::new();
         let policy = if binding == SsoResponseBinding::Post {
             ReplayPolicy::RequireCache(&mut cache)
@@ -160,8 +240,8 @@ fn a_response_to_the_supplied_non_default_consumer_is_accepted(
         };
         let validation = SamlValidationContext::new(SystemTime::now(), policy)
             .with_recipient_endpoint(EndpointUrl::try_new(ACS_B)?);
-        let session = accept(binding, ACS_B, validation)?;
-        assert_eq!(session.name_id().value(), USER, "{binding:?}");
+        let session = receive(flow, binding, ACS_B, validation)?;
+        assert_eq!(session.name_id().value(), USER, "{flow:?} {binding:?}");
     }
     Ok(())
 }
@@ -169,22 +249,28 @@ fn a_response_to_the_supplied_non_default_consumer_is_accepted(
 #[test]
 fn a_response_to_another_consumer_than_the_supplied_one_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for binding in BINDINGS {
-        match accept(binding, ACS_A, at(ACS_B)?) {
+    for (flow, binding) in FLOWS
+        .into_iter()
+        .flat_map(|flow| BINDINGS.map(|binding| (flow, binding)))
+    {
+        match receive(flow, binding, ACS_A, at(ACS_B)?) {
             Err(error) => match error.downcast_ref::<SamlError>() {
                 Some(SamlError::DestinationMismatch {
                     expected, actual, ..
                 }) => {
-                    assert_eq!(expected, ACS_B, "{binding:?}");
-                    assert_eq!(actual.as_deref(), Some(ACS_A), "{binding:?}");
+                    assert_eq!(expected, ACS_B, "{flow:?} {binding:?}");
+                    assert_eq!(actual.as_deref(), Some(ACS_A), "{flow:?} {binding:?}");
                 }
                 other => {
-                    return Err(
-                        format!("{binding:?}: expected DestinationMismatch, got {other:?}").into(),
+                    return Err(format!(
+                        "{flow:?} {binding:?}: expected DestinationMismatch, got {other:?}"
                     )
+                    .into())
                 }
             },
-            Ok(_) => return Err(format!("{binding:?}: expected DestinationMismatch").into()),
+            Ok(_) => {
+                return Err(format!("{flow:?} {binding:?}: expected DestinationMismatch").into())
+            }
         }
     }
     Ok(())
@@ -193,16 +279,23 @@ fn a_response_to_another_consumer_than_the_supplied_one_is_rejected(
 #[test]
 fn a_supplied_consumer_not_published_for_the_binding_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for binding in BINDINGS {
-        match accept(binding, ACS_A, at(OTHER_BINDING)?) {
+    for (flow, binding) in FLOWS
+        .into_iter()
+        .flat_map(|flow| BINDINGS.map(|binding| (flow, binding)))
+    {
+        match receive(flow, binding, ACS_A, at(OTHER_BINDING)?) {
             Err(error) => assert!(
                 matches!(
                     error.downcast_ref::<SamlError>(),
                     Some(SamlError::RecipientEndpointNotPublished)
                 ),
-                "{binding:?}: {error:?}"
+                "{flow:?} {binding:?}: {error:?}"
             ),
-            Ok(_) => return Err(format!("{binding:?}: expected Invalid").into()),
+            Ok(_) => {
+                return Err(
+                    format!("{flow:?} {binding:?}: expected RecipientEndpointNotPublished").into(),
+                )
+            }
         }
     }
     Ok(())

@@ -35,6 +35,7 @@ fn signing_failure_leaves_the_artifact_available_to_retry() -> Result<(), Box<dy
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         retry.request().envelope(),
+        retry.request().endpoint(),
         &mut issued,
         channel,
     )?;

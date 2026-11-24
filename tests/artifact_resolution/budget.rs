@@ -80,6 +80,7 @@ fn issuance_reserves_the_complete_soap_response_budget() -> Result<(), Box<dyn s
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &resolve_with_id(&artifact, &request_id),
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         confidential(),
     )?;
@@ -115,6 +116,7 @@ fn an_over_budget_release_can_retry_with_a_shorter_request_id(
         .answer_artifact_resolve(
             &parties.sp_metadata,
             &resolve_with_id(&artifact, &request_id),
+            &EndpointUrl::try_new(RESOLUTION_URL)?,
             &mut issued,
             confidential(),
         )
@@ -132,6 +134,7 @@ fn an_over_budget_release_can_retry_with_a_shorter_request_id(
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         confidential(),
     )?;

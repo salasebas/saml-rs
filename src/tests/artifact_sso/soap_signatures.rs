@@ -160,6 +160,7 @@ fn signed_artifact_resolve_completes_the_protected_soap_exchange() -> TestResult
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         request.envelope(),
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     )?;
@@ -199,6 +200,7 @@ fn artifact_resolve_signature_failure_leaves_the_artifact_outstanding() -> TestR
     let result = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &sign_rsa(request, IDP_KEY)?,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     );
@@ -210,6 +212,7 @@ fn artifact_resolve_signature_failure_leaves_the_artifact_outstanding() -> TestR
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &sign_rsa(request, PRIVKEY)?,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     )?;
@@ -244,6 +247,7 @@ fn artifact_response_signature_precedes_status_and_does_not_authenticate_inner_s
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -328,6 +332,7 @@ fn soap_artifact_hmac_signatures_use_the_receivers_profile() -> TestResult {
         let answer = parties.idp.answer_artifact_resolve(
             &sp_descriptor,
             &sign(request, &sp_secret)?,
+            &EndpointUrl::try_new(RESOLUTION_URL)?,
             &mut issued,
             channel,
         );
@@ -336,9 +341,13 @@ fn soap_artifact_hmac_signatures_use_the_receivers_profile() -> TestResult {
                 matches!(answer, Err(SamlError::AlgorithmUnsupported)),
                 "{answer:?}"
             );
-            parties
-                .idp
-                .answer_artifact_resolve(&sp_descriptor, request, &mut issued, channel)?
+            parties.idp.answer_artifact_resolve(
+                &sp_descriptor,
+                request,
+                &EndpointUrl::try_new(RESOLUTION_URL)?,
+                &mut issued,
+                channel,
+            )?
         } else {
             answer?
         };

@@ -102,7 +102,7 @@ pub enum ArtifactWithheld {
     DifferentPresenter,
     /// The SOAP channel lacks the protection required for the stored message.
     InsufficientChannelProtection,
-    /// The request's `Destination` differs from the artifact resolution endpoint.
+    /// The request's `Destination` differs from the URL that received it.
     DestinationMismatch,
 }
 
@@ -469,6 +469,7 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     metadata: &IdpMetadata,
     presenter: &SpDescriptor,
     request_envelope: &str,
+    received_at: &EndpointUrl,
     issued: &mut S,
     channel: SoapChannel,
     setting: &EntitySetting,
@@ -478,6 +479,13 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
         .entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?
         .to_string();
+    if !metadata
+        .artifact_resolution_services()?
+        .iter()
+        .any(|service| service.is_soap() && service.location() == received_at.as_str())
+    {
+        return Err(SamlError::RecipientEndpointNotPublished);
+    }
     let body = read_soap_body(request_envelope, setting.xml_limits)?;
     crate::schema::validate(request_envelope, setting.schema_validator)?;
     if body.local_name != "ArtifactResolve" || body.namespace != namespace::PROTOCOL {
@@ -531,14 +539,15 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     if entry.expires_at() <= issued.now()? {
         return success_without(ArtifactWithheld::NotOutstanding);
     }
-    if let Ok(service) = soap_service(metadata, artifact.endpoint_index()) {
-        if let Some(destination) = request.destination.as_deref() {
-            if destination != service.location() {
-                return success_without(ArtifactWithheld::DestinationMismatch);
-            }
-        }
-    } else {
+    if soap_service(metadata, artifact.endpoint_index()).is_err() {
         return success_without(ArtifactWithheld::NotOutstanding);
+    }
+    if request
+        .destination
+        .as_deref()
+        .is_some_and(|destination| destination != received_at.as_str())
+    {
+        return success_without(ArtifactWithheld::DestinationMismatch);
     }
     if !channel_allows(channel, entry.required_channel()) {
         return success_without(ArtifactWithheld::InsufficientChannelProtection);

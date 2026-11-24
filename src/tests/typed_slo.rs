@@ -1647,7 +1647,7 @@ fn typed_facade_finish_slo_checks_logout_response_replay() -> Result<(), Box<dyn
 #[test]
 fn typed_facades_accept_matching_logout_response_destination_for_all_bindings(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for binding in ALL_LOGOUT_BINDINGS {
+    for binding in LOGOUT_BINDINGS_WITH_SOAP {
         for receiver_role in LOCAL_SLO_ROLES {
             let endpoint = receiver_role.endpoint(binding);
             let completed = finish_custom_logout_response(
@@ -1734,7 +1734,7 @@ fn typed_facades_reject_signed_logout_response_without_destination_before_replay
 #[test]
 fn typed_facades_reject_mismatched_logout_response_destination_before_replay(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for binding in ALL_LOGOUT_BINDINGS {
+    for binding in LOGOUT_BINDINGS_WITH_SOAP {
         for receiver_role in LOCAL_SLO_ROLES {
             let mut cache = RecordingReplayCache::default();
             match finish_custom_logout_response(
@@ -3626,6 +3626,66 @@ fn soap_logout_accepts_signed_messages_without_destination(
         )?;
     }
     Ok(())
+}
+
+#[test]
+fn a_soap_requester_without_a_soap_endpoint_checks_only_a_present_destination(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = ServiceProvider::new(
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS_POST)?,
+        )
+        .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
+        .credentials(signing_credentials())
+        .validation(signing_sp_validation())
+        .build()?,
+    );
+    let idp = IdentityProvider::new(idp_config()?);
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::soap())?;
+    let received = idp.receive_slo(
+        &sp_descriptor,
+        Inbound::soap(
+            started.outbound.soap_request()?.envelope(),
+            SoapChannel::unattested(),
+        ),
+        validation(),
+    )?;
+    let response = idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::soap(),
+    )?;
+    let completed = sp.finish_slo(
+        &idp_descriptor,
+        &started.pending,
+        Inbound::soap(
+            response.soap_response()?.envelope(),
+            SoapChannel::unattested(),
+        ),
+        validation(),
+    )?;
+    assert_eq!(completed.response().destination(), None);
+
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::soap())?;
+    let xml = logout_response_xml(
+        "_addressed_soap_reply",
+        IDP_ENTITY_ID,
+        started.pending.request_id().as_str(),
+        Some(SP_SLO_SOAP),
+    );
+    match sp.finish_slo(
+        &idp_descriptor,
+        &started.pending,
+        signed_logout_response_input(&xml, LogoutBinding::Soap)?,
+        validation(),
+    ) {
+        Err(SamlError::MissingMetadata(element)) if element == "SingleLogoutService" => Ok(()),
+        other => Err(format!("expected MissingMetadata, got {other:?}").into()),
+    }
 }
 
 const SOAP_NAMESPACE_DECLARATION: &str =

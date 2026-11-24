@@ -240,8 +240,14 @@ fn soap_artifact_and_name_id_flows_refuse_expired_metadata(
         ),
         (
             "answer_artifact_resolve",
-            idp.answer_artifact_resolve(&expired_sp, &resolve_envelope, &mut issued, channel)
-                .map(drop),
+            idp.answer_artifact_resolve(
+                &expired_sp,
+                &resolve_envelope,
+                &EndpointUrl::try_new("https://idp.example.com/artifact")?,
+                &mut issued,
+                channel,
+            )
+            .map(drop),
         ),
         (
             "resolve_artifact",

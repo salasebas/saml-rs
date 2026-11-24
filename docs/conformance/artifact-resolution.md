@@ -84,7 +84,8 @@ with a higher receive limit could accept. [OpenSAML 5.2.3 source release](https:
 | Keep an outstanding artifact after withholding its message | Library policy: the intended recipient can still resolve it within its lifetime. | Core §3.5.3 | Always |
 | Check the actual SOAP envelope before consuming the artifact | Library policy: keep the entry for retry if the response exceeds the [SOAP response size budget](#soap-response-size-budget). | Core §3.5.3, Bindings §3.2.2.1, E19 | Default `XmlLimits` |
 | Fail closed without releasing the message when the artifact store cannot verify or consume the entry | Library policy: releasing an unconsumed artifact would violate single-use enforcement across retries or concurrent nodes. | Core §3.5.3, Bindings §3.6.5.2 | Always |
-| Withhold the message when a present `Destination`, after XML whitespace collapse, differs from this endpoint | Mandatory | Core §3.2.1, `RequestAbstractType`, XML Schema Part 2 §4.3.6 | Always |
+| Withhold the message when a present `Destination`, after XML whitespace collapse, differs from the URL that received the request | Mandatory | Core §3.2.1, `RequestAbstractType`, XML Schema Part 2 §4.3.6 | `answer_artifact_resolve` `received_at` |
+| Reject a receiving URL that this identity provider does not publish as a SOAP `ArtifactResolutionService` | Library policy: the URL is caller input, and the restriction keeps the handler from naming an endpoint this identity provider does not operate. | Core §3.2.1 | Always |
 | Expire the artifact after the configured lifetime. The issuer should choose the shortest practical lifetime | Recommended | Core §3.5.3 | `ArtifactStore::lifetime`, `IssuedArtifacts::expire_after` |
 | Include the artifact issuer's entity ID in `Issuer` and omit `Format` or set it to `entity` | Mandatory | Profiles §5.4.2 | Always |
 | Set `InResponseTo` to the request `ID` | Mandatory | Core §3.2.2, §3.5.3 | Always |

@@ -21,6 +21,7 @@ fn schema_validator_rejects_artifact_soap_before_release() -> Result<(), Box<dyn
     let result = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     );
@@ -32,6 +33,7 @@ fn schema_validator_rejects_artifact_soap_before_release() -> Result<(), Box<dyn
     let answer = accepting.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
