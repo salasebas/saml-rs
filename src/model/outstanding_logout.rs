@@ -2,23 +2,20 @@ use super::identifiers::{SamlInstant, SessionIndex};
 use super::sso::SsoSession;
 use super::subject::NameId;
 use super::validation::SamlValidationContext;
-use crate::config::NameIdFormat;
-use crate::constants::name_id_format;
+use crate::config::EntityId;
 use crate::error::SamlError;
 use crate::validator::effective_not_on_or_after;
-use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::parse_saml_utc_date_time;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-/// A `LogoutRequest` the caller has already accepted.
+/// A caller-stored record of an authenticated IdP `LogoutRequest`.
 ///
 /// Pass it to [`ServiceProvider::finish_sso_with_outstanding_logout`] or
-/// [`ServiceProvider::accept_unsolicited_sso_with_outstanding_logout`]. The library
-/// does not store it. NameID values must be equal. A `Format` on the logout
-/// must match; an omitted or `unspecified` `Format` compares values only. An
-/// empty session list
-/// applies to every session of that NameID. The classification is in
-/// `docs/conformance/web-browser-sso-acceptance.md`.
+/// [`ServiceProvider::accept_unsolicited_sso_with_outstanding_logout`]. While
+/// the record is unexpired, it applies to assertions from the same issuer
+/// whose full `NameID` matches, including its qualifiers. An omitted `Format`
+/// is equivalent to `unspecified`. An empty session list applies to every
+/// session with that issuer and `NameID`.
 ///
 /// [`ServiceProvider::finish_sso_with_outstanding_logout`]: crate::ServiceProvider::finish_sso_with_outstanding_logout
 /// [`ServiceProvider::accept_unsolicited_sso_with_outstanding_logout`]: crate::ServiceProvider::accept_unsolicited_sso_with_outstanding_logout
@@ -26,19 +23,27 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 /// # Examples
 ///
 /// ```
-/// use saml_rs::{NameId, NameIdFormat, OutstandingLogout, SamlInstant, SessionIndex};
+/// use saml_rs::{LogoutRequest, OutstandingLogout, Received, SamlError};
 ///
-/// # fn main() -> Result<(), saml_rs::SamlError> {
-/// let logout = OutstandingLogout::try_new(
-///     NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
-///     vec![SessionIndex::try_new("_session")?],
-///     SamlInstant::try_new("2026-10-06T00:00:00Z")?,
-/// )?;
-/// # let _ = logout;
-/// # Ok(()) }
+/// fn remember_logout(
+///     received: &Received<LogoutRequest>,
+/// ) -> Result<Option<OutstandingLogout>, SamlError> {
+///     let request = received.message();
+///     let (Some(name_id), Some(deadline)) = (request.name_id(), request.not_on_or_after()) else {
+///         return Ok(None);
+///     };
+///     let logout = OutstandingLogout::try_new(
+///         request.issuer().clone(),
+///         name_id.clone(),
+///         request.session_indexes().to_vec(),
+///         deadline.clone(),
+///     )?;
+///     Ok(Some(logout))
+/// }
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutstandingLogout {
+    issuer: EntityId,
     name_id: NameId,
     session_indexes: Vec<SessionIndex>,
     not_on_or_after: SamlInstant,
@@ -46,14 +51,18 @@ pub struct OutstandingLogout {
 }
 
 impl OutstandingLogout {
-    /// Create an outstanding logout from the NameID, session indexes, and
-    /// `NotOnOrAfter` the caller accepted.
+    /// Create a record from the issuer, `NameID`, session indexes, and
+    /// `NotOnOrAfter` of the same authenticated logout request.
+    ///
+    /// Take these values from the result of [`crate::ServiceProvider::receive_slo`]
+    /// or restore them together from a trusted store.
     ///
     /// # Errors
     ///
     /// Returns [`SamlError::Invalid`] when the NameID value is empty or
     /// `not_on_or_after` is not a representable SAML UTC `xs:dateTime`.
     pub fn try_new(
+        issuer: EntityId,
         name_id: NameId,
         session_indexes: Vec<SessionIndex>,
         not_on_or_after: SamlInstant,
@@ -79,11 +88,17 @@ impl OutstandingLogout {
             SamlInstant::try_new(normalized)?
         };
         Ok(Self {
+            issuer,
             name_id,
             session_indexes,
             not_on_or_after,
             deadline,
         })
+    }
+
+    /// Issuer of the authenticated logout request.
+    pub fn issuer(&self) -> &EntityId {
+        &self.issuer
     }
 
     /// Principal named by the accepted logout.
@@ -108,7 +123,10 @@ impl OutstandingLogout {
         session: &SsoSession,
         validation: &SamlValidationContext<'_>,
     ) -> Result<bool, SamlError> {
-        if !self.same_name_id(session.name_id()) || !self.same_session(session) {
+        if self.issuer() != session.issuer()
+            || !self.name_id().strongly_matches(session.name_id())
+            || !self.same_session(session)
+        {
             return Ok(false);
         }
         let now = validation.now_offset()?;
@@ -117,20 +135,6 @@ impl OutstandingLogout {
             validation.clock_skew().not_on_or_after_millis(),
         )?;
         Ok(now < effective)
-    }
-
-    fn same_name_id(&self, name_id: &NameId) -> bool {
-        if self.name_id.value() != name_id.value() {
-            return false;
-        }
-        let collapsed_uri = |format: &NameIdFormat| collapse_whitespace(format.as_uri());
-        self.name_id
-            .format()
-            .map(collapsed_uri)
-            .is_none_or(|format| {
-                format == name_id_format::UNSPECIFIED
-                    || name_id.format().map(collapsed_uri) == Some(format)
-            })
     }
 
     fn same_session(&self, session: &SsoSession) -> bool {

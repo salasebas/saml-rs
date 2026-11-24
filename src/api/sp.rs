@@ -364,8 +364,8 @@ impl ServiceProvider {
 
     /// Finish SP-initiated SSO and apply an [`OutstandingLogout`].
     ///
-    /// A match is rejected. The assertion identifier is still recorded for
-    /// replay.
+    /// Reject the sign-in when an unexpired logout from the assertion issuer
+    /// matches it. The assertion identifier is still recorded for replay.
     ///
     /// # Errors
     ///
@@ -521,6 +521,9 @@ impl ServiceProvider {
     }
 
     /// Accept an IdP-initiated SSO response and apply an [`OutstandingLogout`].
+    ///
+    /// Uses the same matching and replay rules as
+    /// [`Self::finish_sso_with_outstanding_logout`].
     ///
     /// # Errors
     ///

@@ -12,10 +12,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use saml_rs::{
     AcsEndpoint, AuthnStatement, ClockSkew, EntityId, FormField, IdentityProvider, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound, MetadataTrustPolicy, NameId,
-    NameIdFormat, OutstandingLogout, PendingAuthnRequest, RelayState, ReplayPolicy, RespondSso,
-    SamlError, SamlInstant, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession, StartSso,
+    IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound, LogoutSubject,
+    MetadataTrustPolicy, NameId, NameIdFormat, OutstandingLogout, PendingAuthnRequest, RelayState,
+    ReplayPolicy, RespondSso, SamlError, SamlInstant, SamlValidationContext, ServiceProvider,
+    SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
+    SsoEndpoint, SsoSession, StartSlo, StartSso,
 };
 use time::OffsetDateTime;
 
@@ -30,6 +31,8 @@ fn principal() -> NameId {
 
 struct IssuedSso {
     sp: saml_rs::ServiceProvider,
+    sp_descriptor: SpDescriptor,
+    idp: IdentityProvider,
     idp_descriptor: IdpDescriptor,
     pending: PendingAuthnRequest,
     fields: Vec<FormField>,
@@ -46,6 +49,7 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
         AcsEndpoint::post(SP_ACS)?.with_default(),
     )
     .credentials(signing_credentials())
+    .slo_endpoint(SloEndpoint::post("https://sp.example.com/slo")?)
     .name_id_format(NameIdFormat::Unspecified)
     .validation(SpValidationPolicy::default())
     .build()?;
@@ -90,6 +94,8 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
     )?;
     Ok(IssuedSso {
         sp,
+        sp_descriptor,
+        idp,
         idp_descriptor,
         pending: started.pending,
         fields: response.post_form()?.fields().to_vec(),
@@ -144,7 +150,12 @@ fn logout(
     sessions: Vec<SessionIndex>,
     not_on_or_after_seconds: i64,
 ) -> Result<OutstandingLogout, SamlError> {
-    OutstandingLogout::try_new(principal, sessions, instant_at(not_on_or_after_seconds)?)
+    OutstandingLogout::try_new(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        principal,
+        sessions,
+        instant_at(not_on_or_after_seconds)?,
+    )
 }
 
 fn session_index(session: &SsoSession) -> Result<SessionIndex, Box<dyn std::error::Error>> {
@@ -340,6 +351,51 @@ fn outstanding_logout_does_not_reject_a_different_principal_or_session(
             .value(),
         "alice@example.com"
     );
+    for name_id in [
+        NameId::new("alice@example.com"),
+        NameId::new("alice@example.com").with_format(NameIdFormat::Unspecified),
+    ] {
+        let outstanding = logout(name_id, Vec::new(), now + 120)?;
+        assert_eq!(
+            finish(&issued, now, ClockSkew::strict(), Some(&outstanding))?.name_id(),
+            &principal(),
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn sso_accepts_later_assertions_for_a_different_name_id_namespace(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sign_in = NameId::new("alice").with_name_qualifier("https://staff.example.com");
+    let sign_out = NameId::new("alice").with_name_qualifier("https://alumni.example.com");
+    let issued = issued_sso_for(sign_in.clone())?;
+    let started = issued.idp.start_slo(
+        &issued.sp_descriptor,
+        LogoutSubject::new(sign_out),
+        StartSlo::post(),
+    )?;
+    let now = unix_seconds()? + 2;
+    let received = issued.sp.receive_slo(
+        &issued.idp_descriptor,
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
+        validation_at(now, ClockSkew::strict(), &mut InMemoryReplayCache::new())?,
+    )?;
+    let request = received.message();
+    let outstanding = OutstandingLogout::try_new(
+        request.issuer().clone(),
+        request.name_id().ok_or("expected a NameID")?.clone(),
+        request.session_indexes().to_vec(),
+        request
+            .not_on_or_after()
+            .ok_or("expected a deadline")?
+            .clone(),
+    )?;
+
+    let unsolicited = accept_unsolicited(&issued, now, ClockSkew::strict(), Some(&outstanding))?;
+    assert_eq!(unsolicited.name_id(), &sign_in);
+    let solicited = finish(&issued, now, ClockSkew::strict(), Some(&outstanding))?;
+    assert_eq!(solicited.name_id(), &sign_in);
     Ok(())
 }
 
@@ -371,12 +427,7 @@ fn outstanding_logout_with_a_custom_spelling_of_the_format_rejects_the_assertion
     let issued = issued_sso()?;
     let now = unix_seconds()? + 2;
     let email = NameIdFormat::EmailAddress.as_uri();
-    let unspecified = NameIdFormat::Unspecified.as_uri();
-    for spelling in [
-        email.to_string(),
-        format!(" {email} "),
-        format!(" {unspecified} "),
-    ] {
+    for spelling in [email.to_string(), format!(" {email} ")] {
         let outstanding = logout(
             NameId::new("alice@example.com").with_format(NameIdFormat::Custom(spelling.clone())),
             Vec::new(),
@@ -397,8 +448,8 @@ fn outstanding_logout_without_a_session_index_rejects_every_session_of_the_princ
 ) -> Result<(), Box<dyn std::error::Error>> {
     let issued = issued_sso()?;
     let now = unix_seconds()? + 2;
-    let value_only = logout(NameId::new("alice@example.com"), Vec::new(), now + 120)?;
-    match finish(&issued, now, ClockSkew::strict(), Some(&value_only)) {
+    let outstanding = logout(principal(), Vec::new(), now + 120)?;
+    match finish(&issued, now, ClockSkew::strict(), Some(&outstanding)) {
         Err(SamlError::AssertionMatchesOutstandingLogout) => Ok(()),
         other => Err(format!(
             "expected a logout with no SessionIndex to reject the principal, got {other:?}"

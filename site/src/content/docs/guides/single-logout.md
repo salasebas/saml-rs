@@ -85,7 +85,8 @@ or an identifier that could not be decrypted gives no match. Use
 candidate.
 
 Use `OutstandingLogout` during SSO to check an assertion that arrives after a
-logout request.
+logout request. Build the record from the issuer, full `NameID`, session
+indexes, and `NotOnOrAfter` of the same authenticated request.
 
 ## Identity provider
 

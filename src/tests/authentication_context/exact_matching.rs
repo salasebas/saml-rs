@@ -353,6 +353,7 @@ fn exact_authn_context_opt_in_rejects_different_wrong_kind_and_missing_reference
     }
 
     let other_logout = OutstandingLogout::try_new(
+        idp_descriptor.entity_id().clone(),
         NameId::new("bob"),
         Vec::new(),
         SamlInstant::try_new("2099-01-01T00:00:00Z")?,
@@ -409,6 +410,7 @@ fn matching_outstanding_logout_records_replay_even_when_authn_context_mismatches
         ),
     )?;
     let matching_logout = OutstandingLogout::try_new(
+        idp_descriptor.entity_id().clone(),
         principal(),
         Vec::new(),
         SamlInstant::try_new("2099-01-01T00:00:00Z")?,
