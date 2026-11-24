@@ -29,20 +29,25 @@ impl EntityDescription {
         {
             return Ok(Self::default());
         }
-        let (element, _) =
-            super::role::namespaced_entity(parse_saml_with_limits(xml, limits)?, entity)?;
+        let document = parse_saml_with_limits(xml, limits)?;
+        let path = super::role::namespaced_path(&document, entity)?;
+        let element = path.last().ok_or_else(super::role::missing_entity)?;
+        Ok(Self::from_entity(element))
+    }
+
+    pub(super) fn from_entity(element: &SamlElement) -> Self {
         if !element.is(namespace::METADATA, "EntityDescriptor") {
-            return Ok(Self::default());
+            return Self::default();
         }
         let mut description = Self::default();
-        for child in element.children {
+        for child in &element.children {
             if child.is(namespace::METADATA, "Organization") {
-                description.organizations.push(child);
+                description.organizations.push(child.clone());
             } else if child.is(namespace::METADATA, "ContactPerson") {
-                description.contacts.push(child);
+                description.contacts.push(child.clone());
             }
         }
-        Ok(description)
+        description
     }
 
     pub(super) fn organization(&self) -> Result<Option<Organization>, SamlError> {

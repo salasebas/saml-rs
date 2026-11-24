@@ -447,11 +447,11 @@ pub use config::{
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, Credentials,
     DataEncryptionAlgorithm, DigestAlgorithm, EntityId, HmacSecret, IdentifierEncryptionPolicy,
     IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpMetadataConfig, IdpValidationPolicy,
-    KeyEncryptionAlgorithm, ManageNameIdService, MaskGenerationFunction, MetadataTrustPolicy,
-    NameIdCreationPolicy, NameIdFormat, Passphrase, PrivateKeyPem, ResponseSignaturePolicy,
-    Rsa15KeyTransportPolicy, SignatureAction, SignatureAlgorithm, SignatureConfig, SpConfig,
-    SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpValidationPolicy, TemplatePolicy,
-    TransformAlgorithm, X509Credential, XmlEncryptionPolicy, XmlLimits, XmlPolicy,
+    KeyEncryptionAlgorithm, ManageNameIdService, MaskGenerationFunction, MetadataAggregate,
+    MetadataTrustPolicy, NameIdCreationPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
+    ResponseSignaturePolicy, Rsa15KeyTransportPolicy, SignatureAction, SignatureAlgorithm,
+    SignatureConfig, SpConfig, SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpValidationPolicy,
+    TemplatePolicy, TransformAlgorithm, X509Credential, XmlEncryptionPolicy, XmlLimits, XmlPolicy,
     XmlSignatureProfile,
 };
 #[cfg(crypto)]

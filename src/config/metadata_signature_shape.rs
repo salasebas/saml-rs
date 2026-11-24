@@ -1,6 +1,6 @@
 use crate::constants::transform_algorithm;
 use crate::error::SamlError;
-use crate::xml::dom::{self, Node, XmlLimits};
+use crate::xml::dom::Node;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MetadataSignatureTransforms {
@@ -9,12 +9,9 @@ pub(super) enum MetadataSignatureTransforms {
 }
 
 pub(super) fn ensure_import_signature_shape(
-    xml: &str,
+    root: &Node,
     transforms: MetadataSignatureTransforms,
-    limits: XmlLimits,
 ) -> Result<(), SamlError> {
-    let document = dom::parse_document(xml, limits)?;
-    let root = &document.root;
     if !is_metadata_root(root) {
         return Ok(());
     }

@@ -364,12 +364,7 @@ pub(crate) fn verify_signature(
     xml: &str,
     metadata_certs: &[String],
 ) -> Result<(bool, Option<String>), SamlError> {
-    verify_first_signature_with_profile(
-        xml,
-        metadata_certs,
-        XmlLimits::default(),
-        XmlSignatureProfile::AllowWeakAlgorithms,
-    )
+    verify_signature_with_limits(xml, metadata_certs, XmlLimits::default())
 }
 
 struct PreparedSignatureVerification {
@@ -450,27 +445,22 @@ pub(crate) fn verify_signature_with_limits(
     metadata_certs: &[String],
     limits: XmlLimits,
 ) -> Result<(bool, Option<String>), SamlError> {
-    verify_first_signature_with_profile(
+    verify_first_signature_in_document(
         xml,
+        dom::parse_document(xml, limits)?,
         metadata_certs,
-        limits,
         XmlSignatureProfile::AllowWeakAlgorithms,
     )
 }
 
-pub(crate) fn verify_first_signature_with_profile(
+fn verify_first_signature_in_document(
     xml: &str,
+    document: dom::Document,
     metadata_certs: &[String],
-    limits: XmlLimits,
     profile: XmlSignatureProfile,
 ) -> Result<(bool, Option<String>), SamlError> {
-    let Some(prepared) = prepare_signature_verification(
-        xml,
-        dom::parse_document(xml, limits)?,
-        metadata_certs,
-        None,
-        profile,
-    )?
+    let Some(prepared) =
+        prepare_signature_verification(xml, document, metadata_certs, None, profile)?
     else {
         return Ok((false, None));
     };
@@ -748,23 +738,23 @@ fn verified_coverage(
     Ok((targets, verified_embedded_signatures))
 }
 
-pub(crate) fn verify_metadata_signature_coverage_with_limits(
+pub(crate) fn verify_metadata_signature_coverage(
     xml: &str,
+    document: dom::Document,
     trusted_certificates: &[String],
-    limits: XmlLimits,
     profile: XmlSignatureProfile,
 ) -> Result<Option<String>, SamlError> {
+    let is_metadata_root = matches!(
+        document.root.local_name.as_str(),
+        "EntityDescriptor" | "EntitiesDescriptor"
+    );
     let (verified, signed_metadata_xml) =
-        verify_first_signature_with_profile(xml, trusted_certificates, limits, profile)?;
+        verify_first_signature_in_document(xml, document, trusted_certificates, profile)?;
     if !verified {
         return Ok(None);
     }
     let signed_metadata_xml = signed_metadata_xml.ok_or_else(verified_content_not_covered)?;
-    let descriptor = dom::parse_document(xml, limits)?;
-    if !matches!(
-        descriptor.root.local_name.as_str(),
-        "EntityDescriptor" | "EntitiesDescriptor"
-    ) {
+    if !is_metadata_root {
         return Err(verified_content_not_covered());
     }
     Ok(Some(signed_metadata_xml))

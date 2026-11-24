@@ -26,6 +26,13 @@ expected outputs for `tests/metadata_description.rs`. Their structure follows
 OASIS Metadata §§2.3.2–2.4.1 and the REFEDS security contact extension. They use
 invented organization and contact details and contain no key material.
 
+## Federation aggregate metadata
+
+`metadata/federation-aggregate.xml` is a hand-written test federation with
+invented IdP and SP endpoints under `example.com`. It follows the aggregate
+structure in SAML Metadata §2.3.1. Tests sign it at runtime with
+`key/sp/privkey.unencrypted.pkcs8.pem` and `key/sp/cert.unencrypted.pkcs8.cer`.
+
 ## Crypto provider matrix fixture audit
 
 `src/tests/provider_regression.rs` deliberately uses the matching

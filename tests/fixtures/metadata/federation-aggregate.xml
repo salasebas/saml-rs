@@ -1,0 +1,39 @@
+<md:EntitiesDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
+    xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
+    xmlns:mdattr="urn:oasis:names:tc:SAML:metadata:attribute"
+    xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+    ID="_federation" validUntil="2031-01-01T00:00:00Z">
+    <md:EntityDescriptor entityID="https://other.example.com/metadata">
+        <md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+            <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+                Location="https://other.example.com/sso"/>
+        </md:IDPSSODescriptor>
+    </md:EntityDescriptor>
+    <md:EntitiesDescriptor Name="members" validUntil="2030-01-01T00:00:00Z">
+        <md:Extensions>
+            <mdattr:EntityAttributes>
+                <saml:Attribute Name="urn:oasis:names:tc:SAML:attribute:assurance-certification"
+                    NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:uri">
+                    <saml:AttributeValue>https://refeds.org/sirtfi</saml:AttributeValue>
+                </saml:Attribute>
+            </mdattr:EntityAttributes>
+        </md:Extensions>
+        <md:EntityDescriptor entityID=" https://idp.example.com/metadata " validUntil="2032-01-01T00:00:00Z">
+            <md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:1.1:protocol">
+                <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+                    Location="https://idp.example.com/saml1"/>
+            </md:IDPSSODescriptor>
+            <md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"
+                validUntil="2033-01-01T00:00:00Z">
+                <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+                    Location="https://idp.example.com/sso"/>
+            </md:IDPSSODescriptor>
+        </md:EntityDescriptor>
+    </md:EntitiesDescriptor>
+    <md:EntityDescriptor entityID="https://sp.example.com/metadata">
+        <md:SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+            <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+                Location="https://sp.example.com/acs" index="0"/>
+        </md:SPSSODescriptor>
+    </md:EntityDescriptor>
+</md:EntitiesDescriptor>

@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use super::{as_object_list, Metadata};
 use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::util::Value;
+use crate::xml::protocol_element::SamlElement;
 use crate::xml::{extract_with_limits, ExtractorField, XmlLimits};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,8 +71,32 @@ impl SpMetadata {
     /// Returns the errors from [`Self::from_xml`] and any schema validation
     /// error from `policy`.
     pub fn from_xml_with_policy(xml: &str, policy: &crate::XmlPolicy) -> Result<Self, SamlError> {
-        let limits = policy.limits;
-        let extra = vec![
+        let inner = Metadata::parse_role_with_policy(
+            xml,
+            super::SsoDescriptorRole::ServiceProvider,
+            Self::fields(),
+            policy,
+        )?;
+        Self::from_extracted(inner, policy.limits)
+    }
+
+    pub(crate) fn from_aggregate_entity(
+        xml: &Arc<str>,
+        path: &[&SamlElement],
+        limits: XmlLimits,
+    ) -> Result<Self, SamlError> {
+        let inner = Metadata::from_aggregate_entity(
+            xml,
+            path,
+            super::SsoDescriptorRole::ServiceProvider,
+            Self::fields(),
+            limits,
+        )?;
+        Self::from_extracted(inner, limits)
+    }
+
+    fn fields() -> Vec<ExtractorField> {
+        vec![
             ExtractorField::new("spRoleContext", &["EntityDescriptor", "SPSSODescriptor"])
                 .capture_source(),
             ExtractorField::new(
@@ -86,13 +113,10 @@ impl SpMetadata {
                 ],
             )
             .capture_source(),
-        ];
-        let mut inner = Metadata::parse_role_with_policy(
-            xml,
-            super::SsoDescriptorRole::ServiceProvider,
-            extra,
-            policy,
-        )?;
+        ]
+    }
+
+    fn from_extracted(mut inner: Metadata, limits: XmlLimits) -> Result<Self, SamlError> {
         let role_context = match &mut inner.meta {
             Value::Object(entries) => entries
                 .iter()

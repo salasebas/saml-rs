@@ -3,7 +3,7 @@
 //! [`SamlError`] is non-exhaustive. Callers should include a fallback match arm
 //! so they can handle variants added in later releases.
 
-use crate::config::NameIdFormat;
+use crate::config::{EntityId, NameIdFormat};
 use crate::constants::Binding;
 use crate::model::{
     AuthnContextReference, RefusedAuthnRequest, RefusedLogoutRequest, RelayState, ReplayKey,
@@ -578,6 +578,20 @@ pub enum SamlError {
     /// Required metadata (endpoint/certificate) was missing.
     #[error("missing metadata: {0}")]
     MissingMetadata(String),
+    /// The aggregate has no member with the requested entity ID.
+    #[error("metadata aggregate has no EntityDescriptor for `{}`", .entity_id.as_str())]
+    #[non_exhaustive]
+    MetadataEntityNotFound {
+        /// The requested entity ID.
+        entity_id: EntityId,
+    },
+    /// The aggregate has several members with the requested entity ID.
+    #[error("metadata aggregate has more than one EntityDescriptor for `{}`", .entity_id.as_str())]
+    #[non_exhaustive]
+    DuplicateMetadataEntity {
+        /// The requested entity ID.
+        entity_id: EntityId,
+    },
     /// A required cryptographic key was missing.
     #[error("missing key: {0}")]
     MissingKey(String),

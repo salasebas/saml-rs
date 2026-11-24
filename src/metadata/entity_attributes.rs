@@ -234,32 +234,25 @@ pub(super) fn read_bound_attributes(
     if !has_extensions_on_path(root, entity) {
         return Ok(Vec::new());
     }
-    let mut element = parse_saml_with_limits(xml, limits)?;
-    let mut attributes = Vec::new();
-    loop {
-        let is_entity = element.start == entity.start && element.end == entity.end;
-        let binds = element.is(namespace::METADATA, "EntitiesDescriptor")
-            || element.is(namespace::METADATA, "EntityDescriptor");
-        let mut next = None;
-        for child in element.children {
-            if binds && child.is(namespace::METADATA, "Extensions") {
-                attributes.extend(
-                    child
-                        .children
-                        .into_iter()
-                        .filter(|extension| extension.is(NAMESPACE, "EntityAttributes"))
-                        .flat_map(|entity_attributes| entity_attributes.children)
-                        .filter(|attribute| attribute.is(namespace::ASSERTION, "Attribute")),
-                );
-            } else if !is_entity && child.start <= entity.start && entity.end <= child.end {
-                next = Some(child);
-            }
-        }
-        if is_entity {
-            return Ok(attributes);
-        }
-        element = next.ok_or_else(|| SamlError::xml("EntityDescriptor is not in the document"))?;
-    }
+    let document = parse_saml_with_limits(xml, limits)?;
+    let path = super::role::namespaced_path(&document, entity)?;
+    Ok(bound_attributes(&path))
+}
+
+pub(super) fn bound_attributes(path: &[&SamlElement]) -> Vec<SamlElement> {
+    path.iter()
+        .filter(|element| {
+            element.is(namespace::METADATA, "EntitiesDescriptor")
+                || element.is(namespace::METADATA, "EntityDescriptor")
+        })
+        .flat_map(|element| &element.children)
+        .filter(|child| child.is(namespace::METADATA, "Extensions"))
+        .flat_map(|extensions| &extensions.children)
+        .filter(|extension| extension.is(NAMESPACE, "EntityAttributes"))
+        .flat_map(|entity_attributes| &entity_attributes.children)
+        .filter(|attribute| attribute.is(namespace::ASSERTION, "Attribute"))
+        .cloned()
+        .collect()
 }
 
 fn has_extensions_on_path(root: &Node, entity: &Node) -> bool {
