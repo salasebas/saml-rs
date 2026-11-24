@@ -279,10 +279,11 @@ impl ServiceProvider {
     /// assertions, including any embedded signatures on HTTP-POST-SimpleSign.
     ///
     /// A present `Destination` and the bearer `Recipient` must name the
-    /// assertion consumer that received the response. Supply that URL with
+    /// assertion consumer that received the response, which must be the one
+    /// [`PendingAuthnRequest::acs`] asked for. Supply the receiving URL with
     /// [`SamlValidationContext::with_recipient_endpoint`]; it must be published
-    /// for the pending request's binding. When omitted, the expected URL is
-    /// the assertion consumer the pending request asked for.
+    /// for the pending request's binding. When omitted, the library assumes
+    /// the response arrived at the requested assertion consumer.
     ///
     /// HTTP-POST requires [`crate::ReplayPolicy::RequireCache`]. After response
     /// parsing and verification, a missing cache returns
@@ -318,7 +319,9 @@ impl ServiceProvider {
     /// each assertion returns [`SamlError::SignatureMissing`].
     /// Returns [`SamlError::RecipientEndpointNotPublished`] when the supplied
     /// recipient endpoint is not an assertion consumer published for the
-    /// pending request's binding.
+    /// pending request's binding, and [`SamlError::DestinationMismatch`] with
+    /// the requested location as `expected` and the supplied URL as `actual`
+    /// when it is another published assertion consumer.
     /// An `Attribute` without an unqualified `Name` returns
     /// [`SamlError::ProtocolProfile`]. The `Conditions` time window returns
     /// [`SamlError::TimeWindowInvalid`] when both bounds are present and
@@ -624,15 +627,23 @@ impl ServiceProvider {
         requested: &AcsEndpoint,
         validation: &SamlValidationContext<'_>,
     ) -> Result<String, SamlError> {
-        match validation.recipient_endpoint() {
-            Some(_) => validation.resolve_recipient_endpoint(
-                &self
-                    .engine()
-                    .metadata
-                    .assertion_consumer_service_locations(Binding::from(requested.binding())),
-            ),
-            None => Ok(requested.location().as_str().to_string()),
+        let requested_location = requested.location().as_str();
+        if validation.recipient_endpoint().is_none() {
+            return Ok(requested_location.to_string());
         }
+        let received_at = validation.resolve_recipient_endpoint(
+            &self
+                .engine()
+                .metadata
+                .assertion_consumer_service_locations(Binding::from(requested.binding())),
+        )?;
+        if received_at != requested_location {
+            return Err(SamlError::destination_mismatch(
+                requested_location,
+                Some(&received_at),
+            ));
+        }
+        Ok(received_at)
     }
 
     fn unsolicited_recipient(

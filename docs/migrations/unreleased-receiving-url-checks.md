@@ -39,11 +39,16 @@ read `SamlValidationContext::with_recipient_endpoint`, as
 assertion consumer of the pending request.
 
 If your service provider publishes several assertion consumers for one
-binding, pass the URL of the handler that received the response. A response
-addressed to another consumer then returns `SamlError::DestinationMismatch`.
-A URL that is not an assertion consumer for the pending request's binding
-returns `SamlError::RecipientEndpointNotPublished`. Without a supplied URL,
-nothing changes.
+binding, pass the URL of the handler that received the response. Without a
+supplied URL, nothing changes.
+
+A supplied URL now returns:
+
+- `SamlError::DestinationMismatch` when it is not the assertion consumer of
+  the pending request. `expected` is the requested location and `actual` is
+  the supplied URL.
+- `SamlError::RecipientEndpointNotPublished` when it is not an assertion
+  consumer for the pending request's binding.
 
 ## Expect `Destination` checks on SOAP logout responses
 
@@ -59,3 +64,6 @@ A response with `Destination` can now return:
   `SingleLogoutService`.
 - `SamlError::RecipientEndpointAmbiguous` when the local party publishes
   several and you supply none with `with_recipient_endpoint`.
+- `SamlError::RecipientEndpointNotPublished` when the URL you supply with
+  `with_recipient_endpoint` is not a local SOAP `SingleLogoutService`
+  location, such as a browser logout URL.

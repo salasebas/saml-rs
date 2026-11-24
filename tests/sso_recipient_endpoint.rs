@@ -40,6 +40,14 @@ fn other_binding(binding: SsoResponseBinding) -> Result<SsoResponseBinding, Saml
 }
 
 fn sp(binding: SsoResponseBinding, default: &str) -> Result<ServiceProvider, SamlError> {
+    sp_indexed(binding, default, [ACS_A, ACS_B])
+}
+
+fn sp_indexed(
+    binding: SsoResponseBinding,
+    default: &str,
+    [first, second]: [&str; 2],
+) -> Result<ServiceProvider, SamlError> {
     let acs = |index, location| -> Result<AcsEndpoint, SamlError> {
         let endpoint = AcsEndpoint::new(binding, EndpointUrl::try_new(location)?).with_index(index);
         Ok(if location == default {
@@ -54,8 +62,8 @@ fn sp(binding: SsoResponseBinding, default: &str) -> Result<ServiceProvider, Sam
     )
     .with_index(2);
     Ok(ServiceProvider::new(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, acs(0, ACS_A)?)
-            .acs_endpoints([acs(1, ACS_B)?, other])
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, acs(0, first)?)
+            .acs_endpoints([acs(1, second)?, other])
             .credentials(signing_credentials())
             .build()?,
     ))
@@ -200,10 +208,19 @@ fn finish(
     sent_to: &str,
     validation: SamlValidationContext<'_>,
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
+    let acs_index = if sent_to == ACS_A { 0 } else { 1 };
+    finish_with_idp_view(binding, acs_index, &sp(binding, ACS_A)?, validation)
+}
+
+fn finish_with_idp_view(
+    binding: SsoResponseBinding,
+    acs_index: u16,
+    idp_view: &ServiceProvider,
+    validation: SamlValidationContext<'_>,
+) -> Result<SsoSession, Box<dyn std::error::Error>> {
     let receiver = sp(binding, ACS_A)?;
     let idp = idp()?;
-    let (sender_view, idp_descriptor) = descriptors(&receiver, &idp)?;
-    let acs_index = if sent_to == ACS_A { 0 } else { 1 };
+    let (sender_view, idp_descriptor) = descriptors(idp_view, &idp)?;
     let started = receiver.start_sso(&idp_descriptor, StartSso::redirect().acs_index(acs_index))?;
     let url = Url::parse(started.outbound.redirect_url()?)?;
     let request = idp.receive_sso(
@@ -253,13 +270,17 @@ fn a_response_to_another_consumer_than_the_supplied_one_is_rejected(
         .into_iter()
         .flat_map(|flow| BINDINGS.map(|binding| (flow, binding)))
     {
+        let (want_expected, want_actual) = match flow {
+            Flow::Unsolicited => (ACS_B, ACS_A),
+            Flow::Solicited => (ACS_A, ACS_B),
+        };
         match receive(flow, binding, ACS_A, at(ACS_B)?) {
             Err(error) => match error.downcast_ref::<SamlError>() {
                 Some(SamlError::DestinationMismatch {
                     expected, actual, ..
                 }) => {
-                    assert_eq!(expected, ACS_B, "{flow:?} {binding:?}");
-                    assert_eq!(actual.as_deref(), Some(ACS_A), "{flow:?} {binding:?}");
+                    assert_eq!(expected, want_expected, "{flow:?} {binding:?}");
+                    assert_eq!(actual.as_deref(), Some(want_actual), "{flow:?} {binding:?}");
                 }
                 other => {
                     return Err(format!(
@@ -295,6 +316,38 @@ fn a_supplied_consumer_not_published_for_the_binding_is_rejected(
                 return Err(
                     format!("{flow:?} {binding:?}: expected RecipientEndpointNotPublished").into(),
                 )
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn a_solicited_response_at_another_consumer_than_the_requested_one_is_rejected(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for binding in BINDINGS {
+        let stale_idp_view = sp_indexed(binding, ACS_B, [ACS_B, ACS_A])?;
+        for (validation, received_at) in [(at(ACS_B)?, "supplied"), (validation(), "omitted")] {
+            match finish_with_idp_view(binding, 0, &stale_idp_view, validation) {
+                Err(error) => match error.downcast_ref::<SamlError>() {
+                    Some(SamlError::DestinationMismatch {
+                        expected, actual, ..
+                    }) => {
+                        assert_eq!(expected, ACS_A, "{binding:?} {received_at}");
+                        assert_eq!(actual.as_deref(), Some(ACS_B), "{binding:?} {received_at}");
+                    }
+                    other => {
+                        return Err(format!(
+                            "{binding:?} {received_at}: expected DestinationMismatch, got {other:?}"
+                        )
+                        .into())
+                    }
+                },
+                Ok(_) => {
+                    return Err(
+                        format!("{binding:?} {received_at}: expected DestinationMismatch").into(),
+                    )
+                }
             }
         }
     }
