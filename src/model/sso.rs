@@ -87,8 +87,9 @@ impl VerifiedXmlSignature {
 
 /// Parsed SSO login session.
 ///
-/// The assertion fields come from the first assertion of the response that
-/// carries a bearer `SubjectConfirmation`, in document order.
+/// The assertion fields come from the first bearer assertion with an
+/// `AuthnStatement`, in document order. If no bearer assertion has one, the
+/// fields come from the first bearer assertion.
 #[derive(Debug, Clone)]
 pub struct SsoSession {
     response_id: MessageId,

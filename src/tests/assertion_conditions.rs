@@ -2,6 +2,7 @@
 #![cfg(crypto)]
 
 mod replay;
+mod session_evidence;
 mod statement;
 mod time_values;
 
@@ -1266,33 +1267,30 @@ mod encrypted_assertions {
     #[test]
     fn only_the_decrypted_bearer_assertion_signature_is_consumed_assertion_evidence(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let exchange = post_exchange(require_signed())?;
-        let holder_of_key_encrypted = encrypt_first(
-            &sign_first_assertion(&holder_of_key_assertion_first(&exchange)?, RSA_SHA384)?,
-            AES_256,
-            CERT,
-        )?;
-        let both_encrypted = encrypt_first(
-            &sign_first_assertion(&holder_of_key_encrypted, RSA_SHA512)?,
-            AES_256,
-            CERT,
-        )?;
+        for policy in [SpValidationPolicy::default(), require_signed()] {
+            let exchange = post_exchange(policy)?;
+            let holder_of_key_encrypted = encrypt_first(
+                &sign_first_assertion(&holder_of_key_assertion_first(&exchange)?, RSA_SHA384)?,
+                AES_256,
+                CERT,
+            )?;
+            let both_encrypted = encrypt_first(
+                &sign_first_assertion(&holder_of_key_encrypted, RSA_SHA512)?,
+                AES_256,
+                CERT,
+            )?;
 
-        let session = accept(&exchange, &resign_response(&both_encrypted)?)?;
+            let session = accept(&exchange, &resign_response(&both_encrypted)?)?;
 
-        assert_ne!(session.assertion_id().as_str(), "_second_assertion");
-        let evidence: Vec<_> = session
-            .verified_xml_signatures()
-            .iter()
-            .map(|signature| (signature.algorithm_uri(), signature.coverage()))
-            .collect();
-        assert_eq!(
-            evidence,
-            [
-                (RSA_SHA256, VerifiedXmlSignatureCoverage::ResponseRoot),
-                (RSA_SHA512, VerifiedXmlSignatureCoverage::ConsumedAssertion),
-            ]
-        );
+            assert_ne!(session.assertion_id().as_str(), "_second_assertion");
+            assert_eq!(
+                session_evidence::xml_signature_evidence(&session),
+                [
+                    (RSA_SHA256, VerifiedXmlSignatureCoverage::ResponseRoot),
+                    (RSA_SHA512, VerifiedXmlSignatureCoverage::ConsumedAssertion),
+                ]
+            );
+        }
         Ok(())
     }
 
