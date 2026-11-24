@@ -1103,7 +1103,7 @@ fn service_provider_without_a_name_id_format_omits_the_name_id_policy_format(
         .nth(1)
         .and_then(|rest| rest.split("/>").next())
         .ok_or("missing NameIDPolicy")?;
-    assert_eq!(policy, " AllowCreate=\"false\"");
+    assert_eq!(policy, " AllowCreate=\"true\"");
     Ok(())
 }
 

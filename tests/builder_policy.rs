@@ -191,7 +191,7 @@ fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
         sp.audience,
         AudienceValidationPolicy::EvaluatePresentRestrictions
     );
-    assert_eq!(sp.name_id_creation, NameIdCreationPolicy::DoNotAllowCreate);
+    assert_eq!(sp.name_id_creation, NameIdCreationPolicy::AllowCreate);
     assert_eq!(
         sp.xml_signatures,
         XmlSignatureProfile::ExcludeWeakAlgorithms

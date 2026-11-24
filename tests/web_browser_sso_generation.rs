@@ -583,7 +583,6 @@ fn typed_sso_optional_generation_capabilities_stay_off_until_selected(
 
     assert!(!redirect.contains("Signature="));
     assert!(!request.contains("ForceAuthn="));
-    assert!(request.contains("AllowCreate=\"false\""));
     assert!(!request.contains("SPNameQualifier="));
     assert!(request.contains("Format=\"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress\""));
     assert!(!request.contains("Format=\"\""));
@@ -597,16 +596,6 @@ fn typed_sso_optional_generation_capabilities_stay_off_until_selected(
     )?;
     let forced_xml = authn_request_xml(&forced.outbound)?;
     assert!(forced_xml.contains("ForceAuthn=\"true\""));
-    assert!(forced_xml.contains("AllowCreate=\"false\""));
-
-    let mut creating = SpValidationPolicy::default();
-    creating.name_id_creation = NameIdCreationPolicy::AllowCreate;
-    let sp = sp_with(creating)?;
-    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
-    let request = authn_request_xml(&started.outbound)?;
-    assert!(request.contains("AllowCreate=\"true\""));
-    assert!(!request.contains("ForceAuthn="));
     Ok(())
 }
 
@@ -660,7 +649,6 @@ fn typed_authn_request_signing_stays_optional_and_does_not_reject_unsigned_reque
     assert!(request.contains(&format!("Destination=\"{IDP_SSO_REDIRECT}\"")));
     assert!(request.contains(&format!("<saml:Issuer>{SP_ENTITY_ID}</saml:Issuer>")));
     assert!(!request.contains("ForceAuthn="));
-    assert!(request.contains("AllowCreate=\"false\""));
 
     let sp = sp_with(SpValidationPolicy::default())?;
     let idp = idp_with(IdpValidationPolicy::default(), false)?;

@@ -25,5 +25,6 @@ additions.
 - [Look up artifact resolution endpoints by role](unreleased-artifact-index-per-role.md)
 - [Handle identity provider response value errors](unreleased-idp-response-values.md)
 - [Send timeout logout reasons only from the identity provider](unreleased-session-authority-logout-reasons.md)
+- [Keep AllowCreate false in AuthnRequests](unreleased-allow-create-default.md)
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

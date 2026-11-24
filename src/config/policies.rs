@@ -182,12 +182,21 @@ pub enum AudienceValidationPolicy {
 }
 
 /// Whether SP AuthnRequests allow IdPs to create a new identifier.
+///
+/// `AllowCreate` lets the identity provider create an identifier for the
+/// principal, or associate an existing one with the service provider, while it
+/// answers the request. An AuthnRequest for the transient format omits
+/// `AllowCreate` under either value.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum NameIdCreationPolicy {
     /// Set `AllowCreate="true"` in AuthnRequests.
+    #[default]
     AllowCreate,
     /// Set `AllowCreate="false"` in AuthnRequests.
-    #[default]
+    ///
+    /// An identity provider that keeps identifier state for each service
+    /// provider can then refuse the first login of a principal it has no
+    /// identifier for yet, with an `InvalidNameIDPolicy` status.
     DoNotAllowCreate,
 }
 
@@ -251,7 +260,7 @@ impl Default for SpValidationPolicy {
             xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
             authn_request_signing: AuthnRequestSigningPolicy::DoNotSign,
             audience: AudienceValidationPolicy::EvaluatePresentRestrictions,
-            name_id_creation: NameIdCreationPolicy::DoNotAllowCreate,
+            name_id_creation: NameIdCreationPolicy::AllowCreate,
         }
     }
 }

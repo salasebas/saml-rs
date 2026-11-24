@@ -34,7 +34,7 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Write `RequestedAuthnContext` with an explicit `Comparison`, after `NameIDPolicy`, with the references in the order given | Optional | Core §3.3.2.2.1, §3.4.1, E45 | `StartSso::requested_authn_context` |
 | Reject a `RequestedAuthnContext` with no reference, or with both class and declaration references | Mandatory | `RequestedAuthnContextType` | Always |
 | Reject a requested authentication context reference that is not an absolute URI reference | Mandatory | Core §1.3.2 | Always |
-| For a non-transient format, write `AllowCreate="true"` when identifier creation is enabled, and `false` otherwise | Optional | Core §3.4.1.1, E14 | `SpValidationPolicy::name_id_creation` |
+| For a non-transient format, write `AllowCreate="true"`, or `false` when identifier creation is disabled | Recommended | Core §3.4.1.1, E14 | `SpValidationPolicy::name_id_creation` |
 | Omit `AllowCreate` when the `NameIDPolicy` format is transient | Mandatory | Core §3.4.1.1, E14 | Always |
 | Request the first configured NameID format as an absolute URI reference. With none configured, the typed service provider advertises and requests `emailAddress` | Mandatory | Core §1.3.2 | Always |
 | Write the requested SP or affiliation as `NameIDPolicy@SPNameQualifier`. Omit it by default | Optional | Core §3.4.1.1, `NameIDPolicyType` | `StartSso::sp_name_qualifier` |

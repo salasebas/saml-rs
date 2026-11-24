@@ -100,3 +100,42 @@ fn start_sso_rejects_a_qualifier_with_entity_format() -> Result<(), Box<dyn std:
     }
     Ok(())
 }
+
+#[test]
+fn persistent_authn_request_allows_identifier_creation_unless_disabled(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut not_creating = SpValidationPolicy::default();
+    not_creating.name_id_creation = NameIdCreationPolicy::DoNotAllowCreate;
+    let idp = idp_with(IdpValidationPolicy::default(), false)?;
+    for (sp_validation, expected) in [
+        (
+            SpValidationPolicy::default(),
+            NameIdCreationRequest::AllowCreate,
+        ),
+        (not_creating, NameIdCreationRequest::DoNotAllowCreate),
+    ] {
+        let sp = ServiceProvider::new(
+            SpConfig::builder(
+                EntityId::try_new(SP_ENTITY_ID)?,
+                AcsEndpoint::post(SP_ACS)?.with_default(),
+            )
+            .name_id_format(NameIdFormat::Persistent)
+            .validation(sp_validation)
+            .build()?,
+        );
+        let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+        let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+        let received = idp.receive_sso(
+            &sp_descriptor,
+            Inbound::post(started.outbound.post_form()?.fields().to_vec()),
+            validation(),
+        )?;
+        let policy = received
+            .message()
+            .name_id_policy()
+            .ok_or("missing NameIDPolicy")?;
+        assert_eq!(policy.format(), Some(&NameIdFormat::Persistent));
+        assert_eq!(policy.creation_request(), expected);
+    }
+    Ok(())
+}
