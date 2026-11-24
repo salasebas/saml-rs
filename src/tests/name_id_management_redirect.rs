@@ -1037,24 +1037,27 @@ fn http_name_identifier_management_endpoint_needs_an_explicit_relaxation() -> Te
 #[test]
 fn an_https_peer_endpoint_is_chosen_over_an_earlier_http_one() -> TestResult {
     const SP_MANAGE_HTTP: &str = "http://sp.example.com/manage-name-id";
-    const IDP_MANAGE_HTTP: &str = "http://idp.example.com/manage-name-id";
+    const IDP_RESPONSE_HTTPS: &str = "https://idp.example.com/manage-name-id/response";
+    const REDIRECT: &str = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect";
     let idp = idp()?;
     let sp = sp()?;
     let sp_peer = sp_descriptor(&sp_with(&[SP_MANAGE_HTTP, SP_MANAGE])?)?;
-    let idp_peer = idp_descriptor(&IdentityProvider::new(
-        IdpConfig::builder(
-            EntityId::try_new(IDP_ENTITY_ID)?,
-            SsoEndpoint::redirect(IDP_SSO)?,
-        )
-        .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
-            IDP_MANAGE_HTTP,
-        )?))
-        .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
-            IDP_MANAGE,
-        )?))
-        .credentials(signing_credentials())
-        .build()?,
-    ))?;
+    let published =
+        format!(r#"<ManageNameIDService Binding="{REDIRECT}" Location="{IDP_MANAGE}"/>"#);
+    let idp_metadata = idp.metadata_xml();
+    if !idp_metadata.contains(&published) {
+        return Err("identity provider metadata does not publish the expected endpoint".into());
+    }
+    let idp_peer = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        &idp_metadata.replace(
+            &published,
+            &format!(
+                r#"<ManageNameIDService Binding="{REDIRECT}" Location="{IDP_MANAGE}" ResponseLocation="http://idp.example.com/manage-name-id/response"/><ManageNameIDService Binding="{REDIRECT}" Location="http://idp.example.com/manage-name-id" ResponseLocation="{IDP_RESPONSE_HTTPS}"/>"#
+            ),
+        ),
+        MetadataTrustPolicy::Unverified,
+    )?;
 
     let started = idp.start_name_id_management_redirect(
         &sp_peer,
@@ -1091,7 +1094,7 @@ fn an_https_peer_endpoint_is_chosen_over_an_earlier_http_one() -> TestResult {
     )?;
     assert!(response
         .redirect_url()?
-        .starts_with(&format!("{IDP_MANAGE}?")));
+        .starts_with(&format!("{IDP_RESPONSE_HTTPS}?")));
     Ok(())
 }
 
