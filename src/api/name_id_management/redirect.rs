@@ -56,12 +56,14 @@ impl ServiceProvider {
     ///
     /// Returns [`SamlError::MissingMetadata`] when this service provider or
     /// the identity provider publishes no HTTP-Redirect `ManageNameIDService`.
-    /// Returns [`SamlError::ProtocolProfile`] for a transient identifier, and
-    /// when no identity-provider endpoint is `https` unless
-    /// [`StartNameIdManagement::allow_http`] is selected.
+    /// Returns [`SamlError::ProtocolProfile`] for a transient identifier.
+    /// When no identity-provider endpoint is `https` and
+    /// [`StartNameIdManagement::allow_http`] is not selected, the first
+    /// endpoint decides the error: [`SamlError::ProtocolProfile`] for an
+    /// `http` URL, [`SamlError::Invalid`] for a value that is not a URL.
     /// Returns [`SamlError::Invalid`] when the NameID format is not an
-    /// absolute URI reference, or when the chosen endpoint is not a URL, as is
-    /// the first when none is `https`. With
+    /// absolute URI reference, or when `allow_http` is selected and the first
+    /// endpoint is not an `http` or `https` URL. With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers),
     /// returns [`SamlError::MissingMetadata`] when the identity provider
     /// publishes no encryption certificate. Returns another [`SamlError`] when
@@ -125,11 +127,10 @@ impl ServiceProvider {
     /// [`SamlValidationContext::with_recipient_endpoint`], the message is
     /// malformed, its version is too low for a SAML 2.0 response, or replay
     /// validation detects a duplicate. Returns
-    /// [`SamlError::ProtocolProfile`] when a refused request would be answered,
-    /// no identity-provider endpoint is `https`, and
-    /// [`ReceiveNameIdManagement::allow_http`] is not
-    /// selected, or [`SamlError::Invalid`] when the chosen endpoint is not a
-    /// URL, as is the first when none is `https`. Returns [`SamlError::TimeWindowInvalid`] when
+    /// [`SamlError::ProtocolProfile`] or [`SamlError::Invalid`] when a refused
+    /// request would be answered at an endpoint that
+    /// [`Self::respond_name_id_management_redirect`] rejects under `options`.
+    /// Returns [`SamlError::TimeWindowInvalid`] when
     /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
     /// selected and `validation` has no
     /// [`SamlValidationContext::with_replay_retention`].
@@ -170,10 +171,13 @@ impl ServiceProvider {
     /// SOAP.
     /// Returns [`SamlError`] when the request was not received from `idp`,
     /// the identity provider publishes no HTTP-Redirect `ManageNameIDService`,
-    /// none of its endpoints is `https` and
-    /// [`RespondNameIdManagement::allow_http`] is not
-    /// selected, the signing key is missing, or no crypto provider is
-    /// enabled.
+    /// the signing key is missing, or no crypto provider is enabled. When none
+    /// of its endpoints is `https` and
+    /// [`RespondNameIdManagement::allow_http`] is not selected, the first
+    /// endpoint decides the error: [`SamlError::ProtocolProfile`] for an
+    /// `http` URL, [`SamlError::Invalid`] for a value that is not a URL. With
+    /// `allow_http`, returns [`SamlError::Invalid`] when the first endpoint is
+    /// not an `http` or `https` URL.
     pub fn respond_name_id_management_redirect(
         &self,
         idp: &IdpDescriptor,
@@ -237,7 +241,7 @@ impl IdentityProvider {
     /// `name_id` is the identifier as both providers know it, with the
     /// `SPProvidedID` the service provider most recently set, if any. A
     /// `NameId` without a format is sent with the first configured NameID
-    /// format, the one [`Self::respond_sso`] writes for it. Pass an
+    /// format, if any, the one [`Self::respond_sso`] writes for it. Pass an
     /// identifier established in another format with that format:
     /// [`NameIdFormat::Unspecified`](crate::NameIdFormat::Unspecified) for
     /// one established without `Format`. A persistent
@@ -258,12 +262,15 @@ impl IdentityProvider {
     ///
     /// Returns [`SamlError::MissingMetadata`] when this identity provider or
     /// the service provider publishes no HTTP-Redirect `ManageNameIDService`.
-    /// Returns [`SamlError::ProtocolProfile`] for a transient identifier, and
-    /// when no service-provider endpoint is `https` unless
-    /// [`StartNameIdManagement::allow_http`] is selected.
+    /// Returns [`SamlError::ProtocolProfile`] for a transient identifier.
+    /// When no service-provider endpoint is `https` and
+    /// [`StartNameIdManagement::allow_http`] is not selected, the first
+    /// endpoint decides the error: [`SamlError::ProtocolProfile`] for an
+    /// `http` URL, [`SamlError::Invalid`] for a value that is not a URL.
     /// Returns [`SamlError::Invalid`] when a persistent value is longer than
     /// 256 characters, the NameID format is not an absolute URI reference, or
-    /// the chosen endpoint is not a URL, as is the first when none is `https`.
+    /// `allow_http` is selected and the first endpoint is not an `http` or
+    /// `https` URL.
     /// With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers),
     /// returns [`SamlError::MissingMetadata`] when the service provider
