@@ -38,16 +38,6 @@ use crate::xml::{dom, extract_with_limits, ExtractorField};
 
 const MULTIPLE_ENTITY_DESCRIPTORS: &str = "metadata has more than one EntityDescriptor";
 
-fn base_fields() -> Vec<ExtractorField> {
-    vec![
-        ExtractorField::new("entityID", &["EntityDescriptor"]).attrs(&["entityID"]),
-        ExtractorField::new(
-            "nameIDFormat",
-            &["EntityDescriptor", "~SSODescriptor", "NameIDFormat"],
-        ),
-    ]
-}
-
 pub(crate) fn as_object_list(value: &Value) -> Vec<&Value> {
     match value {
         Value::Array(items) => items.iter().collect(),
@@ -220,6 +210,7 @@ fn non_empty_location(value: Option<&str>) -> Option<&str> {
 pub struct Metadata {
     xml: String,
     pub(crate) meta: Value,
+    entity_id: Option<String>,
     key_certificates: KeyCertificates,
     valid_until_bounds: Vec<String>,
     signing_flags: SigningFlags,
@@ -286,7 +277,10 @@ impl Metadata {
         let (extraction, entity) = entity_descriptor_xml(xml, &roots, &descriptor_starts)?;
         let descriptors = role.descriptors(xml, entity, limits)?;
 
-        let mut fields = base_fields();
+        let mut fields = vec![ExtractorField::new(
+            "nameIDFormat",
+            &["EntityDescriptor", "~SSODescriptor", "NameIDFormat"],
+        )];
         fields.extend(role.fields());
         fields.extend(extra);
         let mut meta = extract_with_limits(
@@ -303,6 +297,7 @@ impl Metadata {
         Ok(Self {
             xml: xml.to_string(),
             meta,
+            entity_id: descriptors.entity_id,
             key_certificates: KeyCertificates::from_descriptors(&descriptors.nodes),
             valid_until_bounds: descriptors.valid_until_bounds,
             signing_flags: descriptors.signing_flags,
@@ -323,9 +318,9 @@ impl Metadata {
         &self.xml
     }
 
-    /// `entityID`.
+    /// The `entityID`. Role-specific readers apply XML Schema whitespace collapse.
     pub fn entity_id(&self) -> Option<&str> {
-        self.meta.get_str("entityID")
+        self.entity_id.as_deref()
     }
 
     /// Read the entity-level organization without changing the imported XML.

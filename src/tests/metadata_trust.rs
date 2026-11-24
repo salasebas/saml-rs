@@ -632,14 +632,14 @@ fn exclusive_canonicalization_with_comments_is_part_of_the_profile(
 fn entities_descriptor_require_signature_accepts_the_profile_shape(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cert = CertificatePem::new(CERT);
-    let signed = sign_metadata_root(
-        &entities_document(Some("_group1"), ""),
-        "EntitiesDescriptor",
-        &[],
-    )?;
+    let xml = entities_document(Some("_group1"), "").replace(
+        "entityID=\"https://idp.example.com/metadata\"",
+        "entityID=\" https://idp.example.com/metadata \"",
+    );
+    let signed = sign_metadata_root(&xml, "EntitiesDescriptor", &[])?;
     let descriptor = import_idp(&signed, trust(std::slice::from_ref(&cert)))?;
 
-    assert!(descriptor.signed_metadata_xml().is_some());
+    assert_eq!(descriptor.signed_metadata_xml(), Some(signed.as_str()));
     assert_eq!(
         descriptor
             .single_sign_on_location(saml_rs::SsoRequestBinding::Post)?
@@ -647,9 +647,6 @@ fn entities_descriptor_require_signature_accepts_the_profile_shape(
             .map(saml_rs::EndpointUrl::as_str),
         Some("https://idp.example.com/sso")
     );
-    assert!(descriptor.signed_metadata_xml().is_some_and(|xml| {
-        xml.contains("EntitiesDescriptor") && xml.contains("https://idp.example.com/metadata")
-    }));
     Ok(())
 }
 

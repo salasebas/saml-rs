@@ -54,6 +54,36 @@ fn foreign_names_do_not_supply_a_missing_aggregate_member() {
 }
 
 #[test]
+fn descriptors_read_entity_id_with_xml_schema_whitespace_collapsed(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let xml = XML.replace(
+        "entityID=\"https://peer.example.com\"",
+        "entityID=\" &#x9;https://peer.example.com/hosted&#x9;  identity&#xD;&#xA; \"",
+    );
+    let expected = EntityId::try_new("https://peer.example.com/hosted identity")?;
+    let idp =
+        IdpDescriptor::from_metadata_xml(expected.clone(), &xml, MetadataTrustPolicy::Unverified)?;
+    let sp =
+        SpDescriptor::from_metadata_xml(expected.clone(), &xml, MetadataTrustPolicy::Unverified)?;
+    assert_eq!(idp.entity_id(), &expected);
+    assert_eq!(sp.entity_id(), &expected);
+    assert_eq!(idp.metadata_xml(), xml);
+    assert_eq!(sp.metadata_xml(), xml);
+
+    let uncollapsed = " \thttps://peer.example.com/hosted\t  identity\r\n ";
+    assert_eq!(Metadata::parse(&xml)?.entity_id(), Some(uncollapsed));
+    assert!(matches!(
+        IdpDescriptor::from_metadata_xml(
+            EntityId::try_new(uncollapsed)?,
+            &xml,
+            MetadataTrustPolicy::Unverified,
+        ),
+        Err(SamlError::Invalid(_))
+    ));
+    Ok(())
+}
+
+#[test]
 fn peer_endpoints_keep_their_role_direction_and_indexed_default(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = IdpDescriptor::from_metadata_xml(

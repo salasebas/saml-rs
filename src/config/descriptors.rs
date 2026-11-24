@@ -385,6 +385,8 @@ pub struct IdpDescriptor {
 
 impl IdpDescriptor {
     /// Parse IdP metadata for an expected entity ID and explicit trust policy.
+    /// The expected ID must equal the document's `entityID` after XML Schema
+    /// whitespace collapse.
     ///
     /// # Errors
     ///
@@ -600,6 +602,8 @@ pub struct SpDescriptor {
 
 impl SpDescriptor {
     /// Parse SP metadata for an expected entity ID and explicit trust policy.
+    /// The expected ID must equal the document's `entityID` after XML Schema
+    /// whitespace collapse.
     ///
     /// # Errors
     ///
