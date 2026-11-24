@@ -69,6 +69,7 @@ on both roles exposes the received attribute through `LogoutRequest::reason`.
 | --- | --- | --- | --- |
 | Write a caller-supplied `Reason` and omit it when unset | Optional | Core §3.7.1, §3.7.3 | `StartSlo::reason` |
 | Require an absolute URI reference for a typed `Reason`, using the same `anyURI` whitespace and syntax rules as [identifier formats](identifiers.md#name-identifier-formats) | Mandatory | Core §1.3.2, §3.7.1, E10 | `StartSlo::reason` |
+| Send the `global-timeout` and `sp-timeout` reasons only from the identity provider, which is the session authority. The service provider refuses them on ordinary and asynchronous logout, after whitespace collapse | Mandatory | Core §3.7.3.2, E0 | Always |
 | Read an optional unqualified `Reason` from an authenticated request as an `xs:string`, preserving its XML-normalized value and absence without URI validation or `anyURI` whitespace collapse. Ignore a qualified attribute with the same local name | Optional | Core §3.7.1, §3.7.3, `LogoutRequestType`, E10 | `LogoutRequest::reason` |
 
 ## Peer endpoints

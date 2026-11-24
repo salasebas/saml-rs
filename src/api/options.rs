@@ -419,6 +419,13 @@ impl StartSlo {
     /// reference such as `urn:oasis:names:tc:SAML:2.0:logout:user`. The writer
     /// collapses XML whitespace, and `start_slo` returns [`crate::SamlError::Invalid`]
     /// for an invalid reference.
+    ///
+    /// Only the session authority sends
+    /// `urn:oasis:names:tc:SAML:2.0:logout:global-timeout` and
+    /// `urn:oasis:names:tc:SAML:2.0:logout:sp-timeout`.
+    /// [`ServiceProvider::start_slo`](crate::ServiceProvider::start_slo) and
+    /// [`ServiceProvider::start_async_slo`](crate::ServiceProvider::start_async_slo)
+    /// return [`crate::SamlError::Invalid`] for either value.
     pub fn reason(mut self, reason: impl Into<String>) -> Self {
         self.reason = Some(reason.into());
         self

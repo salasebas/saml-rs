@@ -17,6 +17,11 @@ use super::rendering::{
     LogoutRequestSubject, LogoutResponseAttributes,
 };
 
+const SESSION_AUTHORITY_REASONS: [&str; 2] = [
+    "urn:oasis:names:tc:SAML:2.0:logout:global-timeout",
+    "urn:oasis:names:tc:SAML:2.0:logout:sp-timeout",
+];
+
 pub(crate) struct CreatedLogoutRequest {
     pub(crate) context: BindingContext,
     pub(crate) not_on_or_after: Option<String>,
@@ -72,6 +77,13 @@ pub(crate) fn create_logout_request_for_subject_inner(
     }
     let reason = reason.map(collapse_whitespace);
     let reason = reason.as_deref();
+    if let (LogoutRequestValidation::SessionParticipant, Some(reason)) = (validation, reason) {
+        if SESSION_AUTHORITY_REASONS.contains(&reason) {
+            return Err(SamlError::Invalid(format!(
+                "a session participant LogoutRequest cannot use the session authority reason {reason}"
+            )));
+        }
+    }
     if matches!(validation, LogoutRequestValidation::SessionParticipant)
         && subject.session_indexes.is_empty()
     {
