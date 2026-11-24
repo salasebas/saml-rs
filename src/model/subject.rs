@@ -253,8 +253,9 @@ impl<'a> From<&'a NameId> for OutboundNameIdQualifiers<'a> {
 
 /// The `<NameIDPolicy>` of a received `<AuthnRequest>`.
 ///
-/// [`crate::AuthnRequest::name_id_policy`] returns it. A service provider
-/// configures the `NameIDPolicy` it sends on its `SpConfig`.
+/// [`crate::AuthnRequest::name_id_policy`] returns it. A service provider uses
+/// [`crate::SpConfig`] for format and creation, and
+/// [`crate::StartSso::sp_name_qualifier`] for the outbound qualifier.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameIdPolicy {
     format: Option<NameIdFormat>,

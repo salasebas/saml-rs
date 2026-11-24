@@ -1,5 +1,5 @@
 use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
-use crate::config::IdentifierEncryptionPolicy;
+use crate::config::{EntityId, IdentifierEncryptionPolicy};
 use crate::idp::ResponseMessageSignature;
 use crate::model::{ExtensionElement, RelayState, RequestedAuthnContext};
 
@@ -17,6 +17,7 @@ pub struct StartSso {
     pub(super) acs_index: Option<u16>,
     pub(super) passive: Option<IsPassive>,
     pub(super) provider_name: Option<String>,
+    pub(super) sp_name_qualifier: Option<EntityId>,
     pub(super) requested_authn_context: Option<RequestedAuthnContext>,
     pub(super) require_exact_authn_context: bool,
     pub(super) extensions: Vec<ExtensionElement>,
@@ -52,6 +53,7 @@ impl StartSso {
             acs_index: None,
             passive: None,
             provider_name: None,
+            sp_name_qualifier: None,
             requested_authn_context: None,
             require_exact_authn_context: false,
             extensions: Vec::new(),
@@ -97,6 +99,32 @@ impl StartSso {
     /// character XML 1.0 forbids.
     pub fn provider_name(mut self, provider_name: impl Into<String>) -> Self {
         self.provider_name = Some(provider_name.into());
+        self
+    }
+
+    /// Set the SP or affiliation whose namespace the IdP uses for the `NameID`.
+    ///
+    /// The request omits `SPNameQualifier` by default. If set, the qualifier
+    /// must be an absolute URI reference of at most 1024 characters with
+    /// collapsed whitespace. [`ServiceProvider::start_sso`](crate::ServiceProvider::start_sso)
+    /// returns [`SamlError::Invalid`](crate::SamlError::Invalid) for an invalid
+    /// qualifier or when the configured NameID format is `entity`, since an
+    /// issued entity identifier cannot carry a qualifier.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use saml_rs::{EntityId, StartSso};
+    ///
+    /// # fn main() -> Result<(), saml_rs::SamlError> {
+    /// let affiliation = EntityId::try_new("https://federation.example.com/research")?;
+    /// let options = StartSso::post().sp_name_qualifier(affiliation);
+    /// # let _ = options;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn sp_name_qualifier(mut self, qualifier: EntityId) -> Self {
+        self.sp_name_qualifier = Some(qualifier);
         self
     }
 

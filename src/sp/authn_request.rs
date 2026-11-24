@@ -1,17 +1,22 @@
-use crate::constants::namespace;
-use crate::model::{AuthnContextReferenceKind, ExtensionElement, RequestedAuthnContext};
+use crate::config::validate_entity_id_syntax;
+use crate::constants::{name_id_format, namespace};
+use crate::error::SamlError;
+use crate::model::{
+    is_name_id_format, AuthnContextReferenceKind, ExtensionElement, RequestedAuthnContext,
+};
 use crate::xml::write::{Prefixes, XmlWriter};
 
 #[derive(Default)]
 pub(crate) struct AuthnRequestPreferences<'a> {
     pub(crate) is_passive: Option<bool>,
     pub(crate) provider_name: Option<&'a str>,
+    pub(crate) sp_name_qualifier: Option<&'a str>,
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
     pub(crate) extensions: &'a [ExtensionElement],
 }
 
 impl AuthnRequestPreferences<'_> {
-    pub(super) fn validate(&self) -> Result<(), crate::error::SamlError> {
+    pub(super) fn validate(&self, name_id_format: Option<&str>) -> Result<(), SamlError> {
         if let Some(provider_name) = self.provider_name {
             validate_provider_name(provider_name)?;
         }
@@ -20,17 +25,25 @@ impl AuthnRequestPreferences<'_> {
                 reference.ensure_absolute_uri()?;
             }
         }
+        if let Some(qualifier) = self.sp_name_qualifier {
+            validate_entity_id_syntax(qualifier)?;
+            if is_name_id_format(name_id_format, name_id_format::ENTITY) {
+                return Err(SamlError::Invalid(
+                    "NameIDPolicy cannot request SPNameQualifier with the entity format".into(),
+                ));
+            }
+        }
         Ok(())
     }
 }
 
 /// The protocol schema types `ProviderName` as `xs:string`, which allows an
 /// empty name.
-fn validate_provider_name(provider_name: &str) -> Result<(), crate::error::SamlError> {
+fn validate_provider_name(provider_name: &str) -> Result<(), SamlError> {
     if provider_name.chars().all(crate::xml::is_xml_char) {
         return Ok(());
     }
-    Err(crate::error::SamlError::Invalid(
+    Err(SamlError::Invalid(
         "ProviderName must contain only XML characters".into(),
     ))
 }
@@ -49,6 +62,7 @@ pub(super) struct AuthnRequestXml<'a> {
     pub(super) extensions: &'a [ExtensionElement],
     pub(super) issuer: &'a str,
     pub(super) name_id_format: Option<&'a str>,
+    pub(super) sp_name_qualifier: Option<&'a str>,
     pub(super) allow_create: bool,
 }
 
@@ -63,15 +77,15 @@ pub(super) fn render_default_authn_request_xml(
     let assertion_consumer_service_index = input
         .assertion_consumer_service_index
         .map(|value| value.to_string());
-    let allow_create = (!crate::model::is_name_id_format(
-        input.name_id_format,
-        crate::constants::name_id_format::TRANSIENT,
-    ))
-    .then_some(if input.allow_create { "true" } else { "false" });
+    let allow_create = (!is_name_id_format(input.name_id_format, name_id_format::TRANSIENT))
+        .then_some(if input.allow_create { "true" } else { "false" });
 
     let mut name_id_policy_attrs = Vec::new();
     if let Some(format) = input.name_id_format {
         name_id_policy_attrs.push(("Format", format));
+    }
+    if let Some(qualifier) = input.sp_name_qualifier {
+        name_id_policy_attrs.push(("SPNameQualifier", qualifier));
     }
     if let Some(allow_create) = allow_create {
         name_id_policy_attrs.push(("AllowCreate", allow_create));
