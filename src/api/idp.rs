@@ -290,6 +290,7 @@ impl IdentityProvider {
     /// #         let _ = form;
     ///     }
     ///     Ok(request) => {
+    ///         // Continue with user authentication.
     /// #         let _ = request;
     ///     }
     ///     Err(error) => return Err(error),
