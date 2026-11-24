@@ -36,21 +36,23 @@ fn confirmation_attributes_with_the_same_local_name_use_the_first_value(
 }
 
 #[test]
-fn unsolicited_duplicate_data_uses_the_first_child_with_a_request_id() {
+fn an_unsolicited_confirmation_with_a_request_id_in_a_second_data_child_is_unsatisfied(
+) -> Result<(), Box<dyn std::error::Error>> {
     let xml = r#"<Response><Assertion><Subject>
         <SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
-            <SubjectConfirmationData/>
+            <SubjectConfirmationData NotOnOrAfter="2100-01-01T00:00:00Z" Recipient="https://sp/acs"/>
             <SubjectConfirmationData InResponseTo="_req1"/>
-            <SubjectConfirmationData InResponseTo=""/>
         </SubjectConfirmation>
     </Subject></Assertion></Response>"#;
+    let opts = FlowOptions {
+        now: Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000)),
+        ..FlowOptions::new(Binding::Post, ParserType::SamlResponse)
+    };
     assert!(matches!(
-        reject_unsolicited_bearer_in_response_to(xml, XmlLimits::default()),
-        Err(SamlError::InResponseToMismatch { actual, .. }) if actual.as_deref() == Some("_req1")
+        accept_response_assertions(xml, &opts, Some("https://sp/acs")),
+        Err(SamlError::SubjectConfirmationInvalid { .. })
     ));
-    let empty_first = xml.replace("InResponseTo=\"_req1\"", "InResponseTo=\"\"");
-    assert!(matches!(
-        reject_unsolicited_bearer_in_response_to(&empty_first, XmlLimits::default()),
-        Err(SamlError::InResponseToMismatch { .. })
-    ));
+    let single = xml.replace("<SubjectConfirmationData InResponseTo=\"_req1\"/>", "");
+    accept_response_assertions(&single, &opts, Some("https://sp/acs"))?;
+    Ok(())
 }

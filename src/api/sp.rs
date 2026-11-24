@@ -278,6 +278,13 @@ impl ServiceProvider {
     /// The service provider verifies every signature on the response and its
     /// assertions, including any embedded signatures on HTTP-POST-SimpleSign.
     ///
+    /// The session reads the assertion that [`SsoSession`] describes. Its
+    /// bearer confirmation, audience, conditions, and session expiry decide
+    /// whether the response is accepted. Every other assertion must name the
+    /// same issuer and principal. Its own bearer confirmation, audience,
+    /// conditions, and session expiry do not reject the response, and none of
+    /// its data reaches the session.
+    ///
     /// A present `Destination` and the bearer `Recipient` must name the
     /// assertion consumer that received the response, which must be the one
     /// [`PendingAuthnRequest::acs`] asked for. Supply the receiving URL with
@@ -423,9 +430,12 @@ impl ServiceProvider {
     /// the assertions do not share one issuer and one principal, or replay
     /// validation fails. After response parsing and verification, HTTP-POST
     /// returns [`SamlError::ReplayCacheRequired`] if the cache is absent. Returns
-    /// [`SamlError::InResponseToMismatch`] when the response or a bearer
-    /// `SubjectConfirmationData` carries an `InResponseTo` attribute, including
-    /// an empty one. A status other than `Success` returns
+    /// [`SamlError::InResponseToMismatch`] when the response carries an
+    /// `InResponseTo` attribute, including an empty one. A bearer
+    /// `SubjectConfirmationData` that carries one leaves its confirmation
+    /// unsatisfied. When no other bearer confirmation of the assertion is
+    /// satisfied, returns [`SamlError::SubjectConfirmationInvalid`]. A status
+    /// other than `Success` returns
     /// [`SamlError::StatusNotSuccess`] once all present signatures verify and
     /// the issuer and destination checks pass. An error response can be
     /// unsigned. Its operator diagnostic requires a signature over the response

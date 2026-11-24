@@ -28,5 +28,6 @@ additions.
 - [Keep AllowCreate false in AuthnRequests](unreleased-allow-create-default.md)
 - [Handle status shape errors and SOAP replies](unreleased-status-and-soap-replies.md)
 - [Handle attribute name errors and encryption key choice](unreleased-attribute-output.md)
+- [Handle SSO responses with alternative assertions and confirmations](unreleased-bearer-alternatives.md)
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

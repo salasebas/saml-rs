@@ -33,7 +33,7 @@ use saml_rs::constants::Binding;
 use saml_rs::constants::{status_code, ParserType};
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
 use saml_rs::entity::{EntitySetting, User};
-use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
+use saml_rs::error::{SignatureVerificationReason, SubjectConfirmationReason, TimeWindowField};
 use saml_rs::idp;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::sp;
@@ -2477,14 +2477,21 @@ fn typed_facade_rejects_an_empty_in_response_to_as_unsolicited(
     ];
 
     for (case, fields) in cases {
-        match sp.accept_unsolicited_sso(&idp_descriptor, Inbound::post(fields), validation()) {
-            Err(SamlError::InResponseToMismatch { expected, actual }) => {
+        match (
+            case,
+            sp.accept_unsolicited_sso(&idp_descriptor, Inbound::post(fields), validation()),
+        ) {
+            ("Response", Err(SamlError::InResponseToMismatch { expected, actual })) => {
                 assert_eq!(expected, None, "{case}");
                 assert_eq!(actual.as_deref(), Some(""), "{case}");
             }
-            other => {
-                return Err(format!("{case}: expected InResponseToMismatch, got {other:?}").into())
-            }
+            (
+                "bearer SubjectConfirmationData",
+                Err(SamlError::SubjectConfirmationInvalid {
+                    reason: SubjectConfirmationReason::InResponseToMismatch,
+                }),
+            ) => {}
+            (case, other) => return Err(format!("{case}: unexpected result {other:?}").into()),
         }
     }
     Ok(())

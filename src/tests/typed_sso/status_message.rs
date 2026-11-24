@@ -53,9 +53,17 @@ fn post_error_exposes_diagnostic_only_with_response_signature_and_matching_reque
         1,
     ))?;
     let no_message = resign_response(&base)?;
+    let request_id = exchange.pending.request_id().as_str();
+    let padded_id = resign_response(&unsigned.replacen(
+        &format!(" InResponseTo=\"{request_id}\""),
+        &format!(" InResponseTo=\"&#10; {request_id}&#9;\""),
+        1,
+    ))?;
+    assert_ne!(padded_id, signed);
 
     for (xml, relay_state, expected) in [
         (&signed, Some("pending-login"), Some(DIAGNOSTIC)),
+        (&padded_id, Some("pending-login"), Some(DIAGNOSTIC)),
         (&no_message, Some("pending-login"), None),
         (&unsigned, Some("pending-login"), None),
         (&signed, Some("another-login"), None),

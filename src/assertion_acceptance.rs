@@ -6,7 +6,7 @@ use crate::util::Value;
 use crate::validator::{conditions_time_window, TimeWindow};
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::dom::{self, reader_err, Node};
-use crate::xml::{extract_with_limits, fields, parse_saml_utc_instant, XmlLimits};
+use crate::xml::{extract_with_limits, fields, parse_saml_utc_instant, utf8_bom_len, XmlLimits};
 use quick_xml::events::Event;
 use quick_xml::reader::NsReader;
 use time::{Duration, OffsetDateTime};
@@ -36,69 +36,55 @@ pub(crate) fn accept_response_assertions(
     opts: &FlowOptions<'_>,
     expected_recipient: Option<&str>,
 ) -> Result<(), SamlError> {
-    reject_unrecognized_conditions(response_xml, opts.xml_limits)?;
     let document = dom::parse_document(response_xml, opts.xml_limits)?;
+    if opts.expected_in_response_to.is_none() {
+        if let Some(actual) = document.root.unqualified_attr("InResponseTo") {
+            return Err(SamlError::in_response_to_mismatch(None, Some(actual)));
+        }
+    }
     let assertions: Vec<_> = document.root.children_named("Assertion").collect();
-    let [first, ..] = assertions.as_slice() else {
+    let Some(selected) = consumed_assertion(&document.root) else {
         return Err(SamlError::AssertionMissing);
     };
-    let first_issuer = issuer_text(first);
-
-    let mut saw_bearer = false;
-    let mut confirmation_error = None;
-    let mut shared_principal: Option<Principal> = None;
-    let several = assertions.len() > 1;
-    for assertion in &assertions {
-        let assertion_xml = &response_xml[assertion.start..assertion.end];
-        if several {
+    if let Some(element) = unrecognized_condition_name(response_xml, selected, opts.xml_limits)? {
+        return Err(SamlError::UnrecognizedCondition { element });
+    }
+    if let [first, _, ..] = assertions.as_slice() {
+        let first_issuer = issuer_text(first);
+        let mut shared_principal: Option<Principal> = None;
+        for assertion in &assertions {
             require_shared_issuer(opts.from_issuer, first_issuer, assertion)?;
             remember_same_principal(assertion, &mut shared_principal)?;
         }
-        let extracted = extract_with_limits(
-            assertion_xml,
-            &fields::login_response_fields(assertion_xml),
-            opts.xml_limits,
-        )?;
-        if node_has_bearer(assertion) {
-            saw_bearer = true;
-            validate_subject_confirmation(assertion, opts, expected_recipient)?;
-            validate_audience(assertion, opts)?;
-            validate_assertion_time(&extracted, opts)?;
-        } else if confirmation_error.is_none() && subject_confirmations(assertion).next().is_some()
-        {
-            if let Err(error) = validate_subject_confirmation(assertion, opts, expected_recipient) {
-                confirmation_error = Some(error);
-            }
-        }
     }
-    if !saw_bearer {
-        return Err(
-            confirmation_error.unwrap_or(SamlError::SubjectConfirmationInvalid {
-                reason: SubjectConfirmationReason::MissingBearerConfirmation,
-            }),
-        );
+    if !node_has_bearer(selected) {
+        return Err(missing_bearer_error(&assertions, opts, expected_recipient));
     }
-    Ok(())
+    let assertion_xml = &response_xml[selected.start..selected.end];
+    let extracted = extract_with_limits(
+        assertion_xml,
+        &fields::login_response_fields(assertion_xml),
+        opts.xml_limits,
+    )?;
+    validate_subject_confirmation(selected, opts, expected_recipient)?;
+    validate_audience(selected, opts)?;
+    validate_assertion_time(&extracted, opts)
 }
 
-pub(crate) fn reject_unsolicited_bearer_in_response_to(
-    response_xml: &str,
-    limits: XmlLimits,
-) -> Result<(), SamlError> {
-    let document = dom::parse_document(response_xml, limits)?;
-    for assertion in document.root.children_named("Assertion") {
-        for confirmation in subject_confirmations(assertion) {
-            let request_id = confirmation
-                .children
-                .iter()
-                .filter(|child| child.local_name == "SubjectConfirmationData")
-                .find_map(|data| data.unqualified_attr("InResponseTo"));
-            if request_id.is_some() && is_bearer_confirmation(confirmation) {
-                return Err(SamlError::in_response_to_mismatch(None, request_id));
-            }
-        }
-    }
-    Ok(())
+fn missing_bearer_error(
+    assertions: &[&Node],
+    opts: &FlowOptions<'_>,
+    expected_recipient: Option<&str>,
+) -> SamlError {
+    assertions
+        .iter()
+        .filter(|assertion| subject_confirmations(assertion).next().is_some())
+        .find_map(|assertion| {
+            validate_subject_confirmation(assertion, opts, expected_recipient).err()
+        })
+        .unwrap_or(SamlError::SubjectConfirmationInvalid {
+            reason: SubjectConfirmationReason::MissingBearerConfirmation,
+        })
 }
 
 pub(crate) fn first_login_assertion_xml(
@@ -269,15 +255,15 @@ fn principal_of(assertion: &Node) -> Result<Principal, SamlError> {
     })
 }
 
-fn reject_unrecognized_conditions(response_xml: &str, limits: XmlLimits) -> Result<(), SamlError> {
-    if let Some(element) = unrecognized_condition_name(response_xml, limits)? {
-        return Err(SamlError::UnrecognizedCondition { element });
-    }
-    Ok(())
+struct OpenElement {
+    namespace: ElementNamespace,
+    local: String,
+    start: usize,
 }
 
 fn unrecognized_condition_name(
     response_xml: &str,
+    assertion: &Node,
     limits: XmlLimits,
 ) -> Result<Option<String>, SamlError> {
     limits.check_input_bytes(response_xml.len())?;
@@ -285,21 +271,29 @@ fn unrecognized_condition_name(
     reader
         .resolver_mut()
         .set_max_namespace_bindings(limits.max_attributes_per_element);
+    let bom_len = utf8_bom_len(response_xml);
     let mut stack = Vec::new();
     loop {
+        let start = bom_len + reader.buffer_position() as usize;
         let (resolved, event) = reader.read_resolved_event().map_err(reader_err)?;
         let namespace = element_namespace(&resolved);
         match event {
             Event::Start(element) => {
                 let local = element_local_name(&element);
-                if let Some(element) = unknown_condition_child(&stack, namespace, &local) {
+                if let Some(element) = unknown_condition_child(&stack, assertion, namespace, &local)
+                {
                     return Ok(Some(element));
                 }
-                stack.push((namespace, local));
+                stack.push(OpenElement {
+                    namespace,
+                    local,
+                    start,
+                });
             }
             Event::Empty(element) => {
                 let local = element_local_name(&element);
-                if let Some(element) = unknown_condition_child(&stack, namespace, &local) {
+                if let Some(element) = unknown_condition_child(&stack, assertion, namespace, &local)
+                {
                     return Ok(Some(element));
                 }
             }
@@ -340,23 +334,21 @@ fn element_local_name(element: &quick_xml::events::BytesStart<'_>) -> String {
 }
 
 fn unknown_condition_child(
-    stack: &[(ElementNamespace, String)],
+    stack: &[OpenElement],
+    assertion: &Node,
     namespace: ElementNamespace,
     local: &str,
 ) -> Option<String> {
-    let (conditions_namespace, conditions_local) = stack.last()?;
-    if *conditions_namespace != ElementNamespace::Assertion || conditions_local != "Conditions" {
-        return None;
-    }
-    let [.., (response_namespace, response_local), (assertion_namespace, assertion_local), _] =
-        stack
-    else {
+    let [.., response, open_assertion, conditions] = stack else {
         return None;
     };
-    if *response_namespace != ElementNamespace::Protocol
-        || response_local != "Response"
-        || *assertion_namespace != ElementNamespace::Assertion
-        || assertion_local != "Assertion"
+    if conditions.namespace != ElementNamespace::Assertion
+        || conditions.local != "Conditions"
+        || response.namespace != ElementNamespace::Protocol
+        || response.local != "Response"
+        || open_assertion.namespace != ElementNamespace::Assertion
+        || open_assertion.local != "Assertion"
+        || open_assertion.start != assertion.start
     {
         return None;
     }
@@ -464,12 +456,15 @@ fn check_bearer_subject_confirmation(
         }
     }
 
-    if let Some(expected) = opts.expected_in_response_to {
-        if data.unqualified_attr("InResponseTo") != Some(expected) {
-            return Ok(SubjectConfirmationCheck::Invalid(
-                SubjectConfirmationReason::InResponseToMismatch,
-            ));
-        }
+    if data
+        .unqualified_attr("InResponseTo")
+        .map(collapse_whitespace)
+        .as_deref()
+        != opts.expected_in_response_to
+    {
+        return Ok(SubjectConfirmationCheck::Invalid(
+            SubjectConfirmationReason::InResponseToMismatch,
+        ));
     }
 
     Ok(SubjectConfirmationCheck::Valid)

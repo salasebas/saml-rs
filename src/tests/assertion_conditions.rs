@@ -1,7 +1,9 @@
 #![cfg(crypto)]
 
+mod in_response_to;
 mod replay;
 mod session_evidence;
+mod sibling_assertions;
 mod statement;
 mod time_values;
 
@@ -737,24 +739,29 @@ fn an_additional_assertion_without_bearer_stays_accepted() -> Result<(), Box<dyn
 }
 
 #[test]
-fn a_second_bearer_assertion_with_the_wrong_audience_is_rejected(
+fn a_bearer_assertion_with_the_wrong_audience_fails_only_the_session_it_supplies(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::default(), false)?;
-    let xml = resigned(&replace_in_last_assertion(
+    let wrong_sibling = replace_in_last_assertion(
         &duplicate_assertion(
             &response_xml(&exchange.response_fields)?,
             "_second_assertion",
         )?,
         SP_ENTITY_ID,
         OTHER_AUDIENCE,
-    )?)?;
-    match accept(&exchange, &xml) {
-        Err(error) => match error.downcast_ref::<SamlError>() {
-            Some(SamlError::AudienceMismatch { expected }) if expected == SP_ENTITY_ID => Ok(()),
-            _ => Err(format!("expected AudienceMismatch, got {error}").into()),
-        },
-        Ok(_) => Err("expected AudienceMismatch".into()),
-    }
+    )?;
+
+    let session = accept(&exchange, &resigned(&wrong_sibling)?)?;
+    assert_ne!(session.assertion_id().as_str(), "_second_assertion");
+    assert_eq!(audience_groups(&session), [[SP_ENTITY_ID]]);
+
+    expect_error(
+        accept(
+            &exchange,
+            &resigned(&move_last_assertion_first(&wrong_sibling)?)?,
+        ),
+        |error| matches!(error, SamlError::AudienceMismatch { expected } if expected == SP_ENTITY_ID),
+    )
 }
 
 #[test]
@@ -1219,14 +1226,25 @@ mod encrypted_assertions {
     }
 
     #[test]
-    fn a_second_encrypted_assertion_with_the_wrong_audience_is_rejected(
+    fn an_encrypted_assertion_with_the_wrong_audience_fails_only_the_session_it_supplies(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let exchange = post_exchange(SpValidationPolicy::default())?;
-        let plaintext =
+        let wrong_sibling =
             replace_in_last_assertion(&two_assertions(&exchange)?, SP_ENTITY_ID, OTHER_AUDIENCE)?;
-        let xml = both_encrypted_then_response_signed(&plaintext)?;
+
+        let session = accept(
+            &exchange,
+            &both_encrypted_then_response_signed(&wrong_sibling)?,
+        )?;
+        assert_ne!(session.assertion_id().as_str(), "_second_assertion");
+        assert_eq!(audience_groups(&session), [[SP_ENTITY_ID]]);
+
+        let wrong_first = move_last_assertion_first(&wrong_sibling)?;
         expect_error(
-            accept(&exchange, &xml),
+            accept(
+                &exchange,
+                &both_encrypted_then_response_signed(&wrong_first)?,
+            ),
             |error| matches!(error, SamlError::AudienceMismatch { expected } if expected == SP_ENTITY_ID),
         )
     }
@@ -1401,11 +1419,14 @@ mod encrypted_assertions {
     }
 
     #[test]
-    fn every_assertion_signed_inside_its_encryption_is_evaluated(
+    fn the_session_assertion_signed_inside_its_encryption_is_evaluated(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let exchange = post_exchange(SpValidationPolicy::default())?;
-        let plaintext =
-            replace_in_last_assertion(&two_assertions(&exchange)?, SP_ENTITY_ID, OTHER_AUDIENCE)?;
+        let plaintext = move_last_assertion_first(&replace_in_last_assertion(
+            &two_assertions(&exchange)?,
+            SP_ENTITY_ID,
+            OTHER_AUDIENCE,
+        )?)?;
         let first = encrypt_first(
             &sign_first_assertion(&plaintext, RSA_SHA256)?,
             AES_128_GCM,
@@ -1508,22 +1529,28 @@ mod encrypted_assertions {
     }
 
     #[test]
-    fn each_assertion_of_a_signed_mixed_response_is_evaluated(
+    fn a_signed_mixed_response_is_judged_by_the_assertion_the_session_reads(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let exchange = post_exchange(SpValidationPolicy::default())?;
         let wrong_audience =
             replace_in_last_assertion(&two_assertions(&exchange)?, SP_ENTITY_ID, OTHER_AUDIENCE)?;
-        let plaintext_wrong = encrypt_first(&wrong_audience, AES_256, CERT)?;
-        let encrypted_wrong =
-            encrypt_first(&move_last_assertion_first(&wrong_audience)?, AES_256, CERT)?;
-        for unsigned in both_orders(&plaintext_wrong)?
-            .into_iter()
-            .chain(both_orders(&encrypted_wrong)?)
-        {
+        let [valid_encrypted_first, wrong_plaintext_first] =
+            both_orders(&encrypt_first(&wrong_audience, AES_256, CERT)?)?;
+        let [wrong_encrypted_first, valid_plaintext_first] = both_orders(&encrypt_first(
+            &move_last_assertion_first(&wrong_audience)?,
+            AES_256,
+            CERT,
+        )?)?;
+        for unsigned in [wrong_plaintext_first, wrong_encrypted_first] {
             expect_error(
                 accept(&exchange, &resign_response(&unsigned)?),
                 |error| matches!(error, SamlError::AudienceMismatch { expected } if expected == SP_ENTITY_ID),
             )?;
+        }
+        for unsigned in [valid_encrypted_first, valid_plaintext_first] {
+            let session = accept(&exchange, &resign_response(&unsigned)?)?;
+            assert_ne!(session.assertion_id().as_str(), "_second_assertion");
+            assert_eq!(audience_groups(&session), [[SP_ENTITY_ID]]);
         }
         Ok(())
     }
@@ -1570,7 +1597,7 @@ mod encrypted_assertions {
     }
 
     #[test]
-    fn every_encrypted_assertion_is_evaluated_over_simple_sign(
+    fn the_encrypted_session_assertion_is_evaluated_over_simple_sign(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let exchange = Exchange {
             sp: decrypting_sp(
@@ -1580,8 +1607,11 @@ mod encrypted_assertions {
             )?,
             ..exchange_simple_sign(SpValidationPolicy::default())?
         };
-        let plaintext =
-            replace_in_last_assertion(&two_assertions(&exchange)?, SP_ENTITY_ID, OTHER_AUDIENCE)?;
+        let plaintext = move_last_assertion_first(&replace_in_last_assertion(
+            &two_assertions(&exchange)?,
+            SP_ENTITY_ID,
+            OTHER_AUDIENCE,
+        )?)?;
         let first = encrypt_first(&plaintext, AES_256, CERT)?;
         let xml = encrypt_first(&first, AES_256, CERT)?;
         expect_error(

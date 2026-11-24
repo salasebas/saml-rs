@@ -117,7 +117,7 @@ profile. Web SSO applies its own checks to the dereferenced response.
 | Reject a SOAP body that is not an `ArtifactResponse` | Mandatory | Core §3.5.2 | Always |
 | Require `ID`, `Version` `2.0`, and a UTC `IssueInstant` | Mandatory | `StatusResponseType`, Core §3.2.2, §1.3.3 | Always |
 | Require exactly one `Status` | Mandatory | `StatusResponseType` | Always |
-| Require the response `InResponseTo` to equal the pending request ID | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2 | Always |
+| Require the response `InResponseTo`, after XML whitespace collapse, to equal the pending request ID | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2, `StatusResponseType`, XML Schema Part 2 §4.3.6 | Always |
 | Verify a present `ArtifactResponse` signature over the SOAP body message using the expected IdP's signing keys before reporting its status or returning its message | Mandatory | Core §3.2.2, §5.4.1–§5.4.2 | Always |
 | Reject an `ArtifactResponse` with more than one message element | Mandatory | `ArtifactResponseType` | Always |
 | Return a message only from a Success status that carries one | Library policy: reason not recorded. | Profiles §5.3.2, Core §3.5.3 | Always |

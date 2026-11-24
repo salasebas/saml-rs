@@ -436,7 +436,9 @@ fn hardening_unsolicited_response_rejects_empty_in_response_to(
     let req = HttpRequest::post(vec![("SAMLResponse".into(), bearer_only)]);
     assert!(matches!(
         sp.parse_unsolicited_login_response(&idp()?, Binding::Post, &req),
-        Err(SamlError::InResponseToMismatch { expected: None, actual }) if actual.as_deref() == Some("")
+        Err(SamlError::SubjectConfirmationInvalid {
+            reason: SubjectConfirmationReason::InResponseToMismatch
+        })
     ));
     Ok(())
 }
@@ -460,7 +462,9 @@ fn hardening_unsolicited_response_rejects_subject_confirmation_in_response_to(
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
     assert!(matches!(
         sp.parse_unsolicited_login_response(&idp()?, Binding::Post, &req),
-        Err(SamlError::InResponseToMismatch { expected: None, actual }) if actual.as_deref() == Some("_req1")
+        Err(SamlError::SubjectConfirmationInvalid {
+            reason: SubjectConfirmationReason::InResponseToMismatch
+        })
     ));
     Ok(())
 }

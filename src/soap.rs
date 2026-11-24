@@ -475,7 +475,11 @@ pub(crate) fn read_soap_status_response(
     response.required_attr("ID")?;
     response.required_issue_instant()?;
     let in_response_to = response.attr("InResponseTo");
-    if in_response_to != Some(request_id) {
+    if in_response_to
+        .map(crate::xml::any_uri::collapse_whitespace)
+        .as_deref()
+        != Some(request_id)
+    {
         return Err(SamlError::in_response_to_mismatch(
             Some(request_id),
             in_response_to,
