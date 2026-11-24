@@ -146,8 +146,9 @@ impl IdentityProvider {
     /// [`SamlError::TimeWindowInvalid`] when
     /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
     /// selected and `validation` has no
-    /// [`SamlValidationContext::with_replay_retention`]. The deployment can
-    /// answer those with an HTTP error or a SOAP fault.
+    /// [`SamlValidationContext::with_replay_retention`]. An envelope that SOAP
+    /// processing rejects returns [`SamlError::SoapEnvelope`]. Answer each
+    /// error as [`SoapFault`](crate::SoapFault) describes.
     pub fn receive_name_id_management(
         &self,
         sp: &SpDescriptor,

@@ -57,3 +57,52 @@ let answer = idp.answer_artifact_resolve(
 	SoapChannel::mutually_authenticated_confidential(),
 )?;
 ```
+
+## Answer SOAP processing failures with a SOAP fault
+
+Bindings §3.2.3.3 and SOAP 1.1 §6.2 require a SOAP responder to answer a SOAP
+processing failure with HTTP 500 and a SOAP fault. Bindings §3.2.3.3 also
+recommends HTTP 403 for a refused exchange, and E19 recommends a SAML status
+with HTTP 200 for a SAML processing error.
+
+A received envelope that saml-rs cannot process now returns
+`SamlError::SoapEnvelope`. Its `fault` field is a `SoapFaultCode`:
+
+- `VersionMismatch` for an `Envelope` outside the SOAP 1.1 namespace.
+- `MustUnderstand` for a header entry addressed to the receiver with
+  `mustUnderstand` set.
+- `Client` for every other failure, such as malformed XML, an XML limit, or
+  an envelope without exactly one `Body` element.
+
+Before, the same failures returned `SamlError::Xml`,
+`SamlError::ProtocolProfile`, or `SamlError::LimitExceeded`. The original
+error is now the `source` of `SoapEnvelope`. The change applies to
+`SoapBodyElement::from_envelope`, `IdentityProvider::answer_artifact_resolve`,
+`IdentityProvider::receive_name_id_management`, `receive_slo` and
+`finish_slo` with `Inbound::soap` on both roles, `ArtifactResolution::finish`,
+and `StartedNameIdManagement::finish`.
+
+If your SOAP handler matched those variants, match `SoapEnvelope` instead and
+send `SoapFault::new` with HTTP 500:
+
+```rust
+match idp.answer_artifact_resolve(&sp, envelope, &received_at, &mut issued, channel) {
+	Ok(answer) => reply(200, answer.response().envelope()),
+	Err(SamlError::SoapChannelProtection) => reply(403, ""),
+	Err(SamlError::SoapEnvelope { fault, .. }) => reply(500, SoapFault::new(fault).envelope()),
+	Err(SamlError::ArtifactStoreUnavailable { .. }) => {
+		reply(500, SoapFault::new(SoapFaultCode::Server).envelope())
+	}
+	Err(_) => reply(500, SoapFault::new(SoapFaultCode::Client).envelope()),
+}
+```
+
+To read the limit that stopped an envelope, downcast the source:
+
+```rust
+if let SamlError::SoapEnvelope { source, .. } = &error {
+	if let Some(SamlError::LimitExceeded { limit, .. }) = source.downcast_ref::<SamlError>() {
+		log_limit(*limit);
+	}
+}
+```

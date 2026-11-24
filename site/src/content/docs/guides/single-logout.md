@@ -176,6 +176,17 @@ let logout_response = idp.respond_slo(&sp, &logout_request, &status, RespondSlo:
 let reply_body = logout_response.soap_response()?.envelope();
 ```
 
+A `LogoutResponse` with an error status also goes back as HTTP 200. When `receive_slo` returns an error, no SAML response exists to send. Answer `SamlError::SoapEnvelope` with HTTP 500 and `SoapFault::new` with its `fault` code. Answer `SamlError::SoapChannelProtection` with HTTP 403. Answer any other error with HTTP 500 and a `SoapFaultCode::Client` fault, or `SoapFaultCode::Server` when a retry can succeed:
+
+```rust
+let fault = match &error {
+	SamlError::SoapEnvelope { fault, .. } => *fault,
+	SamlError::ReplayCacheUnavailable { .. } => SoapFaultCode::Server,
+	_ => SoapFaultCode::Client,
+};
+let reply_body = SoapFault::new(fault).envelope();
+```
+
 ## Next
 
 Follow the [checkout and Rust setup](../tutorial/run-the-sso-example.md),

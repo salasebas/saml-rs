@@ -1007,7 +1007,16 @@ fn a_header_the_responder_must_understand_is_refused_without_consuming_the_artif
         &mut issued,
         channel,
     );
-    assert!(matches!(refused, Err(SamlError::Xml { .. })));
+    assert!(
+        matches!(
+            refused,
+            Err(SamlError::SoapEnvelope {
+                fault: saml_rs::SoapFaultCode::MustUnderstand,
+                ..
+            })
+        ),
+        "{refused:?}"
+    );
 
     let for_router = resolution.request().envelope().replacen(
         "<soap:Body>",
@@ -1638,10 +1647,17 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits(
     assert!(
         matches!(
             &refused,
-            Err(SamlError::LimitExceeded {
-                limit: saml_rs::ResourceLimit::XmlDepth,
+            Err(SamlError::SoapEnvelope {
+                fault: saml_rs::SoapFaultCode::Client,
+                source,
                 ..
-            })
+            }) if matches!(
+                source.downcast_ref::<SamlError>(),
+                Some(SamlError::LimitExceeded {
+                    limit: saml_rs::ResourceLimit::XmlDepth,
+                    ..
+                })
+            )
         ),
         "{refused:?}"
     );
@@ -1666,10 +1682,17 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits(
     assert!(
         matches!(
             &refused,
-            Err(SamlError::LimitExceeded {
-                limit: saml_rs::ResourceLimit::XmlDepth,
+            Err(SamlError::SoapEnvelope {
+                fault: saml_rs::SoapFaultCode::Client,
+                source,
                 ..
-            })
+            }) if matches!(
+                source.downcast_ref::<SamlError>(),
+                Some(SamlError::LimitExceeded {
+                    limit: saml_rs::ResourceLimit::XmlDepth,
+                    ..
+                })
+            )
         ),
         "{refused:?}"
     );

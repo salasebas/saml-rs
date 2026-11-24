@@ -949,10 +949,17 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
     assert!(
         matches!(
             &refused,
-            Err(SamlError::LimitExceeded {
-                limit: saml_rs::ResourceLimit::XmlDepth,
+            Err(SamlError::SoapEnvelope {
+                fault: saml_rs::SoapFaultCode::Client,
+                source,
                 ..
-            })
+            }) if matches!(
+                source.downcast_ref::<SamlError>(),
+                Some(SamlError::LimitExceeded {
+                    limit: saml_rs::ResourceLimit::XmlDepth,
+                    ..
+                })
+            )
         ),
         "{refused:?}"
     );
@@ -987,10 +994,17 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
     assert!(
         matches!(
             &refused,
-            Err(SamlError::LimitExceeded {
-                limit: saml_rs::ResourceLimit::XmlDepth,
+            Err(SamlError::SoapEnvelope {
+                fault: saml_rs::SoapFaultCode::Client,
+                source,
                 ..
-            })
+            }) if matches!(
+                source.downcast_ref::<SamlError>(),
+                Some(SamlError::LimitExceeded {
+                    limit: saml_rs::ResourceLimit::XmlDepth,
+                    ..
+                })
+            )
         ),
         "{refused:?}"
     );

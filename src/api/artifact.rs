@@ -231,8 +231,9 @@ impl IdentityProvider {
     /// integrity protection.
     /// Returns [`SamlError::RecipientEndpointNotPublished`] when `received_at`
     /// is not a published SOAP `ArtifactResolutionService` location. Returns
-    /// [`SamlError`] when `request_envelope` cannot be read as a SOAP
-    /// 1.1 envelope. Returns [`SamlError::ProtocolProfile`] when the body is
+    /// [`SamlError::SoapEnvelope`] when `request_envelope` cannot be read as a
+    /// SOAP 1.1 envelope. Answer each error as
+    /// [`SoapFault`](crate::SoapFault) describes. Returns [`SamlError::ProtocolProfile`] when the body is
     /// not one `ArtifactResolve`, the request lacks exactly one `Artifact`
     /// value or has a second `Issuer`, or the required `ID`, `Version`, or UTC
     /// `IssueInstant` fails validation. A version below 2.0 also returns

@@ -145,6 +145,9 @@ impl ServiceProvider {
     /// Returns [`SamlError::LogoutRequestRefused`] for an authenticated newer
     /// version. Send its refusal with [`Self::respond_slo_refusal`].
     /// A version below 2.0 returns [`SamlError::ProtocolProfile`].
+    /// A SOAP envelope that SOAP processing rejects returns
+    /// [`SamlError::SoapEnvelope`]. Over SOAP, answer each error as
+    /// [`SoapFault`](crate::SoapFault) describes.
     ///
     /// A decrypted `<NameID>` is available through [`LogoutRequest::name_id`].
     /// If no configured key decrypts the `<EncryptedID>`, or it contains a
@@ -404,6 +407,9 @@ impl IdentityProvider {
     /// Returns [`SamlError::LogoutRequestRefused`] for an authenticated newer
     /// version. Send its refusal with [`Self::respond_slo_refusal`].
     /// A version below 2.0 returns [`SamlError::ProtocolProfile`].
+    /// A SOAP envelope that SOAP processing rejects returns
+    /// [`SamlError::SoapEnvelope`]. Over SOAP, answer each error as
+    /// [`SoapFault`](crate::SoapFault) describes.
     ///
     /// # Examples
     ///

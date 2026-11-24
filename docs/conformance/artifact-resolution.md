@@ -2,7 +2,7 @@
 
 `IdentityProvider::issue_artifact` and `IdentityProvider::answer_artifact_resolve` are the issuer APIs. The service provider prepares a request with `resolve_artifact` or `resolve_artifact_with_signed_request`. `ArtifactResolution::finish` reads the protocol message from the SOAP response. The Web SSO API accepts the session.
 Normative text is SAML Core, Bindings, Profiles, and Metadata 2.0 as corrected by Approved Errata 05, plus SOAP 1.1 and WS-I Basic Profile 1.1 for the shared [SOAP envelope rules](#soap-envelope-rules).
-The deployment POSTs the envelope. TLS, HTTP authentication, and the HTTP 500 SOAP fault stay there, and `SoapChannel` records the protection it provided (Conformance Requirements §3.5 and §5).
+The deployment POSTs the envelope. TLS, HTTP authentication, and the HTTP status code stay there, and `SoapChannel` records the protection it provided (Conformance Requirements §3.5 and §5). `SoapFault` writes the body of a SOAP fault.
 Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browser-sso-artifact.md).
 
 ## Issuing an artifact
@@ -151,6 +151,10 @@ write and read envelopes for artifact resolution,
 | Default to a bare `SOAPAction` URI | Library policy for interoperability. SAML's SOAP example uses the bare URI, as does [Keycloak 26.6.0 for IdP-to-SP SOAP logout](https://github.com/keycloak/keycloak/blob/26.6.0/services/src/main/java/org/keycloak/protocol/saml/SamlProtocol.java#L829-L842). SOAP 1.1 quotes the URI in its grammar | [Bindings §3.2.3](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf#page=11), [SOAP 1.1 §6.1.1](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/#_Toc478383528) | `SoapRequest::headers` |
 | Process the request independently of the `SOAPAction` value | Mandatory | Bindings §3.2.3 | Always |
 | Return a SAML-domain error as a status in a SAML response, not as a SOAP fault | Recommended | Bindings §3.2.2.1, §3.2.3.3, E19 | Always |
+| Report a received `Envelope` outside the SOAP 1.1 namespace as `SamlError::SoapEnvelope` with the `VersionMismatch` fault code | Mandatory | SOAP 1.1 §4.1.2, §4.4.1 | Always |
+| Report a refused local header entry with the `MustUnderstand` fault code, and every other envelope failure with `Client` | Library policy: SOAP 1.1 §4.4.1 defines these codes for these failures, so the peer can tell a header it must drop from a malformed message. | SOAP 1.1 §4.2.3, §4.4.1 | Always |
+| Write a SOAP fault for a SOAP processing failure. The deployment sends it with HTTP 500 | Mandatory | Bindings §3.2.3.3, SOAP 1.1 §6.2 | `SoapFault::new` |
+| Refuse an exchange over a channel without the required protection with `SamlError::SoapChannelProtection`. The deployment answers HTTP 403 | Recommended | Bindings §3.2.3.3 | Always |
 | Send SOAP entity bodies with the `text/xml` media type | Mandatory | SOAP 1.1 §6 | `SoapRequest::headers`, `SoapResponse::headers` |
 | Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` with a request | Recommended | Bindings §3.2.3.2 | `SoapRequest::headers` |
 | Send `Cache-Control: no-cache, no-store, must-revalidate, private` and `Pragma: no-cache` with a response | Recommended | Bindings §3.2.3.2 | `SoapResponse::headers` |
@@ -158,7 +162,7 @@ write and read envelopes for artifact resolution,
 ## SOAP envelope helpers
 
 `SoapRequest::try_new` and `SoapResponse::try_new` wrap one XML element in a
-SOAP 1.1 body. `SoapBodyElement::from_envelope` checks the envelope structure
+SOAP 1.1 body. `SoapFault::new` writes a SOAP 1.1 fault. `SoapBodyElement::from_envelope` checks the envelope structure
 and reads its body element. Typed SAML operations validate the payload for
 their protocol flow.
 
