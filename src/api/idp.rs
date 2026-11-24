@@ -139,7 +139,7 @@ impl IdentityProvider {
         let mut validation = validation;
         validation.check_authn_request_issue_instant(authn.issue_instant())?;
         validation.check_and_store_message_replay(ReplayKey::AuthnRequest(authn.id().clone()))?;
-        Ok(Received::new(authn, relay_state))
+        Ok(Received::new(authn, binding.into(), relay_state))
     }
 
     /// Respond to a received SP AuthnRequest.

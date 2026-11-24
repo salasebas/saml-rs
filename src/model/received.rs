@@ -1,18 +1,25 @@
 use super::RelayState;
+use crate::constants::Binding;
 
 /// Typed received message wrapper.
 #[derive(Debug, Clone)]
 pub struct Received<Message> {
     message: Message,
+    binding: Binding,
     relay_state: Option<RelayState>,
 }
 
 impl<Message> Received<Message> {
-    pub(crate) fn new(message: Message, relay_state: Option<RelayState>) -> Self {
+    pub(crate) fn new(message: Message, binding: Binding, relay_state: Option<RelayState>) -> Self {
         Self {
             message,
+            binding,
             relay_state,
         }
+    }
+
+    pub(crate) fn binding(&self) -> Binding {
+        self.binding
     }
 
     /// Borrow the typed message.

@@ -22,16 +22,16 @@ use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::{append_signature, build_redirect_octet};
 use saml_rs::constants::{
-    name_id_format, signature_algorithm::RSA_SHA256, status_code, ParserType,
+    name_id_format, signature_algorithm::RSA_SHA256, status_code, Binding, ParserType,
 };
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
 use saml_rs::{
     AcsEndpoint, ClockSkew, EndpointUrl, EntityId, IdentityProvider, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService,
     MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat, NameIdManagementReceipt,
-    NameIdManagementRedirectReceipt, NameIdManagementRefusal, Outbound, PendingManageNameIdRequest,
-    ReceiveNameIdManagement, Received, RelayState, ReplayCache, ReplayPolicy, RequestAgePolicy,
-    RespondNameIdManagement, SamlError, SamlValidationContext, ServiceProvider, SpConfig,
+    NameIdManagementRefusal, Outbound, PendingManageNameIdRequest, ReceiveNameIdManagement,
+    Received, RelayState, ReplayCache, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement,
+    SamlError, SamlValidationContext, ServiceProvider, SoapChannel, SoapRequest, SpConfig,
     SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status,
     SubordinateStatusCode,
 };
@@ -127,8 +127,8 @@ fn response_input(
 }
 
 /// The request a responder is ready to apply.
-fn request(
-    received: NameIdManagementRedirectReceipt,
+fn request<Response>(
+    received: NameIdManagementReceipt<Response>,
 ) -> Result<Received<ManageNameIdRequest>, Box<dyn std::error::Error>> {
     match received {
         NameIdManagementReceipt::Request(request) => Ok(*request),
@@ -315,6 +315,18 @@ fn service_provider_changes_and_terminates_an_identifier_with_the_identity_provi
         assert_eq!(request.message().change(), &change);
         assert_eq!(request.relay_state(), None);
 
+        let soap_response = idp.respond_name_id_management(&sp_peer, &request, &Status::success());
+        assert!(
+            matches!(
+                soap_response,
+                Err(SamlError::UnsupportedBinding {
+                    binding: Binding::Soap
+                })
+            ),
+            "SOAP response error: {:?}",
+            soap_response.err()
+        );
+
         let response = idp.respond_name_id_management_redirect(
             &sp_peer,
             &request,
@@ -330,6 +342,51 @@ fn service_provider_changes_and_terminates_an_identifier_with_the_identity_provi
             validation(),
         )?;
     }
+    Ok(())
+}
+
+#[test]
+fn a_soap_manage_name_id_request_cannot_be_answered_over_redirect() -> TestResult {
+    let idp = IdentityProvider::new(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect(IDP_SSO)?,
+        )
+        .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(IDP_MANAGE)?))
+        .credentials(signing_credentials())
+        .build()?,
+    );
+    let sp = sp_descriptor(&sp()?)?;
+    let xml = format!(
+        r#"<samlp:ManageNameIDRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_terminate" Version="2.0" IssueInstant="2026-01-01T00:00:00Z" Destination="{IDP_MANAGE}">
+          <saml:Issuer>{SP_ENTITY_ID}</saml:Issuer>
+          <saml:NameID>alice@example.com</saml:NameID>
+          <samlp:Terminate/>
+        </samlp:ManageNameIDRequest>"#
+    );
+    let soap = SoapRequest::try_new(EndpointUrl::try_new(IDP_MANAGE)?, &xml)?;
+    let received = request(idp.receive_name_id_management(
+        &sp,
+        soap.envelope(),
+        SoapChannel::mutually_authenticated_confidential(),
+        validation(),
+    )?)?;
+    let redirect_response = idp.respond_name_id_management_redirect(
+        &sp,
+        &received,
+        &Status::success(),
+        RespondNameIdManagement::new(),
+    );
+    assert!(
+        matches!(
+            redirect_response,
+            Err(SamlError::UnsupportedBinding {
+                binding: Binding::Redirect
+            })
+        ),
+        "Redirect response error: {:?}",
+        redirect_response.err()
+    );
     Ok(())
 }
 

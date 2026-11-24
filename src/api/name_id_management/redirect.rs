@@ -154,6 +154,8 @@ impl ServiceProvider {
     ///
     /// # Errors
     ///
+    /// Returns [`SamlError::UnsupportedBinding`] when the request arrived over
+    /// SOAP.
     /// Returns [`SamlError`] when the request was not received from `idp`,
     /// the identity provider publishes no HTTP-Redirect `ManageNameIDService`,
     /// that endpoint is `http` and
@@ -517,7 +519,7 @@ fn receive(
     let id = request.id.clone();
     match request.validate_and_decrypt(&flow, local.setting, validation)? {
         ParsedRequest::Plain(message) => Ok(NameIdManagementReceipt::Request(Box::new(
-            Received::new(message, relay_state),
+            Received::new(message, Binding::Redirect, relay_state),
         ))),
         ParsedRequest::Refused(refusal) => refuse(
             local,
@@ -558,6 +560,11 @@ fn respond(
     status: &Status,
     transport: PeerEndpointTransport,
 ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
+    if request.binding() != Binding::Redirect {
+        return Err(SamlError::UnsupportedBinding {
+            binding: Binding::Redirect,
+        });
+    }
     ensure_entity_id(request.message().issuer(), peer.entity_id)?;
     response_outbound(
         local,

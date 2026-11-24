@@ -164,6 +164,8 @@ impl IdentityProvider {
 
     /// Answer a received `ManageNameIDRequest` with `ManageNameIDResponse`.
     ///
+    /// Return the [`SoapResponse`] on the request's HTTP exchange.
+    ///
     /// `status` is what the response reports. Pass [`Status::success`] after
     /// applying the change. After a [`NameIdChange::NewId`], send that value
     /// as the identifier's `SPProvidedID` from then on: [`Self::respond_sso`]
@@ -175,7 +177,8 @@ impl IdentityProvider {
     /// # Errors
     ///
     /// Returns [`SamlError::IssuerMismatch`] when the request was not received
-    /// from `sp`.
+    /// from `sp`. Returns [`SamlError::UnsupportedBinding`] when the request
+    /// arrived over HTTP-Redirect.
     ///
     /// # Examples
     ///
