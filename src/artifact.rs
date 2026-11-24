@@ -20,9 +20,9 @@ use crate::soap::{
 };
 use crate::xml::fragment::standalone_element;
 use crate::xml::protocol_element::{
-    issuer, issuer_format_is_entity, parse_saml, parse_saml_with_limits, read_status, PartyName,
-    SamlElement,
+    issuer, issuer_format_is_entity, parse_saml, parse_saml_with_limits, PartyName, SamlElement,
 };
+use crate::xml::status::read_status;
 use crate::xml::write::{Prefixes, XmlWriter};
 use crate::xml::XmlLimits;
 use crate::xml::{any_uri::collapse_whitespace, dom};
@@ -100,7 +100,8 @@ pub enum ArtifactWithheld {
     NotOutstanding,
     /// The presenter is not the service provider the artifact was issued to.
     DifferentPresenter,
-    /// The SOAP channel lacks the protection required for the stored message.
+    /// The SOAP channel is not confidential, and the stored message requires
+    /// confidentiality.
     InsufficientChannelProtection,
     /// The request's `Destination` differs from the URL that received it.
     DestinationMismatch,
@@ -214,7 +215,7 @@ impl ArtifactResolution {
             "SOAP body must be an ArtifactResponse",
             &self.request_id,
         )?;
-        let issuer = issuer(&response)
+        let issuer = issuer(&response)?
             .ok_or_else(|| SamlError::issuer_mismatch(&self.identity_provider, None))?;
         if issuer.value != self.identity_provider {
             return Err(SamlError::issuer_mismatch(
@@ -234,7 +235,7 @@ impl ArtifactResolution {
             self.hmac_secret.as_ref(),
             self.signature_profile,
         )?;
-        read_status(&response)?.require_success()?;
+        read_status(&body.xml, self.xml_limits)?.require_success()?;
         let Some(message) = protocol_payload(&response)? else {
             return Err(SamlError::ArtifactNotReturned);
         };
@@ -474,6 +475,9 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     channel: SoapChannel,
     setting: &EntitySetting,
 ) -> Result<AnsweredArtifact, SamlError> {
+    if !channel.authenticates_peer() {
+        return Err(SamlError::SoapChannelProtection);
+    }
     let entity_id = metadata
         .as_metadata()
         .entity_id()
@@ -536,6 +540,13 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     let Some(entry) = issued.lookup(&artifact)? else {
         return success_without(ArtifactWithheld::NotOutstanding);
     };
+    let presenter_id = presenter.entity_id().as_str();
+    let issuer_matches = request.issuer.as_ref().is_some_and(|issuer| {
+        issuer.value == presenter_id && issuer_format_is_entity(issuer.format.as_deref())
+    });
+    if !issuer_matches || presenter_id != entry.service_provider().as_str() {
+        return success_without(ArtifactWithheld::DifferentPresenter);
+    }
     if entry.expires_at() <= issued.now()? {
         return success_without(ArtifactWithheld::NotOutstanding);
     }
@@ -551,13 +562,6 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     }
     if !channel_allows(channel, entry.required_channel()) {
         return success_without(ArtifactWithheld::InsufficientChannelProtection);
-    }
-    let presenter_id = presenter.entity_id().as_str();
-    let issuer_matches = request.issuer.as_ref().is_some_and(|issuer| {
-        issuer.value == presenter_id && issuer_format_is_entity(issuer.format.as_deref())
-    });
-    if !issuer_matches || presenter_id != entry.service_provider().as_str() {
-        return success_without(ArtifactWithheld::DifferentPresenter);
     }
     let response = answered(
         &prefixes,
@@ -687,22 +691,11 @@ fn parse_resolve(element: &SamlElement) -> Result<ResolveRequest, SamlError> {
             "ArtifactResolve requires one Artifact value".into(),
         ));
     }
-    if element
-        .children
-        .iter()
-        .filter(|child| child.local_name == "Issuer" && child.namespace == namespace::ASSERTION)
-        .count()
-        > 1
-    {
-        return Err(SamlError::ProtocolProfile(
-            "ArtifactResolve requires at most one Issuer".into(),
-        ));
-    }
     Ok(ResolveRequest {
         id,
         version,
         destination: element.attr("Destination").map(collapse_whitespace),
-        issuer: issuer(element),
+        issuer: issuer(element)?,
         artifact,
     })
 }

@@ -9,6 +9,7 @@ use crate::model::{
     AuthnContextReference, RefusedAuthnRequest, RefusedLogoutRequest, RelayState, ReplayKey,
     Status, StatusMessage, SubordinateStatusCode,
 };
+use crate::soap::SoapFaultCode;
 use std::fmt;
 
 /// Why an unsolicited HTTP-POST response could not be matched to a trusted IdP.
@@ -223,7 +224,8 @@ impl fmt::Display for ResourceLimit {
 /// - configuration and unsupported binding failures.
 ///
 /// A variant that wraps a lower-level failure returns it from
-/// [`std::error::Error::source`]. Its type is not part of the API.
+/// [`std::error::Error::source`]. Its type is not part of the API, except
+/// for [`Self::SoapEnvelope`].
 ///
 /// This enum is `#[non_exhaustive]`; downstream callers should include a
 /// fallback arm when matching. Each variant with named fields is
@@ -466,8 +468,26 @@ pub enum SamlError {
     #[error("artifact response did not contain the protocol message")]
     ArtifactNotReturned,
     /// The SOAP channel lacks the protection this exchange requires.
+    ///
+    /// A SOAP responder that receives this refuses the exchange, for example
+    /// with HTTP 403.
     #[error("SOAP channel protection is not sufficient for this exchange")]
     SoapChannelProtection,
+    /// A received SOAP 1.1 envelope could not be processed before its SAML
+    /// message was read.
+    ///
+    /// A SOAP responder answers with HTTP 500 and
+    /// [`SoapFault::new`](crate::SoapFault::new) with `fault`. A requester
+    /// that reads a reply gets the same variant and has no fault to send.
+    #[error("SOAP envelope processing failed with a {fault} fault")]
+    #[non_exhaustive]
+    SoapEnvelope {
+        /// SOAP fault code that answers the failure.
+        fault: SoapFaultCode,
+        /// The [`SamlError`] that stopped the envelope reader, such as
+        /// [`Self::LimitExceeded`]. Read it with `downcast_ref::<SamlError>()`.
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     /// Response status has no top-level `StatusCode` value.
     #[error("response status code is missing")]
     StatusMissing,
@@ -637,6 +657,13 @@ impl SamlError {
             *status_message = message;
         }
         self
+    }
+
+    pub(crate) fn soap_envelope(fault: SoapFaultCode, source: SamlError) -> Self {
+        Self::SoapEnvelope {
+            fault,
+            source: Box::new(source),
+        }
     }
 
     pub(crate) fn xml(message: impl Into<String>) -> Self {

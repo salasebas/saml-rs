@@ -1,6 +1,6 @@
 use crate::constants::{name_id_format, namespace};
 use crate::error::SamlError;
-use crate::model::{SamlInstant, Status, StatusMessage};
+use crate::model::{SamlInstant, StatusMessage};
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::dom::XmlLimits;
 pub(crate) use crate::xml::dom::{
@@ -58,18 +58,17 @@ pub(crate) fn parse_saml(xml: &str) -> Result<SamlElement, SamlError> {
     parse_saml_with_limits(xml, XmlLimits::default())
 }
 
-pub(crate) fn issuer(element: &SamlElement) -> Option<PartyName> {
-    let issuer = element
-        .children
-        .iter()
-        .find(|child| child.is(namespace::ASSERTION, "Issuer"))?;
+pub(crate) fn issuer(element: &SamlElement) -> Result<Option<PartyName>, SamlError> {
+    let Some(issuer) = at_most_one_child(element, namespace::ASSERTION, "Issuer")? else {
+        return Ok(None);
+    };
     if issuer.text.is_empty() {
-        return None;
+        return Ok(None);
     }
-    Some(PartyName {
+    Ok(Some(PartyName {
         value: issuer.text.clone(),
         format: issuer.attr("Format").map(collapse_whitespace),
-    })
+    }))
 }
 
 pub(crate) fn issuer_format_is_entity(format: Option<&str>) -> bool {
@@ -79,30 +78,23 @@ pub(crate) fn issuer_format_is_entity(format: Option<&str>) -> bool {
     }
 }
 
-pub(crate) fn read_status(response: &SamlElement) -> Result<Status, SamlError> {
-    let mut statuses = response
+fn at_most_one_child<'a>(
+    parent: &'a SamlElement,
+    namespace: &str,
+    local_name: &str,
+) -> Result<Option<&'a SamlElement>, SamlError> {
+    let mut matches = parent
         .children
         .iter()
-        .filter(|child| child.is(namespace::PROTOCOL, "Status"));
-    let status = statuses.next().ok_or(SamlError::StatusMissing)?;
-    if statuses.next().is_some() {
+        .filter(|child| child.is(namespace, local_name));
+    let child = matches.next();
+    if matches.next().is_some() {
         return Err(SamlError::ProtocolProfile(format!(
-            "{} requires one Status",
-            response.local_name
+            "{} allows at most one {local_name}",
+            parent.local_name
         )));
     }
-    let code = status
-        .children
-        .iter()
-        .find(|child| child.is(namespace::PROTOCOL, "StatusCode"))
-        .ok_or(SamlError::StatusMissing)?;
-    let top = code.attr("Value").ok_or(SamlError::StatusMissing)?;
-    let second = code
-        .children
-        .iter()
-        .find(|child| child.is(namespace::PROTOCOL, "StatusCode"))
-        .and_then(|child| child.attr("Value"));
-    Status::received(top, second)
+    Ok(child)
 }
 
 pub(crate) fn read_status_message(response: SamlElement) -> Option<StatusMessage> {

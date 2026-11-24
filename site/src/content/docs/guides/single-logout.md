@@ -167,14 +167,44 @@ let completed = sp.finish_slo(
 )?;
 ```
 
-The receiving side reads the posted body and returns the response envelope as the HTTP 200 body:
+A responder that cannot process the request answers with HTTP 500 and a SOAP fault. Check the HTTP status before you call `finish_slo`, which reads only a `LogoutResponse`.
+
+The receiving side reads the posted body and returns the response envelope as the HTTP 200 body. A `LogoutResponse` with an error status, including the refusal of an authenticated request with a newer SAML version, also goes back as HTTP 200. Any other error leaves no SAML response to send, whether `receive_slo` or `respond_slo` returned it. Answer it with HTTP 500 and a `SoapFault`. Use the `fault` code of a `SamlError::SoapEnvelope`. For another error, use `SoapFaultCode::Client` only when you know the request must change, such as a missing signature, and `SoapFaultCode::Server` otherwise:
 
 ```rust
-let logout_request = idp.receive_slo(&sp, Inbound::soap(body, SoapChannel::unattested()), validation)?;
-let status = logout_status_for(&logout_request)?;
-let logout_response = idp.respond_slo(&sp, &logout_request, &status, RespondSlo::soap())?;
-let reply_body = logout_response.soap_response()?.envelope();
+fn logout_reply(
+	idp: &IdentityProvider,
+	sp: &SpDescriptor,
+	body: String,
+	validation: SamlValidationContext<'_>,
+) -> Result<String, SamlError> {
+	let response = match idp.receive_slo(sp, Inbound::soap(body, SoapChannel::unattested()), validation) {
+		Ok(logout_request) => {
+			let status = logout_status_for(&logout_request).unwrap_or_else(|_| Status::responder());
+			idp.respond_slo(sp, &logout_request, &status, RespondSlo::soap())?
+		}
+		Err(SamlError::LogoutRequestRefused { refusal, .. }) => {
+			idp.respond_slo_refusal(sp, &refusal, RespondSlo::soap())?
+		}
+		Err(error) => return Err(error),
+	};
+	Ok(response.soap_response()?.envelope().to_owned())
+}
+
+let (http_status, reply_body) = match logout_reply(&idp, &sp, body, validation) {
+	Ok(envelope) => (200, envelope),
+	Err(error) => {
+		let fault = match error {
+			SamlError::SoapEnvelope { fault, .. } => fault,
+			SamlError::SignatureMissing => SoapFaultCode::Client,
+			_ => SoapFaultCode::Server,
+		};
+		(500, SoapFault::new(fault).envelope().to_owned())
+	}
+};
 ```
+
+When `logout_status_for` cannot tell which sessions ended, the example reports `Status::responder()` instead of failing the exchange.
 
 ## Next
 

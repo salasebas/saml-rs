@@ -2,7 +2,7 @@
 
 `IdentityProvider::issue_artifact` and `IdentityProvider::answer_artifact_resolve` are the issuer APIs. The service provider prepares a request with `resolve_artifact` or `resolve_artifact_with_signed_request`. `ArtifactResolution::finish` reads the protocol message from the SOAP response. The Web SSO API accepts the session.
 Normative text is SAML Core, Bindings, Profiles, and Metadata 2.0 as corrected by Approved Errata 05, plus SOAP 1.1 and WS-I Basic Profile 1.1 for the shared [SOAP envelope rules](#soap-envelope-rules).
-The deployment POSTs the envelope. TLS, HTTP authentication, and the HTTP 500 SOAP fault stay there, and `SoapChannel` records the protection it provided (Conformance Requirements §3.5 and §5).
+The deployment POSTs the envelope. TLS, HTTP authentication, and the HTTP status code stay there, and `SoapChannel` records the protection it provided (Conformance Requirements §3.5 and §5). `SoapFault` writes the body of a SOAP fault.
 Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browser-sso-artifact.md).
 
 ## Issuing an artifact
@@ -89,7 +89,8 @@ with a higher receive limit could accept. [OpenSAML 5.2.3 source release](https:
 | Expire the artifact after the configured lifetime. The issuer should choose the shortest practical lifetime | Recommended | Core §3.5.3 | `ArtifactStore::lifetime`, `IssuedArtifacts::expire_after` |
 | Include the artifact issuer's entity ID in `Issuer` and omit `Format` or set it to `entity` | Mandatory | Profiles §5.4.2 | Always |
 | Set `InResponseTo` to the request `ID` | Mandatory | Core §3.2.2, §3.5.3 | Always |
-| Authenticate the responder and protect integrity | Mandatory | Profiles §5.3.2, §5.4.2 | `SoapChannel` |
+| Authenticate the responder and protect integrity on every `ArtifactResponse`, including one that withholds the message or reports `VersionMismatch`. saml-rs does not sign it, so `SoapChannel` must attest both | Mandatory | Profiles §5.3.2, §5.4.2 | `SoapChannel` |
+| Refuse the exchange before reading the request when `SoapChannel` does not attest mutual authentication and integrity | Library policy: `SoapChannel` cannot attest responder-only authentication, and the issuer needs the presenter authenticated before it releases a message. | Profiles §5.3.2, §5.4.1 | Always |
 
 ## Web Browser SSO response artifact
 
@@ -120,6 +121,7 @@ profile. Web SSO applies its own checks to the dereferenced response.
 | Verify a present `ArtifactResponse` signature over the SOAP body message using the expected IdP's signing keys before reporting its status or returning its message | Mandatory | Core §3.2.2, §5.4.1–§5.4.2 | Always |
 | Reject an `ArtifactResponse` with more than one message element | Mandatory | `ArtifactResponseType` | Always |
 | Return a message only from a Success status that carries one | Library policy: reason not recorded. | Profiles §5.3.2, Core §3.5.3 | Always |
+| Reject a second direct `Issuer` | Mandatory | `StatusResponseType` | Always |
 | Require an `Issuer` equal to the identity provider that omits `Format` or sets it to `entity` | Library policy: the requester attributes the responder by this `Issuer` together with `SoapChannel`, so without it `finish` would return a message not attributed to the artifact issuer. | Profiles §5.4.2 | Always |
 | Require the message to be one element in the SAML protocol namespace | Library policy: `finish` returns the dereferenced protocol message, and another element would be presented as that message. | `ArtifactResponseType`, Profiles §5.3.2 | Always |
 | Record the artifact when resolution starts. Refuse repeats during retention even if resolution fails. Choose retention longer than the issuer's acceptance period | Recommended | Bindings §3.6.5.2 | `ReplayPolicy::RequireCache`, `ReplayPolicy::NoCache`, `SamlValidationContext::with_replay_retention` |
@@ -149,6 +151,12 @@ write and read envelopes for artifact resolution,
 | Default to a bare `SOAPAction` URI | Library policy for interoperability. SAML's SOAP example uses the bare URI, as does [Keycloak 26.6.0 for IdP-to-SP SOAP logout](https://github.com/keycloak/keycloak/blob/26.6.0/services/src/main/java/org/keycloak/protocol/saml/SamlProtocol.java#L829-L842). SOAP 1.1 quotes the URI in its grammar | [Bindings §3.2.3](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf#page=11), [SOAP 1.1 §6.1.1](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/#_Toc478383528) | `SoapRequest::headers` |
 | Process the request independently of the `SOAPAction` value | Mandatory | Bindings §3.2.3 | Always |
 | Return a SAML-domain error as a status in a SAML response, not as a SOAP fault | Recommended | Bindings §3.2.2.1, §3.2.3.3, E19 | Always |
+| Report a received `Envelope` outside the SOAP 1.1 namespace as `SamlError::SoapEnvelope` with the `VersionMismatch` fault code | Mandatory | SOAP 1.1 §4.1.2, §4.4.1 | Always |
+| Report a refused local header entry with the `MustUnderstand` fault code | Mandatory | SOAP 1.1 §4.2.3, §4.4.1 | Always |
+| Report every other envelope failure, including an XML limit, with the `Client` fault code | Library policy: SOAP 1.1 §4.4.1 gives `Client` to a message that must change before a resend, and no code fits a limit better. | SOAP 1.1 §4.4.1 | Always |
+| Write an empty `detail` in a `Client` or `Server` fault, and none in a `VersionMismatch` or `MustUnderstand` fault | Library policy: SOAP 1.1 requires `detail` when the `Body` was not processed, and an empty one carries no header information when the failure was elsewhere in the envelope. | SOAP 1.1 §4.4 | `SoapFault::new` |
+| Write a SOAP fault for a SOAP processing failure. The deployment sends it with HTTP 500 | Mandatory | Bindings §3.2.3.3, SOAP 1.1 §6.2 | `SoapFault::new` |
+| Refuse an exchange over a channel without the required protection with `SamlError::SoapChannelProtection`. The deployment answers HTTP 403 | Recommended | Bindings §3.2.3.3 | Always |
 | Send SOAP entity bodies with the `text/xml` media type | Mandatory | SOAP 1.1 §6 | `SoapRequest::headers`, `SoapResponse::headers` |
 | Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` with a request | Recommended | Bindings §3.2.3.2 | `SoapRequest::headers` |
 | Send `Cache-Control: no-cache, no-store, must-revalidate, private` and `Pragma: no-cache` with a response | Recommended | Bindings §3.2.3.2 | `SoapResponse::headers` |
@@ -156,7 +164,7 @@ write and read envelopes for artifact resolution,
 ## SOAP envelope helpers
 
 `SoapRequest::try_new` and `SoapResponse::try_new` wrap one XML element in a
-SOAP 1.1 body. `SoapBodyElement::from_envelope` checks the envelope structure
+SOAP 1.1 body. `SoapFault::new` writes a SOAP 1.1 fault. `SoapBodyElement::from_envelope` checks the envelope structure
 and reads its body element. Typed SAML operations validate the payload for
 their protocol flow.
 

@@ -93,16 +93,6 @@ pub(crate) mod logout_request {
     pub(crate) const SESSION_INDEXES: &str = "sessionIndex";
 }
 
-pub(crate) mod logout_response {
-    pub(crate) const STATUS_CODE: &str = "statusCode";
-    pub(crate) const SUBORDINATE_STATUS_CODE: &str = "subordinateStatusCode";
-}
-
-pub(crate) mod status {
-    pub(crate) const TOP: &str = "top";
-    pub(crate) const SECOND: &str = "second";
-}
-
 pub fn login_request_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(request::KEY, &["AuthnRequest"]).attrs(&[
@@ -193,29 +183,6 @@ pub fn login_request_fields() -> Vec<ExtractorField> {
             ],
         ),
         ExtractorField::new(SIGNATURE, &["AuthnRequest", "Signature"]).capture_source(),
-    ]
-}
-
-pub fn login_response_status_fields() -> Vec<ExtractorField> {
-    vec![
-        ExtractorField::new(status::TOP, &["Response", "Status", "StatusCode"]).attrs(&["Value"]),
-        ExtractorField::new(
-            status::SECOND,
-            &["Response", "Status", "StatusCode", "StatusCode"],
-        )
-        .attrs(&["Value"]),
-    ]
-}
-
-pub fn logout_response_status_fields() -> Vec<ExtractorField> {
-    vec![
-        ExtractorField::new(status::TOP, &["LogoutResponse", "Status", "StatusCode"])
-            .attrs(&["Value"]),
-        ExtractorField::new(
-            status::SECOND,
-            &["LogoutResponse", "Status", "StatusCode", "StatusCode"],
-        )
-        .attrs(&["Value"]),
     ]
 }
 
@@ -336,21 +303,6 @@ pub(crate) fn manage_name_id_response_fields() -> Vec<ExtractorField> {
     ]
 }
 
-pub(crate) fn manage_name_id_response_status_fields() -> Vec<ExtractorField> {
-    vec![
-        ExtractorField::new(
-            status::TOP,
-            &["ManageNameIDResponse", "Status", "StatusCode"],
-        )
-        .attrs(&["Value"]),
-        ExtractorField::new(
-            status::SECOND,
-            &["ManageNameIDResponse", "Status", "StatusCode", "StatusCode"],
-        )
-        .attrs(&["Value"]),
-    ]
-}
-
 pub fn logout_response_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(response::KEY, &["LogoutResponse"]).attrs(&[
@@ -360,16 +312,6 @@ pub fn logout_response_fields() -> Vec<ExtractorField> {
             "InResponseTo",
         ]),
         ExtractorField::new(ISSUER, &["LogoutResponse", "Issuer"]),
-        ExtractorField::new(
-            logout_response::STATUS_CODE,
-            &["LogoutResponse", "Status", "StatusCode"],
-        )
-        .attrs(&["Value"]),
-        ExtractorField::new(
-            logout_response::SUBORDINATE_STATUS_CODE,
-            &["LogoutResponse", "Status", "StatusCode", "StatusCode"],
-        )
-        .attrs(&["Value"]),
         ExtractorField::new(SIGNATURE, &["LogoutResponse", "Signature"]).capture_source(),
     ]
 }

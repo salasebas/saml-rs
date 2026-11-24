@@ -2495,7 +2495,7 @@ fn typed_facade_finish_slo_returns_the_any_uri_value_of_a_subordinate_status(
     .replace(
         &format!(r#"<samlp:StatusCode Value="{success}"/>"#),
         &format!(
-            r#"<samlp:StatusCode Value="{success}"><samlp:StatusCode Value=" {partial_logout}&#9;"/></samlp:StatusCode>"#
+            r#"<samlp:StatusCode Value="{success}"><samlp:StatusCode xmlns:Value="urn:example:diagnostic" Value=" {partial_logout}&#9;"/></samlp:StatusCode>"#
         ),
     );
     let completed = sp.finish_slo(
@@ -3963,10 +3963,17 @@ fn soap_slo_envelopes_are_read_under_the_configured_xml_limits(
     assert!(
         matches!(
             &refused,
-            Err(SamlError::LimitExceeded {
-                limit: saml_rs::ResourceLimit::XmlDepth,
+            Err(SamlError::SoapEnvelope {
+                fault: saml_rs::SoapFaultCode::Client,
+                source,
                 ..
-            })
+            }) if matches!(
+                source.downcast_ref::<SamlError>(),
+                Some(SamlError::LimitExceeded {
+                    limit: saml_rs::ResourceLimit::XmlDepth,
+                    ..
+                })
+            )
         ),
         "{refused:?}"
     );
@@ -3995,10 +4002,17 @@ fn soap_slo_envelopes_are_read_under_the_configured_xml_limits(
     assert!(
         matches!(
             &refused,
-            Err(SamlError::LimitExceeded {
-                limit: saml_rs::ResourceLimit::XmlDepth,
+            Err(SamlError::SoapEnvelope {
+                fault: saml_rs::SoapFaultCode::Client,
+                source,
                 ..
-            })
+            }) if matches!(
+                source.downcast_ref::<SamlError>(),
+                Some(SamlError::LimitExceeded {
+                    limit: saml_rs::ResourceLimit::XmlDepth,
+                    ..
+                })
+            )
         ),
         "{refused:?}"
     );

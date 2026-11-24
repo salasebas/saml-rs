@@ -171,7 +171,9 @@ impl SoapRequest {
 /// SOAP 1.1 response carrying one XML element.
 ///
 /// The deployment returns [`Self::envelope`] as the HTTP 200 body of the SOAP
-/// request it answers, with [`Self::headers`].
+/// request it answers, with [`Self::headers`]. That includes a SAML response
+/// whose status reports an error. Answer a SOAP processing failure with a
+/// [`SoapFault`] instead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SoapResponse {
     envelope: String,
@@ -182,7 +184,8 @@ impl SoapResponse {
     ///
     /// The payload can use any element name and namespace. Use a typed SAML
     /// operation such as [`crate::IdentityProvider::respond_slo`] to construct a
-    /// response for its protocol flow.
+    /// response for its protocol flow. Use [`SoapFault::new`] for a SOAP
+    /// fault.
     ///
     /// # Errors
     ///
@@ -192,6 +195,116 @@ impl SoapResponse {
         Ok(Self {
             envelope: envelope(outbound_element(protocol_xml)?),
         })
+    }
+
+    /// SOAP 1.1 envelope.
+    pub fn envelope(&self) -> &str {
+        &self.envelope
+    }
+
+    /// HTTP headers to send with the envelope: `Content-Type`,
+    /// `Cache-Control`, and `Pragma`.
+    pub fn headers(&self) -> &[HttpHeader] {
+        RESPONSE_HEADERS
+    }
+}
+
+/// SOAP 1.1 `faultcode` value, as defined by SOAP 1.1 §4.4.1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SoapFaultCode {
+    /// The envelope element is not in the SOAP 1.1 envelope namespace.
+    VersionMismatch,
+    /// The receiver did not process a header entry addressed to it with
+    /// `mustUnderstand` set.
+    MustUnderstand,
+    /// The message is malformed or lacks information. Resending it unchanged
+    /// fails again.
+    Client,
+    /// The receiver could not process a message for a reason that is not the
+    /// message's content. A later attempt can succeed.
+    Server,
+}
+
+impl SoapFaultCode {
+    fn local_name(self) -> &'static str {
+        match self {
+            Self::VersionMismatch => "VersionMismatch",
+            Self::MustUnderstand => "MustUnderstand",
+            Self::Client => "Client",
+            Self::Server => "Server",
+        }
+    }
+
+    fn fault_string(self) -> &'static str {
+        match self {
+            Self::VersionMismatch => "SOAP envelope version is not supported",
+            Self::MustUnderstand => "SOAP header entry was not understood",
+            Self::Client => "SOAP message could not be processed",
+            Self::Server => "SOAP server could not process the message",
+        }
+    }
+}
+
+impl std::fmt::Display for SoapFaultCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.local_name())
+    }
+}
+
+/// SOAP 1.1 response carrying a `Fault`.
+///
+/// A SOAP responder answers each request in one of three ways:
+///
+/// - It returns a [`SoapResponse`] with HTTP 200 for every SAML response,
+///   including one whose status reports an error.
+/// - It refuses the exchange, for example with HTTP 403, after
+///   [`SamlError::SoapChannelProtection`].
+/// - It returns this fault's [`Self::envelope`] with HTTP 500 and
+///   [`Self::headers`] when processing fails before a SAML response exists.
+///   Use the `fault` code of a [`SamlError::SoapEnvelope`]. For another error,
+///   use [`SoapFaultCode::Client`] only when you know the request must
+///   change, such as a missing required signature, and
+///   [`SoapFaultCode::Server`] otherwise.
+///
+/// # Examples
+///
+/// ```
+/// use saml_rs::{SoapFault, SoapFaultCode};
+///
+/// let fault = SoapFault::new(SoapFaultCode::VersionMismatch);
+/// assert!(fault
+///     .envelope()
+///     .contains("<faultcode>soap:VersionMismatch</faultcode>"));
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SoapFault {
+    envelope: String,
+}
+
+impl SoapFault {
+    /// Write a SOAP 1.1 fault with `code` and a fixed `faultstring`.
+    ///
+    /// A `Client` or `Server` fault also carries an empty `detail`, which
+    /// says that the `Body` was not processed. A `VersionMismatch` or
+    /// `MustUnderstand` fault carries none.
+    pub fn new(code: SoapFaultCode) -> Self {
+        let faultcode = format!("soap:{}", code.local_name());
+        let mut writer = XmlWriter::new();
+        writer.start("soap:Envelope", &[("xmlns:soap", SOAP_NAMESPACE)]);
+        writer.start("soap:Body", &[]);
+        writer.start("soap:Fault", &[]);
+        writer.text_element("faultcode", &[], &faultcode);
+        writer.text_element("faultstring", &[], code.fault_string());
+        match code {
+            SoapFaultCode::Client | SoapFaultCode::Server => writer.text_element("detail", &[], ""),
+            SoapFaultCode::VersionMismatch | SoapFaultCode::MustUnderstand => {}
+        }
+        writer.end("soap:Fault");
+        writer.end("soap:Body");
+        writer.end("soap:Envelope");
+        Self {
+            envelope: writer.finish(),
+        }
     }
 
     /// SOAP 1.1 envelope.
@@ -225,11 +338,14 @@ impl SoapBodyElement {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] for invalid XML under the default [`XmlLimits`],
-    /// an envelope other than SOAP 1.1, or an envelope structure other than an
-    /// optional `Header` followed by one `Body` with exactly one child element.
-    /// A header entry addressed to this receiver with `mustUnderstand` set
-    /// also returns an error.
+    /// Returns [`SamlError::SoapEnvelope`] with
+    /// [`SoapFaultCode::VersionMismatch`] when the `Envelope` is not in the
+    /// SOAP 1.1 namespace, and with [`SoapFaultCode::MustUnderstand`] for a
+    /// header entry addressed to this receiver with `mustUnderstand` set.
+    /// Invalid XML under the default [`XmlLimits`], a root other than
+    /// `Envelope`, or an envelope structure other than an optional `Header`
+    /// followed by one `Body` with exactly one child element returns it with
+    /// [`SoapFaultCode::Client`].
     pub fn from_envelope(envelope: &str) -> Result<Self, SamlError> {
         let body = read_soap_body(envelope, XmlLimits::default())?;
         Ok(Self {
@@ -311,8 +427,15 @@ fn verify_soap_body_signature(
 ///
 /// A locally addressed header entry with SOAP `mustUnderstand` set is refused.
 pub(crate) fn read_soap_body(envelope: &str, limits: XmlLimits) -> Result<SoapBody, SamlError> {
+    read_envelope_body(envelope, limits).map_err(|error| match error {
+        SamlError::SoapEnvelope { .. } => error,
+        error => SamlError::soap_envelope(SoapFaultCode::Client, error),
+    })
+}
+
+fn read_envelope_body(envelope: &str, limits: XmlLimits) -> Result<SoapBody, SamlError> {
     let document = dom::parse_document(envelope, limits)?;
-    let scan = scan_envelope(envelope)?;
+    let scan = scan_envelope(envelope, limits)?;
     let child_namespace = scan
         .child
         .ok_or_else(|| SamlError::xml("SOAP body must contain one SAML protocol element"))?;
@@ -431,8 +554,11 @@ fn single_element_child(body: &Node) -> Result<&Node, SamlError> {
     Ok(child)
 }
 
-fn scan_envelope(xml: &str) -> Result<SoapScan, SamlError> {
+fn scan_envelope(xml: &str, limits: XmlLimits) -> Result<SoapScan, SamlError> {
     let mut reader = NsReader::from_str(xml);
+    reader
+        .resolver_mut()
+        .set_max_namespace_bindings(limits.max_attributes_per_element);
     let mut buf = Vec::new();
     let mut depth = 0usize;
     let mut scan = SoapScan::default();
@@ -491,14 +617,15 @@ fn observe_start(
     scan: &mut SoapScan,
     empty: bool,
 ) -> Result<(), SamlError> {
-    let (namespace, local_name) = reader.resolver().resolve_element(element.name());
-    let local_name = local_name.as_ref().to_string();
-    let namespace = bound_namespace(&namespace);
-
     if depth == 1 {
-        if local_name != "Envelope" || namespace != Some(SOAP_NAMESPACE) {
-            return Err(SamlError::xml(
-                "SOAP message must use the SOAP 1.1 envelope namespace",
+        let (local_name, namespace) = expanded_name(reader, element)?;
+        if local_name != "Envelope" {
+            return Err(SamlError::xml("SOAP message root must be Envelope"));
+        }
+        if namespace.as_deref() != Some(SOAP_NAMESPACE) {
+            return Err(SamlError::soap_envelope(
+                SoapFaultCode::VersionMismatch,
+                SamlError::xml("SOAP message must use the SOAP 1.1 envelope namespace"),
             ));
         }
         scan.saw_envelope = true;
@@ -506,7 +633,8 @@ fn observe_start(
     }
 
     if depth == 2 && scan.saw_envelope {
-        if namespace != Some(SOAP_NAMESPACE) {
+        let (local_name, namespace) = expanded_name(reader, element)?;
+        if namespace.as_deref() != Some(SOAP_NAMESPACE) {
             return Err(SamlError::xml(
                 "SOAP Header and Body must use the SOAP 1.1 namespace",
             ));
@@ -533,8 +661,9 @@ fn observe_start(
         && depth == scan.header_depth + 1
         && requires_local_processing(reader, element)?
     {
-        return Err(SamlError::xml(
-            "SOAP header requires processing this responder does not provide",
+        return Err(SamlError::soap_envelope(
+            SoapFaultCode::MustUnderstand,
+            SamlError::xml("SOAP header requires processing this responder does not provide"),
         ));
     }
 
@@ -545,12 +674,28 @@ fn observe_start(
                 "SOAP body must contain exactly one SAML protocol element".into(),
             ));
         }
+        let (local_name, namespace) = expanded_name(reader, element)?;
         scan.child = Some(NamedNamespace {
             local_name,
-            namespace: namespace.unwrap_or("").to_string(),
+            namespace: namespace.unwrap_or_default(),
         });
     }
     Ok(())
+}
+
+fn expanded_name(
+    reader: &NsReader<&[u8]>,
+    element: &BytesStart<'_>,
+) -> Result<(String, Option<String>), SamlError> {
+    let (namespace, local_name) = reader.resolver().resolve_element(element.name());
+    let namespace = bound_namespace(&namespace)
+        .map(|uri| {
+            quick_xml::escape::unescape(uri)
+                .map(std::borrow::Cow::into_owned)
+                .map_err(xml_err)
+        })
+        .transpose()?;
+    Ok((local_name.as_ref().to_owned(), namespace))
 }
 
 /// Whether a header entry is addressed to this receiver, through no SOAP
@@ -652,25 +797,114 @@ mod tests {
     #[test]
     fn soap_body_rejects_a_second_element() {
         let envelope = r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><samlp:One xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/><samlp:Two xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></soap:Body></soap:Envelope>"#;
-        assert!(matches!(
-            SoapBodyElement::from_envelope(envelope),
-            Err(SamlError::ProtocolProfile(_))
-        ));
+        assert_eq!(
+            fault_of(SoapBodyElement::from_envelope(envelope)),
+            Some(SoapFaultCode::Client)
+        );
+    }
+
+    fn fault_of(result: Result<SoapBodyElement, SamlError>) -> Option<SoapFaultCode> {
+        match result {
+            Err(SamlError::SoapEnvelope { fault, .. }) => Some(fault),
+            Ok(_) | Err(_) => None,
+        }
     }
 
     #[test]
     fn soap_header_must_understand_is_rejected() {
         let envelope = r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Header><wsse:Security xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" soap:mustUnderstand="1"/></soap:Header><soap:Body><samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></soap:Body></soap:Envelope>"#;
-        assert!(SoapBodyElement::from_envelope(envelope).is_err());
+        assert_eq!(
+            fault_of(SoapBodyElement::from_envelope(envelope)),
+            Some(SoapFaultCode::MustUnderstand)
+        );
+    }
+
+    #[test]
+    fn soap_envelope_scan_uses_the_configured_namespace_budget() -> Result<(), SamlError> {
+        let declarations: String = (0..129)
+            .map(|index| format!(r#" xmlns:n{index}="urn:example:{index}""#))
+            .collect();
+        let envelope = format!(
+            r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"{declarations}><soap:Body><samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></soap:Body></soap:Envelope>"#
+        );
+        let raised = XmlLimits {
+            max_attributes_per_element: 256,
+            ..XmlLimits::default()
+        };
+        assert_eq!(
+            read_soap_body(&envelope, raised)?.local_name,
+            "ArtifactResolve"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn soap_envelope_outside_soap_1_1_is_a_version_mismatch() -> Result<(), SamlError> {
+        let body = r#"<Body><samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></Body>"#;
+        let soap_1_2 = format!(
+            r#"<Envelope xmlns="http://www.w3.org/2003/05/soap-envelope">{body}</Envelope>"#
+        );
+        assert_eq!(
+            fault_of(SoapBodyElement::from_envelope(&soap_1_2)),
+            Some(SoapFaultCode::VersionMismatch)
+        );
+        let escaped = format!(
+            r#"<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope&#47;">{body}</Envelope>"#
+        );
+        assert_eq!(
+            SoapBodyElement::from_envelope(&escaped)?.local_name(),
+            "ArtifactResolve"
+        );
+        let bare_message =
+            r#"<samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/>"#;
+        assert_eq!(
+            fault_of(SoapBodyElement::from_envelope(bare_message)),
+            Some(SoapFaultCode::Client)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn soap_fault_is_the_single_body_entry_with_a_qualified_code() -> Result<(), SamlError> {
+        for (code, faultcode, entries) in [
+            (SoapFaultCode::VersionMismatch, "VersionMismatch", 2),
+            (SoapFaultCode::MustUnderstand, "MustUnderstand", 2),
+            (SoapFaultCode::Client, "Client", 3),
+            (SoapFaultCode::Server, "Server", 3),
+        ] {
+            let fault = SoapFault::new(code);
+            let body = SoapBodyElement::from_envelope(fault.envelope())?;
+            assert_eq!(
+                (body.local_name(), body.namespace()),
+                ("Fault", SOAP_NAMESPACE)
+            );
+            let element = dom::parse_document(body.xml(), XmlLimits::default())?.root;
+            let children: Vec<(&str, &str)> = element
+                .children
+                .iter()
+                .map(|child| (child.local_name.as_str(), child.text.as_str()))
+                .collect();
+            assert_eq!(
+                children[0],
+                ("faultcode", format!("soap:{faultcode}").as_str())
+            );
+            assert_eq!(children[1].0, "faultstring");
+            assert_eq!(children.len(), entries, "{faultcode}");
+            if entries == 3 {
+                assert_eq!(children[2], ("detail", ""));
+            }
+            assert_eq!(fault.headers(), RESPONSE_HEADERS);
+        }
+        Ok(())
     }
 
     #[test]
     fn soap_header_padded_must_understand_is_rejected() {
         let envelope = r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Header><extra soap:mustUnderstand=" 1 ">note</extra></soap:Header><soap:Body><samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></soap:Body></soap:Envelope>"#;
-        assert!(matches!(
-            SoapBodyElement::from_envelope(envelope),
-            Err(SamlError::Xml { .. })
-        ));
+        assert_eq!(
+            fault_of(SoapBodyElement::from_envelope(envelope)),
+            Some(SoapFaultCode::MustUnderstand)
+        );
     }
 
     #[test]
@@ -683,11 +917,9 @@ mod tests {
             let envelope = format!(
                 r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">{children}</soap:Envelope>"#
             );
-            assert!(
-                matches!(
-                    SoapBodyElement::from_envelope(&envelope),
-                    Err(SamlError::ProtocolProfile(_))
-                ),
+            assert_eq!(
+                fault_of(SoapBodyElement::from_envelope(&envelope)),
+                Some(SoapFaultCode::Client),
                 "{envelope}"
             );
         }
@@ -733,7 +965,11 @@ mod tests {
             );
             let result = SoapBodyElement::from_envelope(&envelope);
             if mandatory_here {
-                assert!(matches!(result, Err(SamlError::Xml { .. })), "{attributes}");
+                assert_eq!(
+                    fault_of(result),
+                    Some(SoapFaultCode::MustUnderstand),
+                    "{attributes}"
+                );
             } else {
                 assert_eq!(result?.local_name(), "LogoutRequest", "{attributes}");
             }

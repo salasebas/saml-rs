@@ -911,6 +911,25 @@ fn storage_failures_fail_closed_without_releasing_an_unconsumed_artifact() -> Te
         without_replay_cache(),
     )?;
 
+    store.fail = FailurePoint::Now;
+    let hostile = parties.other.resolve_artifact(
+        &parties.idp_metadata,
+        &artifact,
+        channel,
+        without_replay_cache(),
+    )?;
+    let clock_failed_for_another_presenter = parties.idp.answer_artifact_resolve(
+        &parties.other_metadata,
+        hostile.request().envelope(),
+        hostile.request().endpoint(),
+        &mut store,
+        channel,
+    )?;
+    assert_eq!(
+        clock_failed_for_another_presenter.release(),
+        ArtifactRelease::Withheld(ArtifactWithheld::DifferentPresenter)
+    );
+
     store.fail = FailurePoint::Lookup;
     let lookup_failed = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,

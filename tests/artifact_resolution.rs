@@ -1007,7 +1007,16 @@ fn a_header_the_responder_must_understand_is_refused_without_consuming_the_artif
         &mut issued,
         channel,
     );
-    assert!(matches!(refused, Err(SamlError::Xml { .. })));
+    assert!(
+        matches!(
+            refused,
+            Err(SamlError::SoapEnvelope {
+                fault: saml_rs::SoapFaultCode::MustUnderstand,
+                ..
+            })
+        ),
+        "{refused:?}"
+    );
 
     let for_router = resolution.request().envelope().replacen(
         "<soap:Body>",
@@ -1069,6 +1078,11 @@ fn the_service_provider_rejects_an_artifact_response_it_cannot_attribute(
     );
     assert!(matches!(
         resolution.finish(&email_issuer),
+        Err(SamlError::ProtocolProfile(_))
+    ));
+    let repeated_issuer = envelope.replace(&issuer, &issuer.repeat(2));
+    assert!(matches!(
+        resolution.finish(&repeated_issuer),
         Err(SamlError::ProtocolProfile(_))
     ));
     let without_correlation = remove_attribute(envelope, "InResponseTo")?;
@@ -1439,6 +1453,64 @@ fn namespaces_declared_on_the_soap_envelope_reach_the_protocol_message(
 }
 
 #[test]
+fn the_issuer_answers_only_over_a_channel_that_authenticates_it(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let artifact = issue(&parties, &logout_request(), &mut issued)?;
+    let resolution = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        &artifact,
+        confidential(),
+        without_replay_cache(),
+    )?;
+    let unknown = recode(&artifact, |bytes| {
+        bytes[43] ^= 0xff;
+    })?;
+    let unknown_request = resolution
+        .request()
+        .envelope()
+        .replace(artifact.as_str(), unknown.as_str());
+    let received_at = EndpointUrl::try_new(RESOLUTION_URL)?;
+    for weak in [
+        SoapChannel::unattested(),
+        SoapChannel::new(
+            PartyAuthentication::Unattested,
+            MessageIntegrity::Protected,
+            MessageConfidentiality::Protected,
+        ),
+        SoapChannel::new(
+            PartyAuthentication::Mutual,
+            MessageIntegrity::Unattested,
+            MessageConfidentiality::Protected,
+        ),
+    ] {
+        for request in [resolution.request().envelope(), unknown_request.as_str()] {
+            let refused = parties.idp.answer_artifact_resolve(
+                &parties.sp_metadata,
+                request,
+                &received_at,
+                &mut issued,
+                weak,
+            );
+            assert!(
+                matches!(refused, Err(SamlError::SoapChannelProtection)),
+                "{weak:?}: {refused:?}"
+            );
+        }
+    }
+    let answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        resolution.request().envelope(),
+        &received_at,
+        &mut issued,
+        confidential(),
+    )?;
+    assert_eq!(answer.release(), ArtifactRelease::Returned);
+    Ok(())
+}
+
+#[test]
 fn the_service_provider_resolves_only_over_a_confidential_channel(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
@@ -1575,10 +1647,17 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits(
     assert!(
         matches!(
             &refused,
-            Err(SamlError::LimitExceeded {
-                limit: saml_rs::ResourceLimit::XmlDepth,
+            Err(SamlError::SoapEnvelope {
+                fault: saml_rs::SoapFaultCode::Client,
+                source,
                 ..
-            })
+            }) if matches!(
+                source.downcast_ref::<SamlError>(),
+                Some(SamlError::LimitExceeded {
+                    limit: saml_rs::ResourceLimit::XmlDepth,
+                    ..
+                })
+            )
         ),
         "{refused:?}"
     );
@@ -1603,10 +1682,17 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits(
     assert!(
         matches!(
             &refused,
-            Err(SamlError::LimitExceeded {
-                limit: saml_rs::ResourceLimit::XmlDepth,
+            Err(SamlError::SoapEnvelope {
+                fault: saml_rs::SoapFaultCode::Client,
+                source,
                 ..
-            })
+            }) if matches!(
+                source.downcast_ref::<SamlError>(),
+                Some(SamlError::LimitExceeded {
+                    limit: saml_rs::ResourceLimit::XmlDepth,
+                    ..
+                })
+            )
         ),
         "{refused:?}"
     );

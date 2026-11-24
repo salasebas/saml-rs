@@ -289,7 +289,8 @@
 //! [`ServiceProvider::resolve_artifact`] sends `ArtifactResolve` to the identity
 //! provider's `ArtifactResolutionService`, and [`ArtifactResolution::finish`]
 //! reads the message back. The deployment POSTs the SOAP envelope with
-//! [`SoapRequest::headers`] and answers with [`SoapResponse::headers`]. The
+//! [`SoapRequest::headers`] and answers with [`SoapResponse::headers`], or
+//! with a [`SoapFault`] when SOAP processing fails. The
 //! service provider stores each artifact it resolves in its
 //! [`ReplayCache`], like the message IDs it receives. This does not claim the
 //! IdP or SP operational mode.
@@ -489,5 +490,5 @@ pub use name_id_management::{
 };
 pub use soap::{
     MessageConfidentiality, MessageIntegrity, PartyAuthentication, SoapBodyElement, SoapChannel,
-    SoapRequest, SoapResponse,
+    SoapFault, SoapFaultCode, SoapRequest, SoapResponse,
 };

@@ -23,8 +23,8 @@ use crate::xml::XmlLimits;
 
 use super::xml::{render_request, render_response, RequestXml, ResponseXml};
 use super::{
-    identifier_and_change, plaintext_content, protect_request, require_one_status_code, Change,
-    Identifier, ManageNameIdRequest, Refusal,
+    identifier_and_change, plaintext_content, protect_request, Change, Identifier,
+    ManageNameIdRequest, Refusal,
 };
 
 #[derive(Clone, Copy)]
@@ -134,7 +134,7 @@ pub(crate) fn request_from_flow(
     let request = parse_saml_with_limits(&flow.saml_content, setting.xml_limits)?;
     let id = MessageId::try_new(request.required_attr("ID")?)?;
     let issue_instant = request.required_issue_instant()?;
-    let issuer = issuer(&request).ok_or_else(|| {
+    let issuer = issuer(&request)?.ok_or_else(|| {
         SamlError::ProtocolProfile("ManageNameIDRequest is missing Issuer".into())
     })?;
     let issuer = EntityId::try_new(issuer.value)?;
@@ -195,7 +195,6 @@ pub(crate) fn response_id_from_flow(
     limits: XmlLimits,
 ) -> Result<MessageId, SamlError> {
     let response = parse_saml_with_limits(&flow.saml_content, limits)?;
-    require_one_status_code(&response)?;
     MessageId::try_new(response.required_attr("ID")?)
 }
 

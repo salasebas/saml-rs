@@ -145,6 +145,9 @@ impl ServiceProvider {
     /// Returns [`SamlError::LogoutRequestRefused`] for an authenticated newer
     /// version. Send its refusal with [`Self::respond_slo_refusal`].
     /// A version below 2.0 returns [`SamlError::ProtocolProfile`].
+    /// A SOAP envelope that SOAP processing rejects returns
+    /// [`SamlError::SoapEnvelope`]. Over SOAP, answer each error as
+    /// [`SoapFault`](crate::SoapFault) describes.
     ///
     /// A decrypted `<NameID>` is available through [`LogoutRequest::name_id`].
     /// If no configured key decrypts the `<EncryptedID>`, or it contains a
@@ -404,6 +407,9 @@ impl IdentityProvider {
     /// Returns [`SamlError::LogoutRequestRefused`] for an authenticated newer
     /// version. Send its refusal with [`Self::respond_slo_refusal`].
     /// A version below 2.0 returns [`SamlError::ProtocolProfile`].
+    /// A SOAP envelope that SOAP processing rejects returns
+    /// [`SamlError::SoapEnvelope`]. Over SOAP, answer each error as
+    /// [`SoapFault`](crate::SoapFault) describes.
     ///
     /// # Examples
     ///
@@ -938,7 +944,7 @@ fn finish_slo_impl(
         ),
         unresolved_recipient,
     )?;
-    let response = LogoutResponse::from_flow(&parsed.flow, parsed.status_message)?;
+    let response = LogoutResponse::from_flow(&parsed.flow, parsed.status, parsed.status_message)?;
     validation.check_and_store_message_replay(ReplayKey::LogoutResponse(response.id().clone()))?;
     Ok(LogoutCompleted::new(response, relay_state))
 }

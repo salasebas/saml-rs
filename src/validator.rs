@@ -1,8 +1,9 @@
 use crate::constants::ParserType;
 use crate::error::{SamlError, TimeWindowField};
-use crate::model::{ClockSkew, Status};
+use crate::model::ClockSkew;
 use crate::util::Value;
-use crate::xml::{extract_with_limits, fields, parse_saml_utc_instant, XmlLimits};
+use crate::xml::status::read_status;
+use crate::xml::{fields, parse_saml_utc_instant, XmlLimits};
 use std::time::SystemTime;
 use time::{Duration, OffsetDateTime};
 
@@ -119,19 +120,14 @@ pub fn check_status(
     parser_type: ParserType,
     limits: XmlLimits,
 ) -> Result<(), SamlError> {
-    let fields = match parser_type {
-        ParserType::SamlResponse => fields::login_response_status_fields(),
-        ParserType::LogoutResponse => fields::logout_response_status_fields(),
-        ParserType::ManageNameIdResponse => fields::manage_name_id_response_status_fields(),
+    match parser_type {
+        ParserType::SamlResponse
+        | ParserType::LogoutResponse
+        | ParserType::ManageNameIdResponse => read_status(content, limits)?.require_success(),
         ParserType::SamlRequest | ParserType::LogoutRequest | ParserType::ManageNameIdRequest => {
-            return Ok(())
+            Ok(())
         }
-    };
-    let result = extract_with_limits(content, &fields, limits)?;
-    let top = result
-        .get_str(fields::status::TOP)
-        .ok_or(SamlError::StatusMissing)?;
-    Status::received(top, result.get_str(fields::status::SECOND))?.require_success()
+    }
 }
 
 #[cfg(test)]
@@ -248,6 +244,73 @@ mod tests {
             other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
         }
         Ok(())
+    }
+
+    #[test]
+    fn status_reads_one_status_with_one_top_level_status_code() {
+        let success = r#"<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>"#;
+        let requester =
+            r#"<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Requester"/>"#;
+        let status = format!("<samlp:Status>{success}</samlp:Status>");
+        let failed_status = format!("<samlp:Status>{requester}</samlp:Status>");
+        let nested = |children: &str| {
+            format!(
+                r#"<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Requester">{children}</samlp:StatusCode></samlp:Status>"#
+            )
+        };
+        for (parser_type, root) in [
+            (ParserType::SamlResponse, "Response"),
+            (ParserType::LogoutResponse, "LogoutResponse"),
+            (ParserType::ManageNameIdResponse, "ManageNameIDResponse"),
+        ] {
+            let response = |children: &str| {
+                format!(
+                    r#"<samlp:{root} xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_r" Version="2.0" IssueInstant="2026-01-01T00:00:00Z">{children}</samlp:{root}>"#
+                )
+            };
+            for children in [
+                format!("{status}{failed_status}"),
+                format!("<samlp:Status>{success}{requester}</samlp:Status>"),
+                nested(r#"<samlp:StatusCode/>"#),
+                nested(&format!("{requester}{requester}")),
+            ] {
+                let result = check_status(&response(&children), parser_type, XmlLimits::default());
+                assert!(
+                    matches!(result, Err(SamlError::ProtocolProfile(_))),
+                    "{root} {children}: {result:?}"
+                );
+            }
+            for children in [
+                status.clone(),
+                format!(r#"<ext:Status xmlns:ext="urn:example:extension"/>{status}"#),
+            ] {
+                let accepted =
+                    check_status(&response(&children), parser_type, XmlLimits::default());
+                assert!(accepted.is_ok(), "{root} {children}: {accepted:?}");
+            }
+            let missing = check_status(&response(""), parser_type, XmlLimits::default());
+            assert!(
+                matches!(missing, Err(SamlError::StatusMissing)),
+                "{root}: {missing:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn status_reader_uses_the_configured_namespace_budget() -> Result<(), SamlError> {
+        let declarations: String = (0..129)
+            .map(|index| format!(r#" xmlns:n{index}="urn:example:{index}""#))
+            .collect();
+        let response = RESPONSE.replacen(
+            "<samlp:Response ",
+            &format!("<samlp:Response{declarations} "),
+            1,
+        );
+        let raised = XmlLimits {
+            max_attributes_per_element: 256,
+            ..XmlLimits::default()
+        };
+        check_status(&response, ParserType::SamlResponse, raised)
     }
 
     #[test]

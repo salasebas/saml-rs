@@ -207,14 +207,18 @@ impl IdentityProvider {
     /// It must be a SOAP `ArtifactResolutionService` location that this
     /// identity provider publishes. A present `Destination` must equal it.
     ///
+    /// The identity provider does not sign `ArtifactResponse`, so `channel`
+    /// must attest mutual authentication and integrity protection for every
+    /// answer, including one that withholds the message.
+    ///
     /// The protocol message is included only when `presenter` is the service
-    /// provider the artifact was issued to, `channel` supplies the protection
-    /// that message requires, and `issued` atomically consumes the matching
-    /// outstanding entry. [`AnsweredArtifact::release`] says whether the
-    /// response includes the message. An unknown artifact, a `Destination`
-    /// other than `received_at`, a different presenter, insufficient channel
-    /// protection, or a race lost to another responder gets `Success` without
-    /// the message. An
+    /// provider the artifact was issued to, `channel` is also confidential
+    /// when that message requires it, and `issued` atomically consumes the
+    /// matching outstanding entry. [`AnsweredArtifact::release`] says whether
+    /// the response includes the message. An unknown artifact, a
+    /// `Destination` other than `received_at`, a different presenter, a
+    /// channel without the confidentiality the message requires, or a race
+    /// lost to another responder gets `Success` without the message. An
     /// unsupported newer version gets `VersionMismatch`, with
     /// `RequestVersionTooHigh` for a newer major version. A present XML
     /// signature must cover the `ArtifactResolve` and verify against
@@ -222,10 +226,15 @@ impl IdentityProvider {
     ///
     /// # Errors
     ///
+    /// Returns [`SamlError::TimeWindowInvalid`] when `presenter`'s metadata
+    /// has expired. Returns [`SamlError::SoapChannelProtection`] before
+    /// reading the request when `channel` does not attest mutual
+    /// authentication and integrity protection.
     /// Returns [`SamlError::RecipientEndpointNotPublished`] when `received_at`
     /// is not a published SOAP `ArtifactResolutionService` location. Returns
-    /// [`SamlError`] when `request_envelope` cannot be read as a SOAP
-    /// 1.1 envelope. Returns [`SamlError::ProtocolProfile`] when the body is
+    /// [`SamlError::SoapEnvelope`] when `request_envelope` cannot be read as a
+    /// SOAP 1.1 envelope. Answer each error as
+    /// [`SoapFault`](crate::SoapFault) describes. Returns [`SamlError::ProtocolProfile`] when the body is
     /// not one `ArtifactResolve`, the request lacks exactly one `Artifact`
     /// value or has a second `Issuer`, or the required `ID`, `Version`, or UTC
     /// `IssueInstant` fails validation. A version below 2.0 also returns
