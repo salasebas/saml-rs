@@ -12,6 +12,7 @@ use crate::flow::{
 use crate::metadata::Metadata;
 use crate::model::{ClockSkew, StatusMessage};
 use crate::validator::check_status;
+use crate::xml::fields;
 use crate::xml::protocol_element::SamlElement;
 use std::time::SystemTime;
 
@@ -137,6 +138,7 @@ pub(crate) fn parse_logout_response_at(
     request: &HttpRequest,
     request_id: &str,
     validation: LogoutFlowValidation<'_>,
+    unresolved_recipient: Option<SamlError>,
 ) -> Result<ParsedLogoutResponse, SamlError> {
     if request_id.is_empty() {
         return Err(SamlError::InvalidInResponseTo);
@@ -160,6 +162,15 @@ pub(crate) fn parse_logout_response_at(
         validation.expected_recipient,
         receipt.signed_destination,
     )?;
+    if let Some(error) = unresolved_recipient {
+        if flow
+            .extract
+            .get_str(fields::response::DESTINATION)
+            .is_some()
+        {
+            return Err(error);
+        }
+    }
     let status = check_status(
         &flow.saml_content,
         ParserType::LogoutResponse,

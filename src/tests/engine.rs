@@ -345,6 +345,7 @@ pub(crate) fn parse_logout_response(
         request,
         request_id,
         LogoutFlowValidation::typed(None, SystemTime::now(), ClockSkew::strict(), None),
+        None,
     )
     .map(|parsed| parsed.flow)
 }

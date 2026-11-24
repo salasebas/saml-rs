@@ -57,13 +57,14 @@ A supplied URL now returns:
 `Location`. A response without `Destination` is accepted as before, with or
 without a local SOAP endpoint.
 
-A response with `Destination` can now return:
+After the signature checks, a response with `Destination` can now return:
 
 - `SamlError::DestinationMismatch` when it names another URL.
 - `SamlError::MissingMetadata` when the local party publishes no SOAP
   `SingleLogoutService`.
 - `SamlError::RecipientEndpointAmbiguous` when the local party publishes
   several and you supply none with `with_recipient_endpoint`.
-- `SamlError::RecipientEndpointNotPublished` when the URL you supply with
-  `with_recipient_endpoint` is not a local SOAP `SingleLogoutService`
-  location, such as a browser logout URL.
+- `SamlError::RecipientEndpointNotPublished` when the local party publishes
+  a SOAP `SingleLogoutService` and the URL you supply with
+  `with_recipient_endpoint` is not its location, such as a browser logout
+  URL.

@@ -1,4 +1,4 @@
-use crate::browser::{Inbound, LogoutBinding, Outbound, PendingLogoutRequest, Started, Transport};
+use crate::browser::{Inbound, LogoutBinding, Outbound, PendingLogoutRequest, Started};
 use crate::config::{IdpDescriptor, NameIdFormat, SpDescriptor};
 use crate::constants::Binding;
 use crate::entity::{capture_idp_issuance_window, now_iso8601, EntitySetting};
@@ -14,7 +14,6 @@ use crate::model::{
     RefusedLogoutRequest, RelayState, ReplayKey, SamlInstant, SamlValidationContext, SessionIndex,
     Status,
 };
-use crate::soap::read_soap_body;
 use crate::xml::protocol_element::parse_saml_with_limits;
 use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
@@ -894,18 +893,25 @@ fn finish_slo_impl(
     let binding = logout_response_binding(input.binding(), pending.request_binding())?;
     let relay_state = relay_state_from_input(&input)?;
     ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
-    let expected_recipient = match binding {
-        LogoutBinding::Soap => {
-            soap_reply_recipient(&input, local_setting, local_metadata, &validation)?
-        }
-        binding @ (LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign) => {
+    let (expected_recipient, unresolved_recipient) = match binding {
+        LogoutBinding::Soap => match logout_recipient_endpoint(
+            local_metadata,
+            LogoutBinding::Soap,
+            EndpointDirection::Request,
+            &validation,
+        ) {
+            Ok(recipient) => (Some(recipient), None),
+            Err(error) => (None, Some(error)),
+        },
+        binding @ (LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign) => (
             Some(logout_recipient_endpoint(
                 local_metadata,
                 binding,
                 EndpointDirection::Response,
                 &validation,
-            )?)
-        }
+            )?),
+            None,
+        ),
     };
     let receipt = LogoutReceipt::of_input(&input)?;
     let request =
@@ -922,38 +928,11 @@ fn finish_slo_impl(
             validation.clock_skew(),
             peer.hmac_secret,
         ),
+        unresolved_recipient,
     )?;
     let response = LogoutResponse::from_flow(&parsed.flow, parsed.status_message)?;
     validation.check_and_store_message_replay(ReplayKey::LogoutResponse(response.id().clone()))?;
     Ok(LogoutCompleted::new(response, relay_state))
-}
-
-fn soap_reply_recipient(
-    input: &Inbound<LogoutResponse>,
-    local_setting: &EntitySetting,
-    local_metadata: &Metadata,
-    validation: &SamlValidationContext<'_>,
-) -> Result<Option<String>, SamlError> {
-    let unresolved = match logout_recipient_endpoint(
-        local_metadata,
-        LogoutBinding::Soap,
-        EndpointDirection::Request,
-        validation,
-    ) {
-        Ok(recipient) => return Ok(Some(recipient)),
-        Err(error) => error,
-    };
-    let Transport::Soap { envelope, .. } = &input.transport else {
-        return Err(SamlError::UnsupportedBinding {
-            binding: input.binding(),
-        });
-    };
-    let body = read_soap_body(envelope, local_setting.xml_limits)?;
-    let response = parse_saml_with_limits(&body.xml, local_setting.xml_limits)?;
-    match response.attr("Destination") {
-        Some(_) => Err(unresolved),
-        None => Ok(None),
-    }
 }
 
 #[derive(Debug, Clone, Copy)]

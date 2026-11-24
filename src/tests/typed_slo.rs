@@ -3680,6 +3680,15 @@ fn a_soap_requester_without_a_soap_endpoint_checks_only_a_present_destination(
     match sp.finish_slo(
         &idp_descriptor,
         &started.pending,
+        unsigned_logout_response_input(&xml, LogoutBinding::Soap)?,
+        validation(),
+    ) {
+        Err(SamlError::SignatureMissing) => {}
+        other => return Err(format!("expected SignatureMissing, got {other:?}").into()),
+    }
+    match sp.finish_slo(
+        &idp_descriptor,
+        &started.pending,
         signed_logout_response_input(&xml, LogoutBinding::Soap)?,
         validation(),
     ) {
