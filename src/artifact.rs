@@ -621,10 +621,8 @@ fn soap_service(
     metadata: &IdpMetadata,
     index: u16,
 ) -> Result<crate::metadata::ArtifactResolutionServiceEndpoint, SamlError> {
-    let services = metadata.artifact_resolution_services()?;
-    let service = services
-        .into_iter()
-        .find(|service| service.index() == index)
+    let service = metadata
+        .artifact_resolution_service(index)?
         .ok_or_else(|| SamlError::MissingMetadata("ArtifactResolutionService".into()))?;
     if !service.is_soap() {
         return Err(SamlError::Unsupported(

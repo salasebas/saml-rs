@@ -62,7 +62,15 @@ The peer descriptors read the role the peer acts in. `Metadata::parse` has no ro
 | For an `AssertionConsumerService` lookup without a binding, select the default within the first matching SAML 2.0 SP role | Library policy: reason not recorded. | Metadata §2.3.2 | Always |
 | Require unqualified `Binding`, `Location`, and an `unsignedShort` `index` on each `ArtifactResolutionService` | Mandatory | Metadata §2.2.2, §2.2.3 | `IdpMetadata::artifact_resolution_services` |
 | Reject duplicate `ArtifactResolutionService` indexes within one `IDPSSODescriptor` | Mandatory | Metadata §2.2.3 | `IdpMetadata::artifact_resolution_services` |
+| Look up an artifact's `EndpointIndex` in each selected `IDPSSODescriptor`, and refuse an index that more than one of them publishes | Library policy: the artifact names its issuer and index but not the role, so a guessed role could receive an `ArtifactResolve` for an artifact it did not issue. | Metadata §2.2.3, §2.3.2, Bindings §3.6.4 | `IdpMetadata::artifact_resolution_service` |
 | Reject an empty `Binding` or `Location` after whitespace collapse | Library policy: reason not recorded. | Core §1.3.2, Metadata §2.2.2 | `IdpMetadata::artifact_resolution_services` |
+
+[Shibboleth SP 3.6.0](https://codeberg.org/Shibboleth/cpp-sp/src/tag/3.6.0/shibsp/binding/impl/ArtifactResolver.cpp)
+looks up the artifact's index only in the first `IDPSSODescriptor` that is
+currently valid and supports SAML 2.0. It takes that role from
+[OpenSAML-C 3.3.1](https://codeberg.org/Shibboleth/cpp-opensaml/src/tag/3.3.1/saml/saml2/metadata/Metadata.h#L594).
+saml-rs reads these roles together, so an index that only a later role
+publishes still resolves.
 
 ## Metadata validity
 

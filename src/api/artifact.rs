@@ -358,7 +358,9 @@ impl ServiceProvider {
     /// [`SamlError::TimeWindowInvalid`] when a replay cache is passed without
     /// a retention, and another [`SamlError`] when the artifact
     /// was not issued by `identity_provider` or metadata has no SOAP
-    /// resolution service at the artifact's index.
+    /// resolution service at the artifact's index. Returns
+    /// [`SamlError::Invalid`] when more than one SAML 2.0 `IDPSSODescriptor`
+    /// publishes that index.
     pub fn resolve_artifact(
         &self,
         identity_provider: &IdpDescriptor,
