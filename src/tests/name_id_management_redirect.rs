@@ -164,7 +164,7 @@ fn signed_request_input(xml: &str) -> Result<Inbound<ManageNameIdRequest>, SamlE
     let key = read_private_key(PRIVKEY, None)?;
     let octet = build_redirect_octet(ParserType::ManageNameIdRequest, xml, None, RSA_SHA256)?;
     let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
-    let url = append_signature(SP_MANAGE, &octet, &signature);
+    let url = append_signature(SP_MANAGE, &octet, &signature)?;
     let (_, query) = url
         .split_once('?')
         .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
@@ -175,7 +175,7 @@ fn signed_response_input(xml: &str) -> Result<Inbound<ManageNameIdResponse>, Sam
     let key = read_private_key(PRIVKEY, None)?;
     let octet = build_redirect_octet(ParserType::ManageNameIdResponse, xml, None, RSA_SHA256)?;
     let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
-    let url = append_signature(IDP_MANAGE, &octet, &signature);
+    let url = append_signature(IDP_MANAGE, &octet, &signature)?;
     let (_, query) = url
         .split_once('?')
         .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
@@ -420,7 +420,7 @@ fn requester_accepts_relay_state_the_responder_adds_to_a_request_without_one() -
             RSA_SHA256,
         )?;
         let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
-        let url = append_signature(SP_MANAGE, &octet, &signature);
+        let url = append_signature(SP_MANAGE, &octet, &signature)?;
         let (_, query) = url
             .split_once('?')
             .ok_or("redirect URL is missing a query")?;
@@ -457,7 +457,7 @@ fn responder_echoes_a_received_relay_state_up_to_the_receive_limit() -> TestResu
         RSA_SHA256,
     )?;
     let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
-    let url = append_signature(IDP_MANAGE, &octet, &signature);
+    let url = append_signature(IDP_MANAGE, &octet, &signature)?;
     let (_, query) = url
         .split_once('?')
         .ok_or("redirect URL is missing a query")?;

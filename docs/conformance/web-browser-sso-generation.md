@@ -17,6 +17,9 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Write every time value in UTC, and never a leap second | Mandatory | Core §1.3.3 | Always |
 | Write `Destination` as the URL the user agent is sent to. A signed request needs it, and the crate writes it on every request | Mandatory | Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4 | Always |
 | Limit `RelayState` to 80 bytes | Mandatory | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | `RelayState::try_new` |
+| Refuse a form `RelayState` with a CR or LF outside a CRLF pair | Library policy: HTML form submission sends the character as CRLF, so the receiver gets another value and a SimpleSign signature over it fails. | Bindings §3.5.4, CD-04 §2.3 | Always |
+| Refuse a form `RelayState` with a character outside the XML `Char` production, such as U+0000 | Mandatory | Bindings §3.5.4, XML 1.0 §2.2 | Always |
+| Keep the endpoint's own query parameters before the SAML parameters, and refuse an endpoint query that already has `SAMLRequest`, `SAMLResponse`, `SAMLart`, `RelayState`, `SigAlg`, `Signature`, or `SAMLEncoding`, by decoded name | Library policy: the bindings name these parameters, so a configured one can repeat a message field or be read as one by an endpoint that serves several bindings. | Bindings §3.4.4 | Always |
 | Sign a request over HTTP-Redirect by removing any protocol `ds:Signature`, DEFLATE-encoding the XML, and signing `SAMLRequest`, `RelayState` when present, then `SigAlg` | Mandatory | Bindings §3.4.4.1 | `SpValidationPolicy::authn_request_signing` |
 | When signing a SimpleSign request, sign the raw XML, then `RelayState` when present, then `SigAlg`. Preserve any XML signature | Mandatory | CD-04 §2.4, §2.5 | Always |
 | Require `SigAlg` and `Signature` to send an `AuthnRequest` over SimpleSign | Library policy: choosing SimpleSign commits the SP to authenticating the request and binding any `RelayState` to it. | CD-04 §2.4, §2.7.2 | Always |
@@ -92,6 +95,8 @@ unsigned request from an SP whose metadata declares `AuthnRequestsSigned`.
 | Return the exact `RelayState` received with the request, including a value over 80 bytes. Reject `RespondSso::relay_state` on a request that carried one | Mandatory | Bindings §3.1.1, §3.4.3, §3.5.3, CD-04 §2.3 | Always |
 | Send a `RelayState` the identity provider chooses, when the request carried none or the response is unsolicited | Optional | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | `RespondSso::relay_state` |
 | Limit a `RelayState` the identity provider chooses to 80 bytes | Mandatory | Bindings §3.5.3, CD-04 §2.3 | `RespondSso::relay_state` |
+| Refuse a form `RelayState` with a CR or LF outside a CRLF pair, a received one included | Library policy: HTML form submission sends the character as CRLF, so the form cannot return the exact value. | Bindings §3.1.1, §3.5.4, CD-04 §2.3 | Always |
+| Refuse a form `RelayState` with a character outside the XML `Char` production, such as U+0000, a received one included | Mandatory | Bindings §3.5.4, XML 1.0 §2.2 | Always |
 | Protect each assertion over HTTP-POST by a signature on the assertion or on the `Response` | Mandatory | Profiles §4.1.4.5, §4.1.3.5, E26, E93 | Always |
 | Protect each assertion in a stored HTTP-Artifact response with an assertion or `Response` signature | Optional | Profiles §4.1.3.5, E93 | Always |
 | When signing a SimpleSign response, sign the raw XML, then `RelayState` when present, then `SigAlg`. Preserve any XML signatures | Mandatory | CD-04 §2.4, §2.5 | Always |

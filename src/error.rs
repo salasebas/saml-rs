@@ -392,6 +392,21 @@ pub enum SamlError {
         /// Received RelayState. `None` means no `RelayState` parameter.
         actual: Option<RelayState>,
     },
+    /// The form of `binding` cannot send this RelayState unchanged.
+    ///
+    /// The value has a character outside the XML `Char` production, such as
+    /// U+0000, or a CR or LF outside a CRLF pair, which HTML form submission
+    /// sends as CRLF. The party that creates the value can encode it before
+    /// building the [`RelayState`]. A responder must return a received value
+    /// exactly, so it can only choose another delivery that the exchange
+    /// permits, such as an HTTP-Redirect `LogoutResponse` or an artifact URL.
+    #[error("RelayState cannot be sent unchanged in a {binding:?} form")]
+    #[non_exhaustive]
+    RelayStateNotRepresentable {
+        /// Binding whose form would carry the value: HTTP-POST,
+        /// HTTP-POST-SimpleSign, or HTTP-Artifact.
+        binding: Binding,
+    },
     /// `<Audience>` does not include the expected Service Provider entity ID.
     #[error("audience restriction not satisfied: expected {expected}")]
     #[non_exhaustive]

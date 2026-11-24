@@ -4,7 +4,7 @@
 
 use super::forms::FormField;
 use crate::artifact::Artifact;
-use crate::binding::single_parameter;
+use crate::binding::{saml_query_params, single_parameter, ARTIFACT_PARAMETERS};
 use crate::constants::url_params;
 use crate::error::SamlError;
 use crate::model::RelayState;
@@ -66,8 +66,9 @@ pub struct DeliveredArtifact {
 impl DeliveredArtifact {
     /// Read the artifact from the query string of an HTTP GET.
     ///
-    /// The query may start with `?`. Parameters other than `SAMLart` and
-    /// `RelayState` are ignored.
+    /// The query may start with `?`. Parameters are matched by their decoded
+    /// names, and parameters other than `SAMLart` and `RelayState` are
+    /// ignored.
     ///
     /// # Errors
     ///
@@ -76,16 +77,14 @@ impl DeliveredArtifact {
     /// `RelayState` is repeated, [`SamlError::LimitExceeded`] when
     /// `RelayState` is longer than
     /// [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES),
-    /// and [`SamlError::Invalid`] when `SAMLart` is not a type 0x0004 artifact.
+    /// and [`SamlError::Invalid`] when `SAMLart` is not a type 0x0004 artifact
+    /// or `SAMLart` or `RelayState` is not UTF-8 after percent-decoding.
     pub fn from_query(raw_query: &str) -> Result<Self, SamlError> {
-        let pairs: Vec<(String, String)> =
-            url::form_urlencoded::parse(raw_query.trim_start_matches('?').as_bytes())
-                .map(|(name, value)| (name.into_owned(), value.into_owned()))
-                .collect();
+        let params = saml_query_params(raw_query, ARTIFACT_PARAMETERS)?;
         Self::from_pairs(
-            pairs
+            params
                 .iter()
-                .map(|(name, value)| (name.as_str(), value.as_str())),
+                .map(|param| (param.name, param.value.as_str())),
         )
     }
 

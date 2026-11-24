@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 
 use super::artifact::ArtifactEncoding;
-use super::forms::{FormField, PostForm};
+use super::forms::{form_submits_unchanged, FormField, PostForm};
 use super::MessageField;
 use crate::artifact::Artifact;
 use crate::binding::append_redirect_query;
@@ -89,6 +89,12 @@ pub enum OutboundDelivery<'a> {
 /// exchange.
 ///
 /// Send [`Self::headers`] with the HTTP message that carries it.
+///
+/// A redirect keeps the query of the endpoint and appends the SAML
+/// parameters to it. An operation that builds a redirect returns
+/// [`SamlError::Invalid`] when the endpoint query already has `SAMLRequest`,
+/// `SAMLResponse`, `SAMLart`, `RelayState`, `SigAlg`, `Signature`, or
+/// `SAMLEncoding`, matched by decoded name.
 ///
 /// # Examples
 ///
@@ -296,7 +302,7 @@ impl Outbound<SsoResponse> {
                     artifact.as_str(),
                     raw_context.relay_state.as_deref(),
                 );
-                let url = append_redirect_query(acs, &query);
+                let url = append_redirect_query(acs, &query)?;
                 EndpointUrl::try_new(url.clone())?;
                 OutboundAction::Redirect(url)
             }
@@ -519,6 +525,11 @@ fn post_form_from_context(
         context.context.clone(),
     )];
     if let Some(relay_state) = &context.relay_state {
+        if !form_submits_unchanged(relay_state) {
+            return Err(SamlError::RelayStateNotRepresentable {
+                binding: context.binding,
+            });
+        }
         fields.push(FormField::new("RelayState", relay_state.clone()));
     }
     if let Some((algorithm, signature)) = signature_fields {

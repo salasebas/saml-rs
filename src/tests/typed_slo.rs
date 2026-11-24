@@ -468,7 +468,7 @@ fn signed_logout_request_input(
         LogoutBinding::Redirect => {
             let octet = build_redirect_octet(ParserType::LogoutRequest, xml, None, RSA_SHA256)?;
             let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
-            let url = append_signature("https://receiver.example.com/slo", &octet, &signature);
+            let url = append_signature("https://receiver.example.com/slo", &octet, &signature)?;
             let (_, query) = url
                 .split_once('?')
                 .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
@@ -583,7 +583,7 @@ fn signed_logout_response_input(
         LogoutBinding::Redirect => {
             let octet = build_redirect_octet(ParserType::LogoutResponse, xml, None, RSA_SHA256)?;
             let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
-            let url = append_signature("https://receiver.example.com/slo", &octet, &signature);
+            let url = append_signature("https://receiver.example.com/slo", &octet, &signature)?;
             let (_, query) = url
                 .split_once('?')
                 .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
@@ -2837,6 +2837,28 @@ fn typed_facade_slo_rejects_a_repeated_relay_state_on_redirect(
         }
     }
     Ok(())
+}
+
+#[test]
+fn typed_facade_slo_reports_an_unsupported_saml_encoding_before_the_relay_state(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = ServiceProvider::new(sp_config()?);
+    let idp = IdentityProvider::new(idp_config_with_validation(IdpValidationPolicy::default())?);
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_slo(
+        &idp_descriptor,
+        subject()?,
+        StartSlo::redirect().relay_state(RelayState::try_new("logout-state")?),
+    )?;
+    match sp.finish_slo(
+        &idp_descriptor,
+        &started.pending,
+        Inbound::redirect("SAMLEncoding=urn%3Aexample%3Acustom&payload=abc"),
+        validation(),
+    ) {
+        Err(SamlError::Unsupported(message)) if message.contains("SAMLEncoding") => Ok(()),
+        other => Err(format!("expected an unsupported SAMLEncoding, got {other:?}").into()),
+    }
 }
 
 fn status_element(xml: &str) -> Result<&str, Box<dyn std::error::Error>> {

@@ -1,5 +1,7 @@
+use crate::binding::single_parameter;
 use crate::browser::{
-    field_value, parse_form_fields, AcsEndpoint, Inbound, SsoResponseBinding, Transport,
+    deflate_redirect_message_params, field_value, AcsEndpoint, Inbound, SsoResponseBinding,
+    Transport,
 };
 use crate::config::{EntityId, HmacSecret, IdpDescriptor, SpDescriptor};
 use crate::constants::{url_params, Binding};
@@ -106,8 +108,13 @@ pub(super) fn relay_state_from_input<Message>(
     };
     match &input.transport {
         Transport::Redirect { raw_query } => {
-            let params = parse_form_fields(raw_query.trim_start_matches('?'));
-            received(field_value(&params, url_params::RELAY_STATE)?)
+            let params = deflate_redirect_message_params(raw_query)?;
+            received(single_parameter(
+                params
+                    .iter()
+                    .map(|param| (param.name, param.value.as_str())),
+                url_params::RELAY_STATE,
+            )?)
         }
         Transport::Post { fields } | Transport::SimpleSign { fields } => {
             received(field_value(fields, url_params::RELAY_STATE)?)

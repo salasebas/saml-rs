@@ -18,6 +18,9 @@ For the SP and SP Lite columns, the claim covers only sessions where an XML sign
 | Put the URL-encoded artifact in a `SAMLart` query parameter | Mandatory | Bindings §3.6.3.2 | `ArtifactDelivery::redirect` |
 | Put the artifact in a hidden control named `SAMLart`, in a form posted to the assertion consumer | Mandatory | Bindings §3.6.3.3 | `ArtifactDelivery::post_form` |
 | Carry a `RelayState` that accompanies the artifact in a `RelayState` query parameter or hidden control | Mandatory | Bindings §3.6.3.2, §3.6.3.3 | Always |
+| Refuse a form `RelayState` with a CR or LF outside a CRLF pair, a received one included | Library policy: HTML form submission sends the character as CRLF, so the form cannot return the exact value. | Bindings §3.1.1, §3.6.3.3 | Always |
+| Refuse a form `RelayState` with a character outside the XML `Char` production, such as U+0000, a received one included | Mandatory | Bindings §3.6.3.3, XML 1.0 §2.2 | Always |
+| Keep the endpoint's own query parameters before the SAML parameters, and refuse an endpoint query that already has `SAMLRequest`, `SAMLResponse`, `SAMLart`, `RelayState`, `SigAlg`, `Signature`, or `SAMLEncoding`, by decoded name | Library policy: the bindings name these parameters, so a configured one can repeat a message field or be read as one by an endpoint that serves several bindings. | Bindings §3.4.4, §3.6.3.2 | Always |
 | Return the `RelayState` received with the `AuthnRequest` unchanged, including values over 80 bytes | Mandatory | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
 | Reject an explicit `RespondSso::relay_state` whenever the request supplied a `RelayState` | Library policy: reason not recorded. | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
 | Reject a `RelayState` over 80 bytes that the IdP sets | Mandatory | Bindings §3.6.3.1 | Always |
@@ -43,6 +46,7 @@ For the SP and SP Lite columns, the claim covers only sessions where an XML sign
 | Publish an assertion consumer with the HTTP-Artifact binding | Recommended | Bindings §3.6.7, E2 | `AcsEndpoint::artifact` |
 | Process a form without requiring any additional controls, and ignore controls other than `SAMLart` and `RelayState` | Mandatory | Bindings §3.6.3.3 | Always |
 | Require exactly one `SAMLart` and at most one `RelayState` | Library policy: two artifact values refer to two stored messages, and two `RelayState` values cannot both equal the one the service provider sent. | Bindings §3.6.3 | Always |
+| Reject a query `RelayState` or `SAMLart` that is not UTF-8 after percent-decoding | Library policy: `RelayState` is text, and replacing the bytes would change the value compared with the pending login. | Bindings §3.6.3.1 | `DeliveredArtifact::from_query` |
 | Reject an artifact that is not the SAML V2.0 type `0x0004` | Mandatory | Bindings §3.6.4.2, E4 | Always |
 | Accept a received `RelayState` of 81 to 4096 bytes, and reject a longer one | Library policy: the 80-byte limit binds only the creator, and 4096 bytes is a resource limit on unauthenticated input. | Bindings §3.6.3.1 | Always |
 | Compare the `RelayState` with the pending login when the SP sent one | Library policy: nothing protects the pairing of an artifact and its `RelayState`. | Bindings §3.6.5.2 | `ServiceProvider::finish_sso` |

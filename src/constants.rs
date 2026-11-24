@@ -350,6 +350,8 @@ pub(crate) mod url_params {
     pub const RELAY_STATE: &str = "RelayState";
     /// `SAMLart` parameter.
     pub const SAML_ART: &str = "SAMLart";
+    pub const SAML_ENCODING: &str = "SAMLEncoding";
+    pub const DEFLATE_ENCODING: &str = "urn:oasis:names:tc:SAML:2.0:bindings:URL-Encoding:DEFLATE";
 }
 
 /// Certificate use in SAML metadata.

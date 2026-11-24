@@ -19,6 +19,7 @@ additions.
 - [Handle SOAP artifact response size errors](unreleased-artifact-response-budget.md)
 - [Configure ECDSA and Ed25519 signing](unreleased-elliptic-curve-signing.md)
 - [Read received formats without surrounding whitespace](unreleased-format-whitespace.md)
+- [Handle browser binding parameter errors](unreleased-browser-binding-parameters.md)
 - [Import peers from a federation aggregate](unreleased-metadata-aggregate.md)
 - [Check messages against the URL that received them](unreleased-receiving-url-checks.md)
 - [Look up artifact resolution endpoints by role](unreleased-artifact-index-per-role.md)

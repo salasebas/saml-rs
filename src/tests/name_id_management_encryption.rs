@@ -207,7 +207,7 @@ fn idp_request_input(content: &str) -> Result<Inbound<ManageNameIdRequest>, Saml
     let key = read_private_key(SIGNING_KEY, None)?;
     let octet = build_redirect_octet(ParserType::ManageNameIdRequest, &xml, None, RSA_SHA256)?;
     let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
-    let url = append_signature(SP_MANAGE, &octet, &signature);
+    let url = append_signature(SP_MANAGE, &octet, &signature)?;
     let (_, query) = url
         .split_once('?')
         .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;

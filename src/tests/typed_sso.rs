@@ -3418,7 +3418,7 @@ fn signed_redirect_query_without_destination(
     let octet = build_redirect_octet(ParserType::SamlRequest, &unsigned, None, RSA_SHA256)?;
     let key = read_private_key(PRIVKEY, None)?;
     let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
-    let url = append_signature(IDP_SSO_REDIRECT, &octet, &signature);
+    let url = append_signature(IDP_SSO_REDIRECT, &octet, &signature)?;
     Ok(url
         .split_once('?')
         .ok_or("missing redirect query")?

@@ -27,6 +27,15 @@ pub const MAX_RECEIVED_RELAY_STATE_BYTES: usize = 4096;
 /// An operation that sends a value set by the caller rejects one longer than
 /// [`MAX_RELAY_STATE_BYTES`], including a received value passed back in.
 ///
+/// HTTP-Redirect sends any value unchanged. An operation that sends the value
+/// in a POST form, a SimpleSign form, or an artifact form returns
+/// [`SamlError::RelayStateNotRepresentable`] for a value with a character
+/// outside the XML `Char` production, such as U+0000, or with a CR or LF
+/// outside a CRLF pair, which HTML form submission sends as CRLF. That
+/// includes a received value the operation must return. Render the form in a
+/// UTF-8 page, and escape tab, CR, and LF as character references so the
+/// parser keeps them.
+///
 /// # Examples
 ///
 /// ```

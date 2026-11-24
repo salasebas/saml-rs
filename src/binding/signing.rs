@@ -17,7 +17,7 @@ pub(crate) fn sign_detached_message(
             let octet = build_redirect_octet(parser_type, xml, relay_state, sig_alg)?;
             let signature = credential.sign_detached(&octet, sig_alg)?;
             Ok((
-                append_signature(destination, &octet, &signature),
+                append_signature(destination, &octet, &signature)?,
                 None,
                 None,
             ))
