@@ -1,7 +1,3 @@
-//! The service provider key an identity provider encrypts an SSO response
-//! for, chosen from the `KeyDescriptor` elements the service provider
-//! publishes for encryption.
-//!
 //! FIPS rejects the SHA-1 RSA-OAEP key transport these tests use.
 #![cfg(any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc"))]
 
@@ -89,9 +85,6 @@ fn assert_encrypted(encryption: XmlEncryptionPolicy, xml: &str) {
     }
 }
 
-/// Exchange a response encrypted with `encryption` for a service provider
-/// whose metadata publishes `key_infos` before its own encryption key, with
-/// its own key replaced by `own_key`.
 fn exchange_with_encryption_keys_first(
     idp: &IdentityProvider,
     encryption: XmlEncryptionPolicy,

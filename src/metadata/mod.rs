@@ -105,9 +105,6 @@ impl KeyCertificates {
     }
 }
 
-/// The encryption keys of one role: the first certificate of its first
-/// encryption `KeyDescriptor` with a certificate, then each later one whose
-/// `KeyInfo` names the key by one certificate alone.
 #[cfg(crypto)]
 fn role_encryption_keys(role: &dom::Node) -> Vec<String> {
     let mut keys = Vec::new();
@@ -314,14 +311,6 @@ impl Metadata {
         self.key_certificates.for_use(use_)
     }
 
-    /// The encryption keys of the first SSO role that publishes an encryption
-    /// certificate, in document order.
-    ///
-    /// The role's first encryption `KeyDescriptor` with a certificate gives
-    /// its first certificate. A later one gives its certificate only when its
-    /// `KeyInfo` holds that one `X509Certificate` and otherwise only
-    /// `KeyName` elements, so an issuer certificate of a chain is never chosen
-    /// in place of a later key.
     #[cfg(crypto)]
     pub(crate) fn encryption_key_certificates(&self) -> &[String] {
         &self.key_certificates.encryption_keys

@@ -47,8 +47,6 @@ impl<'a> From<&'a str> for KeyTransport<'a> {
     }
 }
 
-/// The certificates a peer publishes for encryption, with the data
-/// encryption algorithm and the key transport to encrypt for it.
 pub(crate) struct EncryptionRecipient<'a> {
     certificates: Vec<&'a str>,
     data_algorithm: &'a str,
@@ -68,8 +66,6 @@ impl<'a> EncryptionRecipient<'a> {
         }
     }
 
-    /// Encrypt with the algorithms of `setting` for a peer that publishes
-    /// `certificates`.
     pub(crate) fn from_setting(certificates: &'a [String], setting: &'a EntitySetting) -> Self {
         Self::new(
             certificates.iter().map(String::as_str),
@@ -78,13 +74,6 @@ impl<'a> EncryptionRecipient<'a> {
         )
     }
 
-    /// Encrypt `plaintext` for the first certificate that the data
-    /// encryption algorithm and the key transport can encrypt for, and
-    /// return that key with the `EncryptedData`.
-    ///
-    /// A certificate is skipped when it does not load, or when the crypto
-    /// provider cannot wrap a data key with its key, such as an EC key or an
-    /// RSA key too small for the key transport.
     pub(super) fn encrypt_first(
         &self,
         plaintext: &[u8],
@@ -111,7 +100,6 @@ impl<'a> EncryptionRecipient<'a> {
     }
 }
 
-/// A peer key with the algorithms that encrypt for it.
 pub(super) struct EncryptionKey<'a> {
     key: Key,
     data_algorithm: &'a str,
