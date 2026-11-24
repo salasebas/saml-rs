@@ -23,7 +23,28 @@ Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browse
 | Associate the stored message with the service provider it is for | Mandatory | Core §3.5.3, Profiles §4.1.4.4 | Always |
 | Store only one element in the SAML protocol namespace | Library policy: `ArtifactResolution::finish` rejects any other payload, so another element could never be resolved. | Bindings §3.6 | Always |
 | Reject processing instructions inside the element before issuing an artifact | Library policy: the stored element must be deliverable in a SOAP response when the artifact resolves. | SOAP 1.1 §3 | Always |
-| Check the complete SOAP response against default XML limits before storing the message. Reserve space for the largest `InResponseTo` those limits permit | Library policy: an artifact must fit its return envelope. | — | Always |
+| Budget the complete SOAP response before storing the message | Library policy: issue only artifacts whose responses fit the crate's XML limits. | Core §3.5.3, Bindings §3.2.2.1, E19 | Default `XmlLimits` |
+
+### SOAP response size budget
+
+For a valid artifact, SAML 2.0 Core §3.5.3 requires the IdP responder to
+return the stored message once. Bindings §3.2.2.1, as corrected by E19,
+requires one SAML response in the SOAP body or a SOAP fault. Those clauses
+set the response shape and single-use rule. The XML resource budget is
+library policy. [Core §3.5.3](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf#page=56),
+[Bindings §3.2.2.1](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf#page=10),
+[Approved Errata 05](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/saml-v2.0-errata05-os.html).
+
+OpenSAML 5.2.3 stores the outgoing message in `HTTPArtifactEncoder` and
+attaches it to the SOAP response in `ResolveArtifact`. Before the IdP issues
+an artifact, saml-rs checks the SOAP envelope and `ArtifactResponse` with the
+final payload, any embedded signatures, and space for the largest request ID
+the response can echo. It checks the actual envelope again before consuming
+the entry. The fixed outbound budget uses default `XmlLimits`, including
+1 MiB for the full envelope. `XmlPolicy::limits` configures inbound parsing.
+This bounds XML processing and avoids issuing an artifact that cannot be
+released, at the cost of rejecting large schema-valid messages that a peer
+with a higher receive limit could accept. [OpenSAML 5.2.3 source release](https://build.shibboleth.net/maven/releases/org/opensaml/opensaml-saml-impl/5.2.3/).
 
 ## ArtifactResolve
 
@@ -61,7 +82,7 @@ Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browse
 | Return the stored message at most once | Mandatory | Core §3.5.3, Bindings §3.6.5.2 | Always |
 | Resolve artifacts across clustered nodes through a shared atomic store, or route each node's artifacts through a per-node `ArtifactResolutionService` `EndpointIndex` | Optional | Core §3.5.3, Bindings §3.6.4.2, §3.6.5.2, Profiles §5.5 | `ArtifactStore`, `IdpConfigBuilder::artifact_resolution_service` |
 | Keep an outstanding artifact after withholding its message | Library policy: the intended recipient can still resolve it within its lifetime. | Core §3.5.3 | Always |
-| Check the actual SOAP response against default XML limits before consuming the artifact | Library policy: the requester may retry an artifact whose response could not be sent. | — | Always |
+| Check the actual SOAP envelope before consuming the artifact | Library policy: keep the entry for retry if the response exceeds the [SOAP response size budget](#soap-response-size-budget). | Core §3.5.3, Bindings §3.2.2.1, E19 | Default `XmlLimits` |
 | Fail closed without releasing the message when the artifact store cannot verify or consume the entry | Library policy: releasing an unconsumed artifact would violate single-use enforcement across retries or concurrent nodes. | Core §3.5.3, Bindings §3.6.5.2 | Always |
 | Withhold the message when a present `Destination`, after XML whitespace collapse, differs from this endpoint | Mandatory | Core §3.2.1, `RequestAbstractType`, XML Schema Part 2 §4.3.6 | Always |
 | Expire the artifact after the configured lifetime. The issuer should choose the shortest practical lifetime | Recommended | Core §3.5.3 | `ArtifactStore::lifetime`, `IssuedArtifacts::expire_after` |
