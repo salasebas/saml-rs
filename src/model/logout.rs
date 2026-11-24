@@ -10,7 +10,7 @@ use crate::browser::LogoutBinding;
 use crate::config::EntityId;
 use crate::error::SamlError;
 use crate::flow::FlowResult;
-use crate::xml::fields::{logout_request, logout_response, name_id, request, response, ISSUER};
+use crate::xml::fields::{logout_request, name_id, request, response, ISSUER};
 
 /// How the IdP completes an authenticated SP logout request.
 #[derive(Debug, Clone)]
@@ -321,6 +321,7 @@ impl LogoutResponse {
 impl LogoutResponse {
     pub(crate) fn from_flow(
         raw_flow: &FlowResult,
+        status: Status,
         status_message: Option<StatusMessage>,
     ) -> Result<Self, SamlError> {
         let id = MessageId::try_new(required_str(&raw_flow.extract, response::ID)?)?;
@@ -332,7 +333,6 @@ impl LogoutResponse {
         let issuer = EntityId::try_new(required_str(&raw_flow.extract, ISSUER)?)?;
         let in_response_to = optional_request_id(&raw_flow.extract, response::IN_RESPONSE_TO)?;
         let destination = optional_endpoint(&raw_flow.extract, response::DESTINATION)?;
-        let status = status_from_extract(&raw_flow.extract)?;
         Ok(Self {
             id,
             issuer,
@@ -343,20 +343,6 @@ impl LogoutResponse {
             status_message,
         })
     }
-}
-
-fn status_from_extract(extract: &crate::util::Value) -> Result<Status, SamlError> {
-    let top_level = extract
-        .get_str(logout_response::STATUS_CODE)
-        .ok_or_else(|| {
-            SamlError::ProtocolProfile(
-                "LogoutResponse is missing required Status/StatusCode".into(),
-            )
-        })?;
-    Status::received(
-        top_level,
-        extract.get_str(logout_response::SUBORDINATE_STATUS_CODE),
-    )
 }
 
 /// Result of a completed logout exchange, including the responder's status.

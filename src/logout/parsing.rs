@@ -10,8 +10,8 @@ use crate::flow::{
     SignedMessageDestination,
 };
 use crate::metadata::Metadata;
-use crate::model::{ClockSkew, StatusMessage};
-use crate::validator::check_status;
+use crate::model::{ClockSkew, Status, StatusMessage};
+use crate::validator::received_status;
 use crate::xml::fields;
 use crate::xml::protocol_element::SamlElement;
 use std::time::SystemTime;
@@ -128,6 +128,7 @@ pub(crate) fn parse_logout_request_at(
 
 pub(crate) struct ParsedLogoutResponse {
     pub(crate) flow: FlowResult,
+    pub(crate) status: Status,
     pub(crate) status_message: Option<StatusMessage>,
 }
 
@@ -171,11 +172,8 @@ pub(crate) fn parse_logout_response_at(
             return Err(error);
         }
     }
-    let status = check_status(
-        &flow.saml_content,
-        ParserType::LogoutResponse,
-        self_setting.xml_limits,
-    );
+    let status = received_status(&flow.saml_content, self_setting.xml_limits)
+        .and_then(|status| status.clone().require_success().map(|()| status));
     let status_message = correlated_status_message(
         &flow.saml_content,
         self_setting.xml_limits,
@@ -184,8 +182,9 @@ pub(crate) fn parse_logout_response_at(
         receipt.signed_destination,
     );
     match status {
-        Ok(()) => Ok(ParsedLogoutResponse {
+        Ok(status) => Ok(ParsedLogoutResponse {
             flow,
+            status,
             status_message,
         }),
         Err(error) => Err(error.with_status_message(status_message)),

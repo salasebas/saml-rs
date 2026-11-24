@@ -93,11 +93,6 @@ pub(crate) mod logout_request {
     pub(crate) const SESSION_INDEXES: &str = "sessionIndex";
 }
 
-pub(crate) mod logout_response {
-    pub(crate) const STATUS_CODE: &str = "statusCode";
-    pub(crate) const SUBORDINATE_STATUS_CODE: &str = "subordinateStatusCode";
-}
-
 pub fn login_request_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(request::KEY, &["AuthnRequest"]).attrs(&[
@@ -317,16 +312,6 @@ pub fn logout_response_fields() -> Vec<ExtractorField> {
             "InResponseTo",
         ]),
         ExtractorField::new(ISSUER, &["LogoutResponse", "Issuer"]),
-        ExtractorField::new(
-            logout_response::STATUS_CODE,
-            &["LogoutResponse", "Status", "StatusCode"],
-        )
-        .attrs(&["Value"]),
-        ExtractorField::new(
-            logout_response::SUBORDINATE_STATUS_CODE,
-            &["LogoutResponse", "Status", "StatusCode", "StatusCode"],
-        )
-        .attrs(&["Value"]),
         ExtractorField::new(SIGNATURE, &["LogoutResponse", "Signature"]).capture_source(),
     ]
 }

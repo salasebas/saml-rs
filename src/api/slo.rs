@@ -944,7 +944,7 @@ fn finish_slo_impl(
         ),
         unresolved_recipient,
     )?;
-    let response = LogoutResponse::from_flow(&parsed.flow, parsed.status_message)?;
+    let response = LogoutResponse::from_flow(&parsed.flow, parsed.status, parsed.status_message)?;
     validation.check_and_store_message_replay(ReplayKey::LogoutResponse(response.id().clone()))?;
     Ok(LogoutCompleted::new(response, relay_state))
 }
