@@ -213,7 +213,14 @@ impl Engine {
             .authn_context
             .cloned()
             .unwrap_or_else(AuthnContextReference::unspecified_class);
-        self.ensure_request_met(&rendering, &user.name_id, name_id_format, &authn_context)?;
+        let recipient_entity_id = sp.metadata.as_metadata().entity_id();
+        self.ensure_request_met(
+            &rendering,
+            &user.name_id,
+            name_id_format,
+            &authn_context,
+            recipient_entity_id,
+        )?;
         let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
         let authn_instant = match rendering.authn_instant {
             Some(authenticated) => written_authn_instant(authenticated, &window)?,
@@ -225,12 +232,7 @@ impl Engine {
             .transpose()?;
         let id = generate_id();
         let assertion_id = generate_id();
-        let audience = sp
-            .metadata
-            .as_metadata()
-            .entity_id()
-            .unwrap_or_default()
-            .to_string();
+        let audience = recipient_entity_id.unwrap_or_default();
         let issuer = self.entity_id();
         let supports_single_logout = !self
             .metadata
@@ -252,7 +254,7 @@ impl Engine {
             subject_confirmation_not_on_or_after: &window.expiration,
             conditions_not_before: &window.issue_instant,
             conditions_not_on_or_after: &window.expiration,
-            audience: &audience,
+            audience,
             name_id_format,
             name_id: &user.name_id,
             name_id_qualifiers: qualifiers,
@@ -308,6 +310,7 @@ impl Engine {
         name_id: &str,
         name_id_format: Option<&str>,
         authn_context: &AuthnContextReference,
+        recipient_entity_id: Option<&str>,
     ) -> Result<(), SamlError> {
         let qualifiers = rendering.name_id_qualifiers;
         if let Some(requested) = rendering.requested_authn_context {
@@ -317,6 +320,7 @@ impl Engine {
             policy.ensure_met_by(
                 name_id_format,
                 qualifiers.sp_name_qualifier,
+                recipient_entity_id,
                 self.setting.assertion_element_encryption.identifiers,
             )?;
         }

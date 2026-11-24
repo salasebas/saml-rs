@@ -221,11 +221,13 @@ impl IdentityProvider {
     /// `RequestedAuthnContext`,
     /// [`SsoAssertion::authn_instant`](crate::SsoAssertion::authn_instant) is
     /// later than the response `IssueInstant`,
-    /// or is before year 1, the `NameId`
-    /// `SPNameQualifier` is not the one the request's `NameIDPolicy` asks for
-    /// with a SAML-defined format other than `unspecified` or `encrypted`, or
-    /// the `NameId` does not strongly match the
+    /// or is before year 1, or the `NameId` does not strongly match the
     /// request's `Subject` (see [`RequestedSubject`](crate::RequestedSubject)).
+    /// When `NameIDPolicy` requests an `SPNameQualifier`, a specific standard
+    /// format requires the issued `NameId` to carry that qualifier. An omitted
+    /// or `unspecified` format requires the identifier to belong to the
+    /// requested namespace. A persistent or pairwise transient identifier
+    /// can omit the qualifier when the namespace is the direct recipient.
     ///
     /// # Examples
     ///

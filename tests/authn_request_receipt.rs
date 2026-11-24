@@ -13,6 +13,7 @@ use std::time::SystemTime;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use saml_rs::constants::namespace::ASSERTION;
 use saml_rs::constants::status_code::INVALID_NAME_ID_POLICY;
 use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, EntityId, ForceAuthn,
@@ -929,25 +930,28 @@ fn respond_sso_refuses_plaintext_for_an_encrypted_name_id_request(
 #[test]
 fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let receive_policy = |attributes: &str| {
+    let receive_policy = |format: Option<&str>, qualifier: &str| {
+        let format = format.map_or_else(String::new, |format| format!(" Format=\"{format}\""));
         receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
             replace_name_id_policy(
                 xml,
-                &format!("<samlp:NameIDPolicy{attributes} SPNameQualifier=\"{AFFILIATION}\"/>"),
+                &format!("<samlp:NameIDPolicy{format} SPNameQualifier=\"{qualifier}\" AllowCreate=\"true\"/>"),
             )
         })
     };
-    let respond = |receipt: &Receipt, sp_name_qualifier: Option<&str>, options: RespondSso| {
-        let pseudonym = NameId::new("pseudonym").with_format(NameIdFormat::Persistent);
-        let pseudonym = match sp_name_qualifier {
+    let persistent = |sp_name_qualifier: Option<&str>| {
+        let pseudonym = NameId::generate_persistent();
+        match sp_name_qualifier {
             Some(sp_name_qualifier) => pseudonym.with_sp_name_qualifier(sp_name_qualifier),
             None => pseudonym,
-        };
+        }
+    };
+    let respond = |receipt: &Receipt, name_id: NameId| {
         receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
-            SsoAssertion::new(pseudonym),
-            options,
+            SsoAssertion::new(name_id),
+            RespondSso::post(),
         )
     };
 
@@ -955,19 +959,19 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
         PERSISTENT_FORMAT.to_string(),
         format!(" {PERSISTENT_FORMAT} "),
     ] {
-        let receipt = receive_policy(&format!(" Format=\"{format}\""))?;
+        let receipt = receive_policy(Some(&format), AFFILIATION)?;
         for issued in [
             None,
             Some(SP_ENTITY_ID),
             Some(" https://affiliation.example.com"),
         ] {
-            let refused = respond(&receipt, issued, RespondSso::post());
+            let refused = respond(&receipt, persistent(issued));
             assert!(
                 matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("SPNameQualifier") && message.contains(AFFILIATION)),
                 "{format} {issued:?}: {refused:?}"
             );
         }
-        let answered = response_xml(&respond(&receipt, Some(AFFILIATION), RespondSso::post())?)?;
+        let answered = response_xml(&respond(&receipt, persistent(Some(AFFILIATION)))?)?;
         assert!(answered.contains(&format!("SPNameQualifier=\"{AFFILIATION}\"")));
 
         let error = receipt.idp.respond_sso(
@@ -982,15 +986,58 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
         assert!(error.is_ok(), "{error:?}");
     }
 
-    for attributes in [
-        format!(" Format=\"{UNSPECIFIED_FORMAT}\""),
-        " Format=\"https://sp.example.com/custom-format\"".to_string(),
-        String::new(),
-    ] {
-        let receipt = receive_policy(&attributes)?;
-        let answered = respond(&receipt, None, RespondSso::post());
-        assert!(answered.is_ok(), "{attributes}: {answered:?}");
+    let mut accepted_outside_affiliation = Vec::new();
+    for format in [None, Some(UNSPECIFIED_FORMAT)] {
+        let receipt = receive_policy(format, AFFILIATION)?;
+        let answered = response_xml(&respond(&receipt, persistent(Some(AFFILIATION)))?)?;
+        let document = roxmltree::Document::parse(&answered)?;
+        let name_id = document
+            .descendants()
+            .find(|node| node.has_tag_name((ASSERTION, "NameID")))
+            .ok_or("missing response NameID")?;
+        assert_eq!(name_id.attribute("Format"), Some(PERSISTENT_FORMAT));
+        assert_eq!(name_id.attribute("SPNameQualifier"), Some(AFFILIATION));
+        for issued in [None, Some(SP_ENTITY_ID)] {
+            match respond(&receipt, persistent(issued)) {
+                Ok(_) => accepted_outside_affiliation.push((format, issued)),
+                Err(SamlError::Invalid(message)) if message.contains("SPNameQualifier") => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
     }
+    assert!(
+        accepted_outside_affiliation.is_empty(),
+        "issued outside the requested affiliation for (requested format, issued qualifier) {accepted_outside_affiliation:?}"
+    );
+
+    let direct = receive_policy(None, SP_ENTITY_ID)?;
+    for (name_id, format) in [
+        (NameId::generate_persistent(), PERSISTENT_FORMAT),
+        (
+            NameId::generate_transient(),
+            NameIdFormat::Transient.as_uri(),
+        ),
+    ] {
+        let answered = response_xml(&respond(&direct, name_id)?)?;
+        assert!(answered.contains(&format!("<saml:NameID Format=\"{format}\">")));
+    }
+
+    let email = NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress);
+    let refused = respond(&direct, email);
+    assert!(
+        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("SPNameQualifier")),
+        "unqualified email in the direct SP namespace: {refused:?}"
+    );
+
+    let explicit = receive_policy(Some(PERSISTENT_FORMAT), SP_ENTITY_ID)?;
+    let refused = respond(&explicit, persistent(None));
+    assert!(
+        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("SPNameQualifier")),
+        "unqualified persistent ID with an explicit format and namespace: {refused:?}"
+    );
+
+    let custom = receive_policy(Some("https://sp.example.com/custom-format"), AFFILIATION)?;
+    respond(&custom, persistent(None))?;
     Ok(())
 }
 

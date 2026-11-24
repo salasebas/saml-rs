@@ -24,6 +24,7 @@ Check the topics that affect your integration.
 - [Update SSO attributes](sso-attributes.md)
 - [Update SSO results and identities](sso-results-and-identities.md)
 - [Honor the requested NameID format](name-id-policy.md)
+- [Honor the requested NameID namespace](name-id-policy-namespace.md)
 - [Update metadata configuration and trust](metadata.md)
 - [Update metadata imports and accessors](metadata-api.md)
 - [Correct metadata signing flags](metadata-signing-flags.md)
