@@ -11,6 +11,7 @@ use crate::config::{EntityId, NameIdFormat};
 use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::flow::FlowResult;
+use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::fields::{authn_request, request, ISSUER};
 use crate::xml::xs_boolean;
 
@@ -350,7 +351,7 @@ fn optional_response_binding(
     let Some(protocol_binding) = extract.get_str(request::PROTOCOL_BINDING) else {
         return Ok(None);
     };
-    let binding = Binding::from_urn(protocol_binding).ok_or_else(|| {
+    let binding = Binding::from_urn(&collapse_whitespace(protocol_binding)).ok_or_else(|| {
         SamlError::Invalid(format!(
             "unsupported AuthnRequest ProtocolBinding {protocol_binding}"
         ))
