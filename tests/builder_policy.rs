@@ -562,6 +562,41 @@ fn config_builders_reject_a_credential_that_cannot_be_used(
     Ok(())
 }
 
+#[cfg(not(crypto))]
+#[test]
+fn protocol_only_builders_reject_unpublishable_certificate_text(
+) -> Result<(), Box<dyn std::error::Error>> {
+    use saml_rs::CertificatePem;
+
+    for (certificate, expected_base64_error) in [("", false), ("certs/rollover.pem", true)] {
+        let credentials = Credentials::default()
+            .with_additional_signing_certificate(CertificatePem::new(certificate));
+        let sp = SpConfig::builder(
+            EntityId::try_new("https://sp.example.com/metadata")?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .validation(sp_validation_without_crypto())
+        .credentials(credentials.clone())
+        .build();
+        let idp = IdpConfig::builder(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .credentials(credentials)
+        .build();
+        for (role, result) in [("SP", sp.map(drop)), ("IdP", idp.map(drop))] {
+            assert!(
+                matches!(
+                    (expected_base64_error, &result),
+                    (false, Err(SamlError::Invalid(_))) | (true, Err(SamlError::Base64 { .. }))
+                ),
+                "{role} accepted {certificate:?} or returned the wrong error: {result:?}"
+            );
+        }
+    }
+    Ok(())
+}
+
 #[cfg(crypto)]
 #[test]
 fn sp_builder_requires_signing_credentials_when_authn_requests_are_signed(

@@ -181,13 +181,14 @@ The credential is `signing credential`, `additional signing certificate at
 index N`, or `decryption credential at index N`, where `N` counts from zero
 in the order the credentials were added. When the provider reports why a key
 or certificate does not load, `std::error::Error::source` returns that
-report. A build without a crypto provider still checks only that each needed
-credential is set.
+report. A build without a crypto provider checks the certificate text during
+metadata generation. Use PEM or nonempty base64 for each certificate in a
+protocol-only build. See [certificate text and literal scopes](metadata.md#supply-valid-certificate-text-and-lowercase-literal-scopes).
 
 **Upgrade:** pair each key with the certificate of its own public key, and
 delete any text outside the certificate's PEM lines, such as the
-`Bag Attributes` that `openssl pkcs12` writes. Metadata publishes that text as
-part of the certificate. For a matching pair, these two commands print the
+`Bag Attributes` that `openssl pkcs12` writes. The extra text can prevent the
+certificate from loading. For a matching pair, these two commands print the
 same digest:
 
 ```sh

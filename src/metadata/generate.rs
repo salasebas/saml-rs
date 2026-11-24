@@ -318,6 +318,8 @@ fn bool_str(value: bool) -> &'static str {
 ///
 /// Endpoints within each group appear in input order.
 /// Supply actual X.509 certificates. The generator checks their base64 text.
+/// With a crypto provider, [`crate::SpConfigBuilder::build`] also loads X.509
+/// certificates and checks that the private keys match.
 ///
 /// # Errors
 ///
@@ -379,6 +381,8 @@ fn write_sp_role(w: &mut MetadataWriter, cfg: &SpMetadataInput) -> Result<(), Sa
 ///
 /// Endpoints within each group appear in input order.
 /// Supply actual X.509 certificates. The generator checks their base64 text.
+/// With a crypto provider, [`crate::IdpConfigBuilder::build`] also loads X.509
+/// certificates and checks that the private keys match.
 ///
 /// # Errors
 ///
