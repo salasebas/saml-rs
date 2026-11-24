@@ -103,13 +103,18 @@ other `Format` URI.
 | Generate a persistent value that is unique among those the identity provider issues for a service provider or affiliation | Mandatory | Core §8.3.7, E86 | `NameId::generate_persistent` |
 | Reject a persistent value of more than 256 characters, in a `Response` and in `NameId::persistent` | Mandatory | Core §8.3.7 | Always |
 | For a persistent or pairwise transient ID, omit `NameQualifier` only when context identifies its creator, and `SPNameQualifier` only in a message solely for the service provider it would name | Optional | Core §8.3.7, §8.3.8 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
+| Reject an `entity` `<NameID>` in a `Response` whose value is not an absolute URI reference of at most 1024 characters, or that has `NameQualifier`, `SPNameQualifier`, or `SPProvidedID` | Mandatory | Core §8.3.6, §1.3.2 | Always |
+| Reject an `entity` value in a `Response` that the `anyURI` whitespace collapse would change | Library policy: a peer compares the value with an entity ID without collapsing it. | Core §8.3.6 | Always |
 | For a persistent ID, write the alternative identifier most recently set by the service provider or affiliation, and omit `SPProvidedID` if none exists | Mandatory | Core §8.3.7, §3.6.3, E55 | `NameId::with_sp_provided_id` |
 | Accept a caller-supplied persistent or transient value without checking randomness, opacity, or reassignment | Library policy: the crate cannot check those properties on a value it did not generate. | Core §8.3.7, §8.3.8 | `NameId::new` |
 | Accept a received persistent or transient `<NameID>` that misses the producer rules, including one over 256 characters | Library policy: Conformance §3.3 places Core §8.3.7 and §8.3.8 on the producer. | Conformance §3.3 | Always |
 
-The 256-character limit counts Unicode scalar values and applies to the effective
-format after XML whitespace collapse, including the identity provider's first
-configured format when the issued `NameId` omits one.
+The 256-character and 1024-character limits count Unicode scalar values and
+apply to the effective format after XML whitespace collapse, including the
+identity provider's first configured format when the issued `NameId` omits one.
+An `entity` identifier such as
+`<NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:entity">https://partner.example.org/metadata</NameID>`
+has no qualifier attributes.
 
 The caller owns these rules, and the crate has no identifier store or log.
 
@@ -120,8 +125,10 @@ The caller owns these rules, and the crate has no identifier store or log.
   Mandatory, Core §8.3.7.
 - Treat a transient value as opaque and temporary. Recommended, Core §8.3.8.
 - Set `NameQualifier` and `SPNameQualifier` to the entities Core §8.3.7
-  names, and omit `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` on an
-  `entity`-format `<NameID>`. Mandatory, Core §8.3.6, §8.3.7.
+  names. Mandatory, Core §8.3.7.
+- Omit `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` on an
+  `entity`-format `<NameID>` in a `LogoutRequest`, which writes every
+  qualifier it is given. Mandatory, Core §8.3.6.
 
 A requested `NameIDPolicy` `SPNameQualifier` is checked as in
 [Web Browser SSO generation](web-browser-sso-generation.md#identity-provider-response).

@@ -464,6 +464,7 @@ pub use error::{
     IdpResolutionReason, ReferenceResolutionReason, ResourceLimit, SamlError,
     SignatureVerificationReason, SubjectConfirmationReason, TimeWindowField,
 };
+pub use flow::MessageAuthentication;
 pub use http_header::HttpHeader;
 pub use metadata::{
     ContactPerson, ContactType, EntityAttributes, LocalizedValue, MetadataLifetime, MetadataScope,

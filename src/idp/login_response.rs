@@ -4,8 +4,9 @@ use crate::model::{
     check_issued_subject_identifiers, is_subject_identifier, Attribute, AttributeNameFormat,
     AuthnContextReference, AuthnContextReferenceKind, Status,
 };
+use crate::xml::name::is_ncname;
 use crate::xml::write::{Prefixes, XmlWriter};
-use crate::xml::OutboundNameIdQualifiers;
+use crate::xml::{is_xml_char, OutboundNameIdQualifiers};
 
 const VERSION: &str = "2.0";
 const XMLNS_XS: &str = "http://www.w3.org/2001/XMLSchema";
@@ -43,6 +44,8 @@ pub(super) struct LoginResponseXml<'a> {
 pub(super) fn render_default_login_response(
     input: &LoginResponseXml<'_>,
 ) -> Result<String, SamlError> {
+    check_in_response_to(input.in_response_to)?;
+    input.authn_statement.authn_context.ensure_absolute_uri()?;
     let prefixes = &input.prefixes;
     let assertion_prefix = prefixes.assertion_prefix();
     let response_name = prefixes.protocol("Response");
@@ -140,13 +143,10 @@ pub(super) struct ErrorLoginResponseXml<'a> {
 pub(super) fn render_error_login_response(
     input: &ErrorLoginResponseXml<'_>,
 ) -> Result<String, SamlError> {
-    if input
-        .status_message
-        .is_some_and(|message| !message.chars().all(crate::xml::is_xml_char))
-    {
-        return Err(SamlError::Invalid(
-            "login status message contains characters forbidden in XML 1.0".into(),
-        ));
+    check_in_response_to(input.in_response_to)?;
+    input.status.check_writable()?;
+    if let Some(message) = input.status_message {
+        check_status_message(message)?;
     }
     let prefixes = &input.prefixes;
     let response_name = prefixes.protocol("Response");
@@ -170,6 +170,32 @@ pub(super) fn render_error_login_response(
     writer.status(prefixes, input.status, input.status_message);
     writer.end(&response_name);
     Ok(writer.finish())
+}
+
+fn check_in_response_to(in_response_to: Option<&str>) -> Result<(), SamlError> {
+    if in_response_to.is_some_and(|id| !is_ncname(id)) {
+        return Err(SamlError::Invalid(
+            "the request ID is not an xs:NCName, so it cannot be written as InResponseTo".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn check_status_message(message: &str) -> Result<(), SamlError> {
+    if !message.chars().all(is_xml_char) {
+        return Err(SamlError::Invalid(
+            "login status message contains characters forbidden in XML 1.0".into(),
+        ));
+    }
+    if message
+        .chars()
+        .all(|c| matches!(c, ' ' | '\t' | '\n' | '\r'))
+    {
+        return Err(SamlError::Invalid(
+            "login status message must contain a non-whitespace character".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn write_authn_statement(writer: &mut XmlWriter, prefix: &str, statement: &AuthnStatementXml<'_>) {

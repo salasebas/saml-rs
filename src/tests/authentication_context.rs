@@ -778,5 +778,15 @@ fn a_received_relative_reference_is_exposed_but_cannot_be_sent_again(
         ),
         Err(SamlError::Invalid(_))
     ));
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(NameId::new("alice")).authn_context(requested.references()[0].clone()),
+        RespondSso::post(),
+    );
+    assert!(
+        matches!(response, Err(SamlError::Invalid(_))),
+        "{response:?}"
+    );
     Ok(())
 }
