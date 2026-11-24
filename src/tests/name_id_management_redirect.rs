@@ -1035,6 +1035,67 @@ fn http_name_identifier_management_endpoint_needs_an_explicit_relaxation() -> Te
 }
 
 #[test]
+fn an_https_peer_endpoint_is_chosen_over_an_earlier_http_one() -> TestResult {
+    const SP_MANAGE_HTTP: &str = "http://sp.example.com/manage-name-id";
+    const IDP_MANAGE_HTTP: &str = "http://idp.example.com/manage-name-id";
+    let idp = idp()?;
+    let sp = sp()?;
+    let sp_peer = sp_descriptor(&sp_with(&[SP_MANAGE_HTTP, SP_MANAGE])?)?;
+    let idp_peer = idp_descriptor(&IdentityProvider::new(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect(IDP_SSO)?,
+        )
+        .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
+            IDP_MANAGE_HTTP,
+        )?))
+        .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
+            IDP_MANAGE,
+        )?))
+        .credentials(signing_credentials())
+        .build()?,
+    ))?;
+
+    let started = idp.start_name_id_management_redirect(
+        &sp_peer,
+        &alice(),
+        &NameIdChange::Terminate,
+        StartNameIdManagement::new(),
+    )?;
+    assert!(started
+        .outbound
+        .redirect_url()?
+        .starts_with(&format!("{SP_MANAGE}?")));
+    let relaxed = idp.start_name_id_management_redirect(
+        &sp_peer,
+        &alice(),
+        &NameIdChange::Terminate,
+        StartNameIdManagement::new().allow_http(),
+    )?;
+    assert!(relaxed
+        .outbound
+        .redirect_url()?
+        .starts_with(&format!("{SP_MANAGE_HTTP}?")));
+
+    let request = request(sp.receive_name_id_management_redirect(
+        &idp_peer,
+        request_input(&started.outbound)?,
+        ReceiveNameIdManagement::new(),
+        validation(),
+    )?)?;
+    let response = sp.respond_name_id_management_redirect(
+        &idp_peer,
+        &request,
+        &Status::success(),
+        RespondNameIdManagement::new(),
+    )?;
+    assert!(response
+        .redirect_url()?
+        .starts_with(&format!("{IDP_MANAGE}?")));
+    Ok(())
+}
+
+#[test]
 fn peer_without_a_name_identifier_management_endpoint_is_missing_metadata() -> TestResult {
     let sp = sp_with(&[])?;
     let idp = idp()?;
