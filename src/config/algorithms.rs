@@ -258,7 +258,10 @@ impl TransformAlgorithm {
 ///
 /// A message or metadata that writes the format rejects a value that is not a
 /// non-blank absolute URI reference with [`crate::SamlError::Invalid`]. A
-/// received format is reported as sent.
+/// received format is not rejected. The format of an assertion `Subject` or a
+/// `LogoutRequest` `NameID` is read after XML whitespace collapse, so a
+/// standard URI with surrounding whitespace is its named variant. Other
+/// received formats keep the spelling the peer sent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum NameIdFormat {

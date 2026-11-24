@@ -166,9 +166,10 @@ impl SsoSession {
     /// Attributes, one for each `Name` and `NameFormat` pair in document
     /// order, with the values of every `<Attribute>` that has that pair.
     ///
-    /// An `<Attribute>` without `NameFormat` has the same identity as one with
-    /// the `unspecified` format. The attribute reports the `NameFormat` of its
-    /// first element.
+    /// The `Name` is compared exactly. The `NameFormat` is compared and
+    /// reported after XML whitespace collapse. An `<Attribute>` without
+    /// `NameFormat` has the same identity as one with the `unspecified`
+    /// format. The attribute reports the `NameFormat` of its first element.
     pub fn attributes(&self) -> &Attributes {
         &self.attributes
     }

@@ -501,6 +501,30 @@ fn service_provider_keeps_one_attribute_for_each_name_and_name_format(
 }
 
 #[test]
+fn service_provider_reads_a_name_format_by_its_schema_value(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let padded_uri = format!(" {URI}\t ");
+    let padded_deployment_format = format!("\n{DEPLOYMENT_FORMAT} ");
+    let session = accept_peer_attributes(&[
+        ("role", &padded_uri, "admin"),
+        ("role", URI, "auditor"),
+        ("role", &padded_deployment_format, "owner"),
+        ("role", DEPLOYMENT_FORMAT, "viewer"),
+    ])?;
+
+    assert_eq!(
+        session.attributes().as_slice(),
+        [
+            Attribute::new("role", values(&["admin", "auditor"]))
+                .with_name_format(AttributeNameFormat::Uri),
+            Attribute::new("role", values(&["owner", "viewer"]))
+                .with_name_format(AttributeNameFormat::Custom(DEPLOYMENT_FORMAT.to_string())),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
 fn service_provider_keeps_every_value_of_repeated_attribute_elements(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let attributes = Attributes::new(vec![
@@ -795,6 +819,27 @@ fn service_provider_accepts_persistent_and_transient_identifiers_that_miss_the_p
         let name_id = NameId::new(value.clone()).with_format(format);
         let session = accept_peer_response(&name_id, "")?;
         assert_eq!(session.name_id(), &name_id);
+    }
+    Ok(())
+}
+
+#[test]
+fn service_provider_reads_a_name_id_format_by_its_schema_value(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let deployment_format = "https://example.com/name-id-format";
+    for (sent, read) in [
+        (format!("\n {PERSISTENT}\t"), NameIdFormat::Persistent),
+        (
+            format!(" {deployment_format} "),
+            NameIdFormat::Custom(deployment_format.to_string()),
+        ),
+    ] {
+        let sent = NameId::new("subject-1").with_format(NameIdFormat::Custom(sent));
+        let session = accept_peer_response(&sent, "")?;
+        assert_eq!(
+            session.name_id(),
+            &NameId::new("subject-1").with_format(read)
+        );
     }
     Ok(())
 }

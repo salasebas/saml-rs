@@ -941,6 +941,24 @@ fn an_omitted_name_id_format_matches_unspecified() -> Result<(), Box<dyn std::er
 }
 
 #[test]
+fn name_id_formats_that_differ_only_in_xml_whitespace_match(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
+    let duplicated = duplicate_assertion(
+        &response_xml(&exchange.response_fields)?,
+        "_second_assertion",
+    )?;
+    let xml = resigned(&set_name_id_format(
+        &set_name_id_format(&duplicated, 0, Some(PERSISTENT))?,
+        1,
+        Some(&format!("  {PERSISTENT} ")),
+    )?)?;
+    let session = accept(&exchange, &xml)?;
+    assert_eq!(session.name_id().format(), Some(&NameIdFormat::Persistent));
+    Ok(())
+}
+
+#[test]
 fn a_different_name_id_format_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let xml = resigned(&set_name_id_format(

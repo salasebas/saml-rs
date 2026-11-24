@@ -31,11 +31,12 @@ The identity provider writes `<Attribute>` elements with `SsoAssertion::attribut
 | Write a `FriendlyName` only when the caller sets one, XML-escaped. Any string of XML characters is written, the empty string included | Optional | Core §2.7.3.1 | `Attribute::with_friendly_name` |
 | Write no `AttributeStatement` in an error `Response` | Mandatory | Profiles §4.1.4.2 | `SsoOutcome::Failure` |
 | Support every Core §8.2 `NameFormat` on input | Mandatory | Conformance §3.3, Core §8.2 | `Attribute::name_format` |
+| Read a received `NameFormat` with XML Schema whitespace collapse, and the `Name` as sent | Mandatory | `AttributeType`, XML Schema Part 2 §3.2.17, §4.3.6 | Always |
 | Read the `FriendlyName` of an accepted `<Attribute>`, also one decrypted from an `<EncryptedAttribute>`, as sent | Optional | Core §2.7.3.1 | `Attribute::friendly_name` |
 | Do not identify an attribute by its `FriendlyName`. `Attributes::get` matches the `Name`, and `Attributes::get_by_friendly_name` is for display and mapping only | Mandatory | Core §2.7.3.1 | Always |
 | Reject an accepted `<Attribute>` without an unqualified `Name` | Mandatory | `AttributeType` | Always |
 | Accept `Name=""`, and a `basic` name that is not an `xs:Name` | Library policy: Core §8.2.3 binds the producer, and the schema types `Name` as `xs:string`. | Core §8.2.3 | Always |
-| Report a received `NameFormat` as sent, whether or not it is an absolute URI reference | Library policy: Core §1.3.2 binds the writer. | Core §1.3.2 | Always |
+| Report a received `NameFormat` whether or not it is an absolute URI reference | Library policy: Core §1.3.2 binds the writer. | Core §1.3.2 | Always |
 | Merge `<Attribute>` elements with the same `Name` and `NameFormat` into one `Attribute`, in document order, whatever their `FriendlyName` values. Treat an omitted `NameFormat` as `unspecified`, and report the `NameFormat` and `FriendlyName` of the first element | Library policy: E49 identifies an attribute by `NameFormat` and `Name` together, and the standard does not define how repeated elements combine. | Core §2.7.3.1, E49 | Always |
 
 ## Subject identifier attributes
@@ -94,7 +95,8 @@ other `Format` URI.
 | Support every Core §8.3 `Format` on input and output | Mandatory | Conformance §3.3, Core §8.3 | `NameId::with_format` |
 | Allow another `Format` URI or an omitted `Format` | Optional | Core §2.2.2 | `NameId::with_format` |
 | Reject a written `Format` that is not an absolute URI reference, in a `Response`, an `AuthnRequest` `NameIDPolicy`, a `LogoutRequest`, a `ManageNameIDRequest`, and metadata `NameIDFormat` | Mandatory | Core §1.3.2 | Always |
-| Accept a received `Format` that is not an absolute URI reference, and report it as sent | Library policy: Core §1.3.2 binds the writer. | Core §1.3.2 | Always |
+| Accept a received `Format` that is not an absolute URI reference, and report it | Library policy: Core §1.3.2 binds the writer. | Core §1.3.2 | Always |
+| Read the `Format` of an assertion `Subject` or `LogoutRequest` `NameID` with XML Schema whitespace collapse | Mandatory | `NameIDType`, XML Schema Part 2 §3.2.17, §4.3.6 | `SsoSession::name_id`, `LogoutRequest::name_id` |
 | Generate a transient value under the generated-ID rules below | Mandatory | Core §8.3.8, §1.3.4 | `NameId::generate_transient` |
 | Reject a transient value of more than 256 characters in a `Response` | Mandatory | Core §8.3.8 | Always |
 | Generate a persistent value with no discernible correspondence to the subject | Mandatory | Core §8.3.7, E86 | `NameId::generate_persistent` |
