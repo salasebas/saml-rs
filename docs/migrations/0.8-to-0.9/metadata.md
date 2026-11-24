@@ -80,6 +80,25 @@ input.assertion_consumer_service = vec![Endpoint::new(Binding::Post, "https://sp
 let xml = generate_sp_metadata(&input)?;
 ```
 
+### Supply valid certificate text and lowercase literal scopes
+
+Pass the contents of the certificate file in `signing_certs` or
+`encrypt_certs`, as PEM or base64-encoded DER. Both generators return
+`SamlError::Base64` for malformed base64 and `SamlError::Invalid` for an empty
+certificate. The generators check the encoding. Supply an X.509 certificate
+for each entry. Omit the list entry if you have no certificate to publish.
+The same encoding checks apply to both config builders in protocol-only
+builds. With a crypto provider, the builders load the certificate and
+check the private key where the credential includes one.
+
+If you publish an IdP scope with `regexp: false`, use the lowercase form
+that your IdP issues in `subject-id` or `pairwise-id` values. For example,
+replace `Research.example.org` with `research.example.org` to publish the
+scope for `alice@research.example.org`. IdP metadata generation and
+`IdpConfigBuilder::build` return `SamlError::Invalid` for uppercase ASCII
+letters in a literal scope. Regular expressions keep their configured case.
+Coordinate and republish signed metadata with the authority that signs it.
+
 ## 7. Verify signed metadata on import
 
 **Affects:** callers of `Metadata::verify_signature`,

@@ -1,5 +1,8 @@
 use std::collections::HashSet;
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine as _;
+
 use crate::config::validate_entity_id_syntax;
 use crate::constants::{name_id_format, namespace, Binding};
 use crate::error::SamlError;
@@ -53,9 +56,9 @@ impl Endpoint {
 pub struct SpMetadataInput {
     /// `entityID`.
     pub entity_id: String,
-    /// Signing certificates (PEM or bare base64).
+    /// Signing X.509 certificates in PEM or as bare base64-encoded DER.
     pub signing_certs: Vec<String>,
-    /// Encryption certificates (PEM or bare base64).
+    /// Encryption X.509 certificates in PEM or as bare base64-encoded DER.
     pub encrypt_certs: Vec<String>,
     /// `AuthnRequestsSigned`.
     pub authn_requests_signed: bool,
@@ -90,9 +93,9 @@ pub struct SpMetadataInput {
 pub struct IdpMetadataInput {
     /// `entityID`.
     pub entity_id: String,
-    /// Signing certificates.
+    /// Signing X.509 certificates in PEM or as bare base64-encoded DER.
     pub signing_certs: Vec<String>,
-    /// Encryption certificates.
+    /// Encryption X.509 certificates in PEM or as bare base64-encoded DER.
     pub encrypt_certs: Vec<String>,
     /// `WantAuthnRequestsSigned`.
     pub want_authn_requests_signed: bool,
@@ -118,6 +121,7 @@ pub struct IdpMetadataInput {
     /// `mdattr:EntityAttributes`. Empty writes no `Extensions`.
     pub entity_attributes: Vec<Attribute>,
     /// Scope declarations published in the IdP role's `Extensions`, in order.
+    /// Use lowercase letters in literal scopes (`regexp: false`).
     pub scopes: Vec<super::MetadataScope>,
 }
 
@@ -150,8 +154,14 @@ fn generate_entity_descriptor(
     Ok(w.finish())
 }
 
-fn write_key_descriptor(w: &mut MetadataWriter, use_: &str, cert: &str) {
+fn write_key_descriptor(w: &mut MetadataWriter, use_: &str, cert: &str) -> Result<(), SamlError> {
     let cert = normalize_cert_string(cert);
+    if cert.is_empty() {
+        return Err(SamlError::Invalid(format!("{use_} certificate is empty")));
+    }
+    STANDARD.decode(&cert).map_err(|source| SamlError::Base64 {
+        source: Box::new(source),
+    })?;
     w.start("KeyDescriptor", &[("use", use_)]);
     w.start("ds:KeyInfo", &[("xmlns:ds", namespace::DSIG)]);
     w.start("ds:X509Data", &[]);
@@ -159,15 +169,21 @@ fn write_key_descriptor(w: &mut MetadataWriter, use_: &str, cert: &str) {
     w.end("ds:X509Data");
     w.end("ds:KeyInfo");
     w.end("KeyDescriptor");
+    Ok(())
 }
 
-fn write_key_descriptors(w: &mut MetadataWriter, signing: &[String], encrypt: &[String]) {
+fn write_key_descriptors(
+    w: &mut MetadataWriter,
+    signing: &[String],
+    encrypt: &[String],
+) -> Result<(), SamlError> {
     for cert in signing {
-        write_key_descriptor(w, "signing", cert);
+        write_key_descriptor(w, "signing", cert)?;
     }
     for cert in encrypt {
-        write_key_descriptor(w, "encryption", cert);
+        write_key_descriptor(w, "encryption", cert)?;
     }
+    Ok(())
 }
 
 fn write_name_id_formats(w: &mut MetadataWriter, formats: &[String]) -> Result<(), SamlError> {
@@ -299,6 +315,9 @@ fn bool_str(value: bool) -> &'static str {
 /// Generate SP metadata XML with role children in schema order.
 ///
 /// Endpoints within each group appear in input order.
+/// Supply actual X.509 certificates. The generator checks their base64 text.
+/// With a crypto provider, [`crate::SpConfigBuilder::build`] also loads X.509
+/// certificates and checks that the private keys match.
 ///
 /// # Errors
 ///
@@ -314,6 +333,8 @@ fn bool_str(value: bool) -> &'static str {
 /// and for an entity attribute whose `NameFormat` is not an absolute URI
 /// reference, whose [`crate::AttributeNameFormat::Basic`] name is not an XML
 /// name, or whose text XML cannot carry.
+/// Returns [`SamlError::Invalid`] for an empty certificate and
+/// [`SamlError::Base64`] for malformed base64 in a certificate.
 pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> {
     if cfg.assertion_consumer_service.is_empty() {
         return Err(SamlError::MissingMetadata(
@@ -341,7 +362,7 @@ fn write_sp_role(w: &mut MetadataWriter, cfg: &SpMetadataInput) -> Result<(), Sa
         role_attributes.push(("errorURL", error_url));
     }
     w.start("SPSSODescriptor", &role_attributes);
-    write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs);
+    write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs)?;
     write_endpoints(w, "SingleLogoutService", &cfg.single_logout_service)?;
     write_endpoints(w, "ManageNameIDService", &cfg.manage_name_id_service)?;
     if cfg.name_id_format.is_empty() {
@@ -357,6 +378,9 @@ fn write_sp_role(w: &mut MetadataWriter, cfg: &SpMetadataInput) -> Result<(), Sa
 /// Generate IdP metadata XML with role children in schema order.
 ///
 /// Endpoints within each group appear in input order.
+/// Supply actual X.509 certificates. The generator checks their base64 text.
+/// With a crypto provider, [`crate::IdpConfigBuilder::build`] also loads X.509
+/// certificates and checks that the private keys match.
 ///
 /// # Errors
 ///
@@ -370,8 +394,10 @@ fn write_sp_role(w: &mut MetadataWriter, cfg: &SpMetadataInput) -> Result<(), Sa
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry,
 /// and for an entity attribute whose `NameFormat` is not an absolute URI
 /// reference, whose [`crate::AttributeNameFormat::Basic`] name is not an XML
-/// name, or whose text XML cannot carry. Scope declarations must also contain
-/// text XML can carry.
+/// name, or whose text XML cannot carry.
+/// Returns [`SamlError::Invalid`] for a scope with invalid XML text, a literal
+/// scope with uppercase ASCII letters, or an empty certificate.
+/// Returns [`SamlError::Base64`] for malformed base64 in a certificate.
 pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError> {
     if cfg.single_sign_on_service.is_empty() {
         return Err(SamlError::MissingMetadata(
@@ -402,7 +428,7 @@ fn write_idp_role(w: &mut MetadataWriter, cfg: &IdpMetadataInput) -> Result<(), 
     }
     w.start("IDPSSODescriptor", &role_attributes);
     super::scope::write_scopes(w, &cfg.scopes)?;
-    write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs);
+    write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs)?;
     write_artifact_resolution_service(w, &cfg.artifact_resolution_service)?;
     write_endpoints(w, "SingleLogoutService", &cfg.single_logout_service)?;
     write_endpoints(w, "ManageNameIDService", &cfg.manage_name_id_service)?;
