@@ -93,6 +93,21 @@ for their binding. The SP compares a received `Issuer` as described in
 | For a SimpleSign error `Response`, allow `Signature` to be absent only if neither the response nor its assertions carry an XML signature | Library policy: unsigned errors cannot establish sessions. Verify signatures before reporting a signed error's status. | CD-04 §2.4, §2.6, Profiles §4.1.4.3 | Always |
 | Ignore ASCII whitespace in the message and the detached `Signature` value, and reject any other character outside the base64 alphabet | Library policy: Bindings §3.4.4.1 requires the sender to remove whitespace and §3.5.4 allows only line wrapping, so any other character means the value was altered. | Bindings §3.4.4.1, §3.5.4, RFC 2045 §6.8 | Always |
 
+### Scoped attributes
+
+The SP application can check scoped values in an accepted `SsoSession` before
+using them for account lookup or access decisions. It decides whether to discard
+reported values or decline the login. The [Subject Identifier Attributes Profile](https://docs.oasis-open.org/security/saml-subject-id-attr/v1.0/saml-subject-id-attr-v1.0.html)
+recommends discarding unauthorized subject identifiers. The [saml2int deployment profile](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html)
+requires an issuer-specific policy and restricts when the SP can rely on
+metadata scopes.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Check the named attributes after acceptance against the assertion issuer's explicit policy or its unexpired registration-authority-signed metadata. Compare literal scopes case-sensitively | Mandatory capability | Subject Identifier §3.5.2, §4.2, saml2int SDP-SP17, E94 | `SsoSession::scoped_attribute_violations` |
+| Ignore regular expression declarations for authorization | Optional | saml2int SDP-SP17 | Always |
+| Report unscoped and unauthorized values. The application applies its policy to the reported values | Library policy: applications choose which attributes they use and how to handle violations. | Subject Identifier §3.5.2 | `SsoSession::scoped_attribute_violations` |
+
 ### Status codes
 
 This rule applies to response recipients in SSO, Single Logout, name

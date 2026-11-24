@@ -271,6 +271,10 @@
 //! signatures and RSA keys shorter than 2048 bits.
 //! [`MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms`] accepts them
 //! when the provider supports them.
+//! For scope authorization, pin the certificate of a trusted third-party
+//! registration authority and import with
+//! [`MetadataTrustPolicy::RequireRegistrationAuthoritySignature`]. Use the
+//! descriptor with [`SsoSession::scoped_attribute_violations`].
 //!
 //! The documented modules and crate-root re-exports are the supported public API.
 //!
@@ -462,21 +466,21 @@ pub use error::{
 };
 pub use http_header::HttpHeader;
 pub use metadata::{
-    ContactPerson, ContactType, EntityAttributes, LocalizedValue, MetadataLifetime, Organization,
-    SubjectIdRequirement,
+    ContactPerson, ContactType, EntityAttributes, LocalizedValue, MetadataLifetime, MetadataScope,
+    Organization, SubjectIdRequirement,
 };
 pub use model::{
-    AssertionId, Attribute, AttributeNameFormat, AttributeValue, Attributes, AudienceRestriction,
-    AuthnContext, AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind,
-    AuthnRequest, AuthnStatement, ClockSkew, ExtensionElement, IdpLogoutAction,
-    InMemoryReplayCache, LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, MessageId,
-    NameId, NameIdCreationRequest, NameIdPolicy, OutstandingLogout, PairwiseId, Received,
-    RefusedLogoutRequest, RelayState, ReplayCache, ReplayKey, ReplayPolicy, RequestAgePolicy,
-    RequestedAuthnContext, RequestedSubject, RequestedSubjectIdentifier, SamlInstant,
-    SamlValidationContext, SessionIndex, SsoResponse, SsoSession, Status, StatusMessage,
-    SubjectConfirmation, SubjectId, SubjectLocality, SubordinateStatusCode, TopLevelStatusCode,
-    VerifiedXmlSignature, VerifiedXmlSignatureCoverage, MAX_RECEIVED_RELAY_STATE_BYTES,
-    MAX_RELAY_STATE_BYTES,
+    AssertionId, Attribute, AttributeNameFormat, AttributeScopePolicy, AttributeValue, Attributes,
+    AudienceRestriction, AuthnContext, AuthnContextComparison, AuthnContextReference,
+    AuthnContextReferenceKind, AuthnRequest, AuthnStatement, ClockSkew, ExtensionElement,
+    IdpLogoutAction, InMemoryReplayCache, LogoutCompleted, LogoutRequest, LogoutResponse,
+    LogoutSubject, MessageId, NameId, NameIdCreationRequest, NameIdPolicy, OutstandingLogout,
+    PairwiseId, Received, RefusedLogoutRequest, RelayState, ReplayCache, ReplayKey, ReplayPolicy,
+    RequestAgePolicy, RequestedAuthnContext, RequestedSubject, RequestedSubjectIdentifier,
+    SamlInstant, SamlValidationContext, ScopedAttributeViolation, SessionIndex, SsoResponse,
+    SsoSession, Status, StatusMessage, SubjectConfirmation, SubjectId, SubjectLocality,
+    SubordinateStatusCode, TopLevelStatusCode, VerifiedXmlSignature, VerifiedXmlSignatureCoverage,
+    MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
 pub use name_id_management::{
     ManageNameIdRequest, ManageNameIdResponse, NameIdChange, NameIdManagementReceipt,

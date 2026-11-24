@@ -256,6 +256,7 @@ pub struct IdpMetadataConfig {
     pub(super) contacts: Vec<crate::metadata::ContactPerson>,
     pub(super) error_url: Option<String>,
     pub(super) entity_attributes: Vec<crate::Attribute>,
+    pub(super) scopes: Vec<crate::metadata::MetadataScope>,
 }
 
 impl IdpMetadataConfig {
@@ -271,6 +272,7 @@ impl IdpMetadataConfig {
             contacts: Vec::new(),
             error_url: None,
             entity_attributes: Vec::new(),
+            scopes: Vec::new(),
         }
     }
 
@@ -323,6 +325,11 @@ impl IdpMetadataConfig {
     pub fn entity_attributes(&self) -> &[crate::Attribute] {
         &self.entity_attributes
     }
+
+    /// Scope declarations to publish, in order.
+    pub fn scopes(&self) -> &[crate::metadata::MetadataScope] {
+        &self.scopes
+    }
 }
 
 /// What both peer descriptors keep from importing metadata.
@@ -331,6 +338,7 @@ struct ImportedMetadata {
     entity_id: EntityId,
     validity: MetadataValidity,
     trust: AppliedMetadataTrust,
+    registration_authority_verified: bool,
 }
 
 impl ImportedMetadata {
@@ -341,12 +349,17 @@ impl ImportedMetadata {
         limits: XmlLimits,
     ) -> Result<Self, SamlError> {
         ensure_expected_entity_id(&expected_entity_id, metadata_entity_id(metadata)?)?;
+        let registration_authority_verified = matches!(
+            trust,
+            MetadataTrustPolicy::RequireRegistrationAuthoritySignature { .. }
+        );
         let trust = ensure_metadata_trust(metadata, trust, limits)?;
         let validity = metadata.validity()?;
         Ok(Self {
             entity_id: expected_entity_id,
             validity,
             trust,
+            registration_authority_verified,
         })
     }
 
@@ -467,6 +480,32 @@ impl IdpDescriptor {
     /// Returns [`SamlError::Invalid`] for an attribute without `Name`.
     pub fn entity_attributes(&self) -> Result<crate::metadata::EntityAttributes, SamlError> {
         self.raw_metadata().entity_attributes()
+    }
+
+    /// Scope declarations on the entity and its selected SAML 2.0 IdP roles.
+    ///
+    /// Returns the declarations in the imported metadata, including regular
+    /// expressions. Use [`crate::AttributeScopePolicy::RegistrationAuthority`]
+    /// to use authorized literal declarations in a session scope check.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for malformed scope declarations.
+    pub fn scopes(&self) -> Result<Vec<crate::metadata::MetadataScope>, SamlError> {
+        self.metadata().scopes()
+    }
+
+    pub(crate) fn registration_authority_scopes(
+        &self,
+        now: SystemTime,
+    ) -> Result<Vec<crate::metadata::MetadataScope>, SamlError> {
+        if !self.imported.registration_authority_verified {
+            return Err(SamlError::Invalid(
+                "scope authorization requires a trusted registration authority signature".into(),
+            ));
+        }
+        self.ensure_valid_at(now)?;
+        self.scopes()
     }
 
     /// First non-empty logout request location for this peer's SAML 2.0 role and binding.

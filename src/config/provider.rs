@@ -93,6 +93,7 @@ fn idp_metadata_input(config: &IdpConfigBuilder) -> IdpMetadataInput {
         contacts: metadata.contacts().to_vec(),
         error_url: metadata.error_url().map(str::to_string),
         entity_attributes: metadata.entity_attributes().to_vec(),
+        scopes: metadata.scopes().to_vec(),
     }
 }
 

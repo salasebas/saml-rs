@@ -70,7 +70,7 @@ The SP and IdP build metadata with `generate_sp_metadata` and
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Write role descriptor children in schema order: `KeyDescriptor`, `ArtifactResolutionService` (IdP only), `SingleLogoutService`, `ManageNameIDService`, `NameIDFormat`, then `SingleSignOnService` or `AssertionConsumerService` | Mandatory | Metadata §2.4.1 to §2.4.4 | Always |
+| Write role descriptor children in schema order: `Extensions` (IdP scopes), `KeyDescriptor`, `ArtifactResolutionService` (IdP only), `SingleLogoutService`, `ManageNameIDService`, `NameIDFormat`, then `SingleSignOnService` or `AssertionConsumerService` | Mandatory | Metadata §2.4.1 to §2.4.4 | Always |
 | Keep the configured order of the endpoints in each group | Library policy: reason not recorded. | — | Always |
 | Write entity-level `Organization`, then `ContactPerson`, after the role descriptors | Mandatory | Metadata §2.3.2 | `organization`, `contact`, `contacts` on `SpConfigBuilder` and `IdpConfigBuilder` |
 | Write at least one name, display name, and URL, each with an `xml:lang` that matches the XML Schema 1.0 [language pattern](https://www.w3.org/TR/xmlschema-2/#language), in an `Organization`. Require an absolute `OrganizationURL` and `errorURL` | Mandatory | Metadata §2.2.4, §2.2.5, §2.3.2.1, Core §1.3.2 | Always |
@@ -121,6 +121,22 @@ application's.
 | Reject a read `subject-id:req` without exactly one value, with a value outside the four, or repeated with a different requirement. Import does not reject it | Library policy: the profile rules these out, and one requirement cannot be chosen from them. | Subject Identifier §3.5.1 | `EntityAttributes::subject_id_requirement` |
 
 - Signed `saml:Assertion` children of `EntityAttributes` are neither read nor written. Mandatory for a publisher that includes one, MDAttr §2.4.
+
+## IdP scope declarations
+
+The [Subject Identifier Attributes Profile](https://docs.oasis-open.org/security/saml-subject-id-attr/v1.0/saml-subject-id-attr-v1.0.html)
+defines `shibmd:Scope` and its schema. The [saml2int deployment profile](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html)
+requires an IdP deployment to publish one or more literal scopes for the
+subject identifiers it supports. The deployment supplies that list.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Read direct `shibmd:Scope` declarations in the entity's `Extensions` and in the selected SAML 2.0 IdP roles' `Extensions` | Mandatory capability for relying parties that consume metadata under the Subject Identifier Profile. Recommended by saml2int. | Subject Identifier §3.5.2, §4.2, saml2int SDP-SP17 | `IdpMetadata::scopes`, `IdpDescriptor::scopes` |
+| Preserve the scope text and the `regexp` flag. Treat an omitted flag as false and report malformed declarations when scopes are read | Mandatory | Subject Identifier §3.5.2.1 | Always |
+| Support publishing scopes in the IdP role's `Extensions`. Write `regexp` explicitly on every declaration | Mandatory capability, recommended explicit flag | Subject Identifier §3.5.2, §3.5.2.2, §4.1, `RoleDescriptorType` | `IdpConfigBuilder::scopes`, `IdpMetadataInput::scopes` |
+| Verify a pinned root signature for scope authorization under a certificate the SP pins as a trusted third-party registration authority | Library policy: distinguish the authority's signature from a generic metadata publisher's signature. | Subject Identifier §3.5.2, saml2int SDP-SP17, Metadata §3.1.1–§3.1.6 (E91) | `MetadataTrustPolicy::RequireRegistrationAuthoritySignature` |
+
+For the use of declarations after login, see [scoped attributes](web-browser-sso-acceptance.md#scoped-attributes).
 
 ## Replay
 

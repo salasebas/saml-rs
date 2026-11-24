@@ -129,6 +129,8 @@ let attributes = Attributes::new([
 
 Give each subject one stable `pairwise-id` value for each service provider, and a different value for every other service provider. The `PairwiseId` documentation shows one way to derive `unique_id`.
 
+If you publish metadata for these identifiers, pass the scopes you issue to `IdpConfigBuilder::scopes`. For a saml2int deployment, list each scope as a `MetadataScope` with `regexp: false`. The scopes appear in the IdP role's `Extensions`. See [IdP scope declarations](../reference/conformance/metadata-and-replay.md#idp-scope-declarations).
+
 `NameId::generate_transient()` returns a new opaque value on every call. For a persistent identifier, call `NameId::generate_persistent()` once for a principal and service provider, store the value, and pass it to `NameId::persistent(stored)` on later responses. Do not issue a stored value for another principal. `NameId::new` takes any value and `with_format` takes any format, but a persistent or transient value longer than 256 characters is rejected when the response is generated. `with_name_qualifier`, `with_sp_name_qualifier`, and `with_sp_provided_id` set the qualifier attributes. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
 
 ## Discovery cookie

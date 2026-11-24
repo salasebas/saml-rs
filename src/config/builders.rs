@@ -565,6 +565,15 @@ impl IdpConfigBuilder {
         self
     }
 
+    /// Append scope declarations to the generated IdP role, in iteration order.
+    pub fn scopes(
+        mut self,
+        scopes: impl IntoIterator<Item = crate::metadata::MetadataScope>,
+    ) -> Self {
+        self.metadata.scopes.extend(scopes);
+        self
+    }
+
     /// Set `validUntil`, `cacheDuration`, or both on generated metadata.
     /// Without this setting, generation writes a one-day `cacheDuration`.
     pub fn metadata_lifetime(mut self, lifetime: MetadataLifetime) -> Self {
@@ -618,8 +627,8 @@ impl IdpConfigBuilder {
     /// Returns [`SamlError`] when:
     ///
     /// - the entity ID is not an absolute URI reference of at most 1024
-    ///   characters, or the organization, contacts, error URI, or entity
-    ///   attributes are invalid;
+    ///   characters, or the organization, contacts, error URI, entity
+    ///   attributes, or scope declarations are invalid;
     /// - two `ArtifactResolutionService` endpoints share an index;
     /// - the issuance lifetime is zero or outside the internal supported
     ///   range;
