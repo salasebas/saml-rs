@@ -262,9 +262,9 @@ impl std::fmt::Display for SoapFaultCode {
 /// - It returns this fault's [`Self::envelope`] with HTTP 500 and
 ///   [`Self::headers`] when processing fails before a SAML response exists.
 ///   Use the `fault` code of a [`SamlError::SoapEnvelope`]. For another error,
-///   use [`SoapFaultCode::Server`] when a retry can succeed, such as
-///   [`SamlError::ReplayCacheUnavailable`], and [`SoapFaultCode::Client`]
-///   otherwise.
+///   use [`SoapFaultCode::Client`] when the request must change, such as a
+///   failed signature check, and [`SoapFaultCode::Server`] when the cause is
+///   on the responder, such as its configuration or an unavailable store.
 ///
 /// # Examples
 ///

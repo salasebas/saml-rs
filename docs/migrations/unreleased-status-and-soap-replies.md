@@ -18,10 +18,14 @@ subordinate `StatusCode`, or a subordinate `StatusCode` without `Value` now
 returns `SamlError::ProtocolProfile` from `ServiceProvider::finish_sso`,
 `accept_unsolicited_sso`, `finish_slo` on both roles,
 `finish_name_id_management_redirect` on both roles,
-`StartedNameIdManagement::finish`, and `ArtifactResolution::finish`. A
-missing `Status`, top-level `StatusCode`, or top-level `Value` returns
-`SamlError::StatusMissing`. For `StartedNameIdManagement::finish`, that case
-returned `SamlError::ProtocolProfile` before.
+`StartedNameIdManagement::finish`, and `ArtifactResolution::finish`. The
+name identifier management flows already rejected a second `Status` or
+top-level `StatusCode`.
+
+A missing `Status`, top-level `StatusCode`, or top-level `Value` returns
+`SamlError::StatusMissing`. Before, `StartedNameIdManagement::finish`
+returned `SamlError::ProtocolProfile` for a missing `Status` or top-level
+`StatusCode`.
 
 A second `Issuer` now returns `SamlError::ProtocolProfile` from
 `ArtifactResolution::finish` and `StartedNameIdManagement::finish`. Before,
@@ -102,10 +106,10 @@ match idp.answer_artifact_resolve(&sp, envelope, &received_at, &mut issued, chan
 	Ok(answer) => reply(200, answer.response().envelope()),
 	Err(SamlError::SoapChannelProtection) => reply(403, ""),
 	Err(SamlError::SoapEnvelope { fault, .. }) => reply(500, SoapFault::new(fault).envelope()),
-	Err(SamlError::ArtifactStoreUnavailable { .. }) => {
-		reply(500, SoapFault::new(SoapFaultCode::Server).envelope())
+	Err(SamlError::ProtocolProfile(_) | SamlError::SignatureVerification { .. }) => {
+		reply(500, SoapFault::new(SoapFaultCode::Client).envelope())
 	}
-	Err(_) => reply(500, SoapFault::new(SoapFaultCode::Client).envelope()),
+	Err(_) => reply(500, SoapFault::new(SoapFaultCode::Server).envelope()),
 }
 ```
 
