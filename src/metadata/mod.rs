@@ -77,7 +77,7 @@ impl KeyCertificates {
                         .extend(x509_certificates.iter().cloned());
                     certificates.encryption.extend(x509_certificates);
                     #[cfg(crypto)]
-                    certificates.add_encryption_keys(&x509_data);
+                    certificates.add_encryption_key(&x509_data);
                 }
                 Some(use_) if use_ == CertUse::Signing.as_str() => {
                     certificates.signing.extend(x509_certificates);
@@ -85,7 +85,7 @@ impl KeyCertificates {
                 Some(use_) if use_ == CertUse::Encryption.as_str() => {
                     certificates.encryption.extend(x509_certificates);
                     #[cfg(crypto)]
-                    certificates.add_encryption_keys(&x509_data);
+                    certificates.add_encryption_key(&x509_data);
                 }
                 Some(_) => {}
             }
@@ -94,15 +94,15 @@ impl KeyCertificates {
     }
 
     #[cfg(crypto)]
-    fn add_encryption_keys(&mut self, x509_data: &[&dom::Node]) {
-        for x509_data in x509_data {
-            let mut certificates = x509_data.children_named("X509Certificate");
-            let Some(first) = certificates.next() else {
-                continue;
-            };
-            if self.encryption_keys.is_empty() || certificates.next().is_none() {
-                self.encryption_keys.push(first.text.clone());
-            }
+    fn add_encryption_key(&mut self, x509_data: &[&dom::Node]) {
+        let mut certificates = x509_data
+            .iter()
+            .flat_map(|x509_data| x509_data.children_named("X509Certificate"));
+        let Some(first) = certificates.next() else {
+            return;
+        };
+        if self.encryption_keys.is_empty() || certificates.next().is_none() {
+            self.encryption_keys.push(first.text.clone());
         }
     }
 
@@ -278,12 +278,13 @@ impl Metadata {
         self.key_certificates.for_use(use_)
     }
 
-    /// One certificate for each `X509Data` declared for encryption, in
-    /// document order.
+    /// At most one certificate for each `KeyDescriptor` declared for
+    /// encryption, in document order.
     ///
-    /// The first `X509Data` gives its first certificate. A later `X509Data`
-    /// gives its certificate only when it holds exactly one, so an issuer
-    /// certificate of a chain is never chosen in place of a later key.
+    /// The first such `KeyDescriptor` gives its first certificate. A later
+    /// one gives its certificate only when its `KeyInfo` holds exactly one,
+    /// so an issuer certificate of a chain is never chosen in place of a
+    /// later key.
     #[cfg(crypto)]
     pub(crate) fn encryption_key_certificates(&self) -> &[String] {
         &self.key_certificates.encryption_keys

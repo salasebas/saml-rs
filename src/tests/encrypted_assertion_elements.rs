@@ -914,9 +914,13 @@ const EC_CERT: &str = include_str!("../../tests/fixtures/key/prime256v1/cert.pem
 const UNREADABLE_CERT: &str = "AAAA";
 const RSA_1024_CERT: &str = include_str!("../../tests/fixtures/key/rsa1024/cert.pem");
 
+/// A `KeyDescriptor` for encryption whose `KeyInfo` holds these `X509Data`
+/// elements, each with its certificates.
+type KeyInfo<'a> = &'a [&'a [&'a str]];
+
 fn with_encryption_keys_first(
     metadata: &str,
-    key_descriptors: &[&[&str]],
+    key_descriptors: &[KeyInfo<'_>],
 ) -> Result<String, String> {
     let first_encryption_key = metadata
         .find("use=\"encryption\"")
@@ -924,18 +928,24 @@ fn with_encryption_keys_first(
         .ok_or("metadata publishes no encryption key")?;
     let key_descriptors: String = key_descriptors
         .iter()
-        .map(|x509_data| {
-            let certificates: String = x509_data
+        .map(|key_info| {
+            let x509_data: String = key_info
                 .iter()
-                .map(|certificate| {
-                    format!(
-                        "<ds:X509Certificate>{}</ds:X509Certificate>",
-                        normalize_cert_string(certificate)
-                    )
+                .map(|certificates| {
+                    let certificates: String = certificates
+                        .iter()
+                        .map(|certificate| {
+                            format!(
+                                "<ds:X509Certificate>{}</ds:X509Certificate>",
+                                normalize_cert_string(certificate)
+                            )
+                        })
+                        .collect();
+                    format!("<ds:X509Data>{certificates}</ds:X509Data>")
                 })
                 .collect();
             format!(
-                "<KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><ds:X509Data>{certificates}</ds:X509Data></ds:KeyInfo></KeyDescriptor>"
+                "<KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\">{x509_data}</ds:KeyInfo></KeyDescriptor>"
             )
         })
         .collect();
@@ -946,11 +956,12 @@ fn with_encryption_keys_first(
 
 fn sp_descriptor_with_encryption_keys_first(
     sp: &saml_rs::ServiceProvider,
-    key_descriptors: &[&[&str]],
+    key_descriptors: &[KeyInfo<'_>],
 ) -> Result<SpDescriptor, Box<dyn std::error::Error>> {
     let metadata = with_encryption_keys_first(sp.metadata_xml(), key_descriptors)?;
     let inserted: Vec<String> = key_descriptors
         .iter()
+        .flat_map(|key_info| key_info.iter())
         .flat_map(|x509_data| x509_data.iter())
         .map(|certificate| normalize_cert_string(certificate))
         .collect();
@@ -971,7 +982,7 @@ fn sp_descriptor_with_encryption_keys_first(
 
 fn exchange_with_encryption_keys_first(
     idp: &saml_rs::IdentityProvider,
-    key_descriptors: &[&[&str]],
+    key_descriptors: &[KeyInfo<'_>],
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
     let sp = sp(XmlEncryptionPolicy::default())?;
     let (_, idp_descriptor) = descriptors(&sp, idp)?;
@@ -990,11 +1001,12 @@ fn exchange_with_encryption_keys_first(
 #[test]
 fn identity_provider_encrypts_for_a_later_certificate_its_key_transport_can_use(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let first_keys: [&[&[&str]]; 4] = [
-        &[&[EC_CERT]],
-        &[&[UNREADABLE_CERT]],
-        &[&[EC_CERT, UNKNOWN_CERT]],
-        &[&[EC_CERT], &[UNKNOWN_CERT, CERT]],
+    let first_keys: [&[KeyInfo<'_>]; 5] = [
+        &[&[&[EC_CERT]]],
+        &[&[&[UNREADABLE_CERT]]],
+        &[&[&[EC_CERT, UNKNOWN_CERT]]],
+        &[&[&[EC_CERT]], &[&[UNKNOWN_CERT, CERT]]],
+        &[&[&[EC_CERT]], &[&[EC_CERT], &[UNKNOWN_CERT]]],
     ];
     for encryption in each_encrypted_element() {
         for key_descriptors in first_keys {
@@ -1028,7 +1040,7 @@ fn identity_provider_skips_an_rsa_key_too_small_for_the_key_transport(
             })
             .build()?,
         );
-        exchange_with_encryption_keys_first(&idp, &[&[RSA_1024_CERT]])?;
+        exchange_with_encryption_keys_first(&idp, &[&[&[RSA_1024_CERT]]])?;
     }
     Ok(())
 }
@@ -1063,7 +1075,7 @@ fn identity_provider_reports_the_first_key_error_when_no_key_is_usable(
     let sp_cert = normalize_cert_string(CERT);
     let ec_only = published.replace(&sp_cert, &normalize_cert_string(EC_CERT));
     let unreadable_only = published.replace(&sp_cert, UNREADABLE_CERT);
-    let unreadable_then_ec = with_encryption_keys_first(&ec_only, &[&[UNREADABLE_CERT]])?;
+    let unreadable_then_ec = with_encryption_keys_first(&ec_only, &[&[&[UNREADABLE_CERT]]])?;
     for encryption in each_encrypted_element() {
         let first_error = crypto_error(encryption, &unreadable_only)?;
         assert_ne!(first_error, crypto_error(encryption, &ec_only)?);

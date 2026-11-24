@@ -48,17 +48,18 @@ of `AttributeNameFormat::Uri`.
 
 An identity provider that encrypts assertions, identifiers, or attributes
 now uses the first encryption key in the service provider metadata that the
-configured algorithms can encrypt for. The keys come from the `X509Data`
-elements of each `KeyDescriptor` whose `use` is `encryption` or absent. The
-first `X509Data` gives its first certificate. A later `X509Data` gives a key
-only when it holds exactly one certificate. Before, the identity provider
+configured algorithms can encrypt for. The keys come from each
+`KeyDescriptor` whose `use` is `encryption` or absent. The first one gives
+its first certificate. A later one gives a key only when its `KeyInfo` holds
+exactly one certificate. Before, the identity provider
 used the first such certificate and failed with `SamlError::Crypto` when it
 did not load or the crypto provider could not encrypt for it, such as an EC
 key or an RSA key too small for the key transport. Now it tries the next key. When no key works, it
 still returns the `SamlError::Crypto` error of the first key.
 
-A later certificate in the same `X509Data`, such as an issuer certificate,
-is never used, and neither is a later `X509Data` with a certificate chain.
+A later certificate in the same `KeyDescriptor`, such as an issuer
+certificate, is never used, and neither is a later `KeyDescriptor` with a
+certificate chain.
 
 With attribute encryption alone, an assertion without attributes no longer
 needs an encryption certificate in the service provider metadata. Before,
