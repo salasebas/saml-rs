@@ -1,5 +1,3 @@
-//! Common domain cookie for Identity Provider Discovery.
-
 use std::fmt::Write as _;
 use std::net::Ipv4Addr;
 use std::time::Duration;
@@ -136,8 +134,6 @@ pub(crate) fn common_domain_cookie(
     entity_ids.retain(|existing| existing != entity_id);
     entity_ids.push(entity_id.to_string());
     let mut value = encode_cookie_value(&entity_ids);
-    // The oldest entries are dropped until the cookie name and value together
-    // are at most 4096 bytes.
     while CommonDomainCookie::NAME.len() + value.len() > MAX_COOKIE_NAME_AND_VALUE_BYTES
         && entity_ids.len() > 1
     {
@@ -161,7 +157,6 @@ fn validate_entity_identifier(entity_id: &str) -> Result<(), SamlError> {
 }
 
 fn is_entity_identifier_uri(entity_id: &str) -> bool {
-    // Every byte is a visible ASCII character.
     if !entity_id.bytes().all(|byte| byte.is_ascii_graphic()) {
         return false;
     }
@@ -193,7 +188,6 @@ fn common_domain_attribute(common_domain: &str) -> Result<String, SamlError> {
 }
 
 fn is_ascii_hostname(domain: &str) -> bool {
-    // An IPv4 literal is not a common domain.
     if domain.len() > 253 || domain.ends_with('.') || domain.parse::<Ipv4Addr>().is_ok() {
         return false;
     }

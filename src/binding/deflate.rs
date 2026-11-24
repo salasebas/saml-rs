@@ -8,12 +8,6 @@ use flate2::Compression;
 
 use crate::error::{ResourceLimit, SamlError};
 
-/// Default maximum inflated size of an HTTP-Redirect message.
-///
-/// SAML does not define this number. It is a conservative library default for
-/// HTTP-Redirect, where messages are decoded before XML or signature validation
-/// and normally remain well below this size. Pass it, or a different cap, to
-/// [`deflate_raw_decode`].
 pub const MAX_DEFLATE_RAW_DECODE_BYTES: usize = 1024 * 1024;
 
 /// Raw-DEFLATE compress `input` (no zlib/gzip header), as required by the
@@ -24,14 +18,6 @@ pub fn deflate_raw_encode(input: &[u8]) -> Result<Vec<u8>, SamlError> {
     encoder.finish().map_err(deflate_error)
 }
 
-/// Inflate raw-DEFLATE `input`, failing if the inflated output exceeds
-/// `max_output_len` bytes.
-///
-/// # Errors
-///
-/// Returns [`SamlError::LimitExceeded`] with [`ResourceLimit::InflatedBytes`]
-/// when the output exceeds `max_output_len`, and [`SamlError::Deflate`] when
-/// `input` is not valid raw DEFLATE.
 pub fn deflate_raw_decode(input: &[u8], max_output_len: usize) -> Result<Vec<u8>, SamlError> {
     let decoder = DeflateDecoder::new(input);
     let mut out = Vec::with_capacity(input.len().min(max_output_len));

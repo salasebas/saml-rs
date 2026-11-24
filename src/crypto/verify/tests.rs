@@ -9,8 +9,8 @@ use bergshamra::sign;
 
 #[test]
 fn external_reference_detection() {
-    assert!(!is_external_reference("")); // whole document
-    assert!(!is_external_reference("#_assertion123")); // same-document
+    assert!(!is_external_reference(""));
+    assert!(!is_external_reference("#_assertion123"));
     assert!(is_external_reference("https://evil.example.com/x"));
     assert!(is_external_reference("/etc/passwd"));
     assert!(is_external_reference("file:///etc/passwd"));
@@ -217,9 +217,7 @@ const FALSE_SIGNED: &str =
 const RESPONSE: &str = include_str!("../../../tests/fixtures/misc/response.xml");
 const SP_PRIVKEY: &str =
     include_str!("../../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-// IdP signing cert (matches the response_signed.xml signer / idpmeta).
 const IDP_CERT: &str = include_str!("../../../tests/fixtures/key/idp/cert.cer");
-// SP signing cert (matches signed_request_sha256.xml signer).
 const SP_CERT: &str = include_str!("../../../tests/fixtures/key/sp/cert.cer");
 const SP_SIGNING_CERT: &str =
     include_str!("../../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -789,7 +787,6 @@ fn rejects_signed_request_without_root_coverage() -> Result<(), Box<dyn std::err
 
 #[test]
 fn rejects_tampered_signature() -> Result<(), Box<dyn std::error::Error>> {
-    // false_signed_request_sha256.xml: signature present but content tampered
     let (verified, _) = verify_signature(FALSE_SIGNED, &[SP_CERT.to_string()])?;
     assert!(!verified, "tampered message must not verify");
     Ok(())
@@ -942,8 +939,6 @@ fn rolling_certs_and_hmac_secret_verify_only_with_their_own_key(
 #[test]
 fn rejects_multi_root_wrapping_attack_before_signature_verification(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // attack_response_signed.xml places a forged NameID before the signed
-    // response. Reject the multi-root document before signature processing.
     match verify_signature(ATTACK, &[IDP_CERT.to_string()]) {
         Err(SamlError::Xml { message, .. }) if message == "multiple document elements" => Ok(()),
         other => Err(format!("expected multi-root XML rejection, got {other:?}").into()),
@@ -952,14 +947,12 @@ fn rejects_multi_root_wrapping_attack_before_signature_verification(
 
 #[test]
 fn no_signature_returns_false() -> Result<(), Box<dyn std::error::Error>> {
-    // a document without any Signature element verifies to (false, None)
     let (verified, content) = verify_signature(
         "<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\">x</samlp:Response>",
         &[],
     )?;
     assert!(!verified);
     assert!(content.is_none());
-    // keep the extractor import exercised
     let _ = extract("<a/>", &[ExtractorField::new("x", &["a"])])?;
     Ok(())
 }

@@ -41,7 +41,6 @@ jobs:
           command: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # After crates.io publishes a release, follow site/README.md to promote its docs to Stable.
 
   release-pr:
     name: Release PR

@@ -3,8 +3,6 @@ use crate::util::{camel_case, Value};
 use quick_xml::events::Event;
 use quick_xml::{Reader, XmlVersion};
 
-/// Replaces the endpoint XML fragments under `key` with their `attributes`,
-/// whitespace collapsed as for `xs:anyURI`.
 pub(super) fn read_endpoints(
     meta: &mut Value,
     key: &str,

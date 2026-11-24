@@ -116,7 +116,6 @@ fn response_xml(outbound: &Outbound<SsoResponse>) -> Result<String, Box<dyn std:
     Ok(String::from_utf8(STANDARD.decode(encoded)?)?)
 }
 
-/// The start tag of the `<saml:Attribute>` whose `Name` is `name`.
 fn attribute_tag<'a>(xml: &'a str, name: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
     let needle = format!("<saml:Attribute Name=\"{name}\"");
     let start = xml
@@ -139,8 +138,6 @@ pub(super) struct Exchange {
     pub(super) session: SsoSession,
 }
 
-/// SP-initiated SSO over HTTP-POST: the identity provider answers with
-/// `assertion` and `options`, and the service provider accepts the response.
 pub(super) fn exchange(
     assertion: SsoAssertion,
     options: RespondSso,
@@ -353,7 +350,6 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
             }
         }
     }
-    // The basic URI is the basic format however the caller spells it.
     let spelled_out = Attribute::new("given name", values(&["x"]))
         .with_name_format(AttributeNameFormat::Custom(BASIC.to_string()));
     assert_eq!(spelled_out.name_format(), Some(&AttributeNameFormat::Basic));
@@ -373,7 +369,6 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
             RespondSso::post(),
         )?;
     }
-    // The xs:Name rule is the basic format's. Other formats carry any name.
     for format in [
         AttributeNameFormat::Unspecified,
         AttributeNameFormat::Uri,
@@ -679,7 +674,6 @@ fn identity_provider_writes_the_qualifiers_and_alternative_identifier_of_the_iss
 #[test]
 fn stored_persistent_identifier_is_at_most_256_characters() -> Result<(), Box<dyn std::error::Error>>
 {
-    // The limit counts characters, not bytes.
     let longest = "é".repeat(256);
     assert_eq!(NameId::persistent(longest.clone())?.value(), longest);
 
@@ -698,7 +692,6 @@ fn expect_name_id_length_error<T: std::fmt::Debug>(
 #[test]
 fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_256_characters(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // The limit counts characters, not bytes.
     for format in [NameIdFormat::Persistent, NameIdFormat::Transient] {
         let longest = NameId::new("é".repeat(256)).with_format(format.clone());
         let exchange = exchange(SsoAssertion::new(longest.clone()), RespondSso::post())?;
@@ -714,7 +707,6 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
         expect_name_id_length_error(respond(SsoAssertion::new(too_long), RespondSso::post()))?;
     }
 
-    // A NameID without a format is issued in the first configured format.
     let sp = sp()?;
     let idp = IdentityProvider::new(
         IdpConfig::builder(
@@ -734,7 +726,6 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
         RespondSso::post(),
     ))?;
 
-    // The rule applies to these two formats only.
     let email = NameId::new(format!("{}@example.com", "x".repeat(300)))
         .with_format(NameIdFormat::EmailAddress);
     let exchange = exchange(SsoAssertion::new(email.clone()), RespondSso::post())?;
@@ -742,8 +733,6 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
     Ok(())
 }
 
-/// A peer identity provider that ignores the producer rules: the raw renderer
-/// callback writes the `<NameID>` as given.
 fn accept_peer_response(
     name_id: &NameId,
     statement: &str,
@@ -801,7 +790,6 @@ fn accept_peer_response(
 #[test]
 fn service_provider_accepts_persistent_and_transient_identifiers_that_miss_the_producer_rules(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Longer than 256 characters, and a discernible username.
     let value = format!("alice@example.com/{}", "x".repeat(300));
     for format in [NameIdFormat::Persistent, NameIdFormat::Transient] {
         let name_id = NameId::new(value.clone()).with_format(format);
@@ -937,7 +925,6 @@ fn identity_provider_does_not_write_a_name_id_format_that_is_not_an_absolute_uri
     for format in INVALID_FORMATS {
         let name_id = NameId::new("subject-1").with_format(NameIdFormat::Custom(format.into()));
         expect_name_id_format_error(respond(SsoAssertion::new(name_id), RespondSso::post()))?;
-        // A NameID without a format is issued in the first configured format.
         let mut raw_idp = idp()?.engine().clone();
         raw_idp.setting.name_id_format = vec![format.to_string()];
         expect_name_id_format_error(raw_idp.create_login_response(
@@ -986,7 +973,6 @@ fn metadata_does_not_advertise_a_name_id_format_that_is_not_an_absolute_uri(
             .build(),
         )?;
 
-        // Every advertised format is checked, not only the first.
         let formats = vec![
             NameIdFormat::EmailAddress.as_uri().to_string(),
             format.to_string(),

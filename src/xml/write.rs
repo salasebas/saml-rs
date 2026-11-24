@@ -1,5 +1,3 @@
-//! Structured XML writing helpers for generated SAML protocol XML.
-
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Writer;
 
@@ -22,7 +20,6 @@ pub(crate) fn validate_tag_prefixes(
     Ok(())
 }
 
-/// Namespace prefixes for the protocol and assertion elements.
 #[derive(Clone, Copy)]
 pub(crate) struct Prefixes<'a> {
     protocol: &'a str,

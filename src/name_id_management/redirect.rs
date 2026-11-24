@@ -1,5 +1,3 @@
-//! `ManageNameIDRequest` and `ManageNameIDResponse` over HTTP-Redirect.
-
 use std::time::SystemTime;
 
 use crate::binding::sign_message;
@@ -29,7 +27,6 @@ use super::{
     Identifier, ManageNameIdRequest, Refusal,
 };
 
-/// The receiving endpoint and clock for an inbound message.
 #[derive(Clone, Copy)]
 pub(crate) struct InboundValidation<'a> {
     pub(crate) expected_recipient: &'a str,
@@ -80,7 +77,6 @@ pub(crate) fn create_response(
     )
 }
 
-/// Parse a signed `ManageNameIDRequest` from `peer_meta`'s entity.
 pub(crate) fn parse_request(
     setting: &EntitySetting,
     peer_meta: &Metadata,
@@ -97,7 +93,6 @@ pub(crate) fn parse_request(
     )
 }
 
-/// Parse a signed `ManageNameIDResponse` that answers `request_id`.
 pub(crate) fn parse_response(
     setting: &EntitySetting,
     peer_meta: &Metadata,
@@ -115,8 +110,6 @@ pub(crate) fn parse_response(
     )
 }
 
-/// A parsed request whose `EncryptedID` and `NewEncryptedID` are not yet
-/// decrypted.
 pub(crate) struct UndecryptedRequest {
     pub(crate) id: MessageId,
     pub(crate) issuer: EntityId,
@@ -129,14 +122,11 @@ enum RequestContent {
     Identifiers(Identifier, Change),
 }
 
-/// What a parsed request names, before the caller decides how to answer.
 pub(crate) enum ParsedRequest {
     Plain(ManageNameIdRequest),
     Refused(Refusal),
 }
 
-/// The request in `flow`, before its `EncryptedID` and `NewEncryptedID` are
-/// decrypted.
 pub(crate) fn request_from_flow(
     flow: &FlowResult,
     setting: &EntitySetting,

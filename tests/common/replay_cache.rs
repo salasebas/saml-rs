@@ -5,7 +5,6 @@ use std::{
 
 use saml_rs::{InMemoryReplayCache, ReplayCache, ReplayKey, SamlError};
 
-/// Records successful writes to the built-in cache using a clock before the fixtures.
 pub struct RecordingReplayCache {
     pub seen: HashMap<String, SystemTime>,
     cache: InMemoryReplayCache,

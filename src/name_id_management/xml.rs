@@ -1,5 +1,3 @@
-//! `ManageNameIDRequest` and `ManageNameIDResponse` XML for every binding.
-
 use crate::config::NameIdFormat;
 use crate::constants::{name_id_format, namespace};
 use crate::entity::now_iso8601;
@@ -11,14 +9,12 @@ use crate::xml::write::{Prefixes, XmlWriter};
 
 use super::NameIdChange;
 
-/// The provider that sends a `ManageNameIDRequest`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Requester {
     IdentityProvider,
     ServiceProvider,
 }
 
-/// A `ManageNameIDRequest` to render.
 pub(crate) struct RequestXml<'a> {
     pub(crate) id: &'a str,
     pub(crate) issuer: &'a str,
@@ -31,7 +27,6 @@ pub(crate) struct RequestXml<'a> {
     pub(crate) sp_entity_id: &'a str,
 }
 
-/// A `ManageNameIDResponse` to render.
 pub(crate) struct ResponseXml<'a> {
     pub(crate) id: &'a str,
     pub(crate) issuer: &'a str,

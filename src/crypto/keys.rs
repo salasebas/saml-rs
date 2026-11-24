@@ -1,6 +1,3 @@
-//! Key, certificate and KeyInfo helpers backed by the selected `bergshamra`
-//! provider.
-
 use crate::config::{CertificatePem, Credentials, HmacSecret, Passphrase, X509Credential};
 use crate::error::{crypto_err, SamlError};
 use crate::util::normalize_cert_string;
@@ -14,9 +11,6 @@ pub(crate) fn read_private_key(pem: &str, password: Option<&str>) -> Result<Key,
     load_pem_auto(pem.as_bytes(), password).map_err(crypto_err)
 }
 
-/// Check that every key and certificate in `credentials` loads, and that the
-/// key of each signing and decryption credential is the private key of its
-/// certificate.
 pub(crate) fn check_credentials(credentials: &Credentials) -> Result<(), SamlError> {
     if let Some(credential) = credentials.signing_credential() {
         check_credential(credential, "signing credential")?;
@@ -70,7 +64,6 @@ fn load_published_certificate(certificate: &CertificatePem, name: &str) -> Resul
         .map_err(|error| credential_error(name, "the certificate does not load", error))
 }
 
-/// The SubjectPublicKeyInfo of `key`, encoded by the selected provider.
 fn public_key(key: &Key, name: &str) -> Result<Vec<u8>, SamlError> {
     key.data
         .export_public()
@@ -88,8 +81,6 @@ fn credential_error(
     }
 }
 
-/// The decryption key `pem`, then each of `additional`, in the order they are
-/// tried.
 pub(crate) fn load_decryption_keys(
     pem: &str,
     password: Option<&str>,
@@ -110,8 +101,6 @@ pub(crate) fn load_hmac_secret(secret: &HmacSecret) -> Result<Key, SamlError> {
     load_hmac_key(secret.as_bytes()).map_err(crypto_err)
 }
 
-/// Wrap a bare base64 certificate (as found in metadata) into a PEM block.
-/// Returns `None` when the bare certificate is not ASCII text.
 fn to_cert_pem(cert: &str) -> Option<String> {
     if cert.contains("BEGIN CERTIFICATE") {
         return Some(cert.to_string());
@@ -133,7 +122,6 @@ fn to_cert_pem(cert: &str) -> Option<String> {
     ))
 }
 
-/// Load an X.509 certificate (PEM or bare base64) as a verification key.
 pub(crate) fn load_certificate(cert: &str) -> Result<Key, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     let pem =
@@ -141,8 +129,6 @@ pub(crate) fn load_certificate(cert: &str) -> Result<Key, SamlError> {
     load_x509_cert_pem(pem.as_bytes()).map_err(crypto_err)
 }
 
-/// Build a `<ds:KeyInfo><ds:X509Data><ds:X509Certificate>` block from a
-/// certificate.
 #[cfg(test)]
 fn build_key_info(cert: &str) -> String {
     let b64 = normalize_cert_string(cert);
@@ -161,7 +147,6 @@ mod tests {
         include_str!("../../tests/fixtures/key/sp/privkey.encrypted.pkcs8.pem");
     const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
     const IDP_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
-    // SP signing passphrase from upstream test/key/keypass.txt.
     #[cfg(feature = "crypto-rustcrypto")]
     const SP_PASS: &str = "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px";
 

@@ -1,7 +1,3 @@
-//! The signature and digest algorithms, and the verification keys, each
-//! [`XmlSignatureProfile`] accepts on a signature that authenticates an
-//! accepted message or a signed metadata import.
-
 use crate::binding::decode_base64;
 use crate::config::XmlSignatureProfile;
 use crate::constants::{digest_algorithm, signature_algorithm};
@@ -12,8 +8,6 @@ use bergshamra::keys::Key;
 
 const MIN_RSA_KEY_BITS: usize = 2048;
 
-/// Whether `profile` accepts the XML-DSig `SignatureMethod` or detached
-/// `SigAlg` URI.
 pub(crate) fn allows_signature_method(profile: XmlSignatureProfile, uri: &str) -> bool {
     match profile {
         XmlSignatureProfile::StrictRsaSha2 => matches!(
@@ -34,7 +28,6 @@ pub(crate) fn allows_signature_method(profile: XmlSignatureProfile, uri: &str) -
     }
 }
 
-/// Whether `profile` accepts the XML-DSig `DigestMethod` URI of a reference.
 pub(crate) fn allows_digest_method(profile: XmlSignatureProfile, uri: &str) -> bool {
     match profile {
         XmlSignatureProfile::StrictRsaSha2 => matches!(
@@ -46,13 +39,6 @@ pub(crate) fn allows_digest_method(profile: XmlSignatureProfile, uri: &str) -> b
     }
 }
 
-/// Reject a peer or pinned metadata verification key that `profile` does not
-/// accept.
-///
-/// [`XmlSignatureProfile::StrictRsaSha2`] and
-/// [`XmlSignatureProfile::ExcludeWeakAlgorithms`] reject an RSA key shorter
-/// than 2048 bits with the [`SamlError::Crypto`] error a provider reports for a
-/// key it cannot use.
 pub(crate) fn check_verification_key(
     profile: XmlSignatureProfile,
     key: &Key,

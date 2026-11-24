@@ -1,12 +1,3 @@
-//! Historical regression cases derived from npm `samlify` index tests.
-//!
-//! Byte-exact assertions over xml-crypto / xml output (embedded signatures, SP
-//! metadata serialization) are adapted to behaviour-equivalent checks
-//! (round-trip verify, parse-back, structural ordering); deterministic
-//! message-signature bytes are still compared exactly.
-
-#![allow(clippy::unwrap_used)]
-
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
@@ -146,7 +137,6 @@ fn time_window_with_and_without_drift_tolerance() {
     let after10 = iso8601_offset(600);
     let now = OffsetDateTime::now_utc();
 
-    // without drift
     let strict = ClockSkew::strict();
     assert!(window(Some(&before5), Some(&after5)).contains(now, strict));
     assert!(window(Some(&before5), None).contains(now, strict));
@@ -157,7 +147,6 @@ fn time_window_with_and_without_drift_tolerance() {
     assert!(!window(Some(&after5), Some(&after10)).contains(now, strict));
     assert!(window(None, None).contains(now, strict));
 
-    // with drift tolerance 5 min + 1 sec
     let d = ClockSkew::from_millis(-301_000, 301_000);
     assert!(window(Some(&before5), Some(&after5)).contains(now, d));
     assert!(window(Some(&before5), None).contains(now, d));
@@ -171,14 +160,11 @@ fn time_window_with_and_without_drift_tolerance() {
 
 #[test]
 fn metadata_with_multiple_entity_descriptors_is_invalid() {
-    // samlify skips this (its DOM ignores the trailing element); our parser rejects it.
     assert!(IdpMetadata::from_xml(MULTI_ENTITY).is_err());
 }
 
 #[test]
 fn undefined_x509_key_in_metadata_returns_none() -> Result<(), Box<dyn std::error::Error>> {
-    // Metadata without any certificate returns None for either use (samlify
-    // returns null for a certificate use that is not declared).
     let sp = SpMetadata::from_xml(&generate_sp_metadata(&SpMetadataInput {
         entity_id: "https://sp".into(),
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "http://sp/acs")],
@@ -227,7 +213,6 @@ fn get_name_id_format_in_metadata() -> Result<(), Box<dyn std::error::Error>> {
 fn get_entity_setting() -> Result<(), Box<dyn std::error::Error>> {
     let idp = IdpMetadata::from_xml(IDPMETA)?;
     let sp = SpMetadata::from_xml(SPMETA)?;
-    // Settings are plain accessible structs in Rust.
     assert!(idp.as_metadata().entity_id().is_some());
     assert_eq!(
         EntitySetting::default().request_signature_algorithm,
@@ -303,20 +288,20 @@ mod crypto {
     const OCTET_SHA256: &str = "SAMLRequest=fZJbTwIxEIX/yqbvy3Yv3BogQYiRBIWw6INvY3eAJt0WO10v/966YIKJkPRpek7nfDMdEdT6IKaN35s1vjVIPvqstSHRXoxZ44ywQIqEgRpJeCnK6f1SZB0uDs56K61mZ5brDiBC55U1LFrMx2wrB8P+IB/GeQHbuOgVwxigB3EqewXfDjDPZJ9Fz+goWMYsvBB8RA0uDHkwPpR42o1THvNswzMRTtHtpEX2wqJ5QFEGfOvce38QSaKtBL235EXOeZoQ2aRUZqexVDvzaEp070pikveG3W5otTrx3ShTBdl1tNejiMTdZrOKV4/lhkXTX9yZNdTU6E4dntbLfzIVnGdtJpDEJqOfaYqW1k0ua2v0UIGHUXKuHx3X+hBSLuYrq5X8im6tq8Ffhkg7aVtRVbxtpQJrUHpaVQ6JAozW9mPmEDyGzYEmZMnk2PbvB5p8Aw==&SigAlg=http%3A%2F%2Fwww.w3.org%2F2001%2F04%2Fxmldsig-more%23rsa-sha256";
     const OCTET_SHA512: &str = "SAMLRequest=fZJfT8IwFMW/ytL3sY5tCA0jQYiRBIWw6INvY3eAJt0WO10v/966YIKJkPRpek7nfDMdEdT6IKaN35s1vjVIPvqstSHRXoxZ44ywQIqEgRpJeCnK6f1SZB0uDs56K61mZ5brDiBC55U1LFrMx2wrB8P+IB/GeQHbuOgVwxigB3EqewXfDjDPZJ9Fz+goWMYsvBB8RA0uDHkwPpR42o1THvNswzMRTtHtpEX2wqJ5QFEGfOvce38QSaKtBL235EXOeZoQ2aRUZqexVDvzaEp070pikveG3W5otTrx3ShTBdl1tNejiMTdZrOKV4/lhkXTX9yZNdTU6E4dntbLfzIVnGdtJpDEJqOfaYqW1k0ua2v0UIGHUXKuHx3X+hBSLuYrq5X8im6tq8Ffhkg7aVtRVbxtpQJrUHpaVQ6JAozW9mPmEDyGzYEmZMnk2PbvB5p8Aw==&SigAlg=http%3A%2F%2Fwww.w3.org%2F2001%2F04%2Fxmldsig-more%23rsa-sha512";
 
-    fn sp_signing() -> Vec<String> {
-        SpMetadata::from_xml(SPMETA)
-            .unwrap()
+    fn sp_signing() -> Result<Vec<String>, SamlError> {
+        let metadata = SpMetadata::from_xml(SPMETA)?;
+        Ok(metadata
             .as_metadata()
             .x509_certificates(CertUse::Signing)
-            .to_vec()
+            .to_vec())
     }
     #[cfg(feature = "crypto-rustcrypto")]
-    fn idp_signing() -> Vec<String> {
-        IdpMetadata::from_xml(IDPMETA)
-            .unwrap()
+    fn idp_signing() -> Result<Vec<String>, SamlError> {
+        let metadata = IdpMetadata::from_xml(IDPMETA)?;
+        Ok(metadata
             .as_metadata()
             .x509_certificates(CertUse::Signing)
-            .to_vec()
+            .to_vec())
     }
     fn assert_content_not_covered(
         result: Result<(bool, Option<String>), SamlError>,
@@ -329,7 +314,6 @@ mod crypto {
         }
     }
 
-    // 9-11: sign a SAML message (round-trip verify; bytes are deterministic).
     fn sign_and_verify(octet: &str, alg: &str) -> Result<(), Box<dyn std::error::Error>> {
         let key = read_private_key(SP_PRIVKEY, None)?;
         let sig = sign_octet_string(octet, &key, alg)?;
@@ -350,7 +334,6 @@ mod crypto {
         sign_and_verify(OCTET_SHA512, RSA_SHA512)
     }
 
-    // 18-20: construct an embedded signature (round-trip verify).
     fn construct_and_verify(alg: &str) -> Result<(), Box<dyn std::error::Error>> {
         let key = read_private_key(SP_PRIVKEY, None)?;
         let signed = sign_saml_xml(REQUEST, true, &key, SIGN_CERT, alg, &[], None)?;
@@ -371,50 +354,46 @@ mod crypto {
         construct_and_verify(RSA_SHA512)
     }
 
-    // 21-26: verify a signed XML against metadata + integrity (tampered) checks.
     #[cfg(feature = "crypto-rustcrypto")]
     #[test]
     fn verify_xml_signature_sha1_with_metadata() -> Result<(), Box<dyn std::error::Error>> {
-        assert!(verify_signature(RESPONSE_SIGNED, &idp_signing())?.0);
+        assert!(verify_signature(RESPONSE_SIGNED, &idp_signing()?)?.0);
         Ok(())
     }
     #[cfg(feature = "crypto-rustcrypto")]
     #[test]
     fn integrity_check_request_sha1() -> Result<(), Box<dyn std::error::Error>> {
-        assert!(!verify_signature(FALSE_SHA1, &sp_signing())?.0);
+        assert!(!verify_signature(FALSE_SHA1, &sp_signing()?)?.0);
         Ok(())
     }
     #[test]
     fn reject_issuer_only_request_sha256_with_metadata() -> Result<(), Box<dyn std::error::Error>> {
-        assert_content_not_covered(verify_signature(SIGNED_SHA256, &sp_signing()))
+        assert_content_not_covered(verify_signature(SIGNED_SHA256, &sp_signing()?))
     }
     #[test]
     fn integrity_check_request_sha256() -> Result<(), Box<dyn std::error::Error>> {
-        assert!(!verify_signature(FALSE_SHA256, &sp_signing())?.0);
+        assert!(!verify_signature(FALSE_SHA256, &sp_signing()?)?.0);
         Ok(())
     }
     #[test]
     fn reject_issuer_only_request_sha512_with_metadata() -> Result<(), Box<dyn std::error::Error>> {
-        assert_content_not_covered(verify_signature(SIGNED_SHA512, &sp_signing()))
+        assert_content_not_covered(verify_signature(SIGNED_SHA512, &sp_signing()?))
     }
     #[test]
     fn integrity_check_request_sha512() -> Result<(), Box<dyn std::error::Error>> {
-        assert!(!verify_signature(FALSE_SHA512, &sp_signing())?.0);
+        assert!(!verify_signature(FALSE_SHA512, &sp_signing()?)?.0);
         Ok(())
     }
 
-    // 27: rolling certificate — verification picks the matching cert from a list.
     #[test]
     fn verify_xml_signature_with_rolling_certificate() -> Result<(), Box<dyn std::error::Error>> {
         let key = read_private_key(SP_PRIVKEY, None)?;
         let signed = sign_saml_xml(REQUEST, true, &key, SIGN_CERT, RSA_SHA256, &[], None)?;
-        // metadata declares two certs; only the second is the signer.
         let certs = vec![IDP_CERT.to_string(), SIGN_CERT.to_string()];
         assert!(verify_signature(&signed, &certs)?.0);
         Ok(())
     }
 
-    // 28-30: verify with a bare certificate (samlify `keyFile`).
     #[cfg(feature = "crypto-rustcrypto")]
     #[test]
     fn reject_issuer_only_request_sha1_with_cert() -> Result<(), Box<dyn std::error::Error>> {
@@ -429,7 +408,6 @@ mod crypto {
         assert_content_not_covered(verify_signature(SIGNED_SHA512, &[SP_CERT.to_string()]))
     }
 
-    // 31-35: encrypt assertion + error cases.
     #[cfg(not(feature = "crypto-fips"))]
     #[test]
     fn encrypt_assertion_passes() -> Result<(), Box<dyn std::error::Error>> {

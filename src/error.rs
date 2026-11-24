@@ -255,7 +255,6 @@ impl fmt::Display for ResourceLimit {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum SamlError {
-    // Wire / XML errors.
     /// Raw DEFLATE data could not be compressed or inflated.
     #[error("deflate error")]
     #[non_exhaustive]
@@ -310,7 +309,6 @@ pub enum SamlError {
         name: &'static str,
     },
 
-    // Unsupported profiles and bindings.
     /// An operation or input is unsupported, including operations that
     /// require a Cargo feature disabled in this build.
     #[error("unsupported: {0}")]
@@ -332,7 +330,6 @@ pub enum SamlError {
         actual: Binding,
     },
 
-    // SAML protocol validation.
     /// Issuer in the message does not match the expected peer entity ID.
     #[error("issuer mismatch: expected {expected}, got {actual:?}")]
     #[non_exhaustive]
@@ -514,7 +511,6 @@ pub enum SamlError {
         source: Box<dyn std::error::Error + Send + Sync>,
     },
 
-    // Signature / crypto validation.
     /// Required signature is absent.
     #[error("signature missing where required")]
     SignatureMissing,
@@ -566,12 +562,10 @@ pub enum SamlError {
     #[error("signature algorithm is not allowed")]
     AlgorithmUnsupported,
 
-    // Metadata / trust validation.
     /// No trusted certificate could be selected for verification.
     #[error("no trusted certificate could be selected for verification")]
     NoTrustedCertificate,
 
-    // Lower-level operational variants.
     /// Caller supplied an empty request ID for response correlation.
     ///
     /// Prefer [`Self::InResponseToMismatch`] when a message value fails request
@@ -644,7 +638,6 @@ impl SamlError {
     }
 }
 
-/// Wrap an XML parser error.
 pub(crate) fn xml_err(source: impl std::error::Error + Send + Sync + 'static) -> SamlError {
     SamlError::Xml {
         message: "document is not well-formed".into(),
@@ -652,7 +645,6 @@ pub(crate) fn xml_err(source: impl std::error::Error + Send + Sync + 'static) ->
     }
 }
 
-/// Wrap an error from the XML security backend.
 #[cfg(crypto)]
 pub(crate) fn crypto_err(source: impl std::error::Error + Send + Sync + 'static) -> SamlError {
     SamlError::Crypto {

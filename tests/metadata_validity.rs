@@ -86,8 +86,6 @@ fn sp_descriptor(sp: &saml_rs::ServiceProvider) -> Result<SpDescriptor, SamlErro
     )
 }
 
-/// `sp` metadata that also publishes a SOAP `ManageNameIDService`, which
-/// `SpConfig` does not build.
 fn soap_name_id_sp_descriptor(sp: &saml_rs::ServiceProvider) -> Result<SpDescriptor, SamlError> {
     let metadata = sp.metadata_xml().replacen(
         "<AssertionConsumerService",
@@ -103,8 +101,6 @@ fn soap_name_id_sp_descriptor(sp: &saml_rs::ServiceProvider) -> Result<SpDescrip
     )
 }
 
-/// A SOAP `ManageNameIDRequest` from the service provider to terminate its
-/// persistent identifier.
 fn sp_terminate_request() -> Result<String, SamlError> {
     let xml = format!(
         r#"<samlp:ManageNameIDRequest xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="_sp_manage_request" Version="2.0" IssueInstant="2024-01-01T00:00:00Z" Destination="{IDP_NIM_URL}"><saml:Issuer>{SP_ENTITY_ID}</saml:Issuer><saml:NameID Format="{PERSISTENT}" NameQualifier="{IDP_ENTITY_ID}" SPNameQualifier="{SP_ENTITY_ID}">current-value</saml:NameID><samlp:Terminate/></samlp:ManageNameIDRequest>"#
@@ -132,7 +128,6 @@ fn is_valid_until_error<T>(result: &Result<T, SamlError>) -> bool {
     )
 }
 
-/// The AuthnRequest that `sp` sends to `idp`, posted to the identity provider.
 fn posted_authn_request(
     sp: &saml_rs::ServiceProvider,
     idp: &saml_rs::IdentityProvider,

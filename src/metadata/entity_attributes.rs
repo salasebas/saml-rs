@@ -1,5 +1,3 @@
-//! Entity attributes published in metadata with `mdattr:EntityAttributes`.
-
 use crate::constants::entity_attribute::{
     ASSURANCE_CERTIFICATION, ENTITY_CATEGORY, ENTITY_CATEGORY_SUPPORT, SUBJECT_ID_REQUIREMENT,
 };
@@ -224,8 +222,6 @@ impl From<SubjectIdRequirement> for Attribute {
     }
 }
 
-/// The `saml:Attribute` elements bound to `entity`, the `EntityDescriptor`
-/// under the single root of `roots`, read with their namespaces.
 pub(super) fn read_bound_attributes(
     xml: &str,
     roots: &[Node],
@@ -283,11 +279,6 @@ fn has_extensions_on_path(root: &Node, entity: &Node) -> bool {
     }
 }
 
-/// Read `elements` as attributes.
-///
-/// # Errors
-///
-/// Returns [`SamlError::Invalid`] for an attribute without `Name`.
 pub(super) fn entity_attributes(elements: &[SamlElement]) -> Result<EntityAttributes, SamlError> {
     elements
         .iter()
@@ -332,8 +323,6 @@ pub(super) fn validate_entity_attributes(attributes: &[Attribute]) -> Result<(),
     Ok(())
 }
 
-/// Write `attributes` as the entity's `Extensions`. No attributes writes
-/// nothing.
 pub(super) fn write_entity_attributes(writer: &mut MetadataWriter, attributes: &[Attribute]) {
     if attributes.is_empty() {
         return;

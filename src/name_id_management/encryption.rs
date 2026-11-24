@@ -1,5 +1,3 @@
-//! `EncryptedID` and `NewEncryptedID` in a `ManageNameIDRequest`.
-
 use crate::config::IdentifierEncryptionPolicy;
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
@@ -9,18 +7,12 @@ use crate::xml::protocol_element::parse_saml_with_limits;
 
 use super::{identifier_and_change, Change, Identifier, NameIdChange};
 
-/// An encrypted child of a `ManageNameIDRequest`.
 #[derive(Debug, Clone, Copy)]
 enum EncryptedChild {
-    /// `EncryptedID`, which carries a `NameID`.
     EncryptedId,
-    /// `NewEncryptedID`, which carries a `NewID`.
     NewEncryptedId,
 }
 
-/// The rendered request, with its `NameID` and `NewID` replaced by
-/// `EncryptedID` and `NewEncryptedID` for the peer's encryption certificate
-/// when `policy` selects it.
 pub(crate) fn protect_request(
     xml: String,
     policy: IdentifierEncryptionPolicy,
@@ -33,7 +25,6 @@ pub(crate) fn protect_request(
     }
 }
 
-/// The `NameID` that the request's `EncryptedID` carries.
 pub(crate) fn decrypt_name_id(xml: &str, setting: &EntitySetting) -> Result<NameId, SamlError> {
     match decrypted(xml, EncryptedChild::EncryptedId, setting)? {
         (Identifier::Plain(name_id), _) => Ok(name_id),
@@ -43,7 +34,6 @@ pub(crate) fn decrypt_name_id(xml: &str, setting: &EntitySetting) -> Result<Name
     }
 }
 
-/// The new value that the request's `NewEncryptedID` carries.
 pub(crate) fn decrypt_new_id(xml: &str, setting: &EntitySetting) -> Result<String, SamlError> {
     match decrypted(xml, EncryptedChild::NewEncryptedId, setting)? {
         (_, Change::Plain(NameIdChange::NewId(value))) => Ok(value),
@@ -53,8 +43,6 @@ pub(crate) fn decrypt_new_id(xml: &str, setting: &EntitySetting) -> Result<Strin
     }
 }
 
-/// The identifier and change of the request with `child` decrypted in place,
-/// read again with the strict request reader.
 fn decrypted(
     xml: &str,
     child: EncryptedChild,

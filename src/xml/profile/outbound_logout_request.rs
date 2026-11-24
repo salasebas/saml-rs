@@ -14,10 +14,7 @@ use quick_xml::NsReader;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum OutboundLogoutRequestValidation {
-    /// The plaintext request, before the `<NameID>` is encrypted.
     BeforeSigning,
-    /// The signed request. `EncryptIdentifiers` expects an `<EncryptedID>` in
-    /// place of the `<NameID>`.
     AfterEmbeddedSigning(IdentifierEncryptionPolicy),
 }
 
@@ -31,12 +28,9 @@ impl OutboundLogoutRequestValidation {
     }
 }
 
-/// How outbound `LogoutRequest` checks treat `NotOnOrAfter`.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum OutboundLogoutExpiration<'a> {
-    /// The attribute may be absent. A present value must still be UTC.
     Optional,
-    /// The attribute must equal this instant.
     Required(&'a str),
 }
 
@@ -48,16 +42,11 @@ pub(crate) struct OutboundLogoutRequestExpectation<'a> {
     pub(crate) expiration: OutboundLogoutExpiration<'a>,
     pub(crate) reason: Option<&'a str>,
     pub(crate) name_id: &'a str,
-    /// Expected `<NameID>` `Format`. `None` expects the attribute to be absent
-    /// or to name the unspecified format.
     pub(crate) name_id_format: Option<&'a str>,
     pub(crate) name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     pub(crate) session_indexes: &'a [&'a str],
 }
 
-/// `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` of an outbound
-/// `<NameID>`. `None` omits the attribute, and a `LogoutRequest` check expects
-/// it to be absent.
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct OutboundNameIdQualifiers<'a> {
     pub(crate) name_qualifier: Option<&'a str>,

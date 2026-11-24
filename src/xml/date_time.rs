@@ -45,7 +45,6 @@ fn is_xml_schema_whitespace(value: char) -> bool {
     matches!(value, ' ' | '\t' | '\n' | '\r')
 }
 
-/// Parse the SAML UTC subset of `xs:dateTime` and return its collapsed value.
 pub(crate) fn parse_saml_utc_date_time(value: &str) -> Option<&str> {
     parse_saml_utc_date_time_with_seconds(value).map(|(normalized, _)| normalized)
 }
@@ -56,7 +55,6 @@ pub(crate) fn parse_saml_utc_instant(value: &str) -> Option<OffsetDateTime> {
     OffsetDateTime::parse(parse_saml_utc_date_time(value)?, &Rfc3339).ok()
 }
 
-/// Parse a UTC `xs:dateTime` that a SAML producer is allowed to generate.
 pub(crate) fn parse_generated_saml_utc_date_time(value: &str) -> Option<&str> {
     parse_saml_utc_date_time_with_seconds(value)
         .filter(|(_, second)| *second < 60)

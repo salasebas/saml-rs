@@ -9,12 +9,9 @@ use crate::constants::url_params;
 use crate::error::SamlError;
 use crate::model::RelayState;
 
-/// How an artifact is encoded for the browser.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ArtifactEncoding {
-    /// `SAMLart` query parameter on a redirect.
     Url,
-    /// `SAMLart` hidden control in a POST form.
     Form,
 }
 

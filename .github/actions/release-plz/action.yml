@@ -9,8 +9,6 @@ inputs:
 runs:
   using: composite
   steps:
-    # Pins track release-plz/action v0.5.139 (release-plz 0.3.169,
-    # cargo-semver-checks 0.50).
     - name: Install release tools
       uses: taiki-e/install-action@183e4297cca2404691e9380e1307288dced5c82a # v2.87.25
       with:

@@ -255,7 +255,6 @@ fn response_input(
     })
 }
 
-/// The `LogoutRequest` XML that `outbound` carries.
 fn request_xml(outbound: &Outbound<LogoutRequest>) -> Result<String, Box<dyn std::error::Error>> {
     match outbound.delivery() {
         OutboundDelivery::Redirect(url) => {
@@ -668,7 +667,6 @@ fn logout_request_name_id_stays_plaintext_unless_encryption_is_selected(
     Ok(())
 }
 
-/// `metadata` without its `KeyDescriptor` elements.
 fn without_key_descriptors(metadata: &str) -> Result<String, Box<dyn std::error::Error>> {
     let mut stripped = metadata.to_string();
     while let Some(start) = stripped.find("<KeyDescriptor") {
@@ -815,8 +813,6 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
 fn a_replayed_encrypted_id_is_rejected_before_it_is_decrypted(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    // Any attempt to decrypt fails, because this provider allows no decryption
-    // work.
     let mut no_decryption_work = XmlEncryptionPolicy::default();
     no_decryption_work.max_decryption_work = 0;
     let no_decryption = idp_with(no_decryption_work)?;

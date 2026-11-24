@@ -1,5 +1,3 @@
-//! SAML protocol elements read with their namespaces, for SOAP exchanges.
-
 use crate::constants::{name_id_format, namespace};
 use crate::error::SamlError;
 use crate::model::{SamlInstant, Status, StatusMessage};
@@ -60,10 +58,6 @@ pub(crate) fn parse_saml(xml: &str) -> Result<SamlElement, SamlError> {
     parse_saml_with_limits(xml, XmlLimits::default())
 }
 
-/// The first `saml:Issuer` child, unless its content is empty.
-///
-/// The content is an `xs:string`, read as sent. `Format` is an `xs:anyURI`,
-/// read with its whitespace collapsed.
 pub(crate) fn issuer(element: &SamlElement) -> Option<PartyName> {
     let issuer = element
         .children
@@ -85,7 +79,6 @@ pub(crate) fn issuer_format_is_entity(format: Option<&str>) -> bool {
     }
 }
 
-/// `Status` of a status response.
 pub(crate) fn read_status(response: &SamlElement) -> Result<Status, SamlError> {
     let mut statuses = response
         .children

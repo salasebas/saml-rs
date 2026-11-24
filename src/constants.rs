@@ -166,7 +166,6 @@ pub mod authn_context_class_ref {
 
 /// SAML status codes (`StatusCode`), top- and second-tier.
 pub mod status_code {
-    // top-tier
     /// Success.
     pub const SUCCESS: &str = "urn:oasis:names:tc:SAML:2.0:status:Success";
     /// Requester error.
@@ -175,7 +174,6 @@ pub mod status_code {
     pub const RESPONDER: &str = "urn:oasis:names:tc:SAML:2.0:status:Responder";
     /// Version mismatch.
     pub const VERSION_MISMATCH: &str = "urn:oasis:names:tc:SAML:2.0:status:VersionMismatch";
-    // second-tier
     /// Authentication failed.
     pub const AUTHN_FAILED: &str = "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed";
     /// Invalid attribute name or value.
@@ -289,8 +287,6 @@ pub mod data_encryption_algorithm {
     pub const TRIPLE_DES: &str = TRIPLE_DES_CBC;
 }
 
-/// AES-GCM, the XML Encryption 1.1 block encryption that authenticates
-/// its ciphertext.
 #[cfg(crypto)]
 pub(crate) fn is_xml_encryption_gcm_algorithm(algorithm: &str) -> bool {
     matches!(
@@ -333,7 +329,6 @@ pub mod transform_algorithm {
     pub const EXC_C14N_WITH_COMMENTS: &str = "http://www.w3.org/2001/10/xml-exc-c14n#WithComments";
 }
 
-/// SAML query and form parameter names.
 pub(crate) mod url_params {
     /// `SAMLRequest` parameter.
     pub const SAML_REQUEST: &str = "SAMLRequest";

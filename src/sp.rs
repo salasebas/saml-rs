@@ -1,5 +1,3 @@
-//! SAML Service Provider entity.
-
 use crate::assertion_acceptance::reject_unsolicited_bearer_in_response_to;
 use crate::binding::{build_redirect_url, encode_base64};
 use crate::constants::{Binding, CertUse, ParserType};
@@ -21,26 +19,17 @@ use crate::xml::write::Prefixes;
 pub(crate) use authn_request::AuthnRequestPreferences;
 use authn_request::{render_default_authn_request_xml, AuthnRequestXml};
 
-/// A SAML 2.0 Service Provider: runtime [`EntitySetting`] plus parsed [`SpMetadata`].
 #[derive(Debug, Clone)]
 pub struct Engine {
-    /// Runtime configuration (keys, algorithms, flags).
     pub setting: EntitySetting,
-    /// Parsed SP metadata.
     pub metadata: SpMetadata,
 }
 
-/// Per-call options for an `<AuthnRequest>` the service provider builds.
 #[derive(Default)]
 pub struct LoginRequestOptions<'a> {
-    /// RelayState for this request. `Some("")` is preserved as an empty RelayState.
     pub relay_state: Option<&'a str>,
-    /// Optional `ForceAuthn` attribute.
     pub force_authn: Option<bool>,
-    /// Optional `AssertionConsumerServiceIndex`; when present, ACS URL and
-    /// `ProtocolBinding` are omitted.
     pub assertion_consumer_service_index: Option<u16>,
-    /// Expected SAML Response binding. Defaults to HTTP-POST.
     pub response_binding: Option<Binding>,
 }
 
@@ -68,7 +57,6 @@ impl<'a> LoginResponseParseOptions<'a> {
         }
     }
 
-    /// Set whether a signed response must carry `Destination`.
     pub(crate) fn signed_destination(
         mut self,
         signed_destination: SignedMessageDestination,
@@ -84,13 +72,6 @@ impl<'a> LoginResponseParseOptions<'a> {
 }
 
 impl Engine {
-    /// Build from SP metadata XML and copy its assertion signing requirement into `setting`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when `xml` is malformed, exceeds XML limits, or cannot
-    /// be parsed as SP metadata. Metadata parser errors include invalid entity,
-    /// endpoint, certificate, or signing flag declarations.
     pub fn from_metadata(xml: &str, setting: EntitySetting) -> Result<Self, SamlError> {
         Ok(Self::from_parsed_metadata(
             SpMetadata::from_xml(xml)?,
@@ -113,13 +94,6 @@ impl Engine {
         Self { setting, metadata }
     }
 
-    /// Build by generating SP metadata from `config`, then importing it.
-    ///
-    /// # Errors
-    ///
-    /// Returns the errors of [`generate_sp_metadata`], or an error if the
-    /// generated metadata cannot be parsed back into SP metadata, including
-    /// invalid endpoint or certificate declarations.
     pub fn from_config(
         config: &SpMetadataInput,
         setting: EntitySetting,
@@ -127,7 +101,6 @@ impl Engine {
         Self::from_metadata(&generate_sp_metadata(config)?, setting)
     }
 
-    /// The SP metadata XML.
     pub fn metadata_xml(&self) -> &str {
         self.metadata.as_metadata().metadata_xml()
     }

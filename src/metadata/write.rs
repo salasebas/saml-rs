@@ -1,5 +1,3 @@
-//! Structured XML writing helpers for generated SAML metadata.
-
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Writer;
 

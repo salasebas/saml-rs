@@ -1,5 +1,3 @@
-//! `<EncryptedID>` in place of the `<NameID>` of a `<LogoutRequest>`.
-
 use crate::config::IdentifierEncryptionPolicy;
 use crate::constants::{CertUse, ParserType};
 use crate::entity::EntitySetting;
@@ -9,9 +7,6 @@ use crate::metadata::Metadata;
 use crate::model::LogoutRequest;
 use crate::xml::protocol_element::SamlElement;
 
-/// `xml` with its `<NameID>` encrypted for the peer when `policy` selects it.
-/// The peer key is the first `KeyDescriptor` with `use="encryption"` in
-/// `target_meta`.
 pub(super) fn encrypt_name_id_for_peer(
     xml: String,
     policy: IdentifierEncryptionPolicy,
@@ -47,12 +42,6 @@ fn encrypt(_xml: &str, _certificate: &str, _setting: &EntitySetting) -> Result<S
     ))
 }
 
-/// `request` with the `<EncryptedID>` of its `<LogoutRequest>` replaced by
-/// the `<NameID>` it carries, decrypted with the local decryption key.
-///
-/// Call after authenticating the request. If the request has no encrypted
-/// identifier, no configured key can decrypt it, or it decrypts to a
-/// `<BaseID>`, return the original request.
 pub(crate) fn decrypt_encrypted_id(
     request: LogoutRequest,
     setting: &EntitySetting,

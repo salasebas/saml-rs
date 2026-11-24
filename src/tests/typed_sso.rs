@@ -194,7 +194,6 @@ fn idp_config() -> Result<IdpConfig, SamlError> {
     .build()
 }
 
-// Field combination exercised by the typed Web Browser SSO accept tests.
 fn recommended_sso_accept_validation() -> SpValidationPolicy {
     SpValidationPolicy::default()
 }

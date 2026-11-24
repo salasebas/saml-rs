@@ -1,4 +1,3 @@
-//! Typed SSO comparison of a success `<Response>` `<Issuer>` with the identity provider.
 #![cfg(crypto)]
 
 use super::common;

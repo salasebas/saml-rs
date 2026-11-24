@@ -114,8 +114,6 @@ fn ensure_detached_octet_matches_consumed_fields(
     }
 }
 
-/// Verify a detached (redirect/SimpleSign) message signature, returning the
-/// verified `SigAlg`. Requires a crypto provider.
 pub(super) fn verify_detached(
     binding: Binding,
     parser_type: ParserType,
@@ -179,7 +177,6 @@ pub(super) fn verify_detached(
         }
     }
 
-    // A leftover unloadable cert must not poison a rolling-cert verdict.
     match first_error {
         Some(error) if !tried_invalid => Err(error),
         _ => Err(detached_signature_verification()),

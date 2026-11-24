@@ -3253,7 +3253,6 @@ fn typed_logout_request_does_not_write_a_name_id_format_that_is_not_an_absolute_
         }
     }
 
-    // A NameID without a format is sent in the first configured format.
     let mut raw_idp = idp.engine().clone();
     raw_idp.setting.name_id_format = vec!["local-format".into()];
     let raw_sp = sp.engine();

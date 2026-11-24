@@ -19,7 +19,6 @@ const CERTIFICATE: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
 const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
 const RESPONSE_SIGNED_SHA1: &str = include_str!("../../tests/fixtures/misc/response_signed.xml");
 const RSA_SHA1_OCTETS: &str = "SAMLRequest=provider-matrix";
-// PKCS#1 v1.5 RSA-SHA1 over RSA_SHA1_OCTETS with provider_matrix_privkey.
 const RSA_SHA1_SIGNATURE: &str = "C6V+Aylkp2rFZJEZrpZrYFZDl2xn8kLuuSZcsxZ6ClDkYUBADwl3cVdDstU0i1Kx9CV56m3La/iT463DoKASWY+Jg31NU2741dgH6q3vuWLnUOlKTWHCHrbGOBdpU1DzZw2Ab9CA2KOg7KPlOFvJZMfY2IfdznPyQk4GNr54ij/HZWTZbASdBca6yGONqbsyU2f+IdKAYd+qDOgXn7WZQ3LkCNY1tOTGSoGmRv1FRCfJ4MP2FW2MMSueuS8NLPeW4tsgZ7pIK5Vx2HGeKNz4QtEOlMkOnWNJb6o9MgdywQ0sxbN+vI/m2O1qZz4G/JuoX1NXj+hoQ7UJ2UejcdiscA==";
 
 #[cfg(any(feature = "crypto-aws-lc", feature = "crypto-fips"))]
@@ -28,7 +27,6 @@ const RSA_512_CERTIFICATE: &str = include_str!("../../tests/fixtures/key/rsa512/
 const RSA_512_RESPONSE_SIGNED: &str =
     include_str!("../../tests/fixtures/key/rsa512/response_signed.xml");
 const RSA_512_OCTETS: &str = "SAMLRequest=rsa-512";
-// PKCS#1 v1.5 RSA-SHA256 over RSA_512_OCTETS with rsa512/privkey.pkcs8.pem.
 const RSA_512_SIGNATURE: &str =
     "A34mA3xCl9z1j77oDAk2A+o9JTAgYpZnnpw2uJlFlP+cGf8xrpsW/nseSnqMyMJxCjh/OWh3YDb1DsOra4jOyA==";
 

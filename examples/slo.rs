@@ -1,11 +1,3 @@
-//! End-to-end typed Single Logout after a typed SSO session.
-//!
-//! Both peers generate their metadata in this process. For externally supplied metadata,
-//! see `MetadataTrustPolicy::RequireSignature` for import with a pinned signing certificate.
-//!
-//! Run with: `cargo run -p saml-rs --example slo`
-//! (the `crypto-bergshamra` feature is on by default).
-
 #[cfg(crypto)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::{

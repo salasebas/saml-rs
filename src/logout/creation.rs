@@ -24,7 +24,6 @@ pub(crate) struct CreatedLogoutRequest {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum LogoutRequestValidation {
-    /// Session participant producer rules. `NotOnOrAfter` stays optional.
     SessionParticipant,
     SessionAuthority,
 }
@@ -36,15 +35,12 @@ pub(crate) struct LogoutRequestInput<'a> {
     pub(crate) binding: Binding,
     pub(crate) subject: &'a LogoutRequestSubject<'a>,
     pub(crate) relay_state: Option<&'a str>,
-    /// `<NameID>` `Format`. `None` omits the attribute.
     pub(crate) name_id_format: Option<&'a str>,
     pub(crate) issue_instant: &'a str,
     pub(crate) not_on_or_after: Option<&'a str>,
     pub(crate) reason: Option<&'a str>,
     pub(crate) asynchronous: bool,
     pub(crate) validation: LogoutRequestValidation,
-    /// `EncryptIdentifiers` sends the `<NameID>` as an `<EncryptedID>` for the
-    /// peer's encryption key.
     pub(crate) name_id_encryption: IdentifierEncryptionPolicy,
 }
 
@@ -259,7 +255,6 @@ pub(crate) fn create_logout_response_inner(
     Ok(signed.bind(id, destination.unwrap_or_default(), input.relay_state))
 }
 
-/// The signed XML an embedded-signature binding carries.
 fn embedded_signed_xml(binding: Binding, context: &str) -> Result<Option<String>, SamlError> {
     match binding {
         Binding::Post => crate::xml::decode_utf8(crate::binding::decode_base64(context)?).map(Some),

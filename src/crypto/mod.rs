@@ -1,8 +1,3 @@
-//! XML signature and encryption for the typed flows.
-//!
-//! XML-DSig, XML-Enc, and canonicalization live in `bergshamra`; this module
-//! calls it directly.
-
 #[cfg(crypto)]
 pub(crate) mod enc;
 #[cfg(crypto)]

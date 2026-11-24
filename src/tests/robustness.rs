@@ -1,7 +1,3 @@
-//! Robustness / fuzz-lite tests: the parser, extractor and codecs must never
-//! panic on hostile input, and DEFLATE must round-trip. Dependency-free
-//! (deterministic LCG instead of a property-testing crate).
-
 use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::xml::dom::parse_document;
 use saml_rs::xml::{extract, ExtractorField};
@@ -57,7 +53,6 @@ fn pseudo_random_inputs_never_panic() {
         let len = (lcg(&mut seed) % 128) as usize;
         let mut s = String::with_capacity(len);
         for _ in 0..len {
-            // Bias toward XML-ish bytes so the parser exercises real paths.
             let b = match lcg(&mut seed) % 8 {
                 0 => b'<',
                 1 => b'>',

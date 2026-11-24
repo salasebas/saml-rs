@@ -57,7 +57,6 @@ pub(super) fn optional_request_id(
         .transpose()
 }
 
-/// An `xs:anyURI` endpoint attribute, with its whitespace collapsed.
 pub(super) fn optional_endpoint(
     extract: &Value,
     path: &str,
@@ -79,8 +78,6 @@ pub(super) fn optional_u16(extract: &Value, path: &str) -> Result<Option<u16>, S
         .transpose()
 }
 
-/// A time bound that passed the time-window check, with XML Schema whitespace
-/// collapsed.
 fn checked_time_bound(value: &str, field: TimeWindowField) -> Result<SamlInstant, SamlError> {
     SamlInstant::parse_utc(value).ok_or(SamlError::TimeWindowInvalid { field })
 }

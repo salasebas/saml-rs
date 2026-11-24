@@ -1,6 +1,3 @@
-//! Inbound message flow: decode, validate XML/status, verify signatures,
-//! optionally decrypt, extract fields, and validate issuer/time constraints.
-
 use crate::assertion_acceptance::first_login_assertion_xml;
 use crate::binding::{
     decode_base64_with_limit, deflate_raw_decode, single_parameter, MAX_DEFLATE_RAW_DECODE_BYTES,
@@ -37,19 +34,14 @@ use detached::verify_detached;
 #[cfg(crypto)]
 use embedded::{prepare_after_detached_signature, verify_and_prepare, verify_present_signatures};
 
-/// Decoded HTTP request inputs for a binding.
 #[derive(Debug, Default, Clone)]
 pub struct HttpRequest {
-    /// URL-decoded query parameters (HTTP-Redirect).
     pub query: Vec<(String, String)>,
-    /// Form body parameters (HTTP-POST / SimpleSign).
     pub body: Vec<(String, String)>,
-    /// Signed octet string for detached-signature verification.
     pub octet_string: Option<String>,
 }
 
 impl HttpRequest {
-    /// HTTP-POST/SimpleSign request from body pairs.
     pub fn post(body: Vec<(String, String)>) -> Self {
         Self {
             body,
@@ -86,79 +78,39 @@ fn unsupported_binding(binding: Binding) -> SamlError {
     SamlError::UnsupportedBinding { binding }
 }
 
-/// What a flow run does with a signature on the received message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignatureCheck {
-    /// Do not verify a signature, whether or not the message carries one.
     Skip,
-    /// Verify a signature the message carries, and accept an unsigned message.
     VerifyIfPresent,
-    /// Reject an unsigned message, and verify the signature it carries.
-    ///
-    /// A login `<Response>` whose status is not success is the exception: its
-    /// signature is verified when it carries one, and an unsigned one is
-    /// still reported as [`SamlError::StatusNotSuccess`].
     Require,
 }
 
-/// Inputs controlling a flow run.
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 #[cfg_attr(not(crypto), allow(dead_code))]
 pub struct FlowOptions<'a> {
-    /// Protocol binding.
     pub binding: Binding,
-    /// Message parser type.
     pub parser_type: ParserType,
     pub(crate) defer_logout_request_version: bool,
-    /// Maximum decoded compressed and inflated raw-DEFLATE bytes accepted for
-    /// HTTP-Redirect input.
     pub redirect_inflate_max_bytes: usize,
-    /// XML parser resource limits for decoded messages and DOM reparses.
     pub xml_limits: XmlLimits,
-    /// Optional schema validator for received and decrypted XML.
     pub schema_validator: Option<crate::SchemaValidator>,
-    /// What the run does with a signature on the message.
     pub signature_check: SignatureCheck,
-    /// Reject a bearer assertion that omits `<AudienceRestriction>`.
-    ///
-    /// Applies only when `expected_audience` is set. When false, a present
-    /// restriction is still evaluated.
     pub require_audience_restriction: bool,
-    /// Algorithms a signature that authenticates the message may use, for an
-    /// embedded signature and a detached `SigAlg`.
     pub xml_signatures: XmlSignatureProfile,
-    /// Expected issuer (peer `entityID`).
     pub from_issuer: Option<&'a str>,
-    /// Peer signing certificate(s) for verification.
     pub signing_certs: &'a [String],
-    /// Peer HMAC secret for verifying an HMAC signature.
     pub hmac_secret: Option<&'a HmacSecret>,
-    /// SP private key for received assertions and their encrypted children.
     pub decrypt_key: Option<&'a str>,
-    /// Passphrase for `decrypt_key`.
     pub decrypt_key_pass: Option<&'a str>,
-    /// More decryption keys, tried in order after `decrypt_key`. Each one's
-    /// passphrase is its own.
     pub additional_decrypt_keys: &'a [X509Credential],
-    /// Require encryption of every assertion in a login response.
     pub(crate) require_encrypted_assertions: bool,
-    /// Assertion children the SP requires in encrypted form.
     pub(crate) assertion_elements: AssertionElementEncryption,
-    /// Decrypt an `<EncryptedKey>` that uses RSA-v1.5 key transport. When
-    /// `false`, decryption returns `SamlError::Unsupported` before any key is
-    /// decrypted.
     pub allow_rsa15_key_transport_decryption: bool,
-    /// Maximum estimated decryption work per inbound message. Defaults to 16.
-    /// See [`crate::config::XmlEncryptionPolicy::max_decryption_work`].
     pub max_decryption_work: usize,
-    /// Clock skew applied to the message's time windows.
     pub clock_skew: ClockSkew,
-    /// Validation instant. `None` reads the process clock during validation.
     pub now: Option<SystemTime>,
-    /// Expected `<Audience>` (this SP's entity ID); `None` skips the check.
     pub expected_audience: Option<&'a str>,
-    /// Expected `InResponseTo` (originating request ID); `None` skips the check.
     pub expected_in_response_to: Option<&'a str>,
 }
 
@@ -235,19 +187,12 @@ pub(crate) enum ResponseSignatureRequirement {
     Required,
 }
 
-/// Whether a signed message must carry `Destination`.
-///
-/// A `Destination` that is present is compared with the recipient either way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SignedMessageDestination {
-    /// The message arrived through a browser binding that requires it.
     Required,
-    /// The message was resolved from an artifact. Its XML is passed as an
-    /// HTTP-POST message.
     Optional,
 }
 
-/// Whether a verified signature covers the whole received message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MessageAuthentication {
     Authenticated,
@@ -303,19 +248,10 @@ impl VerifiedXmlSignatureEvidence {
     }
 }
 
-/// Result of a successful low-level flow.
-///
-/// This records only validation supported by the supplied flow context. A run
-/// without an expected recipient does not compare a message `Destination` with
-/// the receiving endpoint. Typed receivers supply that context before exposing
-/// this result.
 #[derive(Debug, Clone)]
 pub struct FlowResult {
-    /// The decoded (and, when verified, authenticated) SAML XML.
     pub saml_content: String,
-    /// Extracted fields.
     pub extract: Value,
-    /// Verified signature algorithm, if a signature was checked.
     pub sig_alg: Option<String>,
 }
 
@@ -810,7 +746,6 @@ pub(crate) fn validate_received_message(
     })
 }
 
-/// Run the inbound flow described by `opts` against `request`.
 pub(crate) fn flow_with_authentication(
     opts: &FlowOptions<'_>,
     request: &HttpRequest,

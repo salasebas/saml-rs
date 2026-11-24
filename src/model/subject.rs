@@ -8,8 +8,6 @@ use crate::xml::OutboundNameIdQualifiers;
 const MAX_OPAQUE_NAME_ID_CHARS: usize = 256;
 const ENCRYPTED_NAME_ID_POLICY_FORMAT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:encrypted";
 
-/// Reject a NameID format that is written but is not an absolute URI
-/// reference. `None` is an omitted format and passes.
 pub(crate) fn validate_name_id_format(format_uri: Option<&str>) -> Result<(), SamlError> {
     match format_uri {
         Some(format) if !is_absolute_uri_reference(format) => Err(SamlError::Invalid(
@@ -24,8 +22,6 @@ pub(crate) fn is_name_id_format(format_uri: Option<&str>, expected: &str) -> boo
     format_uri.is_some_and(|format| collapse_whitespace(format) == expected)
 }
 
-/// Reject a persistent or transient `NameID` value longer than 256
-/// characters. Other formats have no length limit.
 pub(crate) fn validate_issued_name_id_length(
     format_uri: Option<&str>,
     value: &str,
@@ -178,7 +174,6 @@ impl NameId {
         self
     }
 
-    /// A received `<NameID>`. `None` is an omitted attribute.
     pub(crate) fn received(
         value: impl Into<String>,
         format: Option<NameIdFormat>,

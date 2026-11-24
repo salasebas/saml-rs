@@ -1,6 +1,4 @@
-//! Production-hardening tests: Audience restriction and InResponseTo / anti-replay.
 #![cfg(crypto)]
-#![allow(clippy::unwrap_used)]
 
 use crate::tests::template::fill_template;
 use base64::engine::general_purpose::STANDARD;
@@ -29,7 +27,7 @@ fn signing() -> EntitySetting {
     }
 }
 
-fn idp() -> idp::Engine {
+fn idp() -> Result<idp::Engine, SamlError> {
     idp::Engine::from_config(
         &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
@@ -39,10 +37,9 @@ fn idp() -> idp::Engine {
         },
         signing(),
     )
-    .unwrap()
 }
 
-fn sp_with(entity_id: &str, setting: EntitySetting) -> sp::Engine {
+fn sp_with(entity_id: &str, setting: EntitySetting) -> Result<sp::Engine, SamlError> {
     sp::Engine::from_config(
         &SpMetadataInput {
             entity_id: entity_id.into(),
@@ -53,29 +50,26 @@ fn sp_with(entity_id: &str, setting: EntitySetting) -> sp::Engine {
         },
         setting,
     )
-    .unwrap()
 }
 
-fn response_for(sp: &sp::Engine) -> String {
-    idp()
-        .create_login_response(
-            sp,
-            Binding::Post,
-            &User::new("a@example.com"),
-            &LoginResponseOptions {
-                in_response_to: Some("_req1"),
-                ..Default::default()
-            },
-        )
-        .unwrap()
-        .context
+fn response_for(sp: &sp::Engine) -> Result<String, SamlError> {
+    let response = idp()?.create_login_response(
+        sp,
+        Binding::Post,
+        &User::new("a@example.com"),
+        &LoginResponseOptions {
+            in_response_to: Some("_req1"),
+            ..Default::default()
+        },
+    )?;
+    Ok(response.context)
 }
 
 fn response_for_audience_restrictions(
     sp: &sp::Engine,
     audience_restrictions: &[&[&str]],
 ) -> Result<String, SamlError> {
-    let idp = idp();
+    let idp = idp()?;
     let audience_restrictions = audience_restrictions
         .iter()
         .map(|audiences| {
@@ -145,7 +139,7 @@ fn response_for_subject_confirmation(
     sp: &sp::Engine,
     case: &SubjectConfirmationCase<'_>,
 ) -> Result<String, SamlError> {
-    let idp = idp();
+    let idp = idp()?;
     let cb = |template: &str| -> Result<(String, String), SamlError> {
         let id = "_response_subject_confirmation".to_string();
         let now = iso8601_offset(-60);
@@ -223,7 +217,7 @@ fn response_for_destination(
     sp: &sp::Engine,
     destination: Option<&str>,
 ) -> Result<String, SamlError> {
-    let idp = idp();
+    let idp = idp()?;
     let cb = |template: &str| -> Result<(String, String), SamlError> {
         let id = "_response_destination".to_string();
         let now = iso8601_offset(-60);
@@ -272,33 +266,33 @@ fn response_for_destination(
 
 #[test]
 fn hardening_audience_match_accepts() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
-    let req = HttpRequest::post(vec![("SAMLResponse".into(), response_for(&sp))]);
-    let parsed = sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1")?;
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
+    let req = HttpRequest::post(vec![("SAMLResponse".into(), response_for(&sp)?)]);
+    let parsed = sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("a@example.com"));
     Ok(())
 }
 
 #[test]
-fn hardening_audience_mismatch_rejected() {
-    // Response is addressed (Audience) to sp1; sp2 must reject it.
-    let sp1 = sp_with("https://sp1.example.com/metadata", signing());
-    let sp2 = sp_with("https://sp2.example.com/metadata", signing());
-    let req = HttpRequest::post(vec![("SAMLResponse".into(), response_for(&sp1))]);
+fn hardening_audience_mismatch_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    let sp1 = sp_with("https://sp1.example.com/metadata", signing())?;
+    let sp2 = sp_with("https://sp2.example.com/metadata", signing())?;
+    let req = HttpRequest::post(vec![("SAMLResponse".into(), response_for(&sp1)?)]);
     assert!(matches!(
-        sp2.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1"),
+        sp2.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1"),
         Err(SamlError::AudienceMismatch { .. })
     ));
+    Ok(())
 }
 
 #[test]
 fn hardening_audience_restrictions_reject_when_missing() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
     let response = response_for_audience_restrictions(&sp, &[])?;
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
 
     assert!(matches!(
-        sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1"),
+        sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1"),
         Err(SamlError::AudienceMismatch { .. })
     ));
     Ok(())
@@ -306,12 +300,12 @@ fn hardening_audience_restrictions_reject_when_missing() -> Result<(), Box<dyn s
 
 #[test]
 fn hardening_audience_restrictions_reject_empty_group() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
     let response = response_for_audience_restrictions(&sp, &[&[]])?;
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
 
     assert!(matches!(
-        sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1"),
+        sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1"),
         Err(SamlError::AudienceMismatch { .. })
     ));
     Ok(())
@@ -320,7 +314,7 @@ fn hardening_audience_restrictions_reject_empty_group() -> Result<(), Box<dyn st
 #[test]
 fn hardening_audience_restrictions_require_every_group_to_match(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
     let response = response_for_audience_restrictions(
         &sp,
         &[
@@ -331,7 +325,7 @@ fn hardening_audience_restrictions_require_every_group_to_match(
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
 
     assert!(matches!(
-        sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1"),
+        sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1"),
         Err(SamlError::AudienceMismatch { .. })
     ));
     Ok(())
@@ -340,7 +334,7 @@ fn hardening_audience_restrictions_require_every_group_to_match(
 #[test]
 fn hardening_audience_restrictions_accept_any_matching_audience_within_group(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
     let response = response_for_audience_restrictions(
         &sp,
         &[&[
@@ -350,14 +344,14 @@ fn hardening_audience_restrictions_accept_any_matching_audience_within_group(
     )?;
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
 
-    sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1")?;
+    sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1")?;
     Ok(())
 }
 
 #[test]
 fn hardening_audience_restrictions_accept_when_every_group_matches(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
     let response = response_for_audience_restrictions(
         &sp,
         &[
@@ -370,42 +364,45 @@ fn hardening_audience_restrictions_accept_when_every_group_matches(
     )?;
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
 
-    sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1")?;
+    sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1")?;
     Ok(())
 }
 
 #[test]
 fn hardening_in_response_to_match_accepts() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
-    let req = HttpRequest::post(vec![("SAMLResponse".into(), response_for(&sp))]);
-    sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1")?;
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
+    let req = HttpRequest::post(vec![("SAMLResponse".into(), response_for(&sp)?)]);
+    sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1")?;
     Ok(())
 }
 
 #[test]
-fn hardening_in_response_to_mismatch_rejected() {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
-    let req = HttpRequest::post(vec![("SAMLResponse".into(), response_for(&sp))]);
+fn hardening_in_response_to_mismatch_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
+    let req = HttpRequest::post(vec![("SAMLResponse".into(), response_for(&sp)?)]);
     assert!(matches!(
-        sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_wrong"),
+        sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_wrong"),
         Err(SamlError::InResponseToMismatch { .. })
     ));
+    Ok(())
 }
 
 #[test]
-fn hardening_unsolicited_response_rejects_non_empty_in_response_to() {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
-    let req = HttpRequest::post(vec![("SAMLResponse".into(), response_for(&sp))]);
+fn hardening_unsolicited_response_rejects_non_empty_in_response_to(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
+    let req = HttpRequest::post(vec![("SAMLResponse".into(), response_for(&sp)?)]);
     assert!(matches!(
-        sp.parse_unsolicited_login_response(&idp(), Binding::Post, &req),
+        sp.parse_unsolicited_login_response(&idp()?, Binding::Post, &req),
         Err(SamlError::InResponseToMismatch { .. })
     ));
+    Ok(())
 }
 
 #[test]
 fn hardening_unsolicited_response_rejects_empty_in_response_to(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
     let response = response_for_subject_confirmation(
         &sp,
         &SubjectConfirmationCase {
@@ -420,7 +417,7 @@ fn hardening_unsolicited_response_rejects_empty_in_response_to(
     assert_eq!(xml.matches("InResponseTo=\"\"").count(), 2, "{xml}");
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
     assert!(matches!(
-        sp.parse_unsolicited_login_response(&idp(), Binding::Post, &req),
+        sp.parse_unsolicited_login_response(&idp()?, Binding::Post, &req),
         Err(SamlError::InResponseToMismatch { expected: None, actual }) if actual.as_deref() == Some("")
     ));
 
@@ -438,7 +435,7 @@ fn hardening_unsolicited_response_rejects_empty_in_response_to(
     assert_eq!(xml.matches("InResponseTo=").count(), 1, "{xml}");
     let req = HttpRequest::post(vec![("SAMLResponse".into(), bearer_only)]);
     assert!(matches!(
-        sp.parse_unsolicited_login_response(&idp(), Binding::Post, &req),
+        sp.parse_unsolicited_login_response(&idp()?, Binding::Post, &req),
         Err(SamlError::InResponseToMismatch { expected: None, actual }) if actual.as_deref() == Some("")
     ));
     Ok(())
@@ -447,7 +444,7 @@ fn hardening_unsolicited_response_rejects_empty_in_response_to(
 #[test]
 fn hardening_unsolicited_response_rejects_subject_confirmation_in_response_to(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
     let response = response_for_subject_confirmation(
         &sp,
         &SubjectConfirmationCase {
@@ -462,7 +459,7 @@ fn hardening_unsolicited_response_rejects_subject_confirmation_in_response_to(
     assert_eq!(xml.matches("InResponseTo=").count(), 1, "{xml}");
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
     assert!(matches!(
-        sp.parse_unsolicited_login_response(&idp(), Binding::Post, &req),
+        sp.parse_unsolicited_login_response(&idp()?, Binding::Post, &req),
         Err(SamlError::InResponseToMismatch { expected: None, actual }) if actual.as_deref() == Some("_req1")
     ));
     Ok(())
@@ -471,7 +468,7 @@ fn hardening_unsolicited_response_rejects_subject_confirmation_in_response_to(
 #[test]
 fn hardening_subject_confirmation_method_must_be_bearer() -> Result<(), Box<dyn std::error::Error>>
 {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
     let response = response_for_subject_confirmation(
         &sp,
         &SubjectConfirmationCase {
@@ -484,7 +481,7 @@ fn hardening_subject_confirmation_method_must_be_bearer() -> Result<(), Box<dyn 
     )?;
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
     assert_subject_confirmation_reason(
-        sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1"),
+        sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1"),
         SubjectConfirmationReason::InvalidMethod,
     )
 }
@@ -492,7 +489,7 @@ fn hardening_subject_confirmation_method_must_be_bearer() -> Result<(), Box<dyn 
 #[test]
 fn hardening_subject_confirmation_data_expiry_is_enforced() -> Result<(), Box<dyn std::error::Error>>
 {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
     let response = response_for_subject_confirmation(
         &sp,
         &SubjectConfirmationCase {
@@ -505,7 +502,7 @@ fn hardening_subject_confirmation_data_expiry_is_enforced() -> Result<(), Box<dy
     )?;
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
     assert_subject_confirmation_reason(
-        sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1"),
+        sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1"),
         SubjectConfirmationReason::TimeWindowInvalid,
     )
 }
@@ -513,7 +510,7 @@ fn hardening_subject_confirmation_data_expiry_is_enforced() -> Result<(), Box<dy
 #[test]
 fn hardening_subject_confirmation_recipient_must_match_acs(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
     let response = response_for_subject_confirmation(
         &sp,
         &SubjectConfirmationCase {
@@ -526,7 +523,7 @@ fn hardening_subject_confirmation_recipient_must_match_acs(
     )?;
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
     assert_subject_confirmation_reason(
-        sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1"),
+        sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1"),
         SubjectConfirmationReason::RecipientMismatch,
     )
 }
@@ -534,11 +531,11 @@ fn hardening_subject_confirmation_recipient_must_match_acs(
 #[test]
 fn hardening_response_destination_must_match_acs_when_present(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
     let response = response_for_destination(&sp, Some("https://evil.example/acs"))?;
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
     assert!(matches!(
-        sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1"),
+        sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1"),
         Err(SamlError::DestinationMismatch { .. })
     ));
     Ok(())
@@ -547,10 +544,10 @@ fn hardening_response_destination_must_match_acs_when_present(
 #[test]
 fn hardening_missing_destination_accepts_matching_recipient(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
     let response = response_for_destination(&sp, None)?;
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
-    let parsed = sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1")?;
+    let parsed = sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("a@example.com"));
     Ok(())
 }
@@ -558,7 +555,7 @@ fn hardening_missing_destination_accepts_matching_recipient(
 #[test]
 fn hardening_subject_confirmation_request_id_must_match() -> Result<(), Box<dyn std::error::Error>>
 {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
     let response = response_for_subject_confirmation(
         &sp,
         &SubjectConfirmationCase {
@@ -571,7 +568,7 @@ fn hardening_subject_confirmation_request_id_must_match() -> Result<(), Box<dyn 
     )?;
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
     assert_subject_confirmation_reason(
-        sp.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1"),
+        sp.parse_login_response_with_request_id(&idp()?, Binding::Post, &req, "_req1"),
         SubjectConfirmationReason::InResponseToMismatch,
     )
 }
@@ -599,8 +596,8 @@ fn resigned_response_request(xml: &str) -> Result<HttpRequest, SamlError> {
 #[test]
 fn hardening_duplicate_confirmation_data_keeps_the_missing_expiry_error(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with("https://sp.example.com/metadata", signing());
-    let xml = String::from_utf8(STANDARD.decode(response_for(&sp))?)?;
+    let sp = sp_with("https://sp.example.com/metadata", signing())?;
+    let xml = String::from_utf8(STANDARD.decode(response_for(&sp)?)?)?;
     let xml = xml
         .replacen(
             "</saml:SubjectConfirmation>",
@@ -613,7 +610,7 @@ fn hardening_duplicate_confirmation_data_keeps_the_missing_expiry_error(
         );
     assert_subject_confirmation_reason(
         sp.parse_login_response_with_request_id(
-            &idp(),
+            &idp()?,
             Binding::Post,
             &resigned_response_request(&xml)?,
             "_req1",
@@ -643,7 +640,7 @@ fn hardening_encrypted_message_signed_response_verifies() -> Result<(), Box<dyn 
     let sp = sp::Engine::from_config(
         &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
-            want_assertions_signed: false, // message gets signed
+            want_assertions_signed: false,
             signing_certs: vec![CERT.into()],
             encrypt_certs: vec![CERT.into()],
             assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],

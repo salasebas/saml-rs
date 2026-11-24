@@ -1,5 +1,3 @@
-//! Effective `validUntil` of imported metadata.
-
 use std::time::SystemTime;
 
 use time::format_description::well_known::Rfc3339;

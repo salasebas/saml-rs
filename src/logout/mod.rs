@@ -1,5 +1,3 @@
-//! Single Logout (SLO): create and parse LogoutRequest and LogoutResponse.
-
 mod creation;
 mod encrypted_id;
 mod parsing;

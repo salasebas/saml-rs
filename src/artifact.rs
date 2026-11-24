@@ -1,9 +1,3 @@
-//! Artifact resolution over the SOAP binding.
-//!
-//! The identity provider stores a protocol message for one service provider and
-//! answers `ArtifactResolve`. The service provider sends that request and
-//! returns the protocol message from `ArtifactResponse`.
-
 use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
 use base64::Engine;
 use sha1::{Digest, Sha1};
@@ -280,12 +274,10 @@ impl ResolvedProtocolMessage {
         &self.xml
     }
 
-    /// Entity ID of the identity provider that returned the message.
     pub(crate) fn identity_provider(&self) -> &str {
         &self.identity_provider
     }
 
-    /// Artifact value the message was resolved from.
     pub(crate) fn artifact(&self) -> &str {
         &self.artifact
     }

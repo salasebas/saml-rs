@@ -37,8 +37,6 @@ impl AuthnRequestPreferences<'_> {
     }
 }
 
-/// The protocol schema types `ProviderName` as `xs:string`, which allows an
-/// empty name.
 fn validate_provider_name(provider_name: &str) -> Result<(), SamlError> {
     if provider_name.chars().all(crate::xml::is_xml_char) {
         return Ok(());

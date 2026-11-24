@@ -1,5 +1,3 @@
-//! Identity Provider Discovery cookie written by the typed identity provider.
-
 use std::time::Duration;
 
 use saml_rs::{
@@ -8,7 +6,6 @@ use saml_rs::{
 };
 
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
-/// Standard base64 of `IDP_ENTITY_ID`, then percent-encoded (`=` is `%3D`).
 const IDP_ENTITY_COOKIE_VALUE: &str = "aHR0cHM6Ly9pZHAuZXhhbXBsZS5jb20vbWV0YWRhdGE%3D";
 
 fn identity_provider(entity_id: &str) -> Result<IdentityProvider, SamlError> {
@@ -155,7 +152,6 @@ fn common_domain_must_be_a_hostname_not_an_ip_address() -> Result<(), Box<dyn st
         )?;
     }
 
-    // A single-label hostname still works as a cookie domain.
     let local = remember(
         IDP_ENTITY_ID,
         "localhost",
@@ -164,7 +160,6 @@ fn common_domain_must_be_a_hostname_not_an_ip_address() -> Result<(), Box<dyn st
     )?;
     assert_eq!(local.domain(), ".localhost");
 
-    // A numeric last label is a hostname, not an IPv4 literal.
     let numeric_label = remember(
         IDP_ENTITY_ID,
         "example.123",
@@ -201,7 +196,6 @@ fn remembered_cookie_value_stays_within_browser_cookie_limits(
 
 #[test]
 fn cookie_name_counts_toward_the_4096_byte_limit() -> Result<(), Box<dyn std::error::Error>> {
-    // Encoded `_saml_idp` value for one identity provider with `tail` path bytes.
     fn listed(tail: usize) -> Result<String, Box<dyn std::error::Error>> {
         let entity = format!("https://idp.example.net/{}", "a".repeat(tail));
         let cookie = identity_provider(&entity)?.common_domain_cookie(
@@ -222,7 +216,6 @@ fn cookie_name_counts_toward_the_4096_byte_limit() -> Result<(), Box<dyn std::er
     )?;
     assert_eq!(name + cookie.value().len(), 4096);
 
-    // The oldest entry is dropped when the name pushes the pair over 4096.
     let over = [listed(999)?, listed(999)?, listed(957)?].join("%20");
     assert!(over.len() + appended <= 4096);
     assert!(name + over.len() + appended > 4096);
@@ -246,7 +239,6 @@ fn cookie_name_counts_toward_the_4096_byte_limit() -> Result<(), Box<dyn std::er
 
 #[test]
 fn existing_entry_that_is_not_a_uri_is_kept() -> Result<(), Box<dyn std::error::Error>> {
-    // Standard base64 of `legacy-idp`.
     let cookie = remember(
         IDP_ENTITY_ID,
         "example.org",

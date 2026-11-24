@@ -1,5 +1,3 @@
-//! Identity Provider metadata.
-
 use super::{as_object_list, Metadata};
 use crate::constants::Binding;
 use crate::error::SamlError;
@@ -162,7 +160,6 @@ impl IdpMetadata {
         )
     }
 
-    /// Every `Location` published on `SingleSignOnService` for `binding`.
     pub(crate) fn single_sign_on_service_locations(&self, binding: Binding) -> Vec<String> {
         super::published_locations_for_binding(
             self.inner.meta.get("singleSignOnService"),

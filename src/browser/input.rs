@@ -293,7 +293,6 @@ impl Inbound<AuthnRequest> {
                 if field_value(&fields, url_params::SIG_ALG)?.is_some() {
                     return Err(SamlError::SignatureMissing);
                 }
-                // Without detached signature controls, the form uses POST encoding.
                 (Binding::Post, Transport::Post { fields })
             }
             transport => (binding, transport),
@@ -366,7 +365,6 @@ fn logout_http_request(
     }
 }
 
-/// The protocol element of a SOAP body, carried as an HTTP-POST message.
 fn soap_request(
     envelope: &str,
     expected_message: MessageField,

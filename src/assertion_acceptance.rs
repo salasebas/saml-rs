@@ -1,9 +1,3 @@
-//! Service-provider acceptance of every assertion in a login `Response`.
-//!
-//! An unrecognized `<Conditions>` child is rejected. `<OneTimeUse>` and
-//! `<ProxyRestriction>` stay valid. The assertions must share one issuer and
-//! one principal. One successful bearer confirmation confirms that assertion.
-
 use crate::constants::namespace;
 use crate::error::{SamlError, SubjectConfirmationReason, TimeWindowField};
 use crate::flow::FlowOptions;
@@ -37,13 +31,6 @@ struct Principal {
     sp_name_qualifier: Option<String>,
 }
 
-/// Evaluate every direct `<Assertion>` in a login response.
-///
-/// # Errors
-///
-/// Returns [`SamlError`] when an assertion is not understood, its bearer
-/// confirmation, audience, or time window fails, or the assertions do not share
-/// one issuer and one principal.
 pub(crate) fn accept_response_assertions(
     response_xml: &str,
     opts: &FlowOptions<'_>,
@@ -94,12 +81,6 @@ pub(crate) fn accept_response_assertions(
     Ok(())
 }
 
-/// Reject an unsolicited response whose bearer confirmation carries `InResponseTo`.
-///
-/// # Errors
-///
-/// Returns [`SamlError::InResponseToMismatch`] when any bearer confirmation in
-/// any direct assertion carries an `InResponseTo`, including an empty one.
 pub(crate) fn reject_unsolicited_bearer_in_response_to(
     response_xml: &str,
     limits: XmlLimits,
@@ -120,11 +101,6 @@ pub(crate) fn reject_unsolicited_bearer_in_response_to(
     Ok(())
 }
 
-/// Source of the [`consumed_assertion`] of `xml`.
-///
-/// # Errors
-///
-/// Returns [`SamlError`] when `xml` cannot be parsed under `limits`.
 pub(crate) fn first_login_assertion_xml(
     xml: &str,
     limits: XmlLimits,
@@ -133,8 +109,6 @@ pub(crate) fn first_login_assertion_xml(
     Ok(consumed_assertion(&document.root).map(|chosen| xml[chosen.start..chosen.end].to_string()))
 }
 
-/// The direct `<Assertion>` a session reads, preferring the first bearer
-/// assertion with an `AuthnStatement`, then the first bearer assertion.
 pub(crate) fn consumed_assertion(response: &Node) -> Option<&Node> {
     let mut assertions = response.children_named("Assertion").peekable();
     let first = assertions.peek().copied()?;
@@ -148,19 +122,11 @@ pub(crate) fn consumed_assertion(response: &Node) -> Option<&Node> {
     first_bearer.or(Some(first))
 }
 
-/// Replay identity of one direct assertion in an already accepted response.
 pub(crate) struct AssertionReplayId {
-    /// Assertion `ID`.
     pub id: String,
-    /// Bearer `SubjectConfirmationData@NotOnOrAfter`, when that confirmation has one.
     pub bearer_not_on_or_after: Option<String>,
 }
 
-/// Direct assertion identifiers in an already accepted response.
-///
-/// # Errors
-///
-/// Returns [`SamlError`] when `xml` cannot be parsed.
 pub(crate) fn assertion_replays(
     xml: &str,
     limits: XmlLimits,
@@ -203,10 +169,6 @@ fn is_bearer_confirmation(confirmation: &Node) -> bool {
         .is_some_and(|method| collapse_whitespace(method) == BEARER_SUBJECT_CONFIRMATION_METHOD)
 }
 
-/// Latest bearer `SubjectConfirmationData@NotOnOrAfter` of `confirmations`.
-///
-/// The latest value that is a SAML UTC instant wins. Another value is
-/// returned only when no bearer value is one.
 pub(crate) fn latest_bearer_not_on_or_after<'a>(
     confirmations: impl IntoIterator<Item = &'a Node>,
 ) -> Option<String> {

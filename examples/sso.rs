@@ -1,12 +1,3 @@
-//! End-to-end typed SSO: SP starts an `AuthnRequest`, the IdP receives it and
-//! issues a signed `Response`, and the SP finishes with a typed session.
-//!
-//! Both peers generate their metadata in this process. For externally supplied metadata,
-//! see `MetadataTrustPolicy::RequireSignature` for import with a pinned signing certificate.
-//!
-//! Run with: `cargo run -p saml-rs --example sso`
-//! (the `crypto-bergshamra` feature is on by default).
-
 #[cfg(crypto)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::{

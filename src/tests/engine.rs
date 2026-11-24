@@ -1,5 +1,3 @@
-//! Message-level entry points into the protocol engine for tests that build
-//! or receive arbitrary messages without the typed facade.
 #![cfg_attr(not(crypto), allow(dead_code))]
 
 use std::time::SystemTime;
@@ -20,17 +18,13 @@ use crate::model::{validate_name_id_format, ClockSkew, Status};
 use crate::sp::{self, AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions};
 use crate::tests::template::LOGIN_RESPONSE_TEMPLATE;
 
-/// The subject of a `<LogoutRequest>`.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct LogoutUser {
-    /// `<NameID>` value.
     pub(crate) name_id: String,
-    /// `<samlp:SessionIndex>` value.
     pub(crate) session_index: Option<String>,
 }
 
 impl LogoutUser {
-    /// A subject with just a NameID.
     pub(crate) fn new(name_id: impl Into<String>) -> Self {
         Self {
             name_id: name_id.into(),
@@ -39,9 +33,7 @@ impl LogoutUser {
     }
 }
 
-/// Service provider messages without the typed facade.
 pub(crate) trait SpMessages {
-    /// `<AuthnRequest>` to `idp` over `binding`.
     fn create_login_request(
         &self,
         idp: &idp::Engine,
@@ -49,7 +41,6 @@ pub(crate) trait SpMessages {
         options: &LoginRequestOptions<'_>,
     ) -> Result<BindingContext, SamlError>;
 
-    /// Login `<Response>` whose `InResponseTo` must be `request_id`.
     fn parse_login_response_with_request_id(
         &self,
         idp: &idp::Engine,
@@ -58,7 +49,6 @@ pub(crate) trait SpMessages {
         request_id: &str,
     ) -> Result<FlowResult, SamlError>;
 
-    /// Login `<Response>` that answers no request.
     fn parse_unsolicited_login_response(
         &self,
         idp: &idp::Engine,
@@ -112,9 +102,7 @@ impl SpMessages for sp::Engine {
     }
 }
 
-/// Identity provider messages without the typed facade.
 pub(crate) trait IdpMessages {
-    /// Login `<Response>` for `user` to `sp` over `binding`.
     fn create_login_response(
         &self,
         sp: &sp::Engine,
@@ -123,9 +111,6 @@ pub(crate) trait IdpMessages {
         options: &LoginResponseOptions<'_>,
     ) -> Result<BindingContext, SamlError>;
 
-    /// Login `<Response>` whose XML `render` writes, signed and bound like
-    /// [`Self::create_login_response`] output. `render` gets the response
-    /// template and returns the response ID and the complete peer XML.
     fn create_rendered_login_response(
         &self,
         sp: &sp::Engine,
@@ -133,7 +118,6 @@ pub(crate) trait IdpMessages {
         render: &dyn Fn(&str) -> RenderedLoginResponse,
     ) -> Result<BindingContext, SamlError>;
 
-    /// `<AuthnRequest>` from `sp`.
     fn parse_login_request(
         &self,
         sp: &sp::Engine,
@@ -204,7 +188,6 @@ impl IdpMessages for idp::Engine {
     }
 }
 
-/// `<LogoutRequest>` for `user` from `init` to `target` over `binding`.
 pub(crate) fn create_logout_request(
     init_setting: &EntitySetting,
     init_meta: &Metadata,
@@ -226,7 +209,6 @@ pub(crate) fn create_logout_request(
     )
 }
 
-/// Like [`create_logout_request`], with `message_id` as the request `ID`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn create_logout_request_with_id(
     init_setting: &EntitySetting,
@@ -290,7 +272,6 @@ pub(crate) fn create_logout_request_with_id(
     })
 }
 
-/// Successful `<LogoutResponse>` from `init` to `target` over `binding`.
 pub(crate) fn create_logout_response(
     init_setting: &EntitySetting,
     init_meta: &Metadata,
@@ -335,7 +316,6 @@ pub(crate) fn create_logout_response(
     })
 }
 
-/// `<LogoutRequest>` from the peer described by `from_meta`.
 pub(crate) fn parse_logout_request(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
@@ -351,8 +331,6 @@ pub(crate) fn parse_logout_request(
     )
 }
 
-/// `<LogoutResponse>` from the peer described by `from_meta` that answers
-/// `request_id`.
 pub(crate) fn parse_logout_response(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
@@ -371,15 +349,12 @@ pub(crate) fn parse_logout_response(
     .map(|parsed| parsed.flow)
 }
 
-/// The ID and XML of a login `<Response>` written from the response template.
 pub(crate) type RenderedLoginResponse = Result<(String, String), SamlError>;
 
-/// Run the receive flow that `opts` describes against `request`.
 pub(crate) fn flow(opts: &FlowOptions<'_>, request: &HttpRequest) -> Result<FlowResult, SamlError> {
     Ok(flow_with_authentication(opts, request)?.into_flow_result())
 }
 
-/// HTTP-Redirect request from decoded query pairs.
 pub(crate) fn redirect_query(query: Vec<(String, String)>) -> HttpRequest {
     HttpRequest {
         query,

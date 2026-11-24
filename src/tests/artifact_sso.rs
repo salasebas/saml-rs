@@ -1,10 +1,3 @@
-//! Web Browser SSO with the `<Response>` delivered as an HTTP-Artifact,
-//! through the typed identity provider and service provider.
-//!
-//! The identity provider stores the response and hands the browser an
-//! artifact. The service provider reads the artifact at its assertion
-//! consumer, resolves it over SOAP, and establishes the session. The
-//! deployment still performs HTTP and TLS.
 #![cfg(crypto)]
 
 use super::common;
@@ -69,8 +62,6 @@ fn parties_with_idp_algorithms(algorithms: AlgorithmPolicy) -> Result<Parties, S
     )
 }
 
-/// Parties whose service provider marks the HTTP-Artifact consumer default,
-/// so an unsolicited artifact response can be sent to it.
 fn unsolicited_parties() -> Result<Parties, SamlError> {
     parties_with_consumers(
         AcsEndpoint::post(SP_ACS_POST)?,
@@ -142,8 +133,6 @@ fn confidential() -> SoapChannel {
     SoapChannel::mutually_authenticated_confidential()
 }
 
-/// The service provider asks for an artifact response, and the identity
-/// provider receives that request.
 fn requested(
     parties: &Parties,
     relay_state: Option<RelayState>,
@@ -163,8 +152,6 @@ fn requested(
     Ok((started.pending, request))
 }
 
-/// The browser follows the redirect, and the service provider resolves the
-/// artifact it received and finishes the login.
 fn follow_redirect_and_finish(
     parties: &Parties,
     pending: &PendingAuthnRequest,
@@ -174,7 +161,6 @@ fn follow_redirect_and_finish(
     resolve_and_finish(parties, pending, delivered_by(response)?, issued)
 }
 
-/// The artifact the browser carries to the assertion consumer in a redirect.
 fn delivered_by(
     response: &Outbound<SsoResponse>,
 ) -> Result<DeliveredArtifact, Box<dyn std::error::Error>> {
@@ -435,7 +421,6 @@ fn a_relay_state_above_the_receive_limit_is_not_delivered() -> Result<(), Box<dy
     Ok(())
 }
 
-/// The service provider resolves `delivered` and finishes the login.
 fn resolve_and_finish(
     parties: &Parties,
     pending: &PendingAuthnRequest,
@@ -790,8 +775,6 @@ fn sign_response(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
     Ok(sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?)
 }
 
-/// A pending login and the unsigned `<Response>` the identity provider
-/// built for it.
 fn unsigned_response(
     parties: &Parties,
     issued: &mut IssuedArtifacts,
@@ -814,8 +797,6 @@ fn unsigned_response(
     Ok((pending, xml))
 }
 
-/// The identity provider stores `xml`, and the service provider resolves the
-/// artifact and finishes the login.
 fn store_and_finish(
     parties: &Parties,
     pending: &PendingAuthnRequest,
@@ -1093,7 +1074,6 @@ fn an_artifact_must_be_delivered_once_and_be_a_saml_v2_artifact(
             "{query}"
         );
     }
-    // Type code 0x0001 is a SAML V1.1 artifact.
     assert!(matches!(
         DeliveredArtifact::from_query(
             "SAMLart=AAEAAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJyg%3D"

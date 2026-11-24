@@ -1,5 +1,3 @@
-//! Placement of embedded SAML signatures.
-
 use super::dom::Node;
 use super::name::is_ncname;
 use crate::error::SamlError;
@@ -23,8 +21,6 @@ pub(crate) fn signature_reference_path(reference: &str) -> Result<Vec<&str>, Sam
         .collect()
 }
 
-/// `Signature` children of `root`, then `Signature` children of each
-/// `Assertion` child of `root`.
 pub(crate) fn saml_signature_candidates(root: &Node) -> Vec<&Node> {
     let mut signatures: Vec<_> = root.children_named("Signature").collect();
     for assertion in root.children_named("Assertion") {

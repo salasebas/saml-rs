@@ -1,6 +1,3 @@
-//! Conformance scenarios for the protocol engine, including historical
-//! regression cases derived from npm `samlify` behavior.
-
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
@@ -112,7 +109,6 @@ mod signed {
     fn full_signed_sso() -> Result<(), Box<dyn std::error::Error>> {
         let sp = sp(signing_setting())?;
         let idp = idp(signing_setting())?;
-        // IdP issues a signed Response; SP consumes it.
         let response = idp.create_login_response(
             &sp,
             Binding::Post,
@@ -140,7 +136,7 @@ mod signed {
             Binding::Post,
             &LogoutUser::new("alice@example.com"),
             None,
-            true, // want signed
+            true,
         )?;
         let request = HttpRequest::post(vec![("SAMLRequest".into(), ctx.context)]);
         let parsed = parse_logout_request(

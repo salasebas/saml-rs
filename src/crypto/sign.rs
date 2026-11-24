@@ -1,6 +1,3 @@
-//! XML-DSig signing and detached message signatures, delegating crypto to the
-//! selected `bergshamra` provider.
-
 use super::keys::{load_certificate, load_hmac_secret, read_private_key};
 use super::signature_profile::check_verification_key;
 use crate::binding::{encode_base64, xml_escape};
@@ -45,10 +42,6 @@ fn resolve_path<'a>(node: &'a Node, names: &[&str]) -> Option<&'a Node> {
         .find_map(|child| resolve_path(child, rest))
 }
 
-/// Insert `signature` into `xml` at `action` relative to `node`.
-///
-/// `Prepend` and `Append` on an empty-element tag such as `<Extensions/>`
-/// rewrite it as a start-tag and end-tag pair around the signature.
 fn place_signature(
     xml: &str,
     node: &Node,
@@ -90,13 +83,6 @@ fn place_signature(
     Ok(format!("{}{signature}{}", &xml[..pos], &xml[pos..]))
 }
 
-/// Construct and embed an enveloped XML-DSig signature.
-///
-/// When `sign_message` the whole root is referenced; otherwise the contained
-/// `<Assertion>` is referenced. `config` customizes the element prefix and
-/// placement; by default the `<Signature>` is inserted right after the target's
-/// `<Issuer>`. bergshamra then fills the digest and signature value. Returns
-/// the signed XML.
 #[cfg(test)]
 pub(crate) fn sign_saml_xml(
     xml: &str,
@@ -278,9 +264,6 @@ impl<'a> SigningCredential<'a> {
     }
 }
 
-/// Sign a detached octet string (redirect/SimpleSign binding).
-///
-/// Returns the base64-encoded signature.
 pub(crate) fn sign_octet_string(
     octet_string: &str,
     key: &Key,
@@ -295,7 +278,6 @@ pub(crate) fn sign_octet_string(
     Ok(encode_base64(&signature))
 }
 
-/// Verify a detached octet-string signature against `cert`.
 #[cfg(test)]
 pub(crate) fn verify_octet_string_signature(
     octet_string: &str,
@@ -587,7 +569,6 @@ mod tests {
             verify_octet_string_signature(octet, &format!("{sig}\u{a0}"), SP_CERT, RSA_SHA256),
             Err(SamlError::Base64 { .. })
         ));
-        // tampered octet string must fail
         assert!(!verify_octet_string_signature(
             "SAMLRequest=TAMPERED",
             &sig,

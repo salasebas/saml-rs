@@ -1,5 +1,3 @@
-//! SAML time-window and status validation.
-
 use crate::constants::ParserType;
 use crate::error::{SamlError, TimeWindowField};
 use crate::model::{ClockSkew, Status};
@@ -24,11 +22,6 @@ pub(crate) fn offset_datetime_from_system_time(
     })
 }
 
-/// Validate saml-rs' fail-closed expiration policy for an inbound LogoutRequest.
-///
-/// The protocol profile layer owns SAML lexical conformance. Values that are
-/// lexically valid but cannot be represented by the runtime clock fail here as
-/// a library time-window policy decision.
 pub(crate) fn logout_request_not_on_or_after_deadline(
     extracted: &Value,
     now: OffsetDateTime,
@@ -49,7 +42,6 @@ pub(crate) fn logout_request_not_on_or_after_deadline(
     Ok(Some(effective_deadline))
 }
 
-/// `NotOnOrAfter` plus the validation context's `NotOnOrAfter` clock skew.
 pub(crate) fn effective_not_on_or_after(
     deadline: OffsetDateTime,
     not_on_or_after_skew_ms: i64,
@@ -61,7 +53,6 @@ pub(crate) fn effective_not_on_or_after(
         })
 }
 
-/// The `NotBefore` and `NotOnOrAfter` attributes of one element, as written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct TimeWindow<'a> {
     pub(crate) not_before: Option<&'a str>,
@@ -69,18 +60,6 @@ pub(crate) struct TimeWindow<'a> {
 }
 
 impl TimeWindow<'_> {
-    /// Whether `now` falls inside the window widened by `skew`.
-    ///
-    /// The `NotBefore` skew and the `NotOnOrAfter` skew are added to their
-    /// bounds. When neither bound is present the window contains every
-    /// instant. A window whose `NotBefore` is not earlier than its
-    /// `NotOnOrAfter` contains no instant, whatever the skew. A present bound
-    /// that is not a SAML UTC `xs:dateTime` ending in `Z`, or that `time`
-    /// cannot represent, fails closed. A `NotOnOrAfter` bound whose skew
-    /// passes the maximum supported instant is treated as not expired, and one
-    /// whose skew passes the minimum supported instant is treated as expired.
-    /// A `NotBefore` bound that cannot be shifted inside the supported range
-    /// fails closed.
     pub(crate) fn contains(self, now: OffsetDateTime, skew: ClockSkew) -> bool {
         let not_before = self.not_before.map(parse_saml_utc_instant);
         let not_on_or_after = self.not_on_or_after.map(parse_saml_utc_instant);
@@ -108,11 +87,6 @@ fn not_before_has_elapsed(bound: OffsetDateTime, drift_ms: i64, now: OffsetDateT
     shift_instant(bound, drift_ms).is_some_and(|effective| effective <= now)
 }
 
-/// `NotOnOrAfter` is exclusive.
-///
-/// A positive skew that passes the maximum supported instant is still after
-/// every representable `now`. A negative skew that passes the minimum
-/// supported instant is before every representable `now`.
 fn not_on_or_after_is_open(bound: OffsetDateTime, drift_ms: i64, now: OffsetDateTime) -> bool {
     match shift_instant(bound, drift_ms) {
         Some(effective) => now < effective,
@@ -140,12 +114,6 @@ pub(crate) fn conditions_time_window(extracted: &Value) -> Result<TimeWindow<'_>
     }
 }
 
-/// Check the two-tier `<StatusCode>` of a response, parsing `content` under
-/// `limits`.
-///
-/// Only `SAMLResponse`, `LogoutResponse`, and `ManageNameIDResponse` are
-/// checked; request parser types are skipped. Success resolves to `Ok(())`;
-/// anything else is an error.
 pub fn check_status(
     content: &str,
     parser_type: ParserType,
@@ -219,11 +187,8 @@ mod tests {
             window(Some("2000-01-01T00:00:00Z"), Some("2999-01-01T00:00:00Z"))
                 .contains(now, strict)
         );
-        // expired
         assert!(!window(None, Some("2000-01-01T00:00:00Z")).contains(now, strict));
-        // not yet valid
         assert!(!window(Some("2999-01-01T00:00:00Z"), None).contains(now, strict));
-        // unparseable fails closed
         assert!(!window(Some("not-a-date"), None).contains(now, strict));
         Ok(())
     }
@@ -240,10 +205,8 @@ mod tests {
     fn drift_widens_window() -> Result<(), Box<dyn std::error::Error>> {
         let now = OffsetDateTime::parse("2026-10-10T00:00:00Z", &Rfc3339)?;
 
-        // expired, but a huge positive notOnOrAfter drift makes it valid again
         assert!(window(None, Some("2000-01-01T00:00:00Z"))
             .contains(now, ClockSkew::from_millis(0, 9_000_000_000_000)));
-        // not-yet-valid, but a huge negative notBefore drift makes it valid
         assert!(window(Some("2999-01-01T00:00:00Z"), None)
             .contains(now, ClockSkew::from_millis(-50_000_000_000_000, 0)));
         Ok(())
@@ -272,7 +235,6 @@ mod tests {
     #[test]
     fn status_success_and_two_tier_failure() -> Result<(), Box<dyn std::error::Error>> {
         check_status(RESPONSE, ParserType::SamlResponse, XmlLimits::default())?;
-        // request types are skipped
         check_status(RESPONSE, ParserType::SamlRequest, XmlLimits::default())?;
 
         match check_status(FAILED, ParserType::SamlResponse, XmlLimits::default()) {

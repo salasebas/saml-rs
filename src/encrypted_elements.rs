@@ -1,15 +1,9 @@
-//! Decryption of the `<EncryptedAssertion>`, `<EncryptedID>`, and
-//! `<EncryptedAttribute>` children of a verified login response.
-
 #[cfg(crypto)]
 use crate::constants::ParserType;
 use crate::error::SamlError;
 use crate::flow::{FlowOptions, MessageAuthentication};
 use crate::xml::XmlLimits;
 
-/// Reject a response with several assertions unless a verified signature
-/// covers the whole response. Encrypted children are decrypted only inside
-/// content that a verified signature covers.
 pub(crate) fn require_one_assertion_unless_message_authenticated(
     saml_content: &str,
     authentication: MessageAuthentication,
@@ -30,8 +24,6 @@ pub(crate) fn require_one_assertion_unless_message_authenticated(
     Ok(())
 }
 
-/// Whether an assertion of `saml_content` carries an `<EncryptedID>` or an
-/// `<EncryptedAttribute>`.
 #[cfg(crypto)]
 pub(crate) fn carries_encrypted_elements(saml_content: &str) -> Result<bool, SamlError> {
     crate::crypto::enc::carries_encrypted_assertion_elements(saml_content)
@@ -46,8 +38,6 @@ pub(crate) fn carries_encrypted_elements(_saml_content: &str) -> Result<bool, Sa
     Ok(false)
 }
 
-/// Decrypt the `<EncryptedID>` and `<EncryptedAttribute>` children of the
-/// verified response and of its consumed assertion.
 #[cfg(crypto)]
 pub(crate) fn decrypt_verified_assertion_elements(
     saml_content: &str,
@@ -78,8 +68,6 @@ pub(crate) fn decrypt_verified_assertion_elements(
     Ok((content, assertion))
 }
 
-/// Position of the consumed `assertion` among the direct assertions of
-/// `response`, which contains its source.
 #[cfg(crypto)]
 fn direct_assertion_position(
     response: &str,
@@ -124,7 +112,6 @@ pub(crate) fn decrypt_verified_assertion_elements(
     ))
 }
 
-/// The SP key when a login response requires or carries an encrypted assertion.
 #[cfg(crypto)]
 pub(crate) fn encrypted_assertion_key<'a>(
     root: &crate::xml::dom::Node,
@@ -140,9 +127,6 @@ pub(crate) fn encrypted_assertion_key<'a>(
     }
 }
 
-/// `xml` with each `<EncryptedAssertion>` decrypted with `key_pem` or the
-/// additional keys, checked against the schema and the protocol profile, and
-/// the decrypted assertions.
 #[cfg(crypto)]
 pub(crate) fn decrypt_assertions(
     xml: &str,

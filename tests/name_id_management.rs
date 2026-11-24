@@ -1,13 +1,3 @@
-//! Name identifier management over SOAP, through the typed identity provider.
-//!
-//! The identity provider sends `ManageNameIDRequest` to a service provider and
-//! reads its `ManageNameIDResponse`, and answers a service provider's request.
-//! The service provider is a third-party peer: `ServiceProvider` has no SOAP name
-//! identifier management, so its messages are written here.
-//!
-//! Config helpers relax the policy fields that need a crypto provider, so they
-//! build without one. Name identifier management does not read those fields.
-
 #[path = "name_id_management/schema_validation.rs"]
 mod schema_validation;
 
@@ -77,8 +67,6 @@ fn identity_provider_with_templates(
     Ok(IdentityProvider::new(builder.build()?))
 }
 
-/// A service provider whose metadata publishes `services` as
-/// `ManageNameIDService` endpoints, as `(binding, location)`.
 fn service_provider(
     entity_id: &str,
     services: &[(&str, &str)],
@@ -136,7 +124,6 @@ fn attribute<'a>(xml: &'a str, name: &str) -> Option<&'a str> {
     Some(&xml[start..start + end])
 }
 
-/// A `ManageNameIDRequest` from the service provider, in a SOAP envelope.
 fn sp_request_with(attributes: &str, issuer: &str, content: &str) -> Result<String, SamlError> {
     let xml = format!(
         r#"<samlp:ManageNameIDRequest xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="{SP_REQUEST_ID}" IssueInstant="2024-01-01T00:00:00Z" {attributes}>{issuer}{content}</samlp:ManageNameIDRequest>"#
@@ -162,7 +149,6 @@ fn current_name_id_xml() -> String {
     )
 }
 
-/// A `ManageNameIDResponse` from the service provider, in a SOAP envelope.
 fn sp_response(in_response_to: &str, issuer: &str, status: &str) -> Result<String, SamlError> {
     Ok(SoapResponse::try_new(&format!(
         r#"<samlp:ManageNameIDResponse xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="_sp_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z" InResponseTo="{in_response_to}"><saml:Issuer>{issuer}</saml:Issuer><samlp:Status>{status}</samlp:Status></samlp:ManageNameIDResponse>"#

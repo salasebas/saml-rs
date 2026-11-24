@@ -1,9 +1,3 @@
-//! XML 1.0 end-of-line handling of signed text through the typed Web Browser
-//! SSO flow.
-//!
-//! XML 1.0 Fifth Edition §2.11 passes a single line feed to the application
-//! for a literal carriage return and line feed pair and for a lone carriage
-//! return. The `&#xD;` character reference stays a carriage return.
 #![cfg(crypto)]
 
 use super::common;

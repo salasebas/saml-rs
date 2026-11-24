@@ -1,6 +1,3 @@
-//! Entity base settings shared by [`crate::sp::Engine`] and
-//! [`crate::idp::Engine`].
-
 use core::fmt;
 
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
@@ -12,94 +9,39 @@ use crate::constants::{
 use crate::error::{SamlError, TimeWindowField};
 use crate::xml::XmlLimits;
 
-/// Runtime configuration for an entity (keys, algorithms, flags).
-///
-/// Use [`EntitySetting::default`] and tweak the fields you need.
 #[non_exhaustive]
 #[derive(Clone)]
 pub struct EntitySetting {
-    /// Override entity ID (otherwise taken from metadata).
     pub entity_id: Option<String>,
-    /// Signature algorithm URI for outgoing signatures.
     pub request_signature_algorithm: String,
-    /// Data encryption algorithm URI.
     pub data_encryption_algorithm: String,
-    /// Key encryption algorithm URI.
     pub key_encryption_algorithm: String,
     pub(crate) rsa_oaep_parameters: Option<(DigestAlgorithm, MaskGenerationFunction)>,
-    /// `AllowCreate` for the NameIDPolicy.
     pub allow_create: bool,
-    /// Whether assertions are encrypted.
     pub is_assertion_encrypted: bool,
-    /// Typed config: assertion `<NameID>` and attributes carried as
-    /// `<EncryptedID>` and `<EncryptedAttribute>`.
     pub(crate) assertion_element_encryption: AssertionElementEncryption,
-    /// Allow this entity to decrypt keys transported with RSA-v1.5.
     pub allow_rsa15_key_transport_decryption: bool,
-    /// Maximum estimated decryption work per inbound message. Defaults to 16.
-    /// See [`crate::config::XmlEncryptionPolicy::max_decryption_work`].
     pub max_decryption_work: usize,
-    /// SP: requires signed assertions.
     pub want_assertions_signed: bool,
-    /// SP: reject a bearer assertion that omits `<AudienceRestriction>`.
     pub(crate) require_audience_restriction: bool,
-    /// SP: requires signed messages.
     pub want_message_signed: bool,
-    /// Typed SP and IdP: algorithms a signature that authenticates an accepted
-    /// message may use.
     pub(crate) xml_signatures: XmlSignatureProfile,
-    /// Typed SP: requires outer integrity for CBC-encrypted Assertions.
     pub(crate) want_encrypted_cbc_response_signed: bool,
-    /// Supported NameID formats. The first is the default format of
-    /// generated messages.
-    ///
-    /// A message or metadata that writes a format rejects one that is not a
-    /// non-blank absolute URI reference. An empty list writes no format.
     pub name_id_format: Vec<String>,
-    /// Signing private key (PEM).
     pub private_key: Option<String>,
-    /// Passphrase for `private_key`.
     pub private_key_pass: Option<String>,
-    /// Signing certificate (PEM/base64).
     pub signing_cert: Option<String>,
-    /// Shared secret this entity signs with when `request_signature_algorithm`
-    /// is an HMAC algorithm, and that verifies this entity's HMAC signatures
-    /// when the setting describes a peer.
     pub hmac_secret: Option<HmacSecret>,
-    /// Encryption certificate (PEM/base64).
     pub encrypt_cert: Option<String>,
-    /// Decryption private key (PEM).
     pub enc_private_key: Option<String>,
-    /// Passphrase for `enc_private_key`.
     pub enc_private_key_pass: Option<String>,
-    /// More decryption keys, tried in order after `enc_private_key`.
     pub additional_decryption_keys: Vec<X509Credential>,
-    /// Maximum decoded compressed and inflated raw-DEFLATE bytes accepted for
-    /// HTTP-Redirect input.
-    ///
-    /// SAML does not define this limit; the default is a conservative
-    /// resource-exhaustion guard for unauthenticated Redirect messages.
     pub redirect_inflate_max_bytes: usize,
-    /// XML parser resource limits for inbound messages and metadata parsing.
     pub xml_limits: XmlLimits,
-    /// Optional schema validator for received and decrypted XML.
     pub schema_validator: Option<crate::SchemaValidator>,
-    /// Protocol tag prefix for generated SAML messages (default `samlp`).
-    ///
-    /// Must be an XML NCName that does not begin with `xml` in any case, and
-    /// must differ
-    /// from `tag_prefix_assertion`.
     pub tag_prefix_protocol: String,
-    /// Assertion tag prefix for generated SAML messages (default `saml`).
-    ///
-    /// Must be an XML NCName that does not begin with `xml` in any case, and
-    /// must differ
-    /// from `tag_prefix_protocol`.
     pub tag_prefix_assertion: String,
-    /// Custom embedded-signature placement/prefix (`None` uses the default).
     pub signature_config: Option<SignatureConfig>,
-    /// XML-DSig transforms applied to signed references (default
-    /// enveloped-signature + exclusive C14N).
     pub transformation_algorithms: Vec<String>,
 }
 
@@ -222,8 +164,6 @@ impl Default for SignatureConfig {
 }
 
 impl EntitySetting {
-    /// The first configured NameID format. `None` when no format is
-    /// configured.
     pub(crate) fn default_name_id_format(&self) -> Option<&str> {
         self.name_id_format.first().map(String::as_str)
     }
@@ -270,11 +210,6 @@ impl Default for EntitySetting {
     }
 }
 
-/// Generate a SAML identifier: `_` and 160 random bits as 40 lowercase
-/// hexadecimal digits.
-///
-/// The result is an `xs:ID` of 41 characters. Each call returns a different
-/// value.
 pub(crate) fn generate_id() -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
 
@@ -286,8 +221,6 @@ pub(crate) fn generate_id() -> String {
     identifier
 }
 
-/// 20 random bytes from two version 4 UUIDs, skipping the bytes that carry
-/// the fixed version and variant bits.
 pub(crate) fn random_20_bytes() -> [u8; 20] {
     let first = uuid::Uuid::new_v4().into_bytes();
     let second = uuid::Uuid::new_v4().into_bytes();
@@ -299,15 +232,12 @@ pub(crate) fn random_20_bytes() -> [u8; 20] {
     random
 }
 
-/// The authenticated subject an IdP issues a response for.
 #[derive(Debug, Clone, Default)]
 pub struct User {
-    /// `<NameID>` value.
     pub name_id: String,
 }
 
 impl User {
-    /// A subject identified by its SAML NameID.
     pub fn new(name_id: impl Into<String>) -> Self {
         Self {
             name_id: name_id.into(),
@@ -315,16 +245,10 @@ impl User {
     }
 }
 
-/// Current UTC time as an ISO-8601 `IssueInstant` (`YYYY-MM-DDTHH:MM:SSZ`).
 pub(crate) fn now_iso8601() -> String {
     iso8601_offset(0)
 }
 
-/// UTC time `seconds` from now as ISO-8601 (`YYYY-MM-DDTHH:MM:SSZ`).
-///
-/// # Panics
-///
-/// Panics when the shifted time falls outside the years -9999 through 9999.
 pub fn iso8601_offset(seconds: i64) -> String {
     let t = time::OffsetDateTime::now_utc() + time::Duration::seconds(seconds);
     format_saml_utc_date_time(t)
@@ -395,7 +319,6 @@ mod tests {
     #[test]
     fn outbound_saml_instants_do_not_generate_leap_seconds(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // The final representable second before the 2016 leap-second boundary.
         let last_second = time::OffsetDateTime::from_unix_timestamp(1_483_228_799)?;
 
         assert_eq!(
@@ -406,24 +329,14 @@ mod tests {
     }
 }
 
-/// The product of building an outbound message for a binding.
 #[derive(Debug, Clone)]
 pub struct BindingContext {
-    /// Generated message ID.
     pub id: String,
-    /// Redirect: the full URL. POST/SimpleSign: the base64 message.
-    /// Artifact: the artifact.
     pub context: String,
-    /// RelayState, if any.
     pub relay_state: Option<String>,
-    /// Destination endpoint.
     pub entity_endpoint: String,
-    /// Binding used.
     pub binding: crate::constants::Binding,
-    /// `SAMLRequest`, `SAMLResponse`, or `SAMLart`.
     pub request_type: &'static str,
-    /// Detached signature (redirect/SimpleSign signed messages), if computed.
     pub signature: Option<String>,
-    /// Signature algorithm URI accompanying `signature`.
     pub sig_alg: Option<String>,
 }

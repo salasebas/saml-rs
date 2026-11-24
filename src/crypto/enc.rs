@@ -1,7 +1,3 @@
-//! Assertion, `<EncryptedID>`, `<EncryptedAttribute>`, and `<NewEncryptedID>`
-//! encryption and decryption, delegating XML-Enc to the selected `bergshamra`
-//! provider.
-
 mod decrypt;
 mod encrypt;
 mod policy;
@@ -36,16 +32,12 @@ pub(crate) use policy::response_uses_cbc_encrypted_assertion;
 
 const ENC: &str = "http://www.w3.org/2001/04/xmlenc#";
 
-/// Plaintext element, its encrypted wrapper, and the parent that holds it.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct EncryptedElementKind {
-    /// Namespace of the plaintext element and of its wrapper.
     namespace: &'static str,
     parent: &'static str,
     plaintext: &'static str,
     encrypted: &'static str,
-    /// Other plaintext elements that SAML allows here and this crate does not
-    /// process.
     unsupported_plaintext: &'static [&'static str],
 }
 
@@ -133,7 +125,6 @@ fn assertion_children<'d>(
     })
 }
 
-/// Each `local_name` child, in `namespace`, of the document element.
 fn root_children(
     document: &XmlDocument<'_>,
     namespace: &'static str,
@@ -145,8 +136,6 @@ fn root_children(
     Ok(document.child_elements_by_name_ns(root, namespace, local_name))
 }
 
-/// Each `<Assertion>` of `xml`: the document element itself, or each
-/// `<Assertion>` child of a protocol `<Response>`.
 fn assertions(document: &XmlDocument<'_>) -> Result<Vec<NodeId>, SamlError> {
     let root = document
         .document_element()
@@ -160,8 +149,6 @@ fn assertions(document: &XmlDocument<'_>) -> Result<Vec<NodeId>, SamlError> {
     Ok(assertion_children(document, root, "Assertion").collect())
 }
 
-/// Each `name` child of each `parent` child of each assertion, in document
-/// order.
 fn assertion_elements(
     document: &XmlDocument<'_>,
     parent: &'static str,
@@ -182,8 +169,6 @@ fn node_range(document: &XmlDocument<'_>, node: NodeId) -> Result<Range<usize>, 
         .ok_or_else(|| SamlError::xml("element has no source range"))
 }
 
-/// Inclusive canonical form of `element`, which declares every namespace in
-/// scope, so the element parses on its own.
 fn namespace_complete(document: &XmlDocument<'_>, element: NodeId) -> Result<Vec<u8>, SamlError> {
     let node_set = NodeSet::tree_without_comments(element, document);
     canonicalize_doc(
@@ -195,7 +180,6 @@ fn namespace_complete(document: &XmlDocument<'_>, element: NodeId) -> Result<Vec
     .map_err(crypto_err)
 }
 
-/// Replace each `(range, replacement)` of `xml`. Ranges are disjoint.
 fn splice(xml: &str, mut replacements: Vec<(Range<usize>, impl AsRef<str>)>) -> String {
     replacements.sort_by_key(|(range, _)| range.start);
     let mut output = String::with_capacity(xml.len());
@@ -345,8 +329,6 @@ mod tests {
         response_with_encrypted_id_beside(plaintext, "")
     }
 
-    /// An `EncryptedID` whose `EncryptedData` carries `plaintext`, followed by
-    /// the unencrypted `beside`.
     fn response_with_encrypted_id_beside(
         plaintext: &str,
         beside: &str,

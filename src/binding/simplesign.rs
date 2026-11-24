@@ -1,5 +1,3 @@
-//! Signed octet strings for the HTTP-POST-SimpleSign binding.
-
 pub(crate) fn build_simplesign_octet(
     param_name: &str,
     xml: &str,

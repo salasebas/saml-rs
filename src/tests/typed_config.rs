@@ -70,8 +70,6 @@ fn hmac_secret_is_at_least_the_sha1_output_length() {
     assert!(HmacSecret::try_new([0_u8; HmacSecret::MIN_LEN]).is_ok());
 }
 
-/// The second line of `pem`: base64 of the key or certificate, which no
-/// `Debug` output may show.
 fn pem_body(pem: &str) -> Result<&str, String> {
     pem.lines()
         .nth(1)
@@ -87,7 +85,6 @@ fn typed_config_credentials_debug_redacts_every_secret() -> Result<(), Box<dyn s
     const DECRYPTION_KEY: &str =
         include_str!("../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
     const DECRYPTION_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
-    // An unencrypted key loads with any passphrase.
     let credentials = Credentials::default()
         .with_signing_credential(
             X509Credential::new(

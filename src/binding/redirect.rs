@@ -1,5 +1,3 @@
-//! HTTP-Redirect binding query construction.
-
 use std::borrow::Cow;
 
 use super::deflate::deflate_raw_encode;
@@ -14,11 +12,6 @@ use quick_xml::name::ResolveResult;
 use quick_xml::NsReader;
 use url::form_urlencoded::byte_serialize;
 
-/// Build the unsigned query string for the SAML HTTP-Redirect binding.
-///
-/// `saml_param` is `SAMLRequest` or `SAMLResponse`; `b64_value` is the
-/// base64-encoded, raw-DEFLATEd message. For a signed redirect, append
-/// `&SigAlg=<uri>&Signature=<b64>` computed over this encoded query (M2).
 pub(crate) fn redirect_binding_query(
     saml_param: &str,
     b64_value: &str,
@@ -53,8 +46,6 @@ pub fn build_redirect_url(
     Ok(append_redirect_query(base_url, &query))
 }
 
-/// Add an encoded query to `base_url`, after any query it already has and
-/// before any fragment.
 pub(crate) fn append_redirect_query(base_url: &str, query: &str) -> String {
     let fragment_start = base_url.find('#').unwrap_or(base_url.len());
     let (before_fragment, fragment) = base_url.split_at(fragment_start);
@@ -222,9 +213,6 @@ fn remove_spans(xml: &str, spans: &[(usize, usize)]) -> String {
     rewritten
 }
 
-/// Finish a signed HTTP-Redirect URL by adding `<octet>&Signature=<enc(sig)>`
-/// to the query of `base_url`, after any existing query and before any
-/// fragment. `octet` is added unchanged.
 #[cfg(any(crypto, test))]
 pub(crate) fn append_signature(base_url: &str, octet: &str, signature_b64: &str) -> String {
     let mut signed = format!("{octet}&Signature=");

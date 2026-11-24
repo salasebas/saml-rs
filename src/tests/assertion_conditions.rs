@@ -1,4 +1,3 @@
-//! Typed SSO acceptance of assertion conditions and every assertion in a response.
 #![cfg(crypto)]
 
 mod replay;
@@ -832,8 +831,6 @@ fn the_session_comes_from_the_assertion_with_a_padded_bearer_method(
     Ok(())
 }
 
-/// The response of `exchange` without signatures, with a holder-of-key
-/// assertion `_second_assertion` before the bearer assertion.
 fn holder_of_key_assertion_first(
     exchange: &Exchange,
 ) -> Result<String, Box<dyn std::error::Error>> {
@@ -1026,14 +1023,11 @@ fn expect_error(
     }
 }
 
-/// `xml` signed over the Response root, keeping its assertion signatures.
 fn sign_response(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
     let key = read_private_key(PRIVKEY, None)?;
     Ok(sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?)
 }
 
-/// The response of `exchange` with its first assertion signed and no other
-/// signature.
 fn assertion_signed(exchange: &Exchange) -> Result<String, Box<dyn std::error::Error>> {
     sign_first_assertion(
         &strip_embedded_signatures(&response_xml(&exchange.response_fields)?)?,
@@ -1041,8 +1035,6 @@ fn assertion_signed(exchange: &Exchange) -> Result<String, Box<dyn std::error::E
     )
 }
 
-/// `xml` with its first `NameID` changed, so a signature over its assertion
-/// no longer verifies.
 fn with_name_id_changed(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
     if !xml.contains(">alice@example.com<") {
         return Err("missing NameID value".into());
@@ -1157,8 +1149,6 @@ mod encrypted_assertions {
         })
     }
 
-    /// The response of `exchange` with a second assertion `_second_assertion`
-    /// for the same principal, and no signatures.
     fn two_assertions(exchange: &Exchange) -> Result<String, Box<dyn std::error::Error>> {
         strip_embedded_signatures(&duplicate_assertion(
             &response_xml(&exchange.response_fields)?,
@@ -1166,7 +1156,6 @@ mod encrypted_assertions {
         )?)
     }
 
-    /// `xml` with its first plaintext `<Assertion>` encrypted for `recipient_cert`.
     fn encrypt_first(
         xml: &str,
         data_algorithm: &str,
@@ -1181,8 +1170,6 @@ mod encrypted_assertions {
         )?)
     }
 
-    /// `xml` with both assertions encrypted for the service provider, and the
-    /// response signed over the ciphertext.
     fn both_encrypted_then_response_signed(
         xml: &str,
     ) -> Result<String, Box<dyn std::error::Error>> {
@@ -1301,7 +1288,6 @@ mod encrypted_assertions {
         }
     }
 
-    /// `xml` with its first plaintext `<Assertion>` signed, then encrypted.
     fn sign_and_encrypt_first(
         xml: &str,
         data_algorithm: &str,
@@ -1419,7 +1405,6 @@ mod encrypted_assertions {
         )
     }
 
-    /// `xml` with its `<EncryptedAssertion>` moved after the plaintext `<Assertion>`.
     fn move_encrypted_assertion_last(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
         let start = xml
             .find("<saml:EncryptedAssertion")
@@ -1440,8 +1425,6 @@ mod encrypted_assertions {
         Ok(moved)
     }
 
-    /// `xml`, whose first `<Assertion>` is already encrypted, in both orders:
-    /// `[EncryptedAssertion, Assertion]` and `[Assertion, EncryptedAssertion]`.
     fn both_orders(xml: &str) -> Result<[String; 2], Box<dyn std::error::Error>> {
         assert_eq!(xml.matches("<saml:EncryptedAssertion").count(), 1);
         assert_eq!(xml.matches("<saml:Assertion ").count(), 1);

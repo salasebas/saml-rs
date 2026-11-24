@@ -1,5 +1,3 @@
-//! Historical regression cases derived from npm `samlify` extractor tests.
-
 use saml_rs::util::Value;
 use saml_rs::xml::{extract, ExtractorField};
 

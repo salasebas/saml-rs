@@ -1,11 +1,4 @@
-//! Historical regression cases derived from npm `samlify` flow tests.
-//!
-//! Upstream uses IdP/SP private keys whose PEM format `bergshamra` cannot
-//! auto-detect, so entities are built from config with the project's working
-//! RSA keypair. Redirect/SimpleSign responses are parsed by reconstructing the
-//! signed octet string the way the bindings produce it.
 #![cfg(crypto)]
-#![allow(clippy::unwrap_used)]
 
 use crate::tests::template::fill_template;
 use crate::tests::template::LoginResponseAttribute;
@@ -84,28 +77,27 @@ fn sp_config(authn_signed: bool, want_assertions_signed: bool, enc: bool) -> SpM
     }
 }
 
-fn idp(want_authn_signed: bool) -> idp::Engine {
-    idp::Engine::from_config(&idp_config(want_authn_signed), signing()).unwrap()
+fn idp(want_authn_signed: bool) -> Result<idp::Engine, SamlError> {
+    idp::Engine::from_config(&idp_config(want_authn_signed), signing())
 }
 
-fn sp(want_assertions_signed: bool, enc: bool) -> sp::Engine {
+fn sp(want_assertions_signed: bool, enc: bool) -> Result<sp::Engine, SamlError> {
     let mut setting = signing();
     if enc {
         setting.is_assertion_encrypted = true;
         setting.enc_private_key = Some(PRIVKEY.into());
     }
-    sp::Engine::from_config(&sp_config(false, want_assertions_signed, enc), setting).unwrap()
+    sp::Engine::from_config(&sp_config(false, want_assertions_signed, enc), setting)
 }
 
-fn unsigned_idp() -> idp::Engine {
-    idp::Engine::from_config(&idp_config(false), EntitySetting::default()).unwrap()
+fn unsigned_idp() -> Result<idp::Engine, SamlError> {
+    idp::Engine::from_config(&idp_config(false), EntitySetting::default())
 }
 
-fn unsigned_sp() -> sp::Engine {
-    sp::Engine::from_config(&sp_config(false, false, false), EntitySetting::default()).unwrap()
+fn unsigned_sp() -> Result<sp::Engine, SamlError> {
+    sp::Engine::from_config(&sp_config(false, false, false), EntitySetting::default())
 }
 
-/// Rebuild the SP-side HTTP request for a response over `binding`.
 fn response_request(binding: Binding, ctx: &BindingContext) -> Result<HttpRequest, SamlError> {
     Ok(match binding {
         Binding::Post => HttpRequest::post(vec![("SAMLResponse".into(), ctx.context.clone())]),
@@ -171,7 +163,6 @@ fn simplesign_request(param: &str, ctx: &BindingContext) -> Result<HttpRequest, 
     })
 }
 
-/// A `customTagReplacement` that renders our default template + attributes.
 fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) {
     let id = "_8e8dc5f69a98cc4c1ff3427e5ce34606fd672f91e6".to_string();
     let now = iso8601_offset(-60);
@@ -254,11 +245,9 @@ fn assert_failed_message_signature(
     }
 }
 
-// ----- create login request (1-3): default template round-trip -----
-
 fn login_request_round_trip(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = unsigned_sp();
-    let idp = unsigned_idp();
+    let sp = unsigned_sp()?;
+    let idp = unsigned_idp()?;
     let ctx = sp.create_login_request(&idp, binding, &LoginRequestOptions::default())?;
     let request = match binding {
         Binding::Redirect => redirect_request(&ctx.context)?,
@@ -282,20 +271,18 @@ fn flow_conformance_login_request_post_default() -> Result<(), Box<dyn std::erro
     login_request_round_trip(Binding::Post)
 }
 
-// ----- AuthnRequest signing flags (4-6) -----
-
 fn signing_sp_against_idp_without_requirement(
     binding: Binding,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp::Engine::from_config(&sp_config(true, false, false), signing())?;
-    let ctx = sp.create_login_request(&idp(false), binding, &LoginRequestOptions::default())?;
+    let ctx = sp.create_login_request(&idp(false)?, binding, &LoginRequestOptions::default())?;
     let request = match binding {
         Binding::Post => HttpRequest::post(vec![("SAMLRequest".into(), ctx.context.clone())]),
         Binding::Redirect => redirect_request(&ctx.context)?,
         Binding::SimpleSign => simplesign_request("SAMLRequest", &ctx)?,
         _ => return Err("unsupported binding".into()),
     };
-    let parsed = idp(true).parse_login_request(&sp, binding, &request)?;
+    let parsed = idp(true)?.parse_login_request(&sp, binding, &request)?;
     assert_eq!(parsed.extract.get_str("request.id"), Some(ctx.id.as_str()));
     Ok(())
 }
@@ -317,8 +304,8 @@ fn flow_conformance_signing_sp_without_idp_requirement_simplesign(
 }
 #[test]
 fn flow_conformance_unsigned_sp_against_requiring_idp() -> Result<(), Box<dyn std::error::Error>> {
-    match sp(false, false).create_login_request(
-        &idp(true),
+    match sp(false, false)?.create_login_request(
+        &idp(true)?,
         Binding::Redirect,
         &LoginRequestOptions::default(),
     ) {
@@ -327,13 +314,11 @@ fn flow_conformance_unsigned_sp_against_requiring_idp() -> Result<(), Box<dyn st
     }
 }
 
-// ----- detached message signature binding -----
-
 fn detached_signature_rejects_mismatched_login_request(
     binding: Binding,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp::Engine::from_config(&sp_config(true, false, false), signing())?;
-    let idp = idp(true);
+    let idp = idp(true)?;
     let ctx = sp.create_login_request(&idp, binding, &LoginRequestOptions::default())?;
     let mut request = match binding {
         Binding::Redirect => redirect_request(&ctx.context)?,
@@ -386,7 +371,7 @@ fn flow_conformance_simplesign_signature_rejects_mismatched_consumed_request(
 fn flow_conformance_redirect_signature_rejects_mismatched_relay_state(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp::Engine::from_config(&sp_config(true, false, false), signing())?;
-    let idp = idp(true);
+    let idp = idp(true)?;
     let ctx = sp.create_login_request(
         &idp,
         Binding::Redirect,
@@ -435,8 +420,6 @@ fn flow_conformance_redirect_signature_rejects_mismatched_relay_state(
     }
 }
 
-// ----- create login request signed with PKCS#8 keys (8,9) -----
-
 fn signed_request_with_key(
     key: &str,
     pass: Option<&str>,
@@ -449,7 +432,7 @@ fn signed_request_with_key(
         ..EntitySetting::default()
     };
     let sp = sp::Engine::from_config(&sp_config(true, false, false), setting)?;
-    let idp = idp(true);
+    let idp = idp(true)?;
     let ctx = sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
     assert!(ctx.context.contains("&Signature="));
     Ok(())
@@ -473,12 +456,10 @@ fn flow_conformance_login_request_redirect_signed_encrypted_pkcs8(
     )
 }
 
-// ----- create login response (12-15) -----
-
 #[test]
 fn flow_conformance_login_response_undefined_binding() -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(true, false);
+    let idp = idp(false)?;
+    let sp = sp(true, false)?;
     match idp.create_login_response(&sp, Binding::Artifact, &User::new("a@e.com"), &opts("_r")) {
         Err(SamlError::UnsupportedBinding {
             binding: Binding::Artifact,
@@ -489,8 +470,8 @@ fn flow_conformance_login_response_undefined_binding() -> Result<(), Box<dyn std
 }
 
 fn create_login_response(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(true, false);
+    let idp = idp(false)?;
+    let sp = sp(true, false)?;
     let ctx = idp.create_login_response(&sp, binding, &User::new("a@e.com"), &opts("_r"))?;
     assert!(!ctx.context.is_empty());
     Ok(())
@@ -512,8 +493,8 @@ fn flow_conformance_create_post_login_response() -> Result<(), Box<dyn std::erro
 #[test]
 fn flow_conformance_simplesign_login_response_post_form_round_trips_to_parser(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false);
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = idp.create_login_response(
         &sp,
         Binding::SimpleSign,
@@ -543,11 +524,9 @@ fn flow_conformance_simplesign_login_response_post_form_round_trips_to_parser(
     Ok(())
 }
 
-// ----- create logout request (16-18) -----
-
 fn logout_request(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false);
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = create_logout_request(
         &idp.setting,
         idp.metadata.as_metadata(),
@@ -571,8 +550,7 @@ fn flow_conformance_logout_request_post() -> Result<(), Box<dyn std::error::Erro
 }
 #[test]
 fn flow_conformance_logout_request_one_binding() -> Result<(), Box<dyn std::error::Error>> {
-    // IdP target exposes a single SLO binding.
-    let idp = idp(false);
+    let idp = idp(false)?;
     let sp_config = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
@@ -593,12 +571,10 @@ fn flow_conformance_logout_request_one_binding() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-// ----- create logout response (19-21) -----
-
 #[test]
 fn flow_conformance_logout_response_undefined_binding() -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false);
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     match create_logout_response(
         &idp.setting,
         idp.metadata.as_metadata(),
@@ -617,8 +593,8 @@ fn flow_conformance_logout_response_undefined_binding() -> Result<(), Box<dyn st
 }
 
 fn logout_response(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false);
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = create_logout_response(
         &idp.setting,
         idp.metadata.as_metadata(),
@@ -641,11 +617,9 @@ fn flow_conformance_logout_response_post() -> Result<(), Box<dyn std::error::Err
     logout_response(Binding::Post)
 }
 
-// ----- send response: signed assertion (22-24) -----
-
 fn send_signed_assertion(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(true, false);
+    let idp = idp(false)?;
+    let sp = sp(true, false)?;
     let ctx = idp.create_login_response(&sp, binding, &User::new("a@example.com"), &opts("_r"))?;
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_r")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("a@example.com"));
@@ -660,8 +634,8 @@ fn flow_conformance_send_signed_assertion_post() -> Result<(), Box<dyn std::erro
 #[test]
 fn flow_conformance_required_response_signature_rejects_assertion_only_post(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let assertion_only_sp = sp(true, false);
+    let idp = idp(false)?;
+    let assertion_only_sp = sp(true, false)?;
     let mut required_setting = signing();
     required_setting.want_message_signed = true;
     let required_sp = sp::Engine::from_config(&sp_config(false, true, false), required_setting)?;
@@ -686,12 +660,10 @@ fn flow_conformance_send_signed_assertion_simplesign() -> Result<(), Box<dyn std
     send_signed_assertion(Binding::SimpleSign)
 }
 
-// ----- signed assertion + custom transformation algorithms (25-27) -----
-
 fn send_signed_assertion_custom_transforms(
     binding: Binding,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
+    let idp = idp(false)?;
     let mut sp_setting = signing();
     sp_setting.transformation_algorithms = vec![
         saml_rs::constants::transform_algorithm::ENVELOPED_SIGNATURE.into(),
@@ -720,11 +692,9 @@ fn flow_conformance_send_signed_assertion_custom_transforms_simplesign(
     send_signed_assertion_custom_transforms(Binding::SimpleSign)
 }
 
-// ----- [custom template] signed assertion (28-30) -----
-
 fn send_custom_signed_assertion(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     let idp = custom_idp()?;
-    let sp = sp(true, false);
+    let sp = sp(true, false)?;
     let idp_id = "https://idp.example.com/metadata";
     let cb = |t: &str| Ok(fill_response(t, idp_id, "custom@example.com"));
     let ctx = idp.create_rendered_login_response(&sp, binding, &cb)?;
@@ -752,11 +722,9 @@ fn flow_conformance_send_custom_signed_assertion_simplesign(
     send_custom_signed_assertion(Binding::SimpleSign)
 }
 
-// ----- signed message (31-33) -----
-
 fn send_signed_message(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false); // not assertion-signed → message is signed (POST)
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = idp.create_login_response(&sp, binding, &User::new("a@example.com"), &opts("_r"))?;
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_r")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("a@example.com"));
@@ -766,8 +734,8 @@ fn send_signed_message(binding: Binding) -> Result<(), Box<dyn std::error::Error
 #[test]
 fn flow_conformance_required_response_signature_accepts_response_root_signed_post(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let response_signed_sp = sp(false, false);
+    let idp = idp(false)?;
+    let response_signed_sp = sp(false, false)?;
     let mut required_setting = signing();
     required_setting.want_message_signed = true;
     let required_sp = sp::Engine::from_config(&sp_config(false, false, false), required_setting)?;
@@ -789,9 +757,9 @@ fn flow_conformance_required_response_signature_accepts_response_root_signed_pos
 #[test]
 fn flow_conformance_strict_assertion_signature_rejects_response_only_post(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp_allowing_unsigned_assertions = sp(false, false);
-    let strict_sp = sp(true, false);
+    let idp = idp(false)?;
+    let sp_allowing_unsigned_assertions = sp(false, false)?;
+    let strict_sp = sp(true, false)?;
     let ctx = idp.create_login_response(
         &sp_allowing_unsigned_assertions,
         Binding::Post,
@@ -808,8 +776,8 @@ fn flow_conformance_strict_assertion_signature_rejects_response_only_post(
 #[test]
 fn flow_conformance_compatible_assertion_signature_accepts_response_only_post(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false);
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = idp.create_login_response(
         &sp,
         Binding::Post,
@@ -838,7 +806,7 @@ fn signed_response_without_destination_is_rejected(
     binding: Binding,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = idp::Engine::from_config(&idp_config(false), signing())?;
-    let sp = sp(false, false);
+    let sp = sp(false, false)?;
     let callback = |template: &str| {
         Ok(fill_response(
             &template.replacen(" Destination=\"{Destination}\"", "", 1),
@@ -880,7 +848,7 @@ fn flow_conformance_signed_simplesign_response_requires_destination(
 fn flow_conformance_assertion_only_signed_post_allows_omitted_response_destination(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = idp::Engine::from_config(&idp_config(false), signing())?;
-    let sp = sp(true, false);
+    let sp = sp(true, false)?;
     let callback = |template: &str| {
         Ok(fill_response(
             &template.replacen(" Destination=\"{Destination}\"", "", 1),
@@ -901,8 +869,8 @@ fn flow_conformance_assertion_only_signed_post_allows_omitted_response_destinati
 fn required_response_signature_accepts_detached_without_embedded_signature(
     binding: Binding,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let detached_signed_sp = sp(false, false);
+    let idp = idp(false)?;
+    let detached_signed_sp = sp(false, false)?;
     let mut required_setting = signing();
     required_setting.want_message_signed = true;
     let required_sp = sp::Engine::from_config(&sp_config(false, false, false), required_setting)?;
@@ -954,11 +922,9 @@ fn flow_conformance_required_response_signature_accepts_simplesign_detached_sign
     required_response_signature_accepts_detached_without_embedded_signature(Binding::SimpleSign)
 }
 
-// ----- [custom template] signed message (34-36) -----
-
 fn send_custom_signed_message(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     let idp = custom_idp()?;
-    let sp = sp(false, false);
+    let sp = sp(false, false)?;
     let idp_id = "https://idp.example.com/metadata";
     let cb = |t: &str| Ok(fill_response(t, idp_id, "cm@example.com"));
     let ctx = idp.create_rendered_login_response(&sp, binding, &cb)?;
@@ -982,10 +948,8 @@ fn flow_conformance_send_custom_signed_message_simplesign() -> Result<(), Box<dy
     send_custom_signed_message(Binding::SimpleSign)
 }
 
-// ----- signed assertion + signed message (37-39) -----
-
 fn send_assertion_and_message(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
+    let idp = idp(false)?;
     let mut sp_setting = signing();
     sp_setting.want_message_signed = true;
     let sp = sp::Engine::from_config(&sp_config(false, true, false), sp_setting)?;
@@ -1009,8 +973,6 @@ fn flow_conformance_send_assertion_and_message_simplesign() -> Result<(), Box<dy
 {
     send_assertion_and_message(Binding::SimpleSign)
 }
-
-// ----- [custom template] signed assertion + signed message (40-42) -----
 
 fn send_custom_assertion_and_message(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     let idp = custom_idp()?;
@@ -1040,8 +1002,6 @@ fn flow_conformance_send_custom_assertion_and_message_simplesign(
 ) -> Result<(), Box<dyn std::error::Error>> {
     send_custom_assertion_and_message(Binding::SimpleSign)
 }
-
-// ----- encrypted assertion variants (43-47, 54) -----
 
 #[cfg(not(feature = "crypto-fips"))]
 fn encrypted_signed(custom: bool, with_message: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -1089,7 +1049,7 @@ fn flow_conformance_required_response_signature_rejects_encrypted_assertion_only
     let mut idp_setting = signing();
     idp_setting.is_assertion_encrypted = true;
     let idp = idp::Engine::from_config(&idp_config(false), idp_setting)?;
-    let assertion_only_sp = sp(true, true);
+    let assertion_only_sp = sp(true, true)?;
     let mut required_setting = signing();
     required_setting.is_assertion_encrypted = true;
     required_setting.enc_private_key = Some(PRIVKEY.into());
@@ -1120,11 +1080,9 @@ fn flow_conformance_encrypted_custom_signed_assertion_and_message(
     encrypted_signed(true, true)
 }
 
-// ----- logout request/response with & without signature (48-53) -----
-
 fn logout_request_flow(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false);
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = create_logout_request(
         &idp.setting,
         idp.metadata.as_metadata(),
@@ -1216,8 +1174,8 @@ fn flow_conformance_idp_post_logout_request_signed() -> Result<(), Box<dyn std::
 #[test]
 fn flow_conformance_signed_simplesign_logout_request_returns_detached_signature_fields(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false);
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = create_logout_request(
         &idp.setting,
         idp.metadata.as_metadata(),
@@ -1237,8 +1195,8 @@ fn flow_conformance_signed_simplesign_logout_request_returns_detached_signature_
 #[test]
 fn flow_conformance_signed_simplesign_logout_request_parses_when_required(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false);
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = create_logout_request(
         &idp.setting,
         idp.metadata.as_metadata(),
@@ -1265,8 +1223,8 @@ fn flow_conformance_signed_simplesign_logout_request_parses_when_required(
 #[test]
 fn flow_conformance_tampered_simplesign_logout_request_body_fails_signature_verification(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false);
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = create_logout_request(
         &idp.setting,
         idp.metadata.as_metadata(),
@@ -1294,8 +1252,8 @@ fn flow_conformance_tampered_simplesign_logout_request_body_fails_signature_veri
 #[test]
 fn flow_conformance_signed_simplesign_logout_request_with_relay_state_includes_body_and_octet(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false);
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = create_logout_request(
         &idp.setting,
         idp.metadata.as_metadata(),
@@ -1319,8 +1277,8 @@ fn flow_conformance_signed_simplesign_logout_request_with_relay_state_includes_b
 }
 
 fn logout_response_flow(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false);
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = create_logout_response(
         &sp.setting,
         sp.metadata.as_metadata(),
@@ -1358,8 +1316,8 @@ fn flow_conformance_sp_redirect_logout_response_signed() -> Result<(), Box<dyn s
 #[test]
 fn flow_conformance_signed_simplesign_logout_response_returns_detached_signature_fields(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false);
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = create_logout_response(
         &sp.setting,
         sp.metadata.as_metadata(),
@@ -1379,8 +1337,8 @@ fn flow_conformance_signed_simplesign_logout_response_returns_detached_signature
 #[test]
 fn flow_conformance_signed_simplesign_logout_response_parses_when_required(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp_recv = idp(false);
-    let sp = sp(false, false);
+    let idp_recv = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = create_logout_response(
         &sp.setting,
         sp.metadata.as_metadata(),
@@ -1408,8 +1366,8 @@ fn flow_conformance_signed_simplesign_logout_response_parses_when_required(
 #[test]
 fn flow_conformance_tampered_simplesign_logout_response_body_fails_signature_verification(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp_recv = idp(false);
-    let sp = sp(false, false);
+    let idp_recv = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = create_logout_response(
         &sp.setting,
         sp.metadata.as_metadata(),
@@ -1438,8 +1396,8 @@ fn flow_conformance_tampered_simplesign_logout_response_body_fails_signature_ver
 #[test]
 fn flow_conformance_signed_simplesign_logout_response_with_relay_state_includes_body_and_octet(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp(false);
-    let sp = sp(false, false);
+    let idp = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = create_logout_response(
         &sp.setting,
         sp.metadata.as_metadata(),
@@ -1465,8 +1423,8 @@ fn flow_conformance_signed_simplesign_logout_response_with_relay_state_includes_
 #[test]
 fn flow_conformance_signed_logout_response_wrong_request_id_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp_recv = idp(false);
-    let sp = sp(false, false);
+    let idp_recv = idp(false)?;
+    let sp = sp(false, false)?;
     let ctx = create_logout_response(
         &sp.setting,
         sp.metadata.as_metadata(),
@@ -1491,13 +1449,11 @@ fn flow_conformance_signed_logout_response_wrong_request_id_rejected(
     Ok(())
 }
 
-// ----- malformed response (57-59) -----
-
-fn malformed(binding: Binding) {
+fn malformed(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
-    let idp = idp(false);
-    let sp = sp(true, false);
+    let idp = idp(false)?;
+    let sp = sp(true, false)?;
     let bad = STANDARD.encode(b"<<<not-xml");
     let request = match binding {
         Binding::Redirect => redirect_query(vec![("SAMLResponse".into(), bad)]),
@@ -1506,31 +1462,31 @@ fn malformed(binding: Binding) {
     assert!(sp
         .parse_unsolicited_login_response(&idp, binding, &request)
         .is_err());
+    Ok(())
 }
 
 #[test]
-fn flow_conformance_malformed_response_post() {
+fn flow_conformance_malformed_response_post() -> Result<(), Box<dyn std::error::Error>> {
     malformed(Binding::Post)
 }
 #[test]
-fn flow_conformance_malformed_response_redirect() {
+fn flow_conformance_malformed_response_redirect() -> Result<(), Box<dyn std::error::Error>> {
     malformed(Binding::Redirect)
 }
 #[test]
-fn flow_conformance_malformed_response_simplesign() {
+fn flow_conformance_malformed_response_simplesign() -> Result<(), Box<dyn std::error::Error>> {
     malformed(Binding::SimpleSign)
 }
-
-// ----- signature wrapping (60-61) -----
 
 const ATTACK: &str = include_str!("../../tests/fixtures/misc/attack_response_signed.xml");
 
 #[test]
-fn flow_conformance_reject_signature_wrapped_response_case_1() {
+fn flow_conformance_reject_signature_wrapped_response_case_1(
+) -> Result<(), Box<dyn std::error::Error>> {
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
-    let idp = idp(false);
-    let sp = sp(true, false);
+    let idp = idp(false)?;
+    let sp = sp(true, false)?;
     let request = HttpRequest::post(vec![(
         "SAMLResponse".into(),
         STANDARD.encode(ATTACK.as_bytes()),
@@ -1538,15 +1494,14 @@ fn flow_conformance_reject_signature_wrapped_response_case_1() {
     assert!(sp
         .parse_unsolicited_login_response(&idp, Binding::Post, &request)
         .is_err());
+    Ok(())
 }
 
 #[test]
 fn flow_conformance_use_signed_contents_in_wrapped_response_case_2(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // A correctly signed response yields only the cryptographically signed
-    // assertion contents (no wrapping injection survives).
-    let idp = idp(false);
-    let sp = sp(true, false);
+    let idp = idp(false)?;
+    let sp = sp(true, false)?;
     let ctx = idp.create_login_response(
         &sp,
         Binding::Post,
@@ -1558,13 +1513,11 @@ fn flow_conformance_use_signed_contents_in_wrapped_response_case_2(
     Ok(())
 }
 
-// ----- two-tier status error (62-64) -----
-
 fn two_tier_status(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
-    let idp = idp(false);
-    let sp = sp(true, false);
+    let idp = idp(false)?;
+    let sp = sp(true, false)?;
     let failed = FAILED.replace(
         "http://sp.example.com/demo1/index.php?acs",
         "https://sp/acs",

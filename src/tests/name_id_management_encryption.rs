@@ -68,8 +68,6 @@ fn encrypted() -> StartNameIdManagement {
         .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers)
 }
 
-/// A service provider that publishes `encryption_cert`, the certificate of
-/// `decryption_key`.
 fn sp_with(
     encryption_cert: &str,
     decryption_key: &str,
@@ -90,9 +88,6 @@ fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
     sp_with(SP_ENCRYPTION_CERT, SP_DECRYPTION_KEY)
 }
 
-/// The service provider's descriptor with the identity provider's encryption
-/// certificate in place of its own, so the service provider holds no key for
-/// what is encrypted for it.
 fn sp_descriptor_with_foreign_encryption_certificate() -> Result<SpDescriptor, SamlError> {
     sp_descriptor(&sp_with(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY)?)
 }
@@ -167,7 +162,6 @@ fn response_input(
     Ok(Inbound::redirect(redirect_query(outbound)?))
 }
 
-/// The SAML message XML carried by an HTTP-Redirect browser action.
 fn redirect_message_xml<Message>(
     outbound: &Outbound<Message>,
 ) -> Result<String, Box<dyn std::error::Error>> {
@@ -183,7 +177,6 @@ fn redirect_message_xml<Message>(
     )?)?)
 }
 
-/// The `<{qualified_name}>` element of `xml`.
 fn element<'a>(xml: &'a str, qualified_name: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
     let start = xml
         .find(&format!("<{qualified_name}>"))
@@ -195,7 +188,6 @@ fn element<'a>(xml: &'a str, qualified_name: &str) -> Result<&'a str, Box<dyn st
     Ok(&xml[start..start + end + end_tag.len()])
 }
 
-/// The encrypted identifier and new value of a generated request.
 fn encrypted_identifier_and_new_value(
     xml: &str,
 ) -> Result<(&str, &str), Box<dyn std::error::Error>> {
@@ -208,8 +200,6 @@ fn encrypted_identifier_and_new_value(
     ))
 }
 
-/// A `ManageNameIDRequest` from the identity provider to the service
-/// provider, signed for HTTP-Redirect.
 fn idp_request_input(content: &str) -> Result<Inbound<ManageNameIdRequest>, SamlError> {
     let xml = format!(
         r#"<samlp:ManageNameIDRequest xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="_manage1" Version="2.0" IssueInstant="2026-01-01T00:00:00Z" Destination="{SP_MANAGE}"><saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>{content}</samlp:ManageNameIDRequest>"#
@@ -380,7 +370,6 @@ fn identity_provider_encrypts_a_soap_request_and_decrypts_one_over_soap() -> Tes
         MetadataTrustPolicy::Unverified,
     )?;
 
-    // The service provider reads the elements the identity provider sends over SOAP.
     let started = idp.start_name_id_management(
         &sp_soap_peer,
         &alice(),
@@ -408,7 +397,6 @@ fn identity_provider_encrypts_a_soap_request_and_decrypts_one_over_soap() -> Tes
         &NameIdChange::NewId("alice-2".into())
     );
 
-    // The identity provider decrypts the elements a service provider sends over SOAP.
     let redirect = sp.start_name_id_management_redirect(
         &idp_peer,
         &alice(),

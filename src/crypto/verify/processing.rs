@@ -1,5 +1,3 @@
-//! Preflight restrictions and verified-signature profile checks.
-
 use super::{
     allows_digest_method, allows_signature_method, bergshamra_ns, crypto_err, reference_resolution,
     verified_target_from_uri, BergshamraDocument, BergshamraNodeId, DsigContext,
@@ -109,11 +107,6 @@ fn invalid_hmac_truncation(
     }
 }
 
-/// Check one verifier-accepted signature against `profile`.
-///
-/// Callers apply this only to a signature that authenticated the message or
-/// metadata document being accepted. An invalid, untrusted, or unrelated
-/// signature therefore cannot reject it.
 pub(super) fn enforce_profile_on_verified_signature(
     document: &BergshamraDocument<'_>,
     signature_node: BergshamraNodeId,

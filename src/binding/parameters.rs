@@ -1,8 +1,5 @@
-//! Binding parameters read from a query string or form.
-
 use crate::error::SamlError;
 
-/// Value of the binding parameter `name`, which may occur at most once.
 pub(crate) fn single_parameter<'a>(
     pairs: impl IntoIterator<Item = (&'a str, &'a str)>,
     name: &'static str,

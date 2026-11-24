@@ -168,9 +168,6 @@ impl Attribute {
         &self.values
     }
 
-    /// Whether this is the attribute `name` that a specification defines with
-    /// the `uri` `NameFormat`: its `NameFormat` is `uri`, `unspecified`, or
-    /// absent.
     pub(crate) fn matches_uri_name(&self, name: &str) -> bool {
         self.name == name
             && matches!(
@@ -179,12 +176,6 @@ impl Attribute {
             )
     }
 
-    /// Check the `Name` and `NameFormat` this attribute would be written with.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::Invalid`] when the `NameFormat` is not an absolute
-    /// URI reference, or a basic attribute name is not an `xs:Name`.
     pub(crate) fn check_writable(&self) -> Result<(), SamlError> {
         if let Some(name_format) = self.name_format.as_ref().map(AttributeNameFormat::as_uri) {
             if !is_absolute_uri_reference(name_format) {

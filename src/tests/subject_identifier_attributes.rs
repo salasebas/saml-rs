@@ -1,9 +1,3 @@
-//! The `subject-id` and `pairwise-id` attributes of the SAML V2.0 Subject
-//! Identifier Attributes Profile, through the typed identity-provider and
-//! service-provider flows.
-//!
-//! The profile §3.3.1 defines the `uniqueID@scope` syntax, the single value,
-//! and case-insensitive comparison. §3.4.1 gives `pairwise-id` the same rules.
 #![cfg(crypto)]
 
 use std::collections::HashSet;

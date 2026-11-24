@@ -1,5 +1,3 @@
-//! XML parsing and field extraction over quick-xml.
-
 pub(crate) mod any_uri;
 mod date_time;
 pub(crate) mod dom;
@@ -32,8 +30,6 @@ pub(crate) fn decode_utf8(bytes: Vec<u8>) -> Result<String, crate::error::SamlEr
     String::from_utf8(bytes).map_err(|error| crate::error::xml_err(error.utf8_error()))
 }
 
-/// Length of the UTF-8 byte order mark that starts `xml`, or 0.
-///
 /// quick-xml skips a leading byte order mark without counting it, so
 /// `Reader::buffer_position` is this many bytes behind the source offset.
 pub(crate) fn utf8_bom_len(xml: &str) -> usize {

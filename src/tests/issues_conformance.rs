@@ -1,5 +1,3 @@
-//! Historical regression cases derived from npm `samlify` issue tests.
-
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
@@ -72,7 +70,6 @@ fn issue_31_query_param_response() {
 
 #[test]
 fn issue_31_query_param_invalid() {
-    // Invalid keywords resolve to no binding/type (samlify throws on a bad type).
     assert!(Binding::from_short_name("samlRequest").is_none());
     assert!(Binding::from_urn("not-a-binding").is_none());
 }
@@ -161,7 +158,6 @@ fn issue_352_no_index_on_idp_slo() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(crypto)]
 #[test]
 fn issue_87_existence_check_for_signature() -> Result<(), Box<dyn std::error::Error>> {
-    // An unsigned response verifies to false (no signature present).
     let (verified, _) = saml_rs::crypto::verify_signature(RESPONSE, &[])?;
     assert!(!verified);
     Ok(())

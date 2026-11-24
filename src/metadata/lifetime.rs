@@ -1,5 +1,3 @@
-//! `validUntil` and `cacheDuration` written on generated metadata.
-
 use std::time::{Duration, SystemTime};
 
 use crate::entity::format_saml_utc_date_time;

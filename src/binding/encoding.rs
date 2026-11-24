@@ -1,5 +1,3 @@
-//! Base64 helpers with SAML whitespace normalization.
-
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
 
@@ -9,25 +7,11 @@ pub(crate) fn encode_base64(input: &[u8]) -> String {
     STANDARD.encode(input)
 }
 
-/// Decode standard base64 with no size limit.
-///
-/// For base64 that the crate or its crypto provider produced, and for a
-/// detached signature value. A received protocol message is decoded with
-/// [`decode_base64_with_limit`].
-///
-/// ASCII whitespace is ignored: space, tab, line feed, form feed, and carriage
-/// return. Any other byte outside the base64 alphabet is rejected.
 pub(crate) fn decode_base64(input: &str) -> Result<Vec<u8>, SamlError> {
     let normalized: Vec<u8> = non_whitespace_bytes(input).collect();
     STANDARD.decode(normalized).map_err(base64_error)
 }
 
-/// Decode standard base64, rejecting inputs whose decoded output would exceed
-/// `max_output_len` bytes.
-///
-/// ASCII whitespace is ignored: space, tab, line feed, form feed, and carriage
-/// return. Ignored whitespace does not count toward the limit. Any other byte
-/// outside the base64 alphabet is rejected.
 pub(crate) fn decode_base64_with_limit(
     input: &str,
     max_output_len: usize,

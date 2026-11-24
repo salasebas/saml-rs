@@ -1,6 +1,3 @@
-//! XML escaping helpers.
-
-/// Escape `& " ' < >` for safe inclusion in XML text or attributes.
 #[cfg(any(crypto, test))]
 pub(crate) fn xml_escape(input: &str) -> String {
     input

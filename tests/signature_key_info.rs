@@ -1,5 +1,3 @@
-//! The certificate in a signature's `KeyInfo` does not decide trust: a
-//! signature verifies when a key in the peer's metadata verifies it.
 #![cfg(crypto)]
 
 use std::time::SystemTime;

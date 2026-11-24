@@ -269,9 +269,6 @@ impl Outbound<SsoResponse> {
         self
     }
 
-    /// Browser action that delivers `artifact` to the assertion consumer `acs`.
-    ///
-    /// `id` is the ID of the stored `<Response>`.
     pub(crate) fn artifact(
         id: String,
         relay_state: Option<RelayState>,

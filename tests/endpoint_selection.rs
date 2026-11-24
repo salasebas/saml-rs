@@ -1,4 +1,3 @@
-//! Default ACS selection and every published SSO location.
 #![cfg(crypto)]
 
 mod common;

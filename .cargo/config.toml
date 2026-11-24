@@ -1,6 +1,4 @@
 [alias]
-# Prefer scoped `cargo -p <crate>` commands for daily work; these aliases are explicit gates.
-# They use the default feature set (RustCrypto provider).
 check-all = "check --workspace --all-targets --locked"
 format = "fmt --all"
 fmt-check = "fmt --all -- --check"

@@ -9,7 +9,6 @@ const STATEMENT: &str = "<saml:AuthnStatement ";
 
 type ExpectedError = fn(&SamlError) -> bool;
 
-/// Byte range of the value of `attribute` in the first `element` start tag.
 fn attribute_range(
     xml: &str,
     element: &str,
@@ -42,8 +41,6 @@ fn with_attribute_value(
     Ok(replaced)
 }
 
-/// The response of `exchange` with a `SessionNotOnOrAfter` equal to its
-/// `Conditions@NotOnOrAfter`.
 fn response_with_session_bound(exchange: &Exchange) -> Result<String, Box<dyn std::error::Error>> {
     let xml = response_xml(&exchange.response_fields)?;
     let bound = xml[attribute_range(&xml, CONDITIONS, "NotOnOrAfter")?].to_string();
@@ -54,7 +51,6 @@ fn response_with_session_bound(exchange: &Exchange) -> Result<String, Box<dyn st
     ))
 }
 
-/// `instant` written with the `+01:00` offset.
 fn at_plus_one_hour(instant: OffsetDateTime) -> Result<String, Box<dyn std::error::Error>> {
     let local = instant.to_offset(UtcOffset::from_hms(1, 0, 0)?);
     Ok(format!(

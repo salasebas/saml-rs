@@ -1,6 +1,3 @@
-//! Assertion, `<EncryptedID>`, `<EncryptedAttribute>`, and `<NewEncryptedID>`
-//! decryption.
-
 use std::ops::Range;
 
 use super::{
@@ -21,7 +18,6 @@ use bergshamra::{decrypt, EncContext, KeysManager};
 
 const RSA15_DECRYPTION_DISABLED: &str = "XML-Enc RSA-v1.5 key transport (http://www.w3.org/2001/04/xmlenc#rsa-1_5) is refused before decryption unless allow_rsa15_key_transport_decryption is selected";
 
-/// Options for XML-Enc assertion decryption.
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub(crate) struct AssertionDecryptionOptions {
@@ -34,9 +30,6 @@ pub(crate) struct AssertionDecryptionOptions {
     /// attack. Set it only for a peer that cannot send RSA-OAEP. It also
     /// needs `crypto-legacy-algorithms`.
     pub allow_rsa15_key_transport_decryption: bool,
-    /// Maximum estimated decryption work per message, including revealed
-    /// encrypted content. Zero refuses encrypted input. See
-    /// [`crate::config::XmlEncryptionPolicy::max_decryption_work`].
     pub max_decryption_work: usize,
 }
 
@@ -67,9 +60,6 @@ impl From<&FlowOptions<'_>> for AssertionDecryptionOptions {
     }
 }
 
-/// Decrypt the `<EncryptedData>` in `xml` with the first of `enc_keys` that
-/// decrypts it, after refusing an unselected RSA-v1.5 `<EncryptionMethod>`
-/// anywhere in `xml`. When none does, the error is the first key's.
 fn decrypt_with_keys(
     xml: &str,
     enc_keys: &[Key],
@@ -95,9 +85,6 @@ fn decrypt_with_keys(
     ))
 }
 
-/// Whether an `<xenc:EncryptionMethod>` of `xml` has an `Algorithm` attribute
-/// naming RSA-v1.5. `bergshamra` parses the same text with `uppsala` and reads
-/// `Algorithm` by local name, so every such attribute is checked.
 fn names_rsa15_key_transport(xml: &str) -> Result<bool, SamlError> {
     let document = uppsala::parse(xml).map_err(xml_err)?;
     Ok(document
@@ -114,28 +101,6 @@ fn names_rsa15_key_transport(xml: &str) -> Result<bool, SamlError> {
         }))
 }
 
-/// Decrypt each `<EncryptedAssertion>` child of the document element of `xml`
-/// using `enc_key`, replacing each one with its plaintext `<Assertion>`.
-///
-/// The `<xenc:EncryptedKey>` is the one in the `ds:KeyInfo` of
-/// `<xenc:EncryptedData>`, or one after `<xenc:EncryptedData>` that a
-/// `ds:RetrievalMethod` of type `http://www.w3.org/2001/04/xmlenc#EncryptedKey`
-/// names.
-///
-/// Returns `(response_with_decrypted_assertions, first_decrypted_assertion)`.
-/// Encrypted identifiers and attributes inside each assertion stay encrypted.
-///
-/// # Errors
-///
-/// Fails when any `<EncryptedAssertion>` does not decrypt. Returns
-/// [`SamlError::ProtocolProfile`] when an `<EncryptedAssertion>` holds
-/// anything other than one `<xenc:EncryptedData>` followed only by
-/// `<xenc:EncryptedKey>` elements, or when its plaintext is not one
-/// `<Assertion>`. Returns [`SamlError::Unsupported`] for a refused key
-/// transport, [`SamlError::LimitExceeded`] with
-/// [`ResourceLimit::DecryptionWork`](crate::ResourceLimit::DecryptionWork)
-/// when `options.max_decryption_work` is exceeded, and another
-/// [`SamlError`] when decryption fails.
 #[cfg(all(test, not(feature = "crypto-fips")))]
 pub(crate) fn decrypt_assertion_with_limits(
     xml: &str,
@@ -152,8 +117,6 @@ pub(crate) fn decrypt_assertion_with_limits(
     Ok((response, assertion))
 }
 
-/// `xml` with each `<EncryptedAssertion>` child of its document element
-/// decrypted, and each decrypted `<Assertion>` in document order.
 pub(crate) fn decrypt_assertions_with_limits(
     xml: &str,
     enc_keys: &[Key],
@@ -190,14 +153,6 @@ pub(crate) fn decrypt_assertions_with_limits(
     Ok((decrypted.xml, decrypted.plaintexts))
 }
 
-/// Replace the one `kind.encrypted` child of the document element of `xml`
-/// with the plaintext it carries, decrypted with one of `enc_keys`.
-///
-/// # Errors
-///
-/// Returns [`SamlError::ProtocolProfile`] when the document element has no
-/// such child or several, or when the plaintext is not one element of the
-/// expected name. Returns another [`SamlError`] when decryption fails.
 pub(crate) fn decrypt_root_child(
     xml: &str,
     kind: EncryptedElementKind,
@@ -218,18 +173,6 @@ pub(crate) fn decrypt_root_child(
     })
 }
 
-/// `xml` with the `<EncryptedID>` of the `<Subject>` of its `<AuthnRequest>`
-/// replaced by the `<NameID>` it carries, decrypted with the private key in
-/// `key_pem` or one of `additional`.
-///
-/// Returns `None` when the `<Subject>` carries no `<EncryptedID>`, for an
-/// unauthenticated request whose `EncryptedData` does not name AES-GCM (CBC
-/// ciphertext is decrypted only under a verified signature), and when the
-/// `<EncryptedID>` does not decrypt to one `<NameID>`.
-///
-/// # Errors
-///
-/// Returns a [`SamlError`] when the key does not load.
 pub(crate) fn decrypt_authn_request_encrypted_id(
     xml: &str,
     key_pem: &str,
@@ -279,15 +222,11 @@ pub(crate) fn decrypt_authn_request_encrypted_id(
     Ok(decrypted.map(|decrypted| decrypted.xml))
 }
 
-/// Whether the `EncryptedData` of `encrypted` names an AES-GCM
-/// `EncryptionMethod`.
 fn uses_gcm(document: &XmlDocument<'_>, encrypted: NodeId) -> bool {
     encrypted_data_algorithm(document, encrypted)
         .is_ok_and(|algorithm| crate::constants::is_xml_encryption_gcm_algorithm(&algorithm))
 }
 
-/// Whether an assertion in `xml` carries an `<EncryptedID>` in its `<Subject>`
-/// or an `<EncryptedAttribute>` in an `<AttributeStatement>`.
 pub(crate) fn carries_encrypted_assertion_elements(xml: &str) -> Result<bool, SamlError> {
     let document = parse_xml_document(xml)?;
     for kind in [ENCRYPTED_ID, ENCRYPTED_ATTRIBUTE] {
@@ -298,20 +237,6 @@ pub(crate) fn carries_encrypted_assertion_elements(xml: &str) -> Result<bool, Sa
     Ok(false)
 }
 
-/// Decrypt each received assertion subject identifier and attribute with `enc_keys`.
-///
-/// Each `<EncryptedID>` of an assertion `<Subject>` becomes the `<NameID>` it
-/// carries, and each `<EncryptedAttribute>` of an `<AttributeStatement>`
-/// becomes its `<Attribute>`. The plaintext is placed where the encrypted
-/// element was, so it takes the namespace context of that position.
-///
-/// # Errors
-///
-/// Returns [`SamlError::EncryptionRequired`] when a selected `<NameID>` or
-/// `<Attribute>` is in plaintext. An `<EncryptedID>` whose plaintext is a
-/// `<BaseID>` or an `<Assertion>` returns [`SamlError::Unsupported`]. Any other
-/// plaintext that is not one element of the expected name returns
-/// [`SamlError::ProtocolProfile`].
 pub(crate) fn decrypt_assertion_elements(
     xml: &str,
     enc_keys: &[Key],
@@ -340,17 +265,6 @@ pub(crate) fn decrypt_assertion_elements(
     Ok(decrypted.map_or_else(|| xml.to_owned(), |decrypted| decrypted.xml))
 }
 
-/// Replace the `<EncryptedID>` of the `<LogoutRequest>` in `xml` with the
-/// `<NameID>` or `<BaseID>` it carries, decrypted with one of `enc_keys`.
-///
-/// Returns `None` when no key in `enc_keys` decrypts the `<EncryptedID>`
-/// under `options`.
-///
-/// # Errors
-///
-/// Call with a validated request whose identifier is an `<EncryptedID>`.
-/// Returns [`SamlError::ProtocolProfile`] if there is no single `<EncryptedID>`
-/// or its plaintext is not one identifier element.
 pub(crate) fn decrypt_logout_request_encrypted_id(
     xml: &str,
     enc_keys: &[Key],
@@ -401,10 +315,6 @@ struct DecryptedDocument {
     plaintexts: Vec<String>,
 }
 
-/// `xml` with the replacements that `decrypt` returns spliced in, and their
-/// plaintexts in the order `decrypt` returns them, or `None` when `decrypt`
-/// decrypts nothing. `xml` is parsed under `limits` before `decrypt` reads it,
-/// and the result must stay within `limits.max_bytes`.
 fn decrypt_selected(
     xml: &str,
     limits: XmlLimits,
@@ -444,7 +354,6 @@ fn decrypt_selected(
     }))
 }
 
-/// The source range of the encrypted `element` and the plaintext it carries.
 fn decrypted_element(
     document: &XmlDocument<'_>,
     element: NodeId,
@@ -463,8 +372,6 @@ fn decrypted_element(
     })
 }
 
-/// The encrypted `element` with the namespace declarations it uses, for
-/// decryption.
 pub(super) fn encrypted_wrapper(
     document: &XmlDocument<'_>,
     element: NodeId,
@@ -474,8 +381,6 @@ pub(super) fn encrypted_wrapper(
     crate::xml::decode_utf8(namespace_complete(document, element)?)
 }
 
-/// `EncryptedElementType`: one `EncryptedData`, then any `EncryptedKey`.
-/// Returns the number of `EncryptedKey` elements.
 fn require_encrypted_element_children(
     document: &XmlDocument<'_>,
     element: NodeId,
@@ -540,8 +445,6 @@ fn decrypted_plaintext(
     Err(must_carry(kind))
 }
 
-/// The element that took the place of `EncryptedData` in the decrypted
-/// `wrapper`, followed by the `peer_keys` `EncryptedKey` elements already there.
 fn decrypted_child(
     wrapper: &str,
     peer_keys: usize,

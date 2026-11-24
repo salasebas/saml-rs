@@ -1,13 +1,3 @@
-//! Artifact resolution over SOAP, through the typed identity provider and
-//! service provider.
-//!
-//! The identity provider stores a protocol message and answers `ArtifactResolve`.
-//! The service provider sends that request and reads the message from
-//! `ArtifactResponse`. The deployment still performs HTTP and TLS.
-//!
-//! Config helpers relax the policy fields that need a crypto provider, so they
-//! build without one for unsigned artifact resolution.
-
 #[path = "artifact_resolution/schema_validation.rs"]
 mod schema_validation;
 
@@ -53,7 +43,6 @@ const SOAP_BINDING: &str = "urn:oasis:names:tc:SAML:2.0:bindings:SOAP";
 const WEB_SSO_MARKER: &str = "web-sso-artifact-marker";
 const LOGOUT_MARKER: &str = "logout-artifact-marker";
 
-/// SHA-1 of `https://idp.example.com/metadata`, from Python `hashlib.sha1`.
 const IDP_SOURCE_ID: &str = "d7070df08eacb863523f9c79f8215dc969a7813d";
 
 struct Parties {
