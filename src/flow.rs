@@ -35,7 +35,7 @@ pub(crate) use response_issuer::issuer_for_idp_resolution;
 #[cfg(crypto)]
 use detached::verify_detached;
 #[cfg(crypto)]
-use embedded::{verify_and_prepare, verify_present_signatures};
+use embedded::{prepare_after_detached_signature, verify_and_prepare, verify_present_signatures};
 
 /// Decoded HTTP request inputs for a binding.
 #[derive(Debug, Default, Clone)]
@@ -416,7 +416,23 @@ impl<'a> ReceivedMessage<'a> {
 }
 
 #[cfg(not(crypto))]
-fn verify_present_signatures(_xml: &str, _opts: &FlowOptions<'_>) -> Result<(), SamlError> {
+fn verify_present_signatures(
+    _xml: &str,
+    _opts: &FlowOptions<'_>,
+) -> Result<Vec<VerifiedXmlSignatureEvidence>, SamlError> {
+    Err(SamlError::Unsupported(
+        "signature verification requires a crypto provider feature".into(),
+    ))
+}
+
+#[cfg(not(crypto))]
+fn prepare_after_detached_signature(
+    _xml: String,
+    _root: &crate::xml::dom::Node,
+    _parser_type: ParserType,
+    _opts: &FlowOptions<'_>,
+    _assertion_signature: AssertionSignatureRequirement,
+) -> Result<PreparedMessage, SamlError> {
     Err(SamlError::Unsupported(
         "signature verification requires a crypto provider feature".into(),
     ))
@@ -615,51 +631,6 @@ fn signature_is_present(
         Binding::Post | Binding::Artifact | Binding::Soap => false,
     };
     detached || !saml_signature_candidates(root).is_empty()
-}
-
-fn prepare_after_detached_signature(
-    xml: String,
-    root: &crate::xml::dom::Node,
-    parser_type: ParserType,
-    opts: &FlowOptions<'_>,
-    assertion_signature: AssertionSignatureRequirement,
-) -> Result<PreparedMessage, SamlError> {
-    let signed_request =
-        parser_type == ParserType::SamlRequest && !saml_signature_candidates(root).is_empty();
-    let direct_assertion_signature = parser_type == ParserType::SamlResponse
-        && assertion_signature == AssertionSignatureRequirement::Direct;
-    if signed_request || direct_assertion_signature {
-        return verify_and_prepare(
-            xml,
-            root,
-            parser_type,
-            opts,
-            assertion_signature,
-            ResponseSignatureRequirement::Optional,
-        );
-    }
-    if parser_type == ParserType::SamlResponse {
-        verify_present_signatures(&xml, opts)?;
-    }
-    let Some((saml_content, assertions)) =
-        crate::encrypted_elements::decrypt_detached_signed_assertions(
-            &xml,
-            root,
-            parser_type,
-            opts,
-        )?
-    else {
-        return PreparedMessage::received(xml, parser_type, opts.xml_limits);
-    };
-    for decrypted in &assertions {
-        verify_present_signatures(decrypted, opts)?;
-    }
-    Ok(PreparedMessage {
-        assertion: first_login_assertion_xml(&saml_content, opts.xml_limits)?,
-        saml_content,
-        authentication: MessageAuthentication::Unauthenticated,
-        verified_xml_signatures: Vec::new(),
-    })
 }
 
 fn decrypt_assertion_elements(

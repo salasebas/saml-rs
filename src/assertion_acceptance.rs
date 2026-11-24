@@ -133,14 +133,19 @@ pub(crate) fn first_login_assertion_xml(
     Ok(consumed_assertion(&document.root).map(|chosen| xml[chosen.start..chosen.end].to_string()))
 }
 
-/// The direct `<Assertion>` of `response` that a login session reads: the
-/// first with a bearer `SubjectConfirmation`, or else the first.
+/// The direct `<Assertion>` a session reads, preferring the first bearer
+/// assertion with an `AuthnStatement`, then the first bearer assertion.
 pub(crate) fn consumed_assertion(response: &Node) -> Option<&Node> {
     let mut assertions = response.children_named("Assertion").peekable();
     let first = assertions.peek().copied()?;
-    assertions
-        .find(|assertion| node_has_bearer(assertion))
-        .or(Some(first))
+    let mut first_bearer = None;
+    for assertion in assertions.filter(|assertion| node_has_bearer(assertion)) {
+        if assertion.child_named("AuthnStatement").is_some() {
+            return Some(assertion);
+        }
+        first_bearer.get_or_insert(assertion);
+    }
+    first_bearer.or(Some(first))
 }
 
 /// Replay identity of one direct assertion in an already accepted response.

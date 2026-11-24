@@ -212,6 +212,23 @@ let expires = session
 could not read. `finish_sso` and the other receiving methods already store
 the keys in the `ReplayCache` of the validation context.
 
+## Read the selected authentication assertion
+
+When a response has several bearer assertions, `SsoSession` now reads the
+first one that contains an `AuthnStatement`. It reads the first bearer
+assertion if none contains an `AuthnStatement`.
+
+If the IdP sends attributes in a separate bearer assertion, configure it to
+include any attributes your application needs in the authentication assertion.
+The session's assertion ID, attributes, and session indexes come from the
+same assertion.
+
+`verified_xml_signatures()` also reports embedded signatures on the response
+or selected assertion when SimpleSign or an outer XML signature authenticates
+the message. The configured `XmlSignatureProfile` applies to those embedded
+signatures. If a peer's embedded signature fails that profile, have the peer
+send an embedded signature that satisfies the profile.
+
 ## Read audiences per restriction and call the renamed accessors
 
 **Affects:** service providers that call `SsoSession::audience()` or

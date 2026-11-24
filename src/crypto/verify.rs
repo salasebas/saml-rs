@@ -186,9 +186,8 @@ fn response_assertions_covered(root: &Node, targets: &[VerifiedTarget]) -> bool 
                 .all(|assertion| id_target_matches_node(targets, assertion)))
 }
 
-/// The element covered by a verified reference that a caller consumes: the
-/// first bearer `<Assertion>`, a consumed root element, or the whole protocol
-/// response when assertions are encrypted.
+/// The element covered by a verified reference that a caller consumes, which
+/// can be the selected `<Assertion>` or the message root.
 ///
 /// Successful coverage is also the strict-profile gate for signatures that
 /// authenticate a message without becoming SSO evidence, including
@@ -591,27 +590,28 @@ fn reject_present_signature_that_does_not_verify(
     Ok(())
 }
 
-/// Reject a `Response` or `Assertion` whose signature in a SAML signature
-/// position does not verify, without requiring it to cover the accepted content.
+/// Verify present signatures and report their coverage of the response and
+/// consumed assertion. The caller already authenticated the content.
 pub(crate) fn verify_present_signatures(
     xml: &str,
     metadata_certs: &[String],
     hmac_secret: Option<&HmacSecret>,
     limits: XmlLimits,
     profile: XmlSignatureProfile,
-) -> Result<(), SamlError> {
+) -> Result<Vec<VerifiedEmbeddedSignature>, SamlError> {
     let dom = dom::parse_document(xml, limits)?;
     if saml_signature_candidates(&dom.root).is_empty() {
-        return Ok(());
+        return Ok(Vec::new());
     }
     let Some(prepared) =
         prepare_signature_verification(xml, dom, metadata_certs, hmac_secret, profile)?
     else {
-        return Ok(());
+        return Ok(Vec::new());
     };
     let document = uppsala::parse(xml).map_err(xml_err)?;
     let results = verify_all_signatures(&prepared.context, &document, xml, profile)?;
-    reject_present_signature_that_does_not_verify(&prepared, &document, &results)
+    let (_, signatures) = verified_coverage(&prepared, &document, &results, profile)?;
+    Ok(signatures)
 }
 
 /// Verify the signature of a SAML message already located by the SOAP reader.
@@ -756,8 +756,6 @@ pub(crate) fn verify_signatures_detailed_with_profile(
         return Ok(SignatureVerification::Absent);
     };
     let root = &prepared.dom.root;
-    let protocol_response = prepared.protocol_response;
-    let consumed = consumed_assertion(root);
 
     // Signature nodes in the results index this DOM, so evidence is read
     // from the same document the verifier saw.
@@ -771,8 +769,33 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     } else {
         &results
     };
-    reject_present_signature_that_does_not_verify(&prepared, &document, results)?;
     let first_signature_verified = matches!(results.first(), Some(VerifyResult::Valid { .. }));
+    let (targets, signatures) = verified_coverage(&prepared, &document, results, profile)?;
+    if first_signature_verified && !targets.is_empty() {
+        let protocol_response = prepared.protocol_response;
+        let assertion_directly_covered =
+            assertion_is_directly_covered(root, &targets, protocol_response);
+        let response_covered = protocol_response && target_matches_node(&targets, root);
+        return Ok(SignatureVerification::Verified(VerifiedSignedContent {
+            content: verified_content(root, xml, &targets, protocol_response)?,
+            assertion_directly_covered,
+            response_covered,
+            signatures,
+        }));
+    }
+    Ok(SignatureVerification::Unverified)
+}
+
+fn verified_coverage(
+    prepared: &PreparedSignatureVerification,
+    document: &BergshamraDocument<'_>,
+    results: &[VerifyResult],
+    profile: XmlSignatureProfile,
+) -> Result<(Vec<VerifiedTarget>, Vec<VerifiedEmbeddedSignature>), SamlError> {
+    reject_present_signature_that_does_not_verify(prepared, document, results)?;
+    let root = &prepared.dom.root;
+    let protocol_response = prepared.protocol_response;
+    let consumed = consumed_assertion(root);
     let mut targets = Vec::new();
     let mut verified_embedded_signatures = Vec::new();
     for result in results {
@@ -784,17 +807,17 @@ pub(crate) fn verify_signatures_detailed_with_profile(
             } => {
                 let signature_targets = verified_targets(references)?;
                 let signature = verified_embedded_signature(
-                    &document,
+                    document,
                     *signature_node,
                     references,
                     &signature_targets,
                     consumed,
                 )?;
                 if signature.is_some()
-                    || references_cover_direct_assertion(&document, references)
+                    || references_cover_direct_assertion(document, references)
                     || covered_content(root, &signature_targets, protocol_response).is_ok()
                 {
-                    enforce_profile_on_verified_signature(&document, *signature_node, profile)?;
+                    enforce_profile_on_verified_signature(document, *signature_node, profile)?;
                 }
                 verified_embedded_signatures.extend(signature);
                 targets.extend(signature_targets);
@@ -802,18 +825,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
             VerifyResult::Invalid { .. } => {}
         }
     }
-    if first_signature_verified && !targets.is_empty() {
-        let assertion_directly_covered =
-            assertion_is_directly_covered(root, &targets, protocol_response);
-        let response_covered = protocol_response && target_matches_node(&targets, root);
-        return Ok(SignatureVerification::Verified(VerifiedSignedContent {
-            content: verified_content(root, xml, &targets, protocol_response)?,
-            assertion_directly_covered,
-            response_covered,
-            signatures: verified_embedded_signatures,
-        }));
-    }
-    Ok(SignatureVerification::Unverified)
+    Ok((targets, verified_embedded_signatures))
 }
 
 /// The signed metadata of `xml` when its signature verifies under `profile`

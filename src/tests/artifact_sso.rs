@@ -30,8 +30,8 @@ use saml_rs::{
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
-    AssertionEncryptionPolicy, CertificatePem, PrivateKeyPem, SloEndpoint, XmlEncryptionPolicy,
-    XmlPolicy,
+    AssertionEncryptionPolicy, CertificatePem, PrivateKeyPem, SloEndpoint,
+    VerifiedXmlSignatureCoverage, XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
 
@@ -1253,13 +1253,21 @@ fn an_artifact_response_returns_the_session_index_of_its_encrypted_assertion(
         redirect_idp_builder()?.slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?),
     )?;
     let (pending, request) = requested(&parties, None)?;
+    let sp_metadata = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &parties.sp.metadata_xml().replace(
+            "WantAssertionsSigned=\"false\"",
+            "WantAssertionsSigned=\"true\"",
+        ),
+        MetadataTrustPolicy::Unverified,
+    )?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
-        &parties.sp_metadata,
+        &sp_metadata,
         &request,
         SsoAssertion::new(principal()),
-        RespondSso::artifact(ArtifactDelivery::redirect(0)),
+        RespondSso::artifact(ArtifactDelivery::redirect(0)).sign_response(),
         &mut issued,
     )?;
     let delivered = delivered_by(&response)?;
@@ -1278,6 +1286,18 @@ fn an_artifact_response_returns_the_session_index_of_its_encrypted_assertion(
     assert_eq!(
         response.session_index().map(std::slice::from_ref),
         Some(accepted.session_indexes())
+    );
+    let evidence: Vec<_> = session
+        .verified_xml_signatures()
+        .iter()
+        .map(|signature| (signature.algorithm_uri(), signature.coverage()))
+        .collect();
+    assert_eq!(
+        evidence,
+        [
+            (RSA_SHA256, VerifiedXmlSignatureCoverage::ResponseRoot),
+            (RSA_SHA256, VerifiedXmlSignatureCoverage::ConsumedAssertion),
+        ]
     );
     Ok(())
 }
