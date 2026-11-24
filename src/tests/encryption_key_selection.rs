@@ -136,6 +136,13 @@ fn identity_provider_encrypts_for_a_later_certificate_its_key_transport_can_use(
             x509_data(&[EC_CERT]),
             format!("{RSA_KEY_VALUE}{}", x509_data(&[UNKNOWN_CERT])),
         ],
+        vec![
+            x509_data(&[EC_CERT]),
+            format!(
+                "<ds:X509Data><ds:X509SubjectName>CN=sp</ds:X509SubjectName><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data>",
+                normalize_cert_string(UNKNOWN_CERT)
+            ),
+        ],
     ];
     for encryption in each_encrypted_element() {
         for key_infos in &first_keys {
@@ -146,11 +153,11 @@ fn identity_provider_encrypts_for_a_later_certificate_its_key_transport_can_use(
 }
 
 #[test]
-fn identity_provider_encrypts_for_a_later_key_named_by_one_certificate(
+fn identity_provider_encrypts_for_a_later_key_with_a_key_name(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let named = format!(
-        "<ds:KeyName>sp-encryption</ds:KeyName><ds:X509Data><ds:X509SubjectName>CN=sp</ds:X509SubjectName><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data>",
-        normalize_cert_string(CERT)
+        "<ds:KeyName>sp-encryption</ds:KeyName>{}",
+        x509_data(&[CERT])
     );
     for encryption in each_encrypted_element() {
         exchange_with_encryption_keys_first(
@@ -261,5 +268,32 @@ fn attribute_encryption_needs_no_certificate_when_the_assertion_has_no_attribute
         matches!(with_attributes, Err(SamlError::MissingMetadata(_))),
         "{with_attributes:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn identity_provider_does_not_encrypt_for_a_key_of_another_service_provider_role(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let published = sp(XmlEncryptionPolicy::default())?.metadata_xml().replace(
+        &normalize_cert_string(CERT),
+        &normalize_cert_string(EC_CERT),
+    );
+    let other_role = format!(
+        "<SPSSODescriptor protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\">{}</ds:KeyInfo></KeyDescriptor><AssertionConsumerService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://sp.example.com/other-acs\" index=\"0\"/></SPSSODescriptor>",
+        x509_data(&[CERT])
+    );
+    let role_end = published
+        .find("</SPSSODescriptor>")
+        .ok_or("metadata has no SP role")?
+        + "</SPSSODescriptor>".len();
+    let mut metadata = published.clone();
+    metadata.insert_str(role_end, &other_role);
+    assert_eq!(metadata.matches("<SPSSODescriptor").count(), 2);
+    for encryption in each_encrypted_element() {
+        assert_eq!(
+            crypto_error(encryption, &metadata)?,
+            crypto_error(encryption, &published)?
+        );
+    }
     Ok(())
 }

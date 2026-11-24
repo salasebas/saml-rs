@@ -76,34 +76,25 @@ impl KeyCertificates {
                         .signing
                         .extend(x509_certificates.iter().cloned());
                     certificates.encryption.extend(x509_certificates);
-                    #[cfg(crypto)]
-                    certificates.add_encryption_key(key_descriptor, &x509_data);
                 }
                 Some(use_) if use_ == CertUse::Signing.as_str() => {
                     certificates.signing.extend(x509_certificates);
                 }
                 Some(use_) if use_ == CertUse::Encryption.as_str() => {
                     certificates.encryption.extend(x509_certificates);
-                    #[cfg(crypto)]
-                    certificates.add_encryption_key(key_descriptor, &x509_data);
                 }
                 Some(_) => {}
             }
         }
-        certificates
-    }
-
-    #[cfg(crypto)]
-    fn add_encryption_key(&mut self, key_descriptor: &dom::Node, x509_data: &[&dom::Node]) {
-        let Some(first) = x509_data
-            .iter()
-            .find_map(|x509_data| x509_data.child_named("X509Certificate"))
-        else {
-            return;
-        };
-        if self.encryption_keys.is_empty() || declares_only_one_certificate(key_descriptor) {
-            self.encryption_keys.push(first.text.clone());
+        #[cfg(crypto)]
+        {
+            certificates.encryption_keys = descriptors
+                .iter()
+                .map(|role| role_encryption_keys(role))
+                .find(|keys| !keys.is_empty())
+                .unwrap_or_default();
         }
+        certificates
     }
 
     fn for_use(&self, use_: CertUse) -> &[String] {
@@ -114,33 +105,49 @@ impl KeyCertificates {
     }
 }
 
-/// Whether the `KeyInfo` of `key_descriptor` names its key only by one
-/// `X509Certificate`, optionally with a `KeyName` and an `X509SubjectName`.
+/// The encryption keys of one role: the first certificate of its first
+/// encryption `KeyDescriptor` with a certificate, then each later one whose
+/// `KeyInfo` names the key by one certificate alone.
 #[cfg(crypto)]
-fn declares_only_one_certificate(key_descriptor: &dom::Node) -> bool {
-    let [key_info] = key_descriptor.children_named("KeyInfo").collect::<Vec<_>>()[..] else {
-        return false;
-    };
-    let mut x509_data = Vec::new();
-    for child in &key_info.children {
-        match child.local_name.as_str() {
-            "KeyName" => {}
-            "X509Data" => x509_data.push(child),
-            _ => return false,
+fn role_encryption_keys(role: &dom::Node) -> Vec<String> {
+    let mut keys = Vec::new();
+    let key_descriptors = role
+        .children_named("KeyDescriptor")
+        .filter(|key_descriptor| {
+            key_descriptor
+                .attr("use")
+                .is_none_or(|use_| use_ == CertUse::Encryption.as_str())
+        });
+    for key_descriptor in key_descriptors {
+        let key_infos: Vec<&dom::Node> = key_descriptor.children_named("KeyInfo").collect();
+        let Some(first) = key_infos
+            .iter()
+            .flat_map(|key_info| key_info.children_named("X509Data"))
+            .find_map(|x509_data| x509_data.child_named("X509Certificate"))
+        else {
+            continue;
+        };
+        if keys.is_empty() || matches!(key_infos[..], [key_info] if names_one_certificate(key_info))
+        {
+            keys.push(first.text.clone());
         }
     }
-    let [x509_data] = x509_data[..] else {
-        return false;
-    };
-    let mut certificates = 0;
-    for child in &x509_data.children {
-        match child.local_name.as_str() {
-            "X509Certificate" => certificates += 1,
-            "X509SubjectName" => {}
-            _ => return false,
+    keys
+}
+
+#[cfg(crypto)]
+fn names_one_certificate(key_info: &dom::Node) -> bool {
+    let mut declarations = key_info
+        .children
+        .iter()
+        .filter(|child| child.local_name != "KeyName");
+    match (declarations.next(), declarations.next()) {
+        (Some(x509_data), None) => {
+            x509_data.local_name == "X509Data"
+                && matches!(&x509_data.children[..], [certificate] if certificate.local_name == "X509Certificate")
         }
+        (Some(_), Some(_)) | (None, _) => false,
     }
-    certificates == 1
 }
 
 #[derive(Clone, Copy)]
@@ -307,13 +314,14 @@ impl Metadata {
         self.key_certificates.for_use(use_)
     }
 
-    /// At most one certificate for each `KeyDescriptor` declared for
-    /// encryption, in document order.
+    /// The encryption keys of the first SSO role that publishes an encryption
+    /// certificate, in document order.
     ///
-    /// The first such `KeyDescriptor` with a certificate gives its first
-    /// certificate. A later one gives its certificate only when its `KeyInfo`
-    /// names the key by that one certificate alone, so an issuer certificate
-    /// of a chain is never chosen in place of a later key.
+    /// The role's first encryption `KeyDescriptor` with a certificate gives
+    /// its first certificate. A later one gives its certificate only when its
+    /// `KeyInfo` holds that one `X509Certificate` and otherwise only
+    /// `KeyName` elements, so an issuer certificate of a chain is never chosen
+    /// in place of a later key.
     #[cfg(crypto)]
     pub(crate) fn encryption_key_certificates(&self) -> &[String] {
         &self.key_certificates.encryption_keys
