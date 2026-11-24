@@ -236,6 +236,14 @@ pub mod signature_algorithm {
     pub const RSA_SHA384: &str = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha384";
     /// RSA-SHA512.
     pub const RSA_SHA512: &str = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512";
+    /// ECDSA with SHA-256.
+    pub const ECDSA_SHA256: &str = "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256";
+    /// ECDSA with SHA-384.
+    pub const ECDSA_SHA384: &str = "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha384";
+    /// ECDSA with SHA-512.
+    pub const ECDSA_SHA512: &str = "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha512";
+    /// EdDSA with Ed25519.
+    pub const EDDSA_ED25519: &str = "http://www.w3.org/2021/04/xmldsig-more#eddsa-ed25519";
 }
 
 /// XML digest algorithm URIs.

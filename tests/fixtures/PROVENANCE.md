@@ -44,6 +44,22 @@ rejection fixture below. Historical encrypted keys and
 expired certificates remain test-only inputs for their existing focused
 regressions and are not provider-support or production-security claims.
 
+## Elliptic-curve signing fixtures
+
+These test-only PKCS#8 private keys and self-signed certificates exercise
+signature generation and peer verification in the crypto provider matrix.
+OpenSSL `4.1.0` generated the EC keys with
+`genpkey -algorithm EC -pkeyopt ec_paramgen_curve:<curve>` and the Ed25519 key
+with `genpkey -algorithm ED25519`. Each certificate uses
+`req -new -x509 -key <key> -days 36500 -subj "/CN=saml-rs test <curve>"`.
+
+| Directory within `key/` | `privkey.pkcs8.pem` SHA-256 | `cert.pem` SHA-256 |
+| --- | --- | --- |
+| `prime256v1` | `19a760c79c6e71442ac18023eccc05393f859fe9aa8de903209d50a7674c3188` | `773d787e3d7d6171dd4a73e1e22c4ee5b200c64ddd44b32fedc6855c58610921` |
+| `secp384r1` | `eccd0a295d7ada4269ea6d097062ad43fe261aeb82c3c5cd3ba155bfd995cca5` | `b43b53e34d1071e1181fe3afff7f6c7ddea9cd6f77aea1d16ba23b9e8e91d27f` |
+| `secp521r1` | `fd595f10b4e4d05b964907ea90ca67012c3422389922363d5de6ed23b2d0b555` | `4e8451ff843a31401143ed329dc8d443c0982a73b392c1df0b85409204b720b0` |
+| `ed25519` | `aabc699aac6c1d6867f9adda98c84271a3bde7b5a2fe006ae71d63789ebe6cdc` | `1131d0dfc20134fac033ddccf9707a92795dbc6905240b02c4255ebe51ebfdfe` |
+
 ## DSA signing fixture
 
 `key/dsa/privkey.pkcs8.pem` and `key/dsa/cert.pem` are a test-only DSA key and
@@ -260,6 +276,8 @@ canonical path; tests and unit tests load it from that path.
   samlify IdP and SP test certificates and keys. `key/idp/README.md` maps each
   IdP private key to its certificate.
 - `tests/fixtures/key/dsa/**` - the DSA signing fixture described above.
+- `tests/fixtures/key/{prime256v1,secp384r1,secp521r1,ed25519}/**` - the
+  elliptic-curve signing fixtures described above.
 - `tests/fixtures/key/rsa512/**` - the 512-bit RSA rejection fixture described
   above.
 - `tests/fixtures/interop/**` - immutable external interoperability inputs and

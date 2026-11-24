@@ -17,6 +17,8 @@ mod browser_signing_bindings;
 mod conformance;
 mod decryption_work;
 mod default_xml_limits;
+#[cfg(crypto)]
+mod elliptic_curve_signatures;
 mod encrypted_assertion_elements;
 mod encrypted_requested_subject;
 pub(crate) mod engine;

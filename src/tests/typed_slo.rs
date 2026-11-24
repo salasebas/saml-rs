@@ -1,6 +1,7 @@
 #![cfg(crypto)]
 
 mod asynchronous;
+mod elliptic_curve;
 
 #[path = "typed_slo/schema_validation.rs"]
 mod schema_validation;

@@ -5,6 +5,7 @@ use super::common;
 use super::post_validation::post_validation;
 #[path = "typed_sso/authn_request_signatures.rs"]
 mod authn_request_signatures;
+mod elliptic_curve;
 #[path = "typed_sso/status_message.rs"]
 mod status_message;
 use saml_rs::tests::engine::LogoutUser;

@@ -34,14 +34,46 @@ the AWS-LC and FIPS builds lack are in the
 | Sign and verify with the enveloped-signature transform | Mandatory | Conformance §4.1 | `TransformAlgorithm::EnvelopedSignature`, the first default transform |
 | Sign `respond_sso_artifact`, `initiate_sso_artifact`, and SOAP logout messages with the enveloped-signature and exclusive canonicalization transforms only | Library policy: Canonical XML would put the SOAP envelope's namespace declarations into the digest of a verifier that checks in place. | — | Always |
 | Sign with RSA-SHA256, RSA-SHA384, or RSA-SHA512 | Optional | E50 | `SignatureAlgorithm::RsaSha256` (default), `RsaSha384`, `RsaSha512` |
+| Sign with ECDSA-SHA256, ECDSA-SHA384, or ECDSA-SHA512 and an EC key | Optional | E50, E81, RFC 9231 §2.3.6 | `SignatureAlgorithm::EcdsaSha256`, `EcdsaSha384`, `EcdsaSha512` |
+| Sign with Ed25519 and an Ed25519 key on RustCrypto and AWS-LC | Optional | E50, E81, RFC 9231 §2.3.12 | `SignatureAlgorithm::Ed25519` |
+| Reject an incompatible signing key family, or Ed25519 on FIPS, in the SP and IdP config builders | Library policy: the selected method cannot sign and would otherwise fail when the application sends a message. | — | Always for these four methods |
 | Sign embedded and detached messages with a custom signature URI the provider supports | Optional | E50, E81 | `SignatureAlgorithm::Custom` |
-| Use SHA-256 for the reference digest of an embedded signature outside the built-in digest mapping | Library policy: SHA-256 is the existing reference digest default and works independently of the signature method. | XMLDSig §4.4.2, §4.4.3.5 | `SignatureAlgorithm::Custom` |
+| Use SHA-256 for the reference digest of an embedded signature outside the built-in digest mapping | Library policy: SHA-256 is the existing reference digest default and works independently of the signature method. | XMLDSig §4.4.2, §4.4.3.5 | ECDSA, Ed25519, and unmapped `Custom` methods |
 
 Peers configure an HMAC shared secret out of band. Generated HMAC signatures
 omit `KeyInfo`. Typed metadata import verifies with pinned certificates, not
 the secret. `AlgorithmPolicy::signed_reference_transforms` applies to embedded
 `AuthnRequest` signatures, responses from `respond_sso` and `initiate_sso`, and
 HTTP-POST logout messages.
+
+### Generation by provider
+
+These methods apply to the embedded signatures and detached `SigAlg` values
+that each flow already generates. This includes AuthnRequests on HTTP-POST,
+Redirect and SimpleSign, Responses and assertions on HTTP-POST, SimpleSign
+and artifact delivery,
+and logout messages on HTTP-POST, Redirect, SimpleSign, and SOAP. A
+SimpleSign Response carries a detached signature and an embedded assertion
+signature. The method does not change which bindings a flow supports.
+
+| `SignatureMethod` or `SigAlg` | RustCrypto | `crypto-aws-lc` | `crypto-fips` |
+| --- | --- | --- | --- |
+| ECDSA-SHA256 | Yes | Yes | Yes |
+| ECDSA-SHA384 | Yes | Yes | Yes |
+| ECDSA-SHA512 | Yes | Yes | Yes |
+| Ed25519 | Yes | Yes | No |
+
+Use P-256 with SHA-256, P-384 with SHA-384, or P-521 with SHA-512 for
+portable ECDSA signing. Other curve and digest combinations depend on
+the crypto provider. The builders check the key family. The provider
+checks whether it can sign with the particular curve and digest.
+
+Kantara saml2int 2.0 SDP-ALG01 requires deployments in that profile to
+support ECDSA-SHA256 and RSA-SHA256. SDP-MD07 sets a 256-bit floor for
+EC public keys in that profile. Those requirements apply to deployments
+that claim the profile. The OASIS base SAML rules leave ECDSA and Ed25519
+optional. See [Kantara saml2int 2.0](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html)
+and [RFC 9231](https://www.rfc-editor.org/rfc/rfc9231.html#section-2.3).
 
 ## Inbound XML signature verification
 

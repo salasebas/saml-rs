@@ -15,12 +15,13 @@ use std::time::SystemTime;
 
 use base64::Engine;
 use saml_rs::{
-    AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, AuthnRequest,
+    AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactResolutionService, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, DeliveredArtifact, EndpointUrl,
     EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
     IssuedArtifacts, MetadataTrustPolicy, Outbound, RelayState, ReplayPolicy, RespondSso,
-    SamlError, SamlValidationContext, ServiceProvider, SoapChannel, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSso, Status, StatusMessage,
+    SamlError, SamlValidationContext, ServiceProvider, SignatureAlgorithm, SoapChannel, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSso, Status,
+    StatusMessage,
 };
 use url::Url;
 
@@ -101,6 +102,57 @@ fn redirect_input(
 ) -> Result<Inbound<AuthnRequest>, Box<dyn std::error::Error>> {
     let url = Url::parse(outbound.redirect_url()?)?;
     Ok(Inbound::redirect(url.query().unwrap_or_default()))
+}
+
+#[test]
+fn elliptic_curve_signing_rejects_incompatible_credentials_during_configuration(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for (signature, credentials) in [
+        (
+            SignatureAlgorithm::Custom(
+                "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256".into(),
+            ),
+            signing_credentials(),
+        ),
+        (SignatureAlgorithm::EcdsaSha384, signing_credentials()),
+        (SignatureAlgorithm::EcdsaSha512, signing_credentials()),
+        #[cfg(not(feature = "crypto-fips"))]
+        (
+            SignatureAlgorithm::Ed25519,
+            saml_rs::Credentials::default().with_signing_credential(saml_rs::X509Credential::new(
+                saml_rs::CertificatePem::new(include_str!("fixtures/key/prime256v1/cert.pem")),
+                saml_rs::PrivateKeyPem::new(include_str!(
+                    "fixtures/key/prime256v1/privkey.pkcs8.pem"
+                )),
+            )),
+        ),
+    ] {
+        let mut algorithms = AlgorithmPolicy::default();
+        algorithms.signature = signature.clone();
+        let mut policy = SpValidationPolicy::default();
+        policy.authn_request_signing = AuthnRequestSigningPolicy::Sign;
+        let sp = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
+            .credentials(credentials.clone())
+            .algorithms(algorithms.clone())
+            .validation(policy)
+            .build();
+        assert!(
+            matches!(sp, Err(SamlError::Invalid(_))),
+            "SP {signature:?}: {sp:?}"
+        );
+        let idp = IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(credentials)
+        .algorithms(algorithms)
+        .build();
+        assert!(
+            matches!(idp, Err(SamlError::Invalid(_))),
+            "IdP {signature:?}: {idp:?}"
+        );
+    }
+    Ok(())
 }
 
 #[test]

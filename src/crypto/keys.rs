@@ -1,6 +1,10 @@
 use crate::config::{CertificatePem, Credentials, HmacSecret, Passphrase, X509Credential};
+use crate::constants::signature_algorithm::{
+    ECDSA_SHA256, ECDSA_SHA384, ECDSA_SHA512, EDDSA_ED25519,
+};
 use crate::error::{crypto_err, SamlError};
 use crate::util::normalize_cert_string;
+use bergshamra::crypto::sign::key_algorithm_matches_signature_uri;
 #[cfg(test)]
 use bergshamra::keys::keyinfo::build_x509_key_info;
 use bergshamra::keys::loader::{load_hmac_key, load_pem_auto, load_x509_cert_pem};
@@ -11,9 +15,27 @@ pub(crate) fn read_private_key(pem: &str, password: Option<&str>) -> Result<Key,
     load_pem_auto(pem.as_bytes(), password).map_err(crypto_err)
 }
 
-pub(crate) fn check_credentials(credentials: &Credentials) -> Result<(), SamlError> {
+pub(crate) fn check_credentials(
+    credentials: &Credentials,
+    signature_uri: &str,
+) -> Result<(), SamlError> {
+    if cfg!(feature = "crypto-fips") && signature_uri == EDDSA_ED25519 {
+        return Err(SamlError::Unsupported(
+            "Ed25519 signing is unavailable with crypto-fips".into(),
+        ));
+    }
     if let Some(credential) = credentials.signing_credential() {
-        check_credential(credential, "signing credential")?;
+        let key = check_credential(credential, "signing credential")?;
+        if matches!(
+            signature_uri,
+            ECDSA_SHA256 | ECDSA_SHA384 | ECDSA_SHA512 | EDDSA_ED25519
+        ) && !key_algorithm_matches_signature_uri(signature_uri, key.data.algorithm())
+        {
+            return Err(SamlError::Invalid(format!(
+                "signing algorithm {signature_uri} does not match the {} signing key",
+                key.algorithm_name()
+            )));
+        }
     }
     for (index, certificate) in credentials
         .additional_signing_certificates()
@@ -34,7 +56,7 @@ pub(crate) fn check_credentials(credentials: &Credentials) -> Result<(), SamlErr
     Ok(())
 }
 
-fn check_credential(credential: &X509Credential, name: &str) -> Result<(), SamlError> {
+fn check_credential(credential: &X509Credential, name: &str) -> Result<Key, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     let key = load_pem_auto(
         credential.key().as_str().as_bytes(),
@@ -52,7 +74,7 @@ fn check_credential(credential: &X509Credential, name: &str) -> Result<(), SamlE
             "{name}: the private key does not match the certificate"
         )));
     }
-    Ok(())
+    Ok(key)
 }
 
 fn load_published_certificate(certificate: &CertificatePem, name: &str) -> Result<Key, SamlError> {
