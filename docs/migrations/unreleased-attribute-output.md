@@ -22,7 +22,8 @@ An attribute is rejected in these cases:
 `Attribute::with_name_format` now stores `AttributeNameFormat::Custom` with
 the `uri`, `basic`, or `unspecified` URI and surrounding whitespace as that
 variant, and `Attribute::name_format` returns it. The `uri` and `basic` name
-rules then apply to it.
+rules then apply to it, and so do the `subject-id` and `pairwise-id` rules of
+`SsoAssertion::attributes`.
 
 To upgrade, leave the friendly name unset when you have no label, pass an
 empty value instead of one with only whitespace, and give a `uri` attribute
@@ -47,16 +48,17 @@ of `AttributeNameFormat::Uri`.
 
 An identity provider that encrypts assertions, identifiers, or attributes
 now uses the first encryption key in the service provider metadata that the
-configured algorithms can encrypt for. Each `X509Data` of a `KeyDescriptor`
-whose `use` is `encryption` or absent gives one key, from its first
-certificate. Before, the identity provider used the first such certificate
-and failed with `SamlError::Crypto` when it did not load or the crypto
-provider could not encrypt for it, such as an EC key or an RSA key too small
-for the key transport. Now it tries the next key. When no key works, it
+configured algorithms can encrypt for. The keys come from the `X509Data`
+elements of each `KeyDescriptor` whose `use` is `encryption` or absent. The
+first `X509Data` gives its first certificate. A later `X509Data` gives a key
+only when it holds exactly one certificate. Before, the identity provider
+used the first such certificate and failed with `SamlError::Crypto` when it
+did not load or the crypto provider could not encrypt for it, such as an EC
+key or an RSA key too small for the key transport. Now it tries the next key. When no key works, it
 still returns the `SamlError::Crypto` error of the first key.
 
 A later certificate in the same `X509Data`, such as an issuer certificate,
-is never used.
+is never used, and neither is a later `X509Data` with a certificate chain.
 
 With attribute encryption alone, an assertion without attributes no longer
 needs an encryption certificate in the service provider metadata. Before,

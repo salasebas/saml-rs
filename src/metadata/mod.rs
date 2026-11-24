@@ -77,9 +77,7 @@ impl KeyCertificates {
                         .extend(x509_certificates.iter().cloned());
                     certificates.encryption.extend(x509_certificates);
                     #[cfg(crypto)]
-                    certificates
-                        .encryption_keys
-                        .extend(entity_certificates(&x509_data));
+                    certificates.add_encryption_keys(&x509_data);
                 }
                 Some(use_) if use_ == CertUse::Signing.as_str() => {
                     certificates.signing.extend(x509_certificates);
@@ -87,14 +85,25 @@ impl KeyCertificates {
                 Some(use_) if use_ == CertUse::Encryption.as_str() => {
                     certificates.encryption.extend(x509_certificates);
                     #[cfg(crypto)]
-                    certificates
-                        .encryption_keys
-                        .extend(entity_certificates(&x509_data));
+                    certificates.add_encryption_keys(&x509_data);
                 }
                 Some(_) => {}
             }
         }
         certificates
+    }
+
+    #[cfg(crypto)]
+    fn add_encryption_keys(&mut self, x509_data: &[&dom::Node]) {
+        for x509_data in x509_data {
+            let mut certificates = x509_data.children_named("X509Certificate");
+            let Some(first) = certificates.next() else {
+                continue;
+            };
+            if self.encryption_keys.is_empty() || certificates.next().is_none() {
+                self.encryption_keys.push(first.text.clone());
+            }
+        }
     }
 
     fn for_use(&self, use_: CertUse) -> &[String] {
@@ -103,18 +112,6 @@ impl KeyCertificates {
             CertUse::Encryption => &self.encryption,
         }
     }
-}
-
-/// The first certificate of each `X509Data`: the entity certificate when the
-/// `X509Data` carries a chain.
-#[cfg(crypto)]
-fn entity_certificates<'a>(x509_data: &'a [&dom::Node]) -> impl Iterator<Item = String> + 'a {
-    x509_data.iter().filter_map(|x509_data| {
-        x509_data
-            .children_named("X509Certificate")
-            .next()
-            .map(|certificate| certificate.text.clone())
-    })
 }
 
 #[derive(Clone, Copy)]
@@ -281,8 +278,12 @@ impl Metadata {
         self.key_certificates.for_use(use_)
     }
 
-    /// The first certificate of each `X509Data` declared for encryption, in
-    /// document order: the entity certificate when `X509Data` carries a chain.
+    /// One certificate for each `X509Data` declared for encryption, in
+    /// document order.
+    ///
+    /// The first `X509Data` gives its first certificate. A later `X509Data`
+    /// gives its certificate only when it holds exactly one, so an issuer
+    /// certificate of a chain is never chosen in place of a later key.
     #[cfg(crypto)]
     pub(crate) fn encryption_key_certificates(&self) -> &[String] {
         &self.key_certificates.encryption_keys
