@@ -9,6 +9,181 @@ Entries before the rebrand use the package names that were current at the time.
 
 ## Unreleased
 
+## [0.9.0](https://github.com/salasebas/saml-rs/compare/v0.8.0...v0.9.0) - 2026-11-24
+
+### Added
+
+- *(idp)* report whether a signature authenticated a received request
+- *(metadata)* import federation peers from a signed aggregate
+- *(crypto)* add ECDSA and Ed25519 signing options
+- *(sso)* authorize scoped attributes for their issuing IdP ([#876](https://github.com/salasebas/saml-rs/pull/876))
+- *(sso)* request an affiliation-qualified NameID ([#875](https://github.com/salasebas/saml-rs/pull/875))
+- *(slo)* accept authenticated asynchronous logout at the IdP ([#874](https://github.com/salasebas/saml-rs/pull/874))
+- *(artifact)* add ArtifactStore trait for shared IdP artifact storage ([#873](https://github.com/salasebas/saml-rs/pull/873))
+- *(slo)* expose reason from received logout requests ([#870](https://github.com/salasebas/saml-rs/pull/870))
+- *(sso)* enforce exact authentication context for opted-in pending logins ([#871](https://github.com/salasebas/saml-rs/pull/871))
+- *(sso)* resolve trusted IdPs for unsolicited browser POST ([#867](https://github.com/salasebas/saml-rs/pull/867))
+- *(saml)* opt in to signing SOAP artifact requests ([#866](https://github.com/salasebas/saml-rs/pull/866))
+- *(slo)* match IdP logout requests to local SP sessions ([#864](https://github.com/salasebas/saml-rs/pull/864))
+- *(sso)* send optional status messages for failed logins ([#863](https://github.com/salasebas/saml-rs/pull/863))
+- *(api)* expose explicit CBC encryption constant names ([#858](https://github.com/salasebas/saml-rs/pull/858))
+- *(saml)* expose verified peer status messages ([#856](https://github.com/salasebas/saml-rs/pull/856))
+- *(sso)* carry the IdP session deadline to the SP ([#854](https://github.com/salasebas/saml-rs/pull/854))
+- *(api)* [**breaking**] send AuthnRequest extensions and align fluent option names ([#802](https://github.com/salasebas/saml-rs/pull/802))
+- *(slo)* let the IdP finish asynchronous browser logout ([#842](https://github.com/salasebas/saml-rs/pull/842))
+- *(slo)* send optional logout status messages ([#841](https://github.com/salasebas/saml-rs/pull/841))
+- *(slo)* set the logout reason from start options ([#831](https://github.com/salasebas/saml-rs/pull/831))
+- [**breaking**] remove Enhanced Client/Proxy SSO, which no dependent uses and enterprise IdPs do not offer ([#809](https://github.com/salasebas/saml-rs/pull/809))
+- *(sso)* [**breaking**] identify subjects with the subject-id and pairwise-id attributes saml2int requires ([#800](https://github.com/salasebas/saml-rs/pull/800))
+- *(metadata)* read and publish entity categories, Sirtfi, and subject-id requirements ([#797](https://github.com/salasebas/saml-rs/pull/797))
+- *(attributes)* read and write Attribute FriendlyName ([#781](https://github.com/salasebas/saml-rs/pull/781))
+- *(api)* say how an Outbound is delivered ([#694](https://github.com/salasebas/saml-rs/pull/694))
+- *(api)* [**breaking**] add a serde feature for pending snapshots and let them gain fields without breaking callers ([#687](https://github.com/salasebas/saml-rs/pull/687))
+- *(crypto)* deprecate the signature verifiers that accept unsigned input as Ok ([#638](https://github.com/salasebas/saml-rs/pull/638))
+- *(raw)* deprecate the raw message functions for removal in the next minor ([#619](https://github.com/salasebas/saml-rs/pull/619))
+- *(crypto)* deprecate the hidden crypto and DOM helpers and move their tests into the crate ([#630](https://github.com/salasebas/saml-rs/pull/630))
+
+### Fixed
+
+- *(idp)* read the AuthnRequest ID as xs:ID reads it
+- *(idp)* apply XML Schema whitespace rules to written response values
+- *(idp)* reject a request ID that cannot be written as InResponseTo
+- *(idp)* check entity-format NameID values on issuance
+- *(idp)* reject relative context and status values in SSO responses
+- *(bindings)* [**breaking**] round-trip RelayState and reserve SAML Redirect parameters
+- *(slo)* report an unresolved SOAP endpoint after verifying the reply
+- *(slo)* check a SOAP reply Destination after signature verification
+- *(sso)* keep the requested assertion consumer contract with a supplied receiving URL
+- [**breaking**] check SSO, ArtifactResolve, and SOAP logout against the receiving URL
+- *(idp)* accept XML whitespace in AuthnRequest ProtocolBinding
+- *(sso)* [**breaking**] preserve authentication and signature evidence ([#880](https://github.com/salasebas/saml-rs/pull/880))
+- *(api)* [**breaking**] clarify outbound delivery errors and artifact refusals ([#859](https://github.com/salasebas/saml-rs/pull/859))
+- *(saml)* [**breaking**] reject invalid SOAP artifact resolution signatures ([#855](https://github.com/salasebas/saml-rs/pull/855))
+- *(saml)* [**breaking**] reject invalid SOAP NameID management signatures ([#828](https://github.com/salasebas/saml-rs/pull/828))
+- *(metadata)* [**breaking**] honor assertion signing across SAML 2.0 SP roles ([#823](https://github.com/salasebas/saml-rs/pull/823))
+- *(crypto)* sign embedded XML with provider-supported algorithms ([#824](https://github.com/salasebas/saml-rs/pull/824))
+- *(soap)* [**breaking**] reject processing instructions in outbound SAML ([#825](https://github.com/salasebas/saml-rs/pull/825))
+- *(config)* [**breaking**] reject unsupported signature placement paths ([#826](https://github.com/salasebas/saml-rs/pull/826))
+- *(template)* [**breaking**] preserve literal content in custom logout templates ([#820](https://github.com/salasebas/saml-rs/pull/820))
+- *(saml)* read received status codes and bearer methods as anyURI values ([#817](https://github.com/salasebas/saml-rs/pull/817))
+- *(saml)* return protocol responses for authenticated refusals ([#812](https://github.com/salasebas/saml-rs/pull/812))
+- [**breaking**] read received URIs as xs:anyURI values and compare every Issuer exactly ([#814](https://github.com/salasebas/saml-rs/pull/814))
+- *(config)* [**breaking**] catch unusable or mismatched credentials in build() instead of at every peer ([#815](https://github.com/salasebas/saml-rs/pull/815))
+- *(sso)* [**breaking**] reject a NotBefore at or after NotOnOrAfter within the clock skew ([#811](https://github.com/salasebas/saml-rs/pull/811))
+- *(replay)* report expired assertion keys with the error custom caches can return ([#810](https://github.com/salasebas/saml-rs/pull/810))
+- *(slo)* [**breaking**] require one principal identifier on received logout requests ([#808](https://github.com/salasebas/saml-rs/pull/808))
+- *(metadata)* [**breaking**] stop publishing relative endpoint locations and duplicate artifact resolution indexes ([#813](https://github.com/salasebas/saml-rs/pull/813))
+- *(sso)* [**breaking**] read SSO time bounds only as SAML UTC dateTimes ([#779](https://github.com/salasebas/saml-rs/pull/779))
+- *(template)* [**breaking**] stop reading text in logout templates as markup ([#766](https://github.com/salasebas/saml-rs/pull/766))
+- *(sso)* [**breaking**] reject an AuthnInstant that is not a SAML UTC dateTime ([#770](https://github.com/salasebas/saml-rs/pull/770))
+- *(sso)* [**breaking**] reject an AuthnStatement without its AuthnInstant ([#765](https://github.com/salasebas/saml-rs/pull/765))
+- *(sso)* [**breaking**] reject repeated SubjectLocality in one AuthnStatement ([#757](https://github.com/salasebas/saml-rs/pull/757))
+- *(sso)* [**breaking**] reject an AuthnStatement without its AuthnContext ([#760](https://github.com/salasebas/saml-rs/pull/760))
+- *(saml)* [**breaking**] honor replay limits and report ambiguous or malformed SAML input ([#752](https://github.com/salasebas/saml-rs/pull/752))
+- *(config)* accept any encryption algorithm in protocol-only builds ([#753](https://github.com/salasebas/saml-rs/pull/753))
+- *(xml)* resolve protocol names during the DOM parse ([#751](https://github.com/salasebas/saml-rs/pull/751))
+- *(paos)* [**breaking**] accept longer responder-added RelayState when the SP sent none ([#747](https://github.com/salasebas/saml-rs/pull/747))
+- *(soap)* [**breaking**] process mandatory headers only for their SOAP actor ([#745](https://github.com/salasebas/saml-rs/pull/745))
+- *(sp)* [**breaking**] report SSO response errors before comparing RelayState ([#743](https://github.com/salasebas/saml-rs/pull/743))
+- *(metadata)* [**breaking**] reject invalid signing booleans on import ([#742](https://github.com/salasebas/saml-rs/pull/742))
+- *(crypto)* [**breaking**] enforce per-algorithm XML HMAC truncation limits ([#740](https://github.com/salasebas/saml-rs/pull/740))
+- *(slo)* let recipients answer an encrypted BaseID ([#741](https://github.com/salasebas/saml-rs/pull/741))
+- *(metadata)* count only members of metadata groups ([#738](https://github.com/salasebas/saml-rs/pull/738))
+- *(sp)* [**breaking**] report SSO failures when InResponseTo is absent ([#739](https://github.com/salasebas/saml-rs/pull/739))
+- *(paos)* accept legacy ECP client headers with single quotes ([#737](https://github.com/salasebas/saml-rs/pull/737))
+- *(metadata)* accept hour 24 in validUntil ([#736](https://github.com/salasebas/saml-rs/pull/736))
+- *(sp)* [**breaking**] require encryption of every assertion when configured ([#735](https://github.com/salasebas/saml-rs/pull/735))
+- *(metadata)* read only unqualified validUntil bounds ([#733](https://github.com/salasebas/saml-rs/pull/733))
+- *(status)* allow URI sub-delimiters in subordinate status codes ([#730](https://github.com/salasebas/saml-rs/pull/730))
+- *(idp)* preserve attribute types with xs and xsi assertion prefixes ([#731](https://github.com/salasebas/saml-rs/pull/731))
+- *(slo)* [**breaking**] authenticate every browser logout request and response ([#720](https://github.com/salasebas/saml-rs/pull/720))
+- *(sp)* [**breaking**] evaluate present audience restrictions before accepting SSO ([#718](https://github.com/salasebas/saml-rs/pull/718))
+- *(xml)* [**breaking**] honor configured SAML prefixes across bindings ([#719](https://github.com/salasebas/saml-rs/pull/719))
+- *(idp)* [**breaking**] verify signatures on every signed AuthnRequest ([#717](https://github.com/salasebas/saml-rs/pull/717))
+- *(metadata)* [**breaking**] always publish role children in schema order ([#715](https://github.com/salasebas/saml-rs/pull/715))
+- *(sp)* [**breaking**] require replay storage for HTTP-POST SSO ([#716](https://github.com/salasebas/saml-rs/pull/716))
+- *(idp)* [**breaking**] honor requested NameID formats in SSO responses ([#714](https://github.com/salasebas/saml-rs/pull/714))
+- *(metadata)* add a default cache duration to generated metadata ([#712](https://github.com/salasebas/saml-rs/pull/712))
+- *(sp)* verify every SSO response and assertion signature under every profile ([#713](https://github.com/salasebas/saml-rs/pull/713))
+- *(idp)* write an SSO error Response when a response template is set ([#690](https://github.com/salasebas/saml-rs/pull/690))
+- *(metadata)* [**breaking**] normalize formats and make metadata access explicit ([#644](https://github.com/salasebas/saml-rs/pull/644))
+- *(xml)* [**breaking**] isolate schema validation and cover inbound XML ([#642](https://github.com/salasebas/saml-rs/pull/642))
+- *(metadata)* [**breaking**] preserve configured groups in custom element orders ([#641](https://github.com/salasebas/saml-rs/pull/641))
+- *(ci)* verify the declared MSRV with its actual toolchain ([#640](https://github.com/salasebas/saml-rs/pull/640))
+- *(idp)* accept a signed PAOS AuthnRequest without Destination under every policy ([#639](https://github.com/salasebas/saml-rs/pull/639))
+- *(config)* [**breaking**] make build() catch every metadata error and require SSO/ACS endpoints ([#637](https://github.com/salasebas/saml-rs/pull/637))
+- *(sp)* [**breaking**] reject an SSO response with an Attribute that has no Name ([#636](https://github.com/salasebas/saml-rs/pull/636))
+- *(logout)* check the outbound LogoutResponse status in the profile validator ([#633](https://github.com/salasebas/saml-rs/pull/633))
+- *(xml)* keep source offsets when input starts with a UTF-8 BOM ([#635](https://github.com/salasebas/saml-rs/pull/635))
+- *(idp)* [**breaking**] reject a template login response attribute with no value ([#634](https://github.com/salasebas/saml-rs/pull/634))
+- *(config)* [**breaking**] remove XmlPolicy::clock_drifts, which typed flows silently ignored ([#632](https://github.com/salasebas/saml-rs/pull/632))
+- *(config)* [**breaking**] remove Default from security policy enums ([#614](https://github.com/salasebas/saml-rs/pull/614))
+
+### Other
+
+- *(idp)* scope the request ID rows and upgrade notes
+- Merge pull request #903 from salasebas/ss/relaystate-redirect-params
+- Merge pull request #902 from salasebas/ss/actual-recipient-checks
+- *(slo)* require the SOAP endpoint error before peer status
+- align release guides with supported exchanges
+- Merge pull request #884 from salasebas/ss/metadata-cert-scope-fixes
+- remove redundant comments and restore Clippy checks in tests
+- Merge pull request #879 from salasebas/ss/nameid-namespace-constraints
+- Merge pull request #882 from salasebas/ss/correlated-idp-refusal
+- Merge pull request #881 from salasebas/ss/outstanding-logout-identity-match
+- clear workspace Clippy warnings ([#868](https://github.com/salasebas/saml-rs/pull/868))
+- *(metadata)* [**breaking**] name trust policies for the checks they apply ([#862](https://github.com/salasebas/saml-rs/pull/862))
+- *(soap)* [**breaking**] name body elements and channel attestations precisely ([#861](https://github.com/salasebas/saml-rs/pull/861))
+- *(api)* [**breaking**] distinguish signing from signature validation ([#860](https://github.com/salasebas/saml-rs/pull/860))
+- *(xml)* [**breaking**] name resource limits for what the parser counts ([#857](https://github.com/salasebas/saml-rs/pull/857))
+- *(saml)* remove leftover raw browser binding code ([#838](https://github.com/salasebas/saml-rs/pull/838))
+- *(slo)* [**breaking**] generate logout messages from typed inputs ([#837](https://github.com/salasebas/saml-rs/pull/837))
+- *(deps)* bump the cargo-maintenance group with 2 updates ([#834](https://github.com/salasebas/saml-rs/pull/834))
+- describe public API behavior and restore upgrade navigation ([#830](https://github.com/salasebas/saml-rs/pull/830))
+- remove unused samlify port settings and fixtures ([#829](https://github.com/salasebas/saml-rs/pull/829))
+- *(sso)* remove obsolete AuthnRequest renderer requirement ([#827](https://github.com/salasebas/saml-rs/pull/827))
+- share common SAML message processing steps ([#822](https://github.com/salasebas/saml-rs/pull/822))
+- require explicit handling for new bindings and XML events ([#818](https://github.com/salasebas/saml-rs/pull/818))
+- *(conformance)* cut the conformance records by 38% to one short row per rule ([#807](https://github.com/salasebas/saml-rs/pull/807))
+- *(migrations)* correct the upgrade from published 0.8 ([#821](https://github.com/salasebas/saml-rs/pull/821))
+- *(replay)* reuse retention when a message has no deadline ([#780](https://github.com/salasebas/saml-rs/pull/780))
+- *(flow)* name the states internal flow code passed as booleans and tuples ([#767](https://github.com/salasebas/saml-rs/pull/767))
+- move iterator side effects out of closures ([#758](https://github.com/salasebas/saml-rs/pull/758))
+- *(xml)* read extracted fields through the keys their field sets write ([#761](https://github.com/salasebas/saml-rs/pull/761))
+- *(saml)* split long flow, SSO, and logout functions into named stages ([#762](https://github.com/salasebas/saml-rs/pull/762))
+- *(config)* read NameID formats through the as_uri table ([#754](https://github.com/salasebas/saml-rs/pull/754))
+- *(api)* [**breaking**] retire hidden public imports ([#750](https://github.com/salasebas/saml-rs/pull/750))
+- distinguish SAML requirements from library policy ([#734](https://github.com/salasebas/saml-rs/pull/734))
+- clarify which SOAP exchanges the typed API supports ([#732](https://github.com/salasebas/saml-rs/pull/732))
+- *(sp)* select received encrypted elements by message type ([#727](https://github.com/salasebas/saml-rs/pull/727))
+- Use Default for validation policies and enforce SSO and logout producer rules ([#706](https://github.com/salasebas/saml-rs/pull/706))
+- *(api)* [**breaking**] replace the Saml<Role> typestate with ServiceProvider and IdentityProvider ([#698](https://github.com/salasebas/saml-rs/pull/698))
+- *(api)* [**breaking**] remove the raw API so every message goes through the typed checks ([#695](https://github.com/salasebas/saml-rs/pull/695))
+- *(api)* [**breaking**] let policies, limits, and inputs gain fields and variants without a breaking change ([#689](https://github.com/salasebas/saml-rs/pull/689))
+- *(api)* [**breaking**] remove constants and options the crate never read, hide internal helpers, and pass every limit as an argument ([#684](https://github.com/salasebas/saml-rs/pull/684))
+- *(api)* [**breaking**] stop answering Success by default in logout and name identifier management ([#686](https://github.com/salasebas/saml-rs/pull/686))
+- *(api)* [**breaking**] report an SSO failure without a NameId and share one outcome type with PAOS ([#685](https://github.com/salasebas/saml-rs/pull/685))
+- *(api)* [**breaking**] set each SSO template on the builder of the role that renders it ([#683](https://github.com/salasebas/saml-rs/pull/683))
+- *(api)* [**breaking**] give each typed operation option one name and drop PAOS arguments that carried no data
+- *(api)* [**breaking**] send SOAP headers as one list and keep resolved artifacts in the shared replay cache ([#678](https://github.com/salasebas/saml-rs/pull/678))
+- *(api)* [**breaking**] keep SSO audiences grouped by restriction and name accessors for what they return ([#677](https://github.com/salasebas/saml-rs/pull/677))
+- *(api)* [**breaking**] issue SSO responses from a NameId and remove misleading SSO result APIs ([#669](https://github.com/salasebas/saml-rs/pull/669))
+- *(config)* [**breaking**] catch config mistakes at compile time and stop sending an unrecorded RelayState ([#674](https://github.com/salasebas/saml-rs/pull/674))
+- *(browser)* [**breaking**] drop the turbofish from received messages and rename BrowserInput to Inbound ([#673](https://github.com/salasebas/saml-rs/pull/673))
+- *(browser)* [**breaking**] name pending accessors for the value they return ([#671](https://github.com/salasebas/saml-rs/pull/671))
+- *(browser)* [**breaking**] simplify RelayState and pending state, and make respond_sso echo RelayState ([#670](https://github.com/salasebas/saml-rs/pull/670))
+- replace stale design records with rules that state their reason ([#667](https://github.com/salasebas/saml-rs/pull/667))
+- *(error)* [**breaking**] make SamlError matchable and keep error sources ([#646](https://github.com/salasebas/saml-rs/pull/646))
+- organize upgrade guides by version and topic ([#645](https://github.com/salasebas/saml-rs/pull/645))
+- *(api)* [**breaking**] simplify logout completion, validation and replay ([#643](https://github.com/salasebas/saml-rs/pull/643))
+- *(api)* [**breaking**] name relaxed options for what they allow ([#617](https://github.com/salasebas/saml-rs/pull/617))
+- *(raw)* [**breaking**] keep one public path per raw item ([#618](https://github.com/salasebas/saml-rs/pull/618))
+- *(config)* [**breaking**] make a built config valid by construction ([#620](https://github.com/salasebas/saml-rs/pull/620))
+- *(error)* [**breaking**] delete compatibility SamlError variants ([#615](https://github.com/salasebas/saml-rs/pull/615))
+- *(deps)* bump uuid ([#627](https://github.com/salasebas/saml-rs/pull/627))
+- *(api)* [**breaking**] give hidden public items a documented path ([#621](https://github.com/salasebas/saml-rs/pull/621))
+- *(config)* [**breaking**] bind every peer descriptor to an expected entity ID and hide secret accessors ([#616](https://github.com/salasebas/saml-rs/pull/616))
+
 ## [0.8.0](https://github.com/salasebas/saml-rs/compare/v0.7.0...v0.8.0) - 2026-11-14
 
 ### Added
