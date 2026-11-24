@@ -7,9 +7,11 @@ Each record covers one flow. Its headings name the actor and the APIs. A row nam
 
 The default validation policies select the settings recorded for each flow. Each conformance claim covers the role, flow, and binding in its record. A producer requirement does not, by itself, become a receiver rejection. Optional capabilities stay off until you select them by name.
 
-Normative text is SAML Core 2.0, Profiles 2.0, Bindings 2.0, and Metadata 2.0, as corrected by Approved Errata 05. HTTP-POST-SimpleSign is the supported CD04 binding.
+Normative text is SAML Core 2.0, Profiles 2.0, Bindings 2.0, and Metadata 2.0, as corrected by Approved Errata 05.
 
-- [IdP and SP operational modes](conformance/idp-sp-operational-modes.md) for every cell of the IdP, IdP Lite, SP, and SP Lite columns of Table 2 and Conformance §§3.3 to 5, and what each one is. The same page lists every Table 3 and Table 4 cell and the attribute profiles, none of which is claimed.
+OASIS approved HTTP-POST-SimpleSign as [Committee Specification 01](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cs-01.html). The crate's records cite the later [Committee Draft 04](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cd-04.html) for the signature input. Both texts sign the raw XML when a signature is used. CD-04 §2.5 explicitly omits the entire `RelayState` field when it is absent. The binding makes the detached signature optional. For the crate's stricter Web SSO policy, see [SSO generation](conformance/web-browser-sso-generation.md) and [SSO acceptance](conformance/web-browser-sso-acceptance.md).
+
+- [IdP and SP operational modes](conformance/idp-sp-operational-modes.md) maps the Table 2 requirements to individual exchanges and lists the additional modes in Tables 3 and 4.
 - [SSO acceptance](conformance/web-browser-sso-acceptance.md) for `finish_sso`, `accept_unsolicited_sso`, and `receive_sso`.
 - [SSO generation](conformance/web-browser-sso-generation.md) for `start_sso`, `respond_sso`, and `initiate_sso`.
 - [Logout](conformance/single-logout.md) for `start_slo`, `start_async_slo`, `respond_slo`, `receive_slo`, `receive_slo_with_async`, and `finish_slo`.

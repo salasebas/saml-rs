@@ -15,18 +15,29 @@ chain. XML signatures and encryption go through
 > the crate has had no external security audit. Review it, your configuration,
 > and your peers' metadata trust before production use.
 
-## Install
+## Install the published crate
 
 ```sh
 cargo add saml-rs
 ```
 
-Rust 1.88 or newer. On a Rust release older than a dependency's newest
-version needs, build with resolver `"3"` or
-`CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback`. The import path is
-`saml_rs`.
+Use Rust 1.88 or newer. To prefer dependencies compatible with your package's
+`rust-version` during Cargo resolution, use resolver `"3"` or set
+`CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback`. An existing lockfile
+keeps its selections until you update them. The import path is `saml_rs`.
 
-## Quick start: service provider login
+Follow the [Stable service provider guide](https://samlrs.vercel.app/guides/service-provider-sso/)
+for the published API.
+
+## Try the service provider API on main
+
+Install from `main` to use the example below.
+
+```sh
+cargo add saml-rs --git https://github.com/salasebas/saml-rs.git --branch main
+```
+
+Use IdP metadata that advertises an HTTP-Redirect single sign-on endpoint.
 
 ```rust
 use std::time::SystemTime;
@@ -80,29 +91,26 @@ Three choices in this example matter in production:
 
 - **Validation preset.** `SpConfig::builder` starts on Recommended. Add a
   hardening or relax a rule by assigning the field that names it. See
-  [validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
+  [validation presets](https://samlrs.vercel.app/next/explanation/validation-presets/).
 - **Metadata trust.** `RequireSignature` pins the certificate that signs the
   IdP metadata. See
-  [metadata trust](https://docs.rs/saml-rs/latest/saml_rs/#metadata-trust).
+  [metadata trust](https://samlrs.vercel.app/next/reference/conformance/metadata-and-replay/#metadata-trust).
 - **Replay cache.** HTTP-POST bearer assertions must not be replayed
   ([Profiles §4.1.4.5](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf)).
   Use
-  [`InMemoryReplayCache`](https://docs.rs/saml-rs/latest/saml_rs/model/struct.InMemoryReplayCache.html)
+  `InMemoryReplayCache`
   for a single process, shared across request handlers with a `Mutex`.
   It expires entries and supports a limit that refuses new keys when full.
   Its state is lost on restart. For multiple processes or protection across
   restarts, implement
-  [`ReplayCache`](https://docs.rs/saml-rs/latest/saml_rs/model/trait.ReplayCache.html)
+  `ReplayCache`
   on storage that every ACS process shares. See
   [replay](docs/conformance/metadata-and-replay.md#replay).
 
-Run a full SP → IdP → SP round trip:
+To run both sides of a login from a checkout, follow the
+[Next checkout tutorial](https://samlrs.vercel.app/next/tutorial/run-the-sso-example/).
 
-```sh
-cargo run -p saml-rs --example sso
-```
-
-## What it covers
+## What main covers
 
 | Area | Typed `ServiceProvider` and `IdentityProvider` API |
 | --- | --- |
@@ -144,9 +152,9 @@ The default `crypto-bergshamra` feature uses RustCrypto. AWS-LC and FIPS are
 available with the default features off. Without a provider
 (`--no-default-features`), the crate builds and parses messages, and signing,
 verification, and encryption return `SamlError::Unsupported`. Details are in
-[crypto providers](https://samlrs.vercel.app/guides/crypto-provider/).
+[crypto providers on Next](https://samlrs.vercel.app/next/guides/crypto-provider/).
 
-The `serde` feature is off by default. It implements `Serialize` and
+On `main`, the `serde` feature is off by default. It implements `Serialize` and
 `Deserialize` for the pending snapshot types, so you can keep pending state in
 a session store:
 
@@ -155,17 +163,16 @@ store.set(key, serde_json::to_string(&started.pending.snapshot())?)?;
 ```
 
 The stored format is in
-[Cargo features](https://samlrs.vercel.app/reference/features/#serialize-pending-snapshots-with-serde).
+[Cargo features on Next](https://samlrs.vercel.app/next/reference/features/#serialize-pending-snapshots-with-serde).
 
 ## Documentation
 
 | Need | Read |
 | --- | --- |
-| Guides | [samlrs.vercel.app](https://samlrs.vercel.app) |
-| API reference | [docs.rs](https://docs.rs/saml-rs/latest/saml_rs/) |
+| Guides | [Stable](https://samlrs.vercel.app), [Next](https://samlrs.vercel.app/next/) |
+| Published API reference | [docs.rs](https://docs.rs/saml-rs/latest/saml_rs/) |
 | Identity provider and logout examples | [`examples/sso.rs`](examples/sso.rs), [`examples/slo.rs`](examples/slo.rs) |
 | Upgrade an existing integration | [Migration guides](docs/migrations/README.md) |
-| Choose a crypto provider | [Crypto providers](https://samlrs.vercel.app/guides/crypto-provider/) |
 | See the rules each flow claims | [Conformance records](docs/conformance/) |
 | Contribute | [Contributing](CONTRIBUTING.md) |
 

@@ -7,9 +7,11 @@ Each record is a table for one flow. A row names the rule, the obligated actor, 
 
 `recommended()` publishes the combination recorded for that flow. It is not an implementation of SAML V2.0 as a whole. A producer requirement does not, by itself, become a receiver rejection. Optional capabilities stay off until you select them by name.
 
-Normative text is SAML Core 2.0, Profiles 2.0, Bindings 2.0, and Metadata 2.0, as corrected by Approved Errata 05. HTTP-POST-SimpleSign is the supported CD04 binding.
+Normative text is SAML Core 2.0, Profiles 2.0, Bindings 2.0, and Metadata 2.0, as corrected by Approved Errata 05.
 
-- [IdP and SP operational modes](conformance/idp-sp-operational-modes.md) for every Table 2 cell and Conformance §§3.3 to 5, and what each one is.
+OASIS approved HTTP-POST-SimpleSign as [Committee Specification 01](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cs-01.html). The records cite the later [Committee Draft 04](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cd-04.html), whose §2.5 clarifies that absent `RelayState` is omitted from the signature input.
+
+- [IdP and SP operational modes](conformance/idp-sp-operational-modes.md) maps the four IdP and SP columns of Table 2 to the exchanges supported in this release.
 - [Extended, authority, and requester modes](conformance/extended-and-authority-modes.md) for every Table 3 and Table 4 cell and the attribute profiles, none of them claimed.
 - [SSO acceptance](conformance/web-browser-sso-acceptance.md) for `finish_sso`, `accept_unsolicited_sso`, and `receive_sso`.
 - [SSO generation](conformance/web-browser-sso-generation.md) for `start_sso`, `respond_sso`, and `initiate_sso`.

@@ -145,7 +145,7 @@ write and read envelopes for artifact resolution,
 | Reject a second `Header` or a `Header` that does not immediately precede `Body` | Library policy: reason not recorded. | SOAP 1.1 §4, §4.3 | Always |
 | Reject an element after the `Body` | Library policy: SOAP 1.1 permits these trailers, and WS-I Basic Profile 1.1 forbids them, so rejection keeps the crate interoperable. | SOAP 1.1 §4, WS-I BP 1.1 R1011 | Always |
 | Use `http://www.oasis-open.org/committees/security` as the `SOAPAction` value | Optional | Bindings §3.2.3 | `SoapRequest::headers` |
-| Send the `SOAPAction` value without quotes | Library policy: Bindings §3.2.3 writes the value bare, and OpenSAML and Keycloak send it bare, while SOAP 1.1 and R1109 require a quoted string. | Bindings §3.2.3, SOAP 1.1 §6.1.1, WS-I BP 1.1 R1109 | `SoapRequest::headers` |
+| Default to a bare `SOAPAction` URI | Library policy for interoperability. SAML's SOAP example uses the bare URI, as does [Keycloak 26.6.0 for IdP-to-SP SOAP logout](https://github.com/keycloak/keycloak/blob/26.6.0/services/src/main/java/org/keycloak/protocol/saml/SamlProtocol.java#L829-L842). SOAP 1.1 quotes the URI in its grammar | [Bindings §3.2.3](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf#page=11), [SOAP 1.1 §6.1.1](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/#_Toc478383528) | `SoapRequest::headers` |
 | Process the request independently of the `SOAPAction` value | Mandatory | Bindings §3.2.3 | Always |
 | Return a SAML-domain error as a status in a SAML response, not as a SOAP fault | Recommended | Bindings §3.2.2.1, §3.2.3.3, E19 | Always |
 | Send SOAP entity bodies with the `text/xml` media type | Mandatory | SOAP 1.1 §6 | `SoapRequest::headers`, `SoapResponse::headers` |

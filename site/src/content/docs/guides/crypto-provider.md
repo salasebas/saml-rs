@@ -8,7 +8,7 @@ Pick the provider before the first release build. Keep the default unless you ne
 ## Default
 
 ```sh
-cargo add saml-rs
+cargo add saml-rs --git https://github.com/salasebas/saml-rs.git --branch main
 ```
 
 `crypto-bergshamra` selects RustCrypto together with bergshamra's legacy-algorithm, post-quantum, and PKCS#11 capabilities. `saml-rs` initialises that provider before the first crypto operation.

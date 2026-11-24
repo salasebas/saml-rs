@@ -146,10 +146,9 @@ is the envelope the deployment returns as the HTTP 200 body. TLS and HTTP
 authentication stay with the deployment, as in artifact resolution. saml-rs
 does not open the connection.
 
-This claims the IdP and SP cells of Single Logout (IdP-initiated) – SOAP and
-Single Logout (SP-initiated) – SOAP in Conformance Requirements Table 2. Those
-cells are `OPTIONAL` for IdP Lite and SP Lite, and this flow does not claim
-them. It does not claim the IdP or SP operational mode.
+This record covers a SOAP request and response between one SP and one IdP.
+Either role can initiate the exchange. The IdP application tracks the sessions,
+propagates logout to other participants, and supplies the aggregate status.
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |

@@ -2,12 +2,13 @@
 
 This inventory covers SAML V2.0 Conformance Requirements Table 2 (IdP,
 IdP Lite, SP, and SP Lite), Tables 3 and 4, §§3.3 to 5, and the attribute
-profiles. Each claimed feature links to its record.
+profiles. Each supported exchange links to its record.
 
-The crate claims no operational mode. Table 2 requires Enhanced Client/Proxy
-SSO over PAOS for all four modes in this inventory. The crate removed that
-profile. The HTTP-Artifact and encrypted identifier records also have
-scope limits, and the HTTP-Redirect claims apply to the default build only.
+The crate claims individual exchanges. [Conformance Requirements Table 2](https://docs.oasis-open.org/security/saml/v2.0/saml-conformance-2.0-os.pdf#page=9)
+requires Enhanced Client/Proxy SSO over PAOS for all four IdP and SP modes.
+[ECP was removed](https://github.com/salasebas/saml-rs/blob/main/docs/migrations/0.8-to-0.9/ecp-removal.md),
+so the crate claims none of those modes. The HTTP-Redirect claims apply to
+the default build only.
 
 Normative text is Conformance Requirements as corrected by Approved Errata 05. E11 relabels the name identifier management rows. E25 adds the Metadata Structures and Metadata Interoperation rows and §§3.6 and 3.7. E29 adds the Request for Assertion by Identifier and SAML URI Binding rows. E42 replaces the `OPTIONAL` cells of an authority for another authority's query with `N/A`. E50 says the §4 and §5 lists are minimal sets.
 
@@ -27,17 +28,17 @@ Table 2 lists the enhanced client as a separate operational mode.
 | --- | --- | --- | --- | --- | --- |
 | Web SSO, `<AuthnRequest>`, HTTP Redirect | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature: `start_sso`, `receive_sso`. [SSO generation](web-browser-sso-generation.md), [SSO acceptance](web-browser-sso-acceptance.md). HTTP-POST and HTTP-POST-SimpleSign are claimed too. HTTP-Artifact is not implemented, and Table 2 does not require it |
 | Web SSO, `<Response>`, HTTP POST | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature: `respond_sso`, `initiate_sso`, `finish_sso`, `accept_unsolicited_sso`. Same records. Profiles §4.1.2 prohibits HTTP-Redirect for a `<Response>`, and the typed API has no such input. HTTP-POST-SimpleSign is also claimed for responses |
-| Web SSO, `<Response>`, HTTP Artifact | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature: `issue_artifact`, `respond_sso_artifact`, `initiate_sso_artifact`. [HTTP-Artifact response](web-browser-sso-artifact.md) |
-| Artifact Resolution, SOAP | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature: `answer_artifact_resolve` on the IdP, `resolve_artifact` on the SP. The SP issues no artifact, so it does not answer `ArtifactResolve`. [Artifact resolution](artifact-resolution.md) |
+| Web SSO, `<Response>`, HTTP Artifact | `MUST` | `MUST` | `MUST` | `MUST` | The IdP issues an artifact for the SSO response. The SP resolves it and requires an XML signature on the response or each assertion to establish a session. [HTTP-Artifact response](web-browser-sso-artifact.md) |
+| Artifact Resolution, SOAP | `MUST` | `MUST` | `MUST` | `MUST` | For an IdP-issued artifact, the SP builds `ArtifactResolve` and validates the reply. The IdP reads the request and builds `ArtifactResponse`. The application carries the SOAP HTTP exchange. [Artifact resolution](artifact-resolution.md) |
 | Enhanced Client/Proxy SSO, PAOS | `MUST` | `MUST` | `MUST` | `MUST` | Exclusion. The crate removed the IdP and SP ends of this profile |
 | Name Identifier Management (IdP-Initiated), HTTP Redirect | `MUST` | `MUST NOT` | `MUST` | `MUST NOT` | Claimed feature for the IdP and SP: `start_name_id_management_redirect`. Prohibited for IdP Lite and SP Lite: such a deployment publishes no `ManageNameIDService`. [Name identifier management](name-id-management.md) |
 | Name Identifier Management (IdP-Initiated), SOAP | `MUST` | `MUST NOT` | `OPTIONAL` | `MUST NOT` | Claimed feature for the IdP: `start_name_id_management`. Not implemented, off, for the SP. Prohibited for IdP Lite and SP Lite |
 | Name Identifier Management (SP-Initiated), HTTP Redirect | `MUST` | `MUST NOT` | `MUST` | `MUST NOT` | Claimed feature for the IdP and SP. Prohibited for IdP Lite and SP Lite |
 | Name Identifier Management (SP-Initiated), SOAP | `MUST` | `MUST NOT` | `OPTIONAL` | `MUST NOT` | Claimed feature for the IdP: `receive_name_id_management`, `respond_name_id_management`. Not implemented, off, for the SP. Prohibited for IdP Lite and SP Lite |
-| Single Logout (IdP-Initiated), HTTP Redirect | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature: `start_slo`, `receive_slo`, `respond_slo`, `finish_slo`. [Single logout](single-logout.md). HTTP-POST and HTTP-POST-SimpleSign are claimed too. HTTP-Artifact is not implemented, and Table 2 does not require it |
-| Single Logout (IdP-Initiated), SOAP | `MUST` | `OPTIONAL` | `MUST` | `OPTIONAL` | Claimed feature for the IdP and SP. [SOAP binding](single-logout.md#soap-binding). IdP Lite and SP Lite use the same flow |
-| Single Logout (SP-Initiated), HTTP Redirect | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature, as the IdP-initiated row |
-| Single Logout (SP-Initiated), SOAP | `MUST` | `OPTIONAL` | `MUST` | `OPTIONAL` | Claimed feature for the IdP and SP, as the IdP-initiated row |
+| Single Logout (IdP-Initiated), HTTP Redirect | `MUST` | `MUST` | `MUST` | `MUST` | The IdP requests logout from one SP and validates its reply. HTTP-POST and HTTP-POST-SimpleSign also support this exchange. [Single Logout](single-logout.md) |
+| Single Logout (IdP-Initiated), SOAP | `MUST` | `OPTIONAL` | `MUST` | `OPTIONAL` | The IdP requests logout from one SP over application-provided HTTP. The SP replies on the same SOAP exchange. [SOAP binding](single-logout.md#soap-binding) |
+| Single Logout (SP-Initiated), HTTP Redirect | `MUST` | `MUST` | `MUST` | `MUST` | The SP requests logout and validates the IdP's reply. HTTP-POST and HTTP-POST-SimpleSign also support this exchange. The IdP application owns propagation and aggregation. [Application duties](single-logout.md#session-authority-application-duties) |
+| Single Logout (SP-Initiated), SOAP | `MUST` | `OPTIONAL` | `MUST` | `OPTIONAL` | The SP requests logout over application-provided HTTP. The IdP replies on the same SOAP exchange. Its application owns propagation and aggregation. [SOAP binding](single-logout.md#soap-binding) |
 | Identity Provider Discovery (cookie) | `MUST` | `MUST` | `OPTIONAL` | `OPTIONAL` | Claimed feature for the IdP and IdP Lite: `common_domain_cookie`. [Identity Provider Discovery](identity-provider-discovery.md). Not implemented, off, for the SP and SP Lite |
 | Metadata Structures | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. E25, [§3.6](#metadata) |
 | Metadata Interoperation | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. E25, [§3.7](#metadata) |

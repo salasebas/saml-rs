@@ -17,7 +17,11 @@ The documents most changes need are
 and [approved Errata 05](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/).
 A schema takes precedence over a schema listing in prose. A binding or
 profile can narrow or add to Core. A draft is a target only for a feature that
-is explicitly experimental.
+is explicitly experimental. The approved HTTP-POST-SimpleSign publication is
+[Committee Specification 01](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cs-01.html).
+The crate's records cite
+[Committee Draft 04 §2.5](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cd-04.html)
+for its clarification of the signature input when RelayState is absent.
 
 SAML builds on general specifications such as SOAP 1.1, XML Signature, XML
 Schema, and HTTP. Where a SAML document states a rule for the same point, the
@@ -32,10 +36,15 @@ for interoperability, when SOAP 1.1 allows both forms. For example:
   the [supported SOAP flows](conformance/artifact-resolution.md#soap-envelope-rules).
 - SOAP 1.1 §4 allows namespace-qualified elements after the `Body`. WS-I R1011
   forbids them, and rejecting them is library policy.
-- Bindings §3.2.3 lets the requester send the OASIS URI as `SOAPAction` and
-  forbids the responder from depending on the header. Its §3.2.3.5 example
-  writes the URI without quotes. SOAP 1.1 §6.1.1 and WS-I R1109 quote it, so
-  sending it bare is library policy.
+- [Bindings §3.2.3](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf#page=11)
+  lets the HTTP requester send the OASIS URI as `SOAPAction` and forbids the
+  SAML responder from depending on its value.
+  [SOAP 1.1 §6.1.1](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/#_Toc478383528)
+  requires the header on requests and quotes a URI value in its grammar.
+  saml-rs defaults to the bare URI for interoperability. The SAML examples
+  use that form, and
+  [Keycloak 26.6.0](https://github.com/keycloak/keycloak/blob/26.6.0/services/src/main/java/org/keycloak/protocol/saml/SamlProtocol.java#L829-L842)
+  sends it when the IdP makes a back-channel logout request to an SP.
 
 ## Classify the rule
 
