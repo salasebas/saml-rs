@@ -2,6 +2,7 @@ use crate::browser::{Inbound, LogoutBinding, Outbound, PendingLogoutRequest, Sta
 use crate::config::{IdpDescriptor, NameIdFormat, SpDescriptor};
 use crate::constants::Binding;
 use crate::entity::{capture_idp_issuance_window, now_iso8601, EntitySetting};
+use crate::flow::MessageAuthentication;
 use crate::logout::{
     create_logout_request_for_subject_inner, create_logout_response_inner, decrypt_encrypted_id,
     has_async_slo_marker, parse_logout_request_at, parse_logout_response_at, CreatedLogoutRequest,
@@ -819,7 +820,12 @@ fn receive_slo_impl(
     )?;
     let logout = decrypt_encrypted_id(logout, local_setting, &document)?;
     Ok((
-        Received::new(logout, binding.into(), relay_state),
+        Received::new(
+            logout,
+            binding.into(),
+            relay_state,
+            MessageAuthentication::Authenticated,
+        ),
         asynchronous,
     ))
 }

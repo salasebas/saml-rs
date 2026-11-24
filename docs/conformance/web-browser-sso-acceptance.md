@@ -188,3 +188,7 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 ### Not implemented in the identity provider
 
 - Decoding of a `BaseID` in a requested `Subject`. Optional, Core §3.4.1.
+- Treating the content of an unauthenticated `AuthnRequest` as advisory.
+  Mandatory, Profiles §4.1.4.1. The caller decides from
+  `Received::authentication`, which reports `MessageAuthentication::Unauthenticated`
+  when no verified signature covers the request.

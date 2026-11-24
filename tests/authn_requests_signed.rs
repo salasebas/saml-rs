@@ -18,10 +18,10 @@ use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactResolutionService, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, DeliveredArtifact, EndpointUrl,
     EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    IssuedArtifacts, MetadataTrustPolicy, Outbound, RelayState, ReplayPolicy, RespondSso,
-    SamlError, SamlValidationContext, ServiceProvider, SignatureAlgorithm, SoapChannel, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSso, Status,
-    StatusMessage,
+    IssuedArtifacts, MessageAuthentication, MetadataTrustPolicy, Outbound, RelayState,
+    ReplayPolicy, RespondSso, SamlError, SamlValidationContext, ServiceProvider,
+    SignatureAlgorithm, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    SsoResponseBinding, StartSso, Status, StatusMessage,
 };
 use url::Url;
 
@@ -260,6 +260,35 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
         validation(),
     )?;
     assert_eq!(received.message().id(), unsigned_post.pending.request_id());
+    Ok(())
+}
+
+#[test]
+fn default_idp_reports_whether_a_signature_authenticated_the_request(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let idp = idp(IdpValidationPolicy::default())?;
+    for (policy, expected) in [
+        (
+            AuthnRequestSigningPolicy::Sign,
+            MessageAuthentication::Authenticated,
+        ),
+        (
+            AuthnRequestSigningPolicy::DoNotSign,
+            MessageAuthentication::Unauthenticated,
+        ),
+    ] {
+        let sp = sp(policy)?;
+        let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+        let post = sp.start_sso(&idp_descriptor, StartSso::post())?;
+        let redirect = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+        for input in [
+            post_input(&post.outbound)?,
+            redirect_input(&redirect.outbound)?,
+        ] {
+            let received = idp.receive_sso(&sp_descriptor, input, validation())?;
+            assert_eq!(received.authentication(), expected, "{policy:?}");
+        }
+    }
     Ok(())
 }
 

@@ -67,6 +67,12 @@ impl IdentityProvider {
     /// response with [`Self::respond_sso_refusal`] or
     /// [`Self::respond_sso_refusal_artifact`].
     ///
+    /// Unless the identity provider requires signed requests, it also accepts
+    /// an unsigned request. [`Received::authentication`] tells you whether a
+    /// verified signature covered it. Treat the content of an
+    /// [`MessageAuthentication::Unauthenticated`](crate::MessageAuthentication::Unauthenticated)
+    /// request as advice.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the inbound message or relay state is invalid, the
@@ -158,7 +164,12 @@ impl IdentityProvider {
             });
         }
         validation.check_and_store_message_replay(ReplayKey::AuthnRequest(authn.id().clone()))?;
-        Ok(Received::new(authn, binding.into(), relay_state))
+        Ok(Received::new(
+            authn,
+            binding.into(),
+            relay_state,
+            authentication,
+        ))
     }
 
     /// Respond to a received SP AuthnRequest.

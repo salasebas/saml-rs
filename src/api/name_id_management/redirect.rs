@@ -4,6 +4,7 @@ use crate::browser::{
 use crate::config::{IdpDescriptor, SpDescriptor};
 use crate::constants::Binding;
 use crate::entity::{generate_id, EntitySetting};
+use crate::flow::MessageAuthentication;
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
     MessageId, NameId, Received, RelayState, ReplayKey, SamlValidationContext, Status,
@@ -548,9 +549,14 @@ fn receive(
     ensure_entity_id(&request.issuer, peer.entity_id)?;
     let id = request.id.clone();
     match request.validate_and_decrypt(&flow, local.setting, validation)? {
-        ParsedRequest::Plain(message) => Ok(NameIdManagementReceipt::Request(Box::new(
-            Received::new(message, Binding::Redirect, relay_state),
-        ))),
+        ParsedRequest::Plain(message) => {
+            Ok(NameIdManagementReceipt::Request(Box::new(Received::new(
+                message,
+                Binding::Redirect,
+                relay_state,
+                MessageAuthentication::Authenticated,
+            ))))
+        }
         ParsedRequest::Refused(refusal) => refuse(
             local,
             &peer,
