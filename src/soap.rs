@@ -426,7 +426,6 @@ fn verify_soap_body_signature(
 /// Read the single XML element of a SOAP 1.1 body.
 ///
 /// A locally addressed header entry with SOAP `mustUnderstand` set is refused.
-/// Every failure is a [`SamlError::SoapEnvelope`].
 pub(crate) fn read_soap_body(envelope: &str, limits: XmlLimits) -> Result<SoapBody, SamlError> {
     read_envelope_body(envelope, limits).map_err(|error| match error {
         SamlError::SoapEnvelope { .. } => error,
