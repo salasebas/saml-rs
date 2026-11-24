@@ -15,15 +15,15 @@ XML whitespace, or inner whitespace other than one space:
   `" urn:oasis:names:tc:SAML:2.0:attrname-format:uri "` is
   `AttributeNameFormat::Uri`. Before, each was `Custom` with the padded text.
 - Another URI is `Custom` with the collapsed text.
-- Attributes with the same `Name` merge when their `NameFormat` values differ
-  only in whitespace.
+- Attributes with the same `Name` merge when their `NameFormat` values are
+  equal after collapse.
 - `SsoSession::subject_id` and `SsoSession::pairwise_id` read an attribute
   with a padded `uri` or `unspecified` `NameFormat`. An identifier that the
   session missed before can now be returned, or reported as an error when it
   breaks the profile.
-- A response whose assertions differ only in whitespace around the `NameID`
-  `Format` is accepted. Before, `finish_sso` and `accept_unsolicited_sso`
-  returned `SamlError::PrincipalMismatch`.
+- A response is accepted when the `NameID` `Format` values of its assertions
+  are equal after collapse but not as written. Before, `finish_sso` and
+  `accept_unsolicited_sso` returned `SamlError::PrincipalMismatch`.
 
 If you match `NameIdFormat::Custom` or `AttributeNameFormat::Custom` against
 padded text, or store the padded spelling, match the named variant or the
