@@ -3,7 +3,7 @@ use crate::xml::name::is_ncname;
 use crate::xml::{is_xml_char, utf8_bom_len};
 use quick_xml::escape::resolve_predefined_entity;
 use quick_xml::events::{BytesRef, Event};
-use quick_xml::name::{NamespaceError, NamespaceResolver};
+use quick_xml::name::{NamespaceError, NamespaceResolver, QName};
 use quick_xml::Reader;
 
 const DEFAULT_XML_MAX_BYTES: usize = 1024 * 1024;
@@ -125,7 +125,8 @@ impl Default for XmlLimits {
 
 mod element;
 
-use element::Element;
+pub(crate) use element::push_normalized_namespaces;
+use element::{Element, LocalAttribute};
 pub(crate) use element::{Node, QualifiedElement};
 
 #[derive(Debug, Clone)]
@@ -137,8 +138,16 @@ pub struct Document {
     clippy::unnecessary_wraps,
     reason = "The shared parser also accepts projections that drop an attribute"
 )]
-fn local_attribute(name: &str, _: Option<&str>, value: String) -> Option<(String, String)> {
-    Some((name.to_owned(), value))
+fn local_attribute(
+    name: QName<'_>,
+    namespace: Option<&str>,
+    value: String,
+) -> Option<LocalAttribute> {
+    Some(LocalAttribute {
+        name: name.local_name().into_inner().to_owned(),
+        qualified: namespace.is_some() || name.prefix().is_some(),
+        value,
+    })
 }
 
 fn checked_append_text(
@@ -314,8 +323,13 @@ pub(crate) fn parse_qualified_document(
         ParseMode::Document,
         |_, ns, _| ns.unwrap_or_default().to_owned(),
         |name, ns, value| {
-            (ns != Some(element::XMLNS_NAMESPACE))
-                .then(|| (ns.map(str::to_owned), name.to_owned(), value))
+            (ns != Some(element::XMLNS_NAMESPACE)).then(|| {
+                (
+                    ns.map(str::to_owned),
+                    name.local_name().into_inner().to_owned(),
+                    value,
+                )
+            })
         },
     )?)
 }
@@ -325,7 +339,7 @@ fn parse_roots_inner<N, A>(
     limits: XmlLimits,
     mode: ParseMode,
     mut element_namespace: impl FnMut(usize, Option<&str>, &str) -> N,
-    attribute: impl Fn(&str, Option<&str>, String) -> Option<A>,
+    attribute: impl Fn(QName<'_>, Option<&str>, String) -> Option<A>,
 ) -> Result<Vec<Element<N, A>>, SamlError> {
     limits.check_input_bytes(xml.len())?;
     check_xml_chars(xml)?;

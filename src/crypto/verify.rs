@@ -51,9 +51,12 @@ fn saml_id_attr(name: &str) -> bool {
 }
 
 fn duplicate_saml_id(node: &Node, seen: &mut HashSet<String>) -> Option<String> {
-    for (name, value) in &node.attrs {
-        if saml_id_attr(name) && !value.is_empty() && !seen.insert(value.clone()) {
-            return Some(value.clone());
+    for attribute in &node.attrs {
+        if saml_id_attr(&attribute.name)
+            && !attribute.value.is_empty()
+            && !seen.insert(attribute.value.clone())
+        {
+            return Some(attribute.value.clone());
         }
     }
     node.children

@@ -19,6 +19,15 @@ difference.
 for their binding. The SP compares a received `Issuer` as described in
 [entity identifiers](identifiers.md#entity-identifiers).
 
+An otherwise valid browser `Response` can fail when a declaration spells the
+protocol or assertion namespace with an XML character reference. The response
+checks use raw namespace bindings throughout this path. This conformance gap
+has no caller option. Namespaces in XML 1.0 §2.3 requires comparing the
+normalized values. SimpleSAMLphp 6.0.0 passes normalized DOM names to its
+HTTP-POST message reader. [Namespaces in XML 1.0 §2.3](https://www.w3.org/TR/REC-xml-names/#NSNameComparison) ·
+[SimpleSAMLphp 6.0.0](https://github.com/simplesamlphp/saml2/blob/v6.0.0/src/Binding/HTTPPost.php#L89-L105) ·
+[Issue #629](https://github.com/salasebas/saml-rs/issues/629)
+
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | For unsolicited HTTP-POST, select a configured IdP by the direct SAML response issuer. When the response is unsigned and omits its issuer, use the common issuer of its plaintext assertions. Verify the message with the selected IdP | Optional | Profiles §4.1.4.2, §4.1.4.3, §4.1.5, E17 | `accept_unsolicited_sso_with_resolver` |
@@ -68,7 +77,7 @@ for their binding. The SP compares a received `Issuer` as described in
 | Reject an `InResponseTo` on the bearer confirmation of an unsolicited response, empty or not | Mandatory | Profiles §4.1.4.3, E26 | Always |
 | Reject a response-level `InResponseTo` on an unsolicited `Success` response, empty or not | Library policy: Profiles §4.1.4.3 names only the bearer confirmation, and a reply tied to a request must pass the pending request's correlation checks. | Core §3.2.2, Profiles §4.1.5 | Always |
 | Reject a bearer confirmation whose `NotBefore` has not been reached, after skew. A `NotBefore` that has been reached is accepted | Mandatory | Core §2.4.1.2, Profiles §4.1.4.2, E26 | Always |
-| Reject a namespace-qualified `NotBefore` on `SubjectConfirmationData` | Library policy: it cannot be read as the SAML attribute. | Core §2.4.1.2 | Always |
+| Permit schema-allowed foreign attributes on `SubjectConfirmationData` and `Attribute`. Read bearer checks and SAML attribute names, formats, and labels from unqualified attributes | Mandatory | Core §2.4.1.2, §2.7.3.1, `SubjectConfirmationDataType`, `AttributeType`, Profiles §4.1.4.3, E26 | Always |
 | Require `NotBefore` to precede `NotOnOrAfter` when both appear in `Conditions` or bearer `SubjectConfirmationData`. Compare the bounds before applying clock skew | Mandatory | Core §2.4.1.2, §2.5.1.1, §2.5.1.2, E92 | Always |
 | Allow five minutes of clock skew on `NotBefore` and `NotOnOrAfter` | Recommended | Core §1.3.3, E92 | `SamlValidationContext::with_clock_skew`, `ClockSkew::strict` |
 | For `Conditions` and bearer confirmation, treat an upper bound shifted past year 9999 as open and reject an unrepresentable shifted `NotBefore`. Reject an unrepresentable shifted session or replay deadline | Library policy: the runtime cannot represent the shifted instant. | Core §1.3.3, E92 | `SamlValidationContext::with_clock_skew` |
@@ -152,11 +161,13 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 | Parse a SimpleSign `AuthnRequest` with neither `Signature` nor `SigAlg` as HTTP-POST and apply the same request signature policy. Use the original binding to select the endpoint for the `Destination` check | Optional | CD-04 §2.10 | Always |
 | Reject a SimpleSign `AuthnRequest` that carries only one of `Signature` and `SigAlg` | Library policy: either field signals a detached signature, which requires both fields to verify. | CD-04 §2.4, §2.5, §2.10 | Always |
 | Reject an `IssueInstant` that is not UTC. A leap second is accepted | Mandatory | Core §1.3.3 | Always |
+| Compare XML namespace names in an `AuthnRequest` after normalizing the declaration value | Mandatory | Namespaces in XML 1.0 §2.3, `AuthnRequestType` | Always |
 | Accept an `AuthnRequest` `IssueInstant` from now − `max_age` − past tolerance through now + future tolerance, inclusive. A positive `NotOnOrAfter` skew supplies the past tolerance, and a negative `NotBefore` skew supplies the future tolerance | Library policy: Core §1.3.3 defines no maximum age, and the limit can reject a conformant request. | Core §1.3.3 | `SamlValidationContext::with_authn_request_age`, `RequestAgePolicy::Bounded` |
 | Compare a present `Destination` with the receiving `SingleSignOnService` `Location` after collapsing XML whitespace. Require it on a signed request. `ResponseLocation` is unused | Mandatory | Core §3.2.1, Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4, Metadata §2.2.2, E41 | `SamlValidationContext::with_recipient_endpoint` |
 | When checking `Destination` in `receive_sso`, reject a supplied receiving URL that is not published for the incoming binding, and several published URLs without an explicit one | Library policy: the URL is caller input, and the restriction keeps a value derived from the request from naming an endpoint this identity provider does not operate for that binding. | Core §3.2.1 | `SamlValidationContext::with_recipient_endpoint` |
 | Verify that a requested ACS URL or index used for delivery names the SP's assertion consumer. Collapse XML whitespace in a requested URL before comparing | Mandatory | Profiles §4.1.4.1, `AuthnRequestType`, XML Schema Part 2 §4.3.6 | Always |
 | Expose `ForceAuthn`, `IsPassive`, `RequestedAuthnContext`, the requested `Subject`, and `NameIDPolicy`. Presence never rejects the request, and the caller decides how to authenticate. A `Subject` with no identifier means the presenter | Optional | Core §3.4.1, §3.4.1.1, §3.4.1.4, E45, E75 | Always |
+| Permit schema-allowed foreign attributes on `SubjectConfirmationData` in the requested `Subject` | Mandatory | Core §2.4.1.2, §3.4.1, `SubjectConfirmationDataType` | Always |
 | Allow at most one `RequestedAuthnContext`. Require one or more assertion-namespace references, all class or all declaration. Keep them in request order, most preferred first. An optional unqualified `Comparison` is `exact`, `minimum`, `maximum`, or `better`, and defaults to `exact` | Mandatory | Core §3.3.2.2.1, E45, `RequestedAuthnContextType` | Always |
 | Read context references with XML whitespace collapsed, including relative references | Library policy: Core §1.3.2 requires absolute URI references from the producer. | Core §1.3.2, XML Schema Part 2 §4.3.6 | `AuthnRequest::requested_authn_context` |
 | Read `ForceAuthn`, `IsPassive`, and `AllowCreate` as `xs:boolean` and `AssertionConsumerServiceIndex` as `xs:unsignedShort`, with XML whitespace collapsed. Reject another value or a qualified attribute | Mandatory | `AuthnRequestType`, `NameIDPolicyType`, XML Schema Part 2 §3.2.2, §3.3.23, §4.3.6 | Always |

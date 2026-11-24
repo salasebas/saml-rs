@@ -1,10 +1,11 @@
 use crate::constants::{name_id_format, namespace, ParserType};
 use crate::error::{xml_err, SamlError};
-use crate::xml::dom::{reader_err, XmlLimits};
+use crate::xml::dom::{push_normalized_namespaces, reader_err, XmlLimits};
 use crate::xml::parse_saml_utc_date_time;
+use quick_xml::escape::unescape;
 use quick_xml::events::{BytesStart, Event};
-use quick_xml::name::ResolveResult;
-use quick_xml::{NsReader, XmlVersion};
+use quick_xml::name::{NamespaceResolver, ResolveResult};
+use quick_xml::{NsReader, Reader, XmlVersion};
 
 mod outbound_logout;
 mod outbound_logout_request;
@@ -81,10 +82,17 @@ fn element_label(element: &BytesStart<'_>) -> String {
 enum UnexpectedAttributePolicy {
     Ignore,
     Reject,
+    AllowForeignAssertionAttributes(NamespaceValues),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum NamespaceValues {
+    Raw,
+    Normalized,
 }
 
 fn validate_attributes(
-    reader: &NsReader<&[u8]>,
+    resolver: &NamespaceResolver,
     element: &BytesStart<'_>,
     consumed: &[&[u8]],
     required: &[&[u8]],
@@ -96,7 +104,7 @@ fn validate_attributes(
         if attribute.key.as_namespace_binding().is_some() {
             continue;
         }
-        let (resolved, local) = reader.resolver().resolve_attribute(attribute.key);
+        let (resolved, local) = resolver.resolve_attribute(attribute.key);
         if !consumed.contains(&local.into_inner().as_bytes()) {
             if matches!(unexpected, UnexpectedAttributePolicy::Reject) {
                 return Err(profile_error(format!(
@@ -107,12 +115,19 @@ fn validate_attributes(
             }
             continue;
         }
-        if !matches!(resolved, ResolveResult::Unbound) {
-            return Err(profile_error(format!(
-                "attribute {} on {} must be unqualified",
-                local.into_inner(),
-                element_label(element),
-            )));
+        match (resolved, unexpected) {
+            (ResolveResult::Unbound, _) => {}
+            (
+                ResolveResult::Bound(namespace),
+                UnexpectedAttributePolicy::AllowForeignAssertionAttributes(values),
+            ) if is_foreign_assertion_attribute(namespace.into_inner(), values)? => continue,
+            _ => {
+                return Err(profile_error(format!(
+                    "attribute {} on {} must be unqualified",
+                    local.into_inner(),
+                    element_label(element),
+                )));
+            }
         }
         let value = attribute
             .normalized_value(XmlVersion::Implicit1_0)
@@ -133,14 +148,22 @@ fn validate_attributes(
     Ok(values)
 }
 
+fn is_foreign_assertion_attribute(uri: &str, values: NamespaceValues) -> Result<bool, SamlError> {
+    let uri = match values {
+        NamespaceValues::Raw => unescape(uri).map_err(xml_err)?,
+        NamespaceValues::Normalized => std::borrow::Cow::Borrowed(uri),
+    };
+    Ok(uri != namespace::ASSERTION)
+}
+
 fn validate_unqualified_attributes(
-    reader: &NsReader<&[u8]>,
+    resolver: &NamespaceResolver,
     element: &BytesStart<'_>,
     consumed: &[&[u8]],
     required: &[&[u8]],
 ) -> Result<Vec<(Vec<u8>, String)>, SamlError> {
     validate_attributes(
-        reader,
+        resolver,
         element,
         consumed,
         required,
@@ -155,7 +178,7 @@ fn validate_closed_unqualified_attributes(
     required: &[&[u8]],
 ) -> Result<Vec<(Vec<u8>, String)>, SamlError> {
     validate_attributes(
-        reader,
+        reader.resolver(),
         element,
         consumed,
         required,
@@ -366,7 +389,7 @@ fn root_consumed_attributes(parser_type: ParserType) -> &'static [&'static [u8]]
 }
 
 fn validate_root(
-    reader: &NsReader<&[u8]>,
+    resolver: &NamespaceResolver,
     element: &BytesStart<'_>,
     element_namespace: NamespaceKind,
     parser_type: ParserType,
@@ -383,7 +406,7 @@ fn validate_root(
         )));
     }
     let attributes = validate_unqualified_attributes(
-        reader,
+        resolver,
         element,
         root_consumed_attributes(parser_type),
         &[b"ID", b"Version", b"IssueInstant"],
@@ -552,14 +575,15 @@ fn consumed_attributes(element: &ExpandedName) -> &'static [&'static [u8]] {
 }
 
 fn validate_element(
-    reader: &NsReader<&[u8]>,
+    resolver: &NamespaceResolver,
     element: &BytesStart<'_>,
     element_namespace: NamespaceKind,
     stack: &[ExpandedName],
     parser_type: ParserType,
+    namespace_values: NamespaceValues,
 ) -> Result<(), SamlError> {
     if stack.is_empty() {
-        return validate_root(reader, element, element_namespace, parser_type);
+        return validate_root(resolver, element, element_namespace, parser_type);
     }
 
     let local = element.local_name();
@@ -583,7 +607,7 @@ fn validate_element(
     let consumed = consumed_attributes_for(&expanded, stack);
     if expanded.is(b"Assertion", NamespaceKind::Assertion) {
         let attributes = validate_unqualified_attributes(
-            reader,
+            resolver,
             element,
             consumed,
             &[b"ID", b"Version", b"IssueInstant"],
@@ -591,7 +615,19 @@ fn validate_element(
         require_version_2(&attributes, element)?;
         require_issue_instant(&attributes, element)?;
     } else if !consumed.is_empty() {
-        validate_unqualified_attributes(reader, element, consumed, &[])?;
+        let unexpected = if matches!(
+            parser_type,
+            ParserType::SamlRequest | ParserType::SamlResponse
+        ) && expanded.namespace == NamespaceKind::Assertion
+            && matches!(
+                expanded.local.as_slice(),
+                b"SubjectConfirmationData" | b"Attribute"
+            ) {
+            UnexpectedAttributePolicy::AllowForeignAssertionAttributes(namespace_values)
+        } else {
+            UnexpectedAttributePolicy::Ignore
+        };
+        validate_attributes(resolver, element, consumed, &[], unexpected)?;
     }
     Ok(())
 }
@@ -602,23 +638,40 @@ pub(crate) fn validate_protocol_profile(
     limits: XmlLimits,
 ) -> Result<(), SamlError> {
     limits.check_input_bytes(xml.len())?;
-    let mut reader = NsReader::from_str(xml);
-    // quick-xml 0.42 caps bindings currently in scope, not declarations on one
-    // element. The configured attribute budget remains that cap.
-    reader
-        .resolver_mut()
-        .set_max_namespace_bindings(limits.max_attributes_per_element);
+    let mut reader = Reader::from_str(xml);
+    let mut resolver = NamespaceResolver::default();
+    resolver.set_max_namespace_bindings(limits.max_attributes_per_element);
+    let namespace_values = match parser_type {
+        ParserType::SamlRequest => NamespaceValues::Normalized,
+        _ => NamespaceValues::Raw,
+    };
     let mut stack = Vec::new();
     let mut saw_root = false;
     let mut logout_identifiers = 0usize;
 
     loop {
-        let (resolved, event) = reader.read_resolved_event().map_err(reader_err)?;
-        let element_namespace = classify_namespace(&resolved);
+        let event = reader.read_event().map_err(reader_err)?;
         match event {
             Event::Start(ref element) | Event::Empty(ref element) => {
-                validate_element(&reader, element, element_namespace, &stack, parser_type)?;
-                let local = element.local_name().into_inner().as_bytes();
+                match namespace_values {
+                    NamespaceValues::Raw => resolver
+                        .push(element)
+                        .map_err(|error| reader_err(error.into()))?,
+                    NamespaceValues::Normalized => {
+                        push_normalized_namespaces(&mut resolver, element)?;
+                    }
+                }
+                let (resolved, local) = resolver.resolve_element(element.name());
+                let element_namespace = classify_namespace(&resolved);
+                validate_element(
+                    &resolver,
+                    element,
+                    element_namespace,
+                    &stack,
+                    parser_type,
+                    namespace_values,
+                )?;
+                let local = local.into_inner().as_bytes();
                 if parser_type == ParserType::LogoutRequest
                     && stack.len() == 1
                     && element_namespace == NamespaceKind::Assertion
@@ -626,7 +679,9 @@ pub(crate) fn validate_protocol_profile(
                 {
                     logout_identifiers += 1;
                 }
-                if matches!(event, Event::Start(_)) {
+                if matches!(event, Event::Empty(_)) {
+                    resolver.pop();
+                } else {
                     stack.push(ExpandedName {
                         local: local.to_vec(),
                         namespace: element_namespace,
@@ -636,6 +691,7 @@ pub(crate) fn validate_protocol_profile(
             }
             Event::End(_) => {
                 stack.pop();
+                resolver.pop();
             }
             Event::Eof => break,
             Event::Decl(_)
@@ -662,6 +718,16 @@ pub(crate) fn validate_protocol_profile(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn assertion_attribute_wildcard_compares_the_normalized_namespace(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        assert!(!is_foreign_assertion_attribute(
+            "urn:oasis:names:tc:SAML:2.0:asserti&#111;n",
+            NamespaceValues::Raw,
+        )?);
+        Ok(())
+    }
 
     const AUTHN_REQUEST_START: &str = concat!(
         r#"<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" "#,

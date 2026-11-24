@@ -493,16 +493,12 @@ fn bearer_subject_confirmation_not_before_allows_five_minutes(
         }
     }
 
-    let qualified_first = xml.replace(
+    let annotated = xml.replace(
         "<saml:SubjectConfirmationData ",
-        "<saml:SubjectConfirmationData xmlns:ext=\"urn:example:ext\" ext:NotBefore=\"2000-01-01T00:00:00Z\" NotBefore=\"2099-01-01T00:00:00Z\" ",
+        "<saml:SubjectConfirmationData xmlns:ext=\"urn:example:directory\" ext:NotBefore=\"next-sync\" NotBefore=\"2026-07-15T12:05:00Z\" ",
     );
-    match parse_response_at(&qualified_first, &validation) {
-        Err(SamlError::ProtocolProfile(_)) => Ok(()),
-        other => {
-            Err(format!("expected a qualified NotBefore to be rejected, got {other:?}").into())
-        }
-    }
+    parse_response_at(&annotated, &validation)?;
+    Ok(())
 }
 
 #[test]
