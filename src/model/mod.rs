@@ -42,7 +42,8 @@ pub use endpoint::EndpointUrl;
 pub use extension::ExtensionElement;
 pub use identifiers::{AssertionId, MessageId, SamlInstant, SessionIndex};
 pub use logout::{
-    LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, RefusedLogoutRequest,
+    IdpLogoutAction, LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject,
+    RefusedLogoutRequest,
 };
 pub use outstanding_logout::OutstandingLogout;
 pub use received::Received;

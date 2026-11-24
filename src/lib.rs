@@ -468,9 +468,9 @@ pub use metadata::{
 pub use model::{
     AssertionId, Attribute, AttributeNameFormat, AttributeValue, Attributes, AudienceRestriction,
     AuthnContext, AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind,
-    AuthnRequest, AuthnStatement, ClockSkew, ExtensionElement, InMemoryReplayCache,
-    LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, MessageId, NameId,
-    NameIdCreationRequest, NameIdPolicy, OutstandingLogout, PairwiseId, Received,
+    AuthnRequest, AuthnStatement, ClockSkew, ExtensionElement, IdpLogoutAction,
+    InMemoryReplayCache, LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, MessageId,
+    NameId, NameIdCreationRequest, NameIdPolicy, OutstandingLogout, PairwiseId, Received,
     RefusedLogoutRequest, RelayState, ReplayCache, ReplayKey, ReplayPolicy, RequestAgePolicy,
     RequestedAuthnContext, RequestedSubject, RequestedSubjectIdentifier, SamlInstant,
     SamlValidationContext, SessionIndex, SsoResponse, SsoSession, Status, StatusMessage,

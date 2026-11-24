@@ -1,6 +1,6 @@
 use crate::browser::{Inbound, Transport};
 use crate::config::HmacSecret;
-use crate::constants::{Binding, ParserType};
+use crate::constants::{namespace, Binding, ParserType};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::flow::{
@@ -12,7 +12,25 @@ use crate::flow::{
 use crate::metadata::Metadata;
 use crate::model::{ClockSkew, StatusMessage};
 use crate::validator::check_status;
+use crate::xml::protocol_element::SamlElement;
 use std::time::SystemTime;
+
+use super::ASYNC_SLO_NAMESPACE;
+
+pub(crate) fn has_async_slo_marker(request: &SamlElement) -> bool {
+    request.is(namespace::PROTOCOL, "LogoutRequest")
+        && request
+            .children
+            .iter()
+            .filter(|child| child.is(namespace::PROTOCOL, "Extensions"))
+            .flat_map(|extensions| &extensions.children)
+            .any(|child| {
+                child.is(ASYNC_SLO_NAMESPACE, "Asynchronous")
+                    && child.attrs.is_empty()
+                    && child.children.is_empty()
+                    && child.text.is_empty()
+            })
+}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LogoutFlowValidation<'a> {

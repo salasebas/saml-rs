@@ -14,8 +14,11 @@ pub(crate) use creation::{
 };
 pub(crate) use encrypted_id::decrypt_encrypted_id;
 pub(crate) use parsing::{
-    parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation, LogoutReceipt,
+    has_async_slo_marker, parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation,
+    LogoutReceipt,
 };
 pub(crate) use rendering::LogoutRequestSubject;
 #[cfg(test)]
 pub(crate) use rendering::{issuer_of, render_logout_request, LogoutRequestAttributes};
+
+const ASYNC_SLO_NAMESPACE: &str = "urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo";
