@@ -1,8 +1,11 @@
+use std::sync::Arc;
+
 use super::{as_object_list, Metadata};
 use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::util::Value;
-use crate::xml::ExtractorField;
+use crate::xml::protocol_element::SamlElement;
+use crate::xml::{ExtractorField, XmlLimits};
 
 /// One `ArtifactResolutionService` endpoint read from IdP metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,7 +88,32 @@ impl IdpMetadata {
     /// Returns the errors from [`Self::from_xml`] and any schema validation
     /// error from `policy`.
     pub fn from_xml_with_policy(xml: &str, policy: &crate::XmlPolicy) -> Result<Self, SamlError> {
-        let extra = vec![
+        let inner = Metadata::parse_role_with_policy(
+            xml,
+            super::SsoDescriptorRole::IdentityProvider,
+            Self::fields(),
+            policy,
+        )?;
+        Self::from_extracted(inner)
+    }
+
+    pub(crate) fn from_aggregate_entity(
+        xml: &Arc<str>,
+        path: &[&SamlElement],
+        limits: XmlLimits,
+    ) -> Result<Self, SamlError> {
+        let inner = Metadata::from_aggregate_entity(
+            xml,
+            path,
+            super::SsoDescriptorRole::IdentityProvider,
+            Self::fields(),
+            limits,
+        )?;
+        Self::from_extracted(inner)
+    }
+
+    fn fields() -> Vec<ExtractorField> {
+        vec![
             ExtractorField::new(
                 "singleSignOnService",
                 &[
@@ -113,13 +141,10 @@ impl IdpMetadata {
                 ],
             )
             .capture_source(),
-        ];
-        let mut inner = Metadata::parse_role_with_policy(
-            xml,
-            super::SsoDescriptorRole::IdentityProvider,
-            extra,
-            policy,
-        )?;
+        ]
+    }
+
+    fn from_extracted(mut inner: Metadata) -> Result<Self, SamlError> {
         super::endpoints::read_endpoints(
             &mut inner.meta,
             "singleSignOnService",

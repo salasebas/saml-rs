@@ -25,7 +25,7 @@ pub use credentials::{
 pub(crate) use descriptors::validate_entity_id_syntax;
 pub use descriptors::{
     ArtifactResolutionService, EntityId, IdpDescriptor, IdpMetadataConfig, ManageNameIdService,
-    SpDescriptor, SpMetadataConfig,
+    MetadataAggregate, SpDescriptor, SpMetadataConfig,
 };
 pub use metadata_trust::MetadataTrustPolicy;
 pub(crate) use policies::AssertionElementEncryption;

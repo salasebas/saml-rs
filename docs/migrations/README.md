@@ -18,5 +18,6 @@ additions.
 
 - [Handle SOAP artifact response size errors](unreleased-artifact-response-budget.md)
 - [Configure ECDSA and Ed25519 signing](unreleased-elliptic-curve-signing.md)
+- [Import peers from a federation aggregate](unreleased-metadata-aggregate.md)
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

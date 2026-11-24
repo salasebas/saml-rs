@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use crate::error::SamlError;
 #[cfg(crypto)]
 use crate::error::SignatureVerificationReason;
 use crate::metadata::Metadata;
+use crate::xml::dom;
 use crate::xml::XmlLimits;
 
 use super::credentials::CertificatePem;
@@ -95,7 +98,10 @@ pub enum MetadataTrustPolicy<'a> {
 #[cfg_attr(not(crypto), allow(dead_code))]
 pub(super) enum AppliedMetadataTrust {
     Unverified,
-    SignedByPinnedCertificates { signed_metadata_xml: String },
+    SignedByPinnedCertificates {
+        signed_metadata_xml: Arc<str>,
+        registration_authority: bool,
+    },
 }
 pub(super) fn metadata_entity_id(metadata: &Metadata) -> Result<&str, SamlError> {
     metadata
@@ -117,82 +123,83 @@ pub(super) fn ensure_expected_entity_id(
 }
 
 pub(super) fn ensure_metadata_trust(
-    metadata: &Metadata,
+    xml: &str,
     trust: MetadataTrustPolicy<'_>,
     limits: XmlLimits,
 ) -> Result<AppliedMetadataTrust, SamlError> {
-    match trust {
-        MetadataTrustPolicy::Unverified => Ok(AppliedMetadataTrust::Unverified),
+    let (certificates, transforms, algorithms) = match trust {
+        MetadataTrustPolicy::Unverified => return Ok(AppliedMetadataTrust::Unverified),
         MetadataTrustPolicy::RequireSignature {
             trusted_certificates,
         }
         | MetadataTrustPolicy::RequireRegistrationAuthoritySignature {
             trusted_certificates,
-        } => verify_pinned_metadata_signature(
-            metadata,
+        } => (
             trusted_certificates,
             MetadataSignatureTransforms::Profile,
             XmlSignatureProfile::ExcludeWeakAlgorithms,
-            limits,
         ),
         MetadataTrustPolicy::RequireSignatureAllowingInclusiveCanonicalization {
             trusted_certificates,
-        } => verify_pinned_metadata_signature(
-            metadata,
+        } => (
             trusted_certificates,
             MetadataSignatureTransforms::AllowInclusiveCanonicalization,
             XmlSignatureProfile::ExcludeWeakAlgorithms,
-            limits,
         ),
         MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms {
             trusted_certificates,
-        } => verify_pinned_metadata_signature(
-            metadata,
+        } => (
             trusted_certificates,
             MetadataSignatureTransforms::Profile,
             XmlSignatureProfile::AllowWeakAlgorithms,
-            limits,
         ),
-    }
+    };
+    let signed_metadata_xml =
+        verify_pinned_metadata_signature(xml, certificates, transforms, algorithms, limits)?;
+    Ok(AppliedMetadataTrust::SignedByPinnedCertificates {
+        signed_metadata_xml: Arc::from(signed_metadata_xml),
+        registration_authority: matches!(
+            trust,
+            MetadataTrustPolicy::RequireRegistrationAuthoritySignature { .. }
+        ),
+    })
 }
 
 #[cfg(crypto)]
 fn verify_pinned_metadata_signature(
-    metadata: &Metadata,
+    xml: &str,
     trusted_certificates: &[CertificatePem],
     transforms: MetadataSignatureTransforms,
     algorithms: XmlSignatureProfile,
     limits: XmlLimits,
-) -> Result<AppliedMetadataTrust, SamlError> {
-    ensure_import_signature_shape(metadata.metadata_xml(), transforms, limits)?;
+) -> Result<String, SamlError> {
+    let document = dom::parse_document(xml, limits)?;
+    ensure_import_signature_shape(&document.root, transforms)?;
     let trusted_certificates: Vec<String> = trusted_certificates
         .iter()
         .map(|certificate| certificate.as_str().to_string())
         .collect();
-    let signed_metadata_xml =
-        crate::crypto::verify::verify_metadata_signature_coverage_with_limits(
-            metadata.metadata_xml(),
-            &trusted_certificates,
-            limits,
-            algorithms,
-        )?
-        .ok_or(SamlError::SignatureVerification {
-            reason: SignatureVerificationReason::XmlSignature,
-        })?;
-    Ok(AppliedMetadataTrust::SignedByPinnedCertificates {
-        signed_metadata_xml,
+    crate::crypto::verify::verify_metadata_signature_coverage(
+        xml,
+        document,
+        &trusted_certificates,
+        algorithms,
+    )?
+    .ok_or(SamlError::SignatureVerification {
+        reason: SignatureVerificationReason::XmlSignature,
     })
 }
 
 #[cfg(not(crypto))]
 fn verify_pinned_metadata_signature(
-    metadata: &Metadata,
+    xml: &str,
     _trusted_certificates: &[CertificatePem],
     transforms: MetadataSignatureTransforms,
     _algorithms: XmlSignatureProfile,
     limits: XmlLimits,
-) -> Result<AppliedMetadataTrust, SamlError> {
-    ensure_import_signature_shape(metadata.metadata_xml(), transforms, limits)?;
+) -> Result<String, SamlError> {
+    let document = dom::parse_document(xml, limits)?;
+    ensure_import_signature_shape(&document.root, transforms)?;
     Err(SamlError::Unsupported(
         "signed metadata verification requires a crypto provider feature".into(),
     ))

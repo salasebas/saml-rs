@@ -15,6 +15,10 @@ use crate::sp;
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
 use crate::xml::XmlLimits;
 
+mod aggregate;
+
+pub use aggregate::MetadataAggregate;
+
 const MAX_ENTITY_ID_CHARACTERS: usize = 1024;
 
 /// SOAP `ArtifactResolutionService` published by an artifact issuer.
@@ -337,7 +341,6 @@ struct ImportedMetadata {
     entity_id: EntityId,
     validity: MetadataValidity,
     trust: AppliedMetadataTrust,
-    registration_authority_verified: bool,
 }
 
 impl ImportedMetadata {
@@ -348,17 +351,19 @@ impl ImportedMetadata {
         limits: XmlLimits,
     ) -> Result<Self, SamlError> {
         ensure_expected_entity_id(&expected_entity_id, metadata_entity_id(metadata)?)?;
-        let registration_authority_verified = matches!(
-            trust,
-            MetadataTrustPolicy::RequireRegistrationAuthoritySignature { .. }
-        );
-        let trust = ensure_metadata_trust(metadata, trust, limits)?;
-        let validity = metadata.validity()?;
+        let trust = ensure_metadata_trust(metadata.metadata_xml(), trust, limits)?;
+        Self::new(expected_entity_id, metadata, trust)
+    }
+
+    fn new(
+        entity_id: EntityId,
+        metadata: &Metadata,
+        trust: AppliedMetadataTrust,
+    ) -> Result<Self, SamlError> {
         Ok(Self {
-            entity_id: expected_entity_id,
-            validity,
+            entity_id,
+            validity: metadata.validity()?,
             trust,
-            registration_authority_verified,
         })
     }
 
@@ -366,7 +371,8 @@ impl ImportedMetadata {
         match &self.trust {
             AppliedMetadataTrust::SignedByPinnedCertificates {
                 signed_metadata_xml,
-            } => Some(signed_metadata_xml.as_str()),
+                ..
+            } => Some(signed_metadata_xml),
             AppliedMetadataTrust::Unverified => None,
         }
     }
@@ -387,6 +393,7 @@ impl IdpDescriptor {
     /// Parse IdP metadata for an expected entity ID and explicit trust policy.
     /// The expected ID must equal the document's `entityID` after XML Schema
     /// whitespace collapse.
+    /// Use [`MetadataAggregate`] to look up peers in a document with several entities.
     ///
     /// # Errors
     ///
@@ -433,10 +440,14 @@ impl IdpDescriptor {
             trust,
             xml_policy.limits,
         )?;
-        Ok(Self {
+        Ok(Self::from_import(metadata, imported))
+    }
+
+    fn from_import(metadata: IdpMetadata, imported: ImportedMetadata) -> Self {
+        Self {
             imported,
             provider: idp::Engine::from_parsed_metadata(metadata, EntitySetting::default()),
-        })
+        }
     }
 
     /// Metadata entity ID.
@@ -500,7 +511,13 @@ impl IdpDescriptor {
         &self,
         now: SystemTime,
     ) -> Result<Vec<crate::metadata::MetadataScope>, SamlError> {
-        if !self.imported.registration_authority_verified {
+        if !matches!(
+            self.imported.trust,
+            AppliedMetadataTrust::SignedByPinnedCertificates {
+                registration_authority: true,
+                ..
+            }
+        ) {
             return Err(SamlError::Invalid(
                 "scope authorization requires a trusted registration authority signature".into(),
             ));
@@ -604,6 +621,7 @@ impl SpDescriptor {
     /// Parse SP metadata for an expected entity ID and explicit trust policy.
     /// The expected ID must equal the document's `entityID` after XML Schema
     /// whitespace collapse.
+    /// Use [`MetadataAggregate`] to look up peers in a document with several entities.
     ///
     /// # Errors
     ///
@@ -650,10 +668,14 @@ impl SpDescriptor {
             trust,
             xml_policy.limits,
         )?;
-        Ok(Self {
+        Ok(Self::from_import(metadata, imported))
+    }
+
+    fn from_import(metadata: SpMetadata, imported: ImportedMetadata) -> Self {
+        Self {
             imported,
             provider: sp::Engine::from_parsed_metadata(metadata, EntitySetting::default()),
-        })
+        }
     }
 
     /// Metadata entity ID.

@@ -1,6 +1,6 @@
 # Metadata trust and replay
 
-Callers pass `MetadataTrustPolicy` to `IdpDescriptor::from_metadata_xml` and `SpDescriptor::from_metadata_xml`, and `ReplayPolicy` to `SamlValidationContext::new`. Neither is a field of `SpValidationPolicy` or `IdpValidationPolicy`. Their defaults are in [validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
+Callers pass `MetadataTrustPolicy` to `IdpDescriptor::from_metadata_xml`, `SpDescriptor::from_metadata_xml`, and `MetadataAggregate::from_xml`. Callers pass `ReplayPolicy` to `SamlValidationContext::new`. Neither is a field of `SpValidationPolicy` or `IdpValidationPolicy`. Their defaults are in [validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 Normative text is [SAML Metadata 2.0](https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf) and its [schema](https://docs.oasis-open.org/security/saml/v2.0/saml-schema-metadata-2.0.xsd), Profiles 2.0, and Core 2.0, as corrected by Approved Errata 05.
 Neighbouring records are [Web Browser SSO generation](web-browser-sso-generation.md), [Web Browser SSO acceptance](web-browser-sso-acceptance.md), and [XML security algorithms](xml-security-algorithms.md).
 
@@ -11,7 +11,7 @@ The caller passes `MetadataTrustPolicy` to the descriptor import. The import rea
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Count the members of a metadata group as its direct `md:EntityDescriptor` children and those of its direct `md:EntitiesDescriptor` groups. `Extensions` content adds none | Mandatory | Metadata §2.3.1, `EntitiesDescriptorType` | Always |
-| Import a document with exactly one entity | Library policy: the import returns a single entity. | Metadata §2.3.1 | Always |
+| Import a document with exactly one entity through the single-entity constructors | Library policy: those constructors require unambiguous input without searching an aggregate. | Metadata §2.3.1 | Use `MetadataAggregate` for several members |
 | Import metadata without a signature | Optional | Metadata §3 | `MetadataTrustPolicy::Unverified` |
 | Leave a signature that is present unverified, and report no signed metadata | Library policy: the caller selected `Unverified` after authenticating the document through another channel. | Metadata §4.3.3.2 | `MetadataTrustPolicy::Unverified` |
 | Have some means to establish trust in metadata before relying on it. The caller supplies it as `MetadataTrustPolicy` | Recommended | Metadata §4 | `MetadataTrustPolicy` |
@@ -24,6 +24,20 @@ The caller passes `MetadataTrustPolicy` to the descriptor import. The import rea
 | Reject a `ds:Object` in a metadata signature | Recommended | Metadata §3.1.5 (E91) | All `RequireSignature` variants. `Unverified` skips the check |
 | Reject an MD5 or RIPEMD-160 signature or digest algorithm and an RSA signing key under 2048 bits. See [weak algorithms and keys](xml-security-algorithms.md#weak-algorithms-and-keys) | Library policy: the certificates a verified document publishes are then trusted for its messages, so the trust root must not use weak algorithms. | Metadata §3.1.1 (E81) | `MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms` |
 | Reject a `ds:Object` in a message signature that authenticates the accepted message | Recommended | Core §5.4.5 (E91) | `XmlSignatureProfile::AllowWeakAlgorithms` |
+
+### Federation aggregate import
+
+`MetadataAggregate::from_xml` loads a caller-supplied document for IdP and SP
+lookups. It applies the same metadata signature policy and role selection as
+single-entity import. The single root signature authenticates the members and
+their enclosing groups, which can publish validity bounds and entity attributes.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Select a member of an `md:EntitiesDescriptor` by its whitespace-collapsed `entityID` before reading its SAML 2.0 roles | Optional | Metadata §2.3.1, §2.3.2 | `MetadataAggregate::idp_descriptor`, `MetadataAggregate::sp_descriptor` |
+| Refuse a lookup with no match or several members with the requested ID | Library policy: selecting a different member or one of several matches can bind the caller to the wrong keys and endpoints. | Metadata §2.2.1, §2.3.1 | Always |
+| Under a signature-requiring policy, require the signature to cover the aggregate root and reuse that verification for lookups | Library policy: a member signature cannot authenticate its enclosing groups or sibling members. | Metadata §3.1.2 | `MetadataTrustPolicy::Unverified` when the caller already trusts the entire document |
+| Require explicit XML resource limits when loading an aggregate | Library policy: feeds vary in size and callers choose their parsing budget. | — | `XmlLimits` |
 
 ## Reading peer metadata
 
