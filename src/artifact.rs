@@ -540,6 +540,13 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     let Some(entry) = issued.lookup(&artifact)? else {
         return success_without(ArtifactWithheld::NotOutstanding);
     };
+    let presenter_id = presenter.entity_id().as_str();
+    let issuer_matches = request.issuer.as_ref().is_some_and(|issuer| {
+        issuer.value == presenter_id && issuer_format_is_entity(issuer.format.as_deref())
+    });
+    if !issuer_matches || presenter_id != entry.service_provider().as_str() {
+        return success_without(ArtifactWithheld::DifferentPresenter);
+    }
     if entry.expires_at() <= issued.now()? {
         return success_without(ArtifactWithheld::NotOutstanding);
     }
@@ -555,13 +562,6 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     }
     if !channel_allows(channel, entry.required_channel()) {
         return success_without(ArtifactWithheld::InsufficientChannelProtection);
-    }
-    let presenter_id = presenter.entity_id().as_str();
-    let issuer_matches = request.issuer.as_ref().is_some_and(|issuer| {
-        issuer.value == presenter_id && issuer_format_is_entity(issuer.format.as_deref())
-    });
-    if !issuer_matches || presenter_id != entry.service_provider().as_str() {
-        return success_without(ArtifactWithheld::DifferentPresenter);
     }
     let response = answered(
         &prefixes,
