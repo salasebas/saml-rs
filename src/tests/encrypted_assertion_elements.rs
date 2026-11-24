@@ -912,55 +912,103 @@ fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
 
 const EC_CERT: &str = include_str!("../../tests/fixtures/key/prime256v1/cert.pem");
 const UNREADABLE_CERT: &str = "AAAA";
+const RSA_1024_CERT: &str = include_str!("../../tests/fixtures/key/rsa1024/cert.pem");
 
-fn with_encryption_certificate_first(metadata: &str, certificate: &str) -> Result<String, String> {
+fn with_encryption_key_first(metadata: &str, x509_data: &[&str]) -> Result<String, String> {
     let first_encryption_key = metadata
         .find("use=\"encryption\"")
         .and_then(|attribute| metadata[..attribute].rfind('<'))
         .ok_or("metadata publishes no encryption key")?;
+    let certificates: String = x509_data
+        .iter()
+        .map(|certificate| {
+            format!(
+                "<ds:X509Certificate>{}</ds:X509Certificate>",
+                normalize_cert_string(certificate)
+            )
+        })
+        .collect();
     let key_descriptor = format!(
-        "<KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><ds:X509Data><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>",
-        normalize_cert_string(certificate)
+        "<KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><ds:X509Data>{certificates}</ds:X509Data></ds:KeyInfo></KeyDescriptor>"
     );
     let mut metadata = metadata.to_string();
     metadata.insert_str(first_encryption_key, &key_descriptor);
     Ok(metadata)
 }
 
+fn exchange_with_encryption_key_first(
+    idp: &saml_rs::IdentityProvider,
+    x509_data: &[&str],
+) -> Result<SsoSession, Box<dyn std::error::Error>> {
+    let sp = sp(XmlEncryptionPolicy::default())?;
+    let (_, idp_descriptor) = descriptors(&sp, idp)?;
+    let metadata = with_encryption_key_first(sp.metadata_xml(), x509_data)?;
+    let published = SpMetadata::from_xml(&metadata)?;
+    let published = published
+        .as_metadata()
+        .x509_certificates(CertUse::Encryption);
+    assert_eq!(
+        published.get(..x509_data.len()),
+        Some(
+            &x509_data
+                .iter()
+                .map(|c| normalize_cert_string(c))
+                .collect::<Vec<_>>()[..]
+        )
+    );
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &metadata,
+        MetadataTrustPolicy::Unverified,
+    )?;
+    let exchange = exchange_between(&sp, &sp_descriptor, idp, &idp_descriptor)?;
+    assert!(
+        !exchange.xml.contains("alice-persistent-id")
+            || !exchange.xml.contains("alice@example.com")
+    );
+    let session = exchange.session?;
+    assert_eq!(session.name_id(), &alice());
+    assert_eq!(session.attributes(), &attributes());
+    Ok(session)
+}
+
 #[test]
 fn identity_provider_encrypts_for_a_later_certificate_its_key_transport_can_use(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let first_certificates = [EC_CERT, UNREADABLE_CERT];
-    for (encryption, first) in each_encrypted_element()
-        .into_iter()
-        .flat_map(|encryption| first_certificates.map(|first| (encryption, first)))
-    {
-        let sp = sp(XmlEncryptionPolicy::default())?;
-        let idp = idp(encryption)?;
-        let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-        let metadata = with_encryption_certificate_first(sp.metadata_xml(), first)?;
-        let sp_descriptor = SpDescriptor::from_metadata_xml(
-            EntityId::try_new(SP_ENTITY_ID)?,
-            &metadata,
-            MetadataTrustPolicy::Unverified,
-        )?;
-        assert_eq!(
-            SpMetadata::from_xml(&metadata)?
-                .as_metadata()
-                .x509_certificates(CertUse::Encryption)
-                .first(),
-            Some(&normalize_cert_string(first))
-        );
+    let first_keys: [&[&str]; 3] = [&[EC_CERT], &[UNREADABLE_CERT], &[EC_CERT, UNKNOWN_CERT]];
+    for encryption in each_encrypted_element() {
+        for x509_data in first_keys {
+            exchange_with_encryption_key_first(&idp(encryption)?, x509_data)?;
+        }
+    }
+    Ok(())
+}
 
-        let exchange = exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)?;
+#[test]
+fn identity_provider_skips_an_rsa_key_too_small_for_the_key_transport(
+) -> Result<(), Box<dyn std::error::Error>> {
+    use saml_rs::{
+        AlgorithmPolicy, DigestAlgorithm, KeyEncryptionAlgorithm, MaskGenerationFunction,
+    };
 
-        assert!(
-            !exchange.xml.contains("alice-persistent-id")
-                || !exchange.xml.contains("alice@example.com")
+    for encryption in each_encrypted_element() {
+        let idp = IdentityProvider::new(
+            IdpConfig::builder(
+                EntityId::try_new(IDP_ENTITY_ID)?,
+                SsoEndpoint::post(IDP_SSO_POST)?,
+            )
+            .credentials(credentials())
+            .xml(xml(encryption))
+            .algorithms(AlgorithmPolicy {
+                key_encryption: KeyEncryptionAlgorithm::RsaOaep {
+                    digest: DigestAlgorithm::Sha512,
+                    mgf: MaskGenerationFunction::Mgf1Sha512,
+                },
+                ..AlgorithmPolicy::default()
+            })
+            .build()?,
         );
-        let session = exchange.session?;
-        assert_eq!(session.name_id(), &alice());
-        assert_eq!(session.attributes(), &attributes());
+        exchange_with_encryption_key_first(&idp, &[RSA_1024_CERT])?;
     }
     Ok(())
 }

@@ -78,39 +78,36 @@ impl<'a> EncryptionRecipient<'a> {
         )
     }
 
-    /// The first published certificate whose key the key transport can wrap
-    /// the data key with.
+    /// The key of the first certificate that the data encryption algorithm
+    /// and the key transport can encrypt for.
     ///
-    /// Every key transport this crate writes is RSA, so a certificate with
-    /// another key type, or one that does not load, is skipped.
+    /// A certificate is skipped when it does not load, or when the crypto
+    /// provider cannot wrap a data key with its key, such as an EC key or an
+    /// RSA key too small for the key transport.
     pub(super) fn key(&self) -> Result<EncryptionKey<'a>, SamlError> {
-        let mut load_error = None;
-        let mut incompatible = false;
+        let mut first_error = None;
         for certificate in &self.certificates {
-            match load_certificate(certificate) {
-                Ok(key) if key.algorithm_name() == "RSA" => {
-                    return Ok(EncryptionKey {
-                        key,
-                        data_algorithm: self.data_algorithm,
-                        key_transport: self.key_transport,
-                    })
-                }
-                Ok(_) => incompatible = true,
+            let candidate = load_certificate(certificate).and_then(|key| {
+                let candidate = EncryptionKey {
+                    key,
+                    data_algorithm: self.data_algorithm,
+                    key_transport: self.key_transport,
+                };
+                encrypted_data_xml(KEY_CHECK_PLAINTEXT, &candidate).map(|_| candidate)
+            });
+            match candidate {
+                Ok(candidate) => return Ok(candidate),
                 Err(error) => {
-                    load_error.get_or_insert(error);
+                    first_error.get_or_insert(error);
                 }
             }
         }
-        match (load_error, incompatible) {
-            (Some(error), _) => Err(error),
-            (None, true) => Err(SamlError::crypto(format!(
-                "no published encryption certificate has an RSA key for key transport {}",
-                self.key_transport.uri
-            ))),
-            (None, false) => Err(SamlError::MissingMetadata("encryption certificate".into())),
-        }
+        Err(first_error
+            .unwrap_or_else(|| SamlError::MissingMetadata("encryption certificate".into())))
     }
 }
+
+const KEY_CHECK_PLAINTEXT: &[u8] = b"<key-check/>";
 
 /// A peer key with the algorithms that encrypt for it.
 pub(super) struct EncryptionKey<'a> {

@@ -480,9 +480,7 @@ impl Engine {
             };
 
         let recipient = EncryptionRecipient::from_setting(
-            sp.metadata
-                .as_metadata()
-                .x509_certificates(crate::constants::CertUse::Encryption),
+            sp.metadata.as_metadata().encryption_key_certificates(),
             &self.setting,
         );
         let element_encryption = self.setting.assertion_element_encryption;

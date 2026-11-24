@@ -49,6 +49,7 @@ pub(crate) fn as_object_list(value: &Value) -> Vec<&Value> {
 struct KeyCertificates {
     signing: Vec<String>,
     encryption: Vec<String>,
+    encryption_keys: Vec<String>,
 }
 
 impl KeyCertificates {
@@ -59,24 +60,35 @@ impl KeyCertificates {
             .flat_map(|descriptor| &descriptor.children)
             .filter(|child| child.local_name == "KeyDescriptor");
         for key_descriptor in key_descriptors {
-            let x509_certificates: Vec<String> = key_descriptor
+            let x509_data: Vec<&dom::Node> = key_descriptor
                 .children_named("KeyInfo")
                 .flat_map(|key_info| key_info.children_named("X509Data"))
+                .collect();
+            let x509_certificates: Vec<String> = x509_data
+                .iter()
                 .flat_map(|x509_data| x509_data.children_named("X509Certificate"))
                 .map(|certificate| certificate.text.clone())
                 .collect();
+            let entity_certificates = x509_data.iter().filter_map(|x509_data| {
+                x509_data
+                    .children_named("X509Certificate")
+                    .next()
+                    .map(|certificate| certificate.text.clone())
+            });
             match key_descriptor.attr("use") {
                 None => {
                     certificates
                         .signing
                         .extend(x509_certificates.iter().cloned());
                     certificates.encryption.extend(x509_certificates);
+                    certificates.encryption_keys.extend(entity_certificates);
                 }
                 Some(use_) if use_ == CertUse::Signing.as_str() => {
                     certificates.signing.extend(x509_certificates);
                 }
                 Some(use_) if use_ == CertUse::Encryption.as_str() => {
                     certificates.encryption.extend(x509_certificates);
+                    certificates.encryption_keys.extend(entity_certificates);
                 }
                 Some(_) => {}
             }
@@ -254,6 +266,12 @@ impl Metadata {
     /// for both signing and encryption.
     pub fn x509_certificates(&self, use_: CertUse) -> &[String] {
         self.key_certificates.for_use(use_)
+    }
+
+    /// The first certificate of each `X509Data` declared for encryption, in
+    /// document order: the entity certificate when `X509Data` carries a chain.
+    pub(crate) fn encryption_key_certificates(&self) -> &[String] {
+        &self.key_certificates.encryption_keys
     }
 
     /// First non-empty `SingleLogoutService` `Location` for `binding`.

@@ -121,7 +121,8 @@ unsigned request from an SP whose metadata declares `AuthnRequestsSigned`.
 | Encrypt the inclusive canonical form of the `NameID` or `Attribute` | Library policy: that form declares every namespace in scope. | Core §6.1 | Always |
 | Embed the `EncryptedKey` in the `ds:KeyInfo` of `EncryptedData`, as `EncryptedAssertion` does | Optional | Core §6.2, E43 | Always |
 | Encrypt the `NameID` or `Attribute` before the assertion or response is signed | Library policy: the signature then covers the ciphertext, and E43 and E93 replace the original Core §6.2 ordering rule. | Core §6.2, E43, E93 | Always |
-| Encrypt for the first service provider encryption certificate with an RSA key, skipping one with another key type or one that does not load | Library policy: E68 lets the encrypting party use any published key, and every key transport the crate writes needs an RSA key. | Metadata §2.4.1.1, E62, E68 | Always |
+| Encrypt for the first service provider encryption key the configured algorithms can use. Skip a key that does not load or that the crypto provider refuses, such as an EC key or an RSA key too small for the key transport | Library policy: E68 lets the encrypting party use any published key, and OpenSAML 5.2.0 also skips a credential without a usable key transport. | Metadata §2.4.1.1, E62, E68 | Always |
+| Take the first certificate of each `X509Data` as that key | Library policy: an `X509Data` can carry a chain in any order, and OpenSAML 5.2.0 falls back to its first certificate as the entity certificate. | XML Signature §4.4.4, Metadata §2.4.1.1 | Always |
 | Look up that certificate only when the response has an element to encrypt | Library policy: a response without such an element uses no encryption key. | Core §2.7.3.2, E68 | Always |
 
 ## Endpoint selection

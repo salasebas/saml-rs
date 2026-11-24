@@ -389,14 +389,18 @@ pub enum Rsa15KeyTransportPolicy {
 /// transport, and allows [`DEFAULT_MAX_DECRYPTION_WORK`](crate::constants::DEFAULT_MAX_DECRYPTION_WORK)
 /// units of decryption work. Start from it and assign the fields you change.
 ///
-/// An identity provider encrypts a response for the first certificate the
-/// service provider publishes for encryption that has an RSA key. It skips a
-/// certificate with another key type or one that does not load. It needs
-/// that certificate only when the response has an element to encrypt, so
-/// attribute encryption alone needs none for an assertion without
-/// attributes. Without a usable certificate it returns
+/// An identity provider encrypts a response for the first service provider
+/// encryption key that the configured data encryption and key transport
+/// algorithms can use. Each `X509Data` of a `KeyDescriptor` for encryption
+/// gives one key, from its first certificate. The identity provider skips a
+/// key that does not load or that the crypto provider cannot encrypt for,
+/// such as an EC key or an RSA key too small for the key transport. It needs
+/// a key only when the response has an element to encrypt, so attribute
+/// encryption alone needs none for an assertion without attributes. Without
+/// a usable key it returns
 /// [`SamlError::MissingMetadata`](crate::SamlError::MissingMetadata) when
-/// none is published, or [`SamlError::Crypto`](crate::SamlError::Crypto).
+/// none is published, or the [`SamlError::Crypto`](crate::SamlError::Crypto)
+/// error of the first key.
 ///
 /// # Examples
 ///

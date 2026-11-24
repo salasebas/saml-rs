@@ -5,7 +5,8 @@ If you run an identity provider, `IdentityProvider::respond_sso`,
 for an attribute that SAML Core does not allow in an assertion. Metadata
 generation returns the same error for such an entity attribute, from
 `SpConfigBuilder::build`, `IdpConfigBuilder::build`, `generate_sp_metadata`,
-and `generate_idp_metadata`. Before, these attributes were written.
+and `generate_idp_metadata`. Before, these attributes were written, except
+an empty `basic` name.
 
 An attribute is rejected in these cases:
 
@@ -15,6 +16,11 @@ An attribute is rejected in these cases:
 - Its `NameFormat` is `AttributeNameFormat::Uri` and its `Name` is not an
   absolute URI reference, such as `mail`, `given name`, or a URN with a
   leading space. The name is checked as written, without trimming.
+
+`Attribute::with_name_format` now stores `AttributeNameFormat::Custom` with
+the `uri`, `basic`, or `unspecified` URI and surrounding whitespace as that
+variant, and `Attribute::name_format` returns it. The `uri` and `basic` name
+rules then apply to it.
 
 An empty value is still written as an empty `AttributeValue`.
 
@@ -39,11 +45,17 @@ of `AttributeNameFormat::Uri`.
 ## Encryption certificate choice
 
 An identity provider that encrypts assertions, identifiers, or attributes
-now uses the first certificate in the service provider metadata that has an
-RSA key. Before, it used the first encryption certificate and failed with
-`SamlError::Crypto` when that certificate had another key type, such as an
-EC key, or did not load. A service provider that lists an EC key before its
-RSA key now receives responses encrypted for the RSA key.
+now uses the first encryption key in the service provider metadata that the
+configured algorithms can encrypt for. Each `X509Data` of a `KeyDescriptor`
+whose `use` is `encryption` or absent gives one key, from its first
+certificate. Before, the identity provider used the first such certificate
+and failed with `SamlError::Crypto` when it did not load or the crypto
+provider could not encrypt for it, such as an EC key or an RSA key too small
+for the key transport. Now it tries the next key. When no key works, it
+still returns the `SamlError::Crypto` error of the first key.
+
+A later certificate in the same `X509Data`, such as an issuer certificate,
+is never used.
 
 With attribute encryption alone, an assertion without attributes no longer
 needs an encryption certificate in the service provider metadata. Before,

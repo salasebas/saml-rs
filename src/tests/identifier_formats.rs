@@ -612,6 +612,11 @@ fn identity_provider_does_not_generate_a_blank_attribute_string_or_a_uri_name_th
                 .with_name_format(AttributeNameFormat::Uri),
         ),
         (
+            "relative Name under a padded uri NameFormat",
+            Attribute::new("mail", values(&["x"]))
+                .with_name_format(AttributeNameFormat::Custom(format!(" {URI}\n"))),
+        ),
+        (
             "uri Name with surrounding whitespace",
             Attribute::new(format!(" {MAIL_OID}"), values(&["x"]))
                 .with_name_format(AttributeNameFormat::Uri),

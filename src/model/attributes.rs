@@ -1,6 +1,8 @@
 use crate::constants::attribute_name_format;
 use crate::error::SamlError;
-use crate::xml::any_uri::{is_absolute_uri_reference, is_absolute_uri_reference_ascii};
+use crate::xml::any_uri::{
+    collapse_whitespace, is_absolute_uri_reference, is_absolute_uri_reference_ascii,
+};
 use crate::xml::dom::is_xml_whitespace_char;
 use crate::xml::name::is_name;
 
@@ -103,15 +105,22 @@ impl Attribute {
 
     /// Replace the `NameFormat`.
     ///
-    /// [`AttributeNameFormat::Custom`] with the URI of another variant is
-    /// stored as that variant. [`crate::SsoAssertion::attributes`] rejects an
+    /// [`AttributeNameFormat::Custom`] with the URI of another variant, after
+    /// XML Schema whitespace collapse, is stored as that variant. [`crate::SsoAssertion::attributes`] rejects an
     /// [`AttributeNameFormat::Basic`] attribute whose name is not an XML name,
     /// an [`AttributeNameFormat::Uri`] attribute whose name is not an absolute
     /// URI reference, and a `NameFormat` that is not an absolute URI
     /// reference.
     pub fn with_name_format(mut self, name_format: AttributeNameFormat) -> Self {
         self.name_format = Some(match name_format {
-            AttributeNameFormat::Custom(uri) => AttributeNameFormat::from_uri(&uri),
+            AttributeNameFormat::Custom(uri) => {
+                match AttributeNameFormat::from_uri(&collapse_whitespace(&uri)) {
+                    AttributeNameFormat::Custom(_) => AttributeNameFormat::Custom(uri),
+                    known @ (AttributeNameFormat::Unspecified
+                    | AttributeNameFormat::Uri
+                    | AttributeNameFormat::Basic) => known,
+                }
+            }
             AttributeNameFormat::Unspecified
             | AttributeNameFormat::Uri
             | AttributeNameFormat::Basic => name_format,
