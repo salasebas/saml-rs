@@ -31,34 +31,35 @@ use saml_rs::{
     XmlPolicy,
 };
 
-const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
-const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
+pub(super) const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
+pub(super) const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const SP_ACS: &str = "https://sp.example.com/acs";
-const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
+pub(super) const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const PERSISTENT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent";
 
 const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+pub(super) const CERT: &str =
+    include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const NEXT_PRIVKEY: &str =
     include_str!("../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
 const NEXT_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
-const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
+pub(super) const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
 
-fn signing_credentials() -> Credentials {
+pub(super) fn signing_credentials() -> Credentials {
     Credentials::default().with_signing_credential(X509Credential::new(
         CertificatePem::new(CERT),
         PrivateKeyPem::new(PRIVKEY),
     ))
 }
 
-fn credentials() -> Credentials {
+pub(super) fn credentials() -> Credentials {
     signing_credentials().with_decryption_credential(X509Credential::new(
         CertificatePem::new(CERT),
         PrivateKeyPem::new(PRIVKEY),
     ))
 }
 
-fn xml(encryption: XmlEncryptionPolicy) -> XmlPolicy {
+pub(super) fn xml(encryption: XmlEncryptionPolicy) -> XmlPolicy {
     XmlPolicy {
         encryption,
         ..XmlPolicy::default()
@@ -69,7 +70,7 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
-fn sp_validation() -> SpValidationPolicy {
+pub(super) fn sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
         assertion_signatures: AssertionSignaturePolicy::RequireSigned,
         audience: AudienceValidationPolicy::RequireRestriction,
@@ -84,7 +85,7 @@ fn sp_with(
     sp_with_credentials(encryption, validation, credentials())
 }
 
-fn sp_with_credentials(
+pub(super) fn sp_with_credentials(
     encryption: XmlEncryptionPolicy,
     validation: SpValidationPolicy,
     credentials: Credentials,
@@ -102,11 +103,11 @@ fn sp_with_credentials(
     ))
 }
 
-fn sp(encryption: XmlEncryptionPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
+pub(super) fn sp(encryption: XmlEncryptionPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
     sp_with(encryption, sp_validation())
 }
 
-fn idp(encryption: XmlEncryptionPolicy) -> Result<saml_rs::IdentityProvider, SamlError> {
+pub(super) fn idp(encryption: XmlEncryptionPolicy) -> Result<saml_rs::IdentityProvider, SamlError> {
     Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -119,7 +120,7 @@ fn idp(encryption: XmlEncryptionPolicy) -> Result<saml_rs::IdentityProvider, Sam
     ))
 }
 
-fn descriptors(
+pub(super) fn descriptors(
     sp: &saml_rs::ServiceProvider,
     idp: &saml_rs::IdentityProvider,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
@@ -137,11 +138,11 @@ fn descriptors(
     ))
 }
 
-fn alice() -> NameId {
+pub(super) fn alice() -> NameId {
     NameId::new("alice-persistent-id").with_format(NameIdFormat::Persistent)
 }
 
-fn attributes() -> Attributes {
+pub(super) fn attributes() -> Attributes {
     Attributes::new(vec![
         Attribute::new("mail", vec![AttributeValue::new("alice@example.com")])
             .with_name_format(AttributeNameFormat::Basic)
@@ -165,9 +166,9 @@ fn response_xml(outbound: &Outbound<SsoResponse>) -> Result<String, Box<dyn std:
     Ok(String::from_utf8(STANDARD.decode(encoded)?)?)
 }
 
-struct Exchange {
-    xml: String,
-    session: Result<SsoSession, SamlError>,
+pub(super) struct Exchange {
+    pub(super) xml: String,
+    pub(super) session: Result<SsoSession, SamlError>,
 }
 
 fn exchange(
@@ -180,7 +181,7 @@ fn exchange(
     exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)
 }
 
-fn exchange_between(
+pub(super) fn exchange_between(
     sp: &saml_rs::ServiceProvider,
     sp_descriptor: &SpDescriptor,
     idp: &saml_rs::IdentityProvider,
@@ -387,7 +388,7 @@ fn exchange_encrypted_for(
     exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)
 }
 
-fn each_encrypted_element() -> [XmlEncryptionPolicy; 3] {
+pub(super) fn each_encrypted_element() -> [XmlEncryptionPolicy; 3] {
     [
         XmlEncryptionPolicy {
             assertions: AssertionEncryptionPolicy::EncryptAssertions,
@@ -907,215 +908,5 @@ fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
         assert_eq!(session.name_id(), &alice());
         assert_eq!(session.attributes(), &attributes());
     }
-    Ok(())
-}
-
-const EC_CERT: &str = include_str!("../../tests/fixtures/key/prime256v1/cert.pem");
-const UNREADABLE_CERT: &str = "AAAA";
-const RSA_1024_CERT: &str = include_str!("../../tests/fixtures/key/rsa1024/cert.pem");
-
-/// A `KeyDescriptor` for encryption whose `KeyInfo` holds these `X509Data`
-/// elements, each with its certificates.
-type KeyInfo<'a> = &'a [&'a [&'a str]];
-
-fn with_encryption_keys_first(
-    metadata: &str,
-    key_descriptors: &[KeyInfo<'_>],
-) -> Result<String, String> {
-    let first_encryption_key = metadata
-        .find("use=\"encryption\"")
-        .and_then(|attribute| metadata[..attribute].rfind('<'))
-        .ok_or("metadata publishes no encryption key")?;
-    let key_descriptors: String = key_descriptors
-        .iter()
-        .map(|key_info| {
-            let x509_data: String = key_info
-                .iter()
-                .map(|certificates| {
-                    let certificates: String = certificates
-                        .iter()
-                        .map(|certificate| {
-                            format!(
-                                "<ds:X509Certificate>{}</ds:X509Certificate>",
-                                normalize_cert_string(certificate)
-                            )
-                        })
-                        .collect();
-                    format!("<ds:X509Data>{certificates}</ds:X509Data>")
-                })
-                .collect();
-            format!(
-                "<KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\">{x509_data}</ds:KeyInfo></KeyDescriptor>"
-            )
-        })
-        .collect();
-    let mut metadata = metadata.to_string();
-    metadata.insert_str(first_encryption_key, &key_descriptors);
-    Ok(metadata)
-}
-
-fn sp_descriptor_with_encryption_keys_first(
-    sp: &saml_rs::ServiceProvider,
-    key_descriptors: &[KeyInfo<'_>],
-) -> Result<SpDescriptor, Box<dyn std::error::Error>> {
-    let metadata = with_encryption_keys_first(sp.metadata_xml(), key_descriptors)?;
-    let inserted: Vec<String> = key_descriptors
-        .iter()
-        .flat_map(|key_info| key_info.iter())
-        .flat_map(|x509_data| x509_data.iter())
-        .map(|certificate| normalize_cert_string(certificate))
-        .collect();
-    let published = SpMetadata::from_xml(&metadata)?;
-    assert_eq!(
-        published
-            .as_metadata()
-            .x509_certificates(CertUse::Encryption)
-            .get(..inserted.len()),
-        Some(&inserted[..])
-    );
-    Ok(SpDescriptor::from_metadata_xml(
-        EntityId::try_new(SP_ENTITY_ID)?,
-        &metadata,
-        MetadataTrustPolicy::Unverified,
-    )?)
-}
-
-fn exchange_with_encryption_keys_first(
-    idp: &saml_rs::IdentityProvider,
-    key_descriptors: &[KeyInfo<'_>],
-) -> Result<SsoSession, Box<dyn std::error::Error>> {
-    let sp = sp(XmlEncryptionPolicy::default())?;
-    let (_, idp_descriptor) = descriptors(&sp, idp)?;
-    let sp_descriptor = sp_descriptor_with_encryption_keys_first(&sp, key_descriptors)?;
-    let exchange = exchange_between(&sp, &sp_descriptor, idp, &idp_descriptor)?;
-    assert!(
-        !exchange.xml.contains("alice-persistent-id")
-            || !exchange.xml.contains("alice@example.com")
-    );
-    let session = exchange.session?;
-    assert_eq!(session.name_id(), &alice());
-    assert_eq!(session.attributes(), &attributes());
-    Ok(session)
-}
-
-#[test]
-fn identity_provider_encrypts_for_a_later_certificate_its_key_transport_can_use(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let first_keys: [&[KeyInfo<'_>]; 5] = [
-        &[&[&[EC_CERT]]],
-        &[&[&[UNREADABLE_CERT]]],
-        &[&[&[EC_CERT, UNKNOWN_CERT]]],
-        &[&[&[EC_CERT]], &[&[UNKNOWN_CERT, CERT]]],
-        &[&[&[EC_CERT]], &[&[EC_CERT], &[UNKNOWN_CERT]]],
-    ];
-    for encryption in each_encrypted_element() {
-        for key_descriptors in first_keys {
-            exchange_with_encryption_keys_first(&idp(encryption)?, key_descriptors)?;
-        }
-    }
-    Ok(())
-}
-
-#[test]
-fn identity_provider_skips_an_rsa_key_too_small_for_the_key_transport(
-) -> Result<(), Box<dyn std::error::Error>> {
-    use saml_rs::{
-        AlgorithmPolicy, DigestAlgorithm, KeyEncryptionAlgorithm, MaskGenerationFunction,
-    };
-
-    for encryption in each_encrypted_element() {
-        let idp = IdentityProvider::new(
-            IdpConfig::builder(
-                EntityId::try_new(IDP_ENTITY_ID)?,
-                SsoEndpoint::post(IDP_SSO_POST)?,
-            )
-            .credentials(credentials())
-            .xml(xml(encryption))
-            .algorithms(AlgorithmPolicy {
-                key_encryption: KeyEncryptionAlgorithm::RsaOaep {
-                    digest: DigestAlgorithm::Sha512,
-                    mgf: MaskGenerationFunction::Mgf1Sha512,
-                },
-                ..AlgorithmPolicy::default()
-            })
-            .build()?,
-        );
-        exchange_with_encryption_keys_first(&idp, &[&[&[RSA_1024_CERT]]])?;
-    }
-    Ok(())
-}
-
-fn crypto_error(
-    encryption: XmlEncryptionPolicy,
-    metadata: &str,
-) -> Result<Option<String>, Box<dyn std::error::Error>> {
-    let sp_descriptor = SpDescriptor::from_metadata_xml(
-        EntityId::try_new(SP_ENTITY_ID)?,
-        metadata,
-        MetadataTrustPolicy::Unverified,
-    )?;
-    match idp(encryption)?.initiate_sso(
-        &sp_descriptor,
-        SsoAssertion::new(alice()).attributes(attributes()),
-        RespondSso::post(),
-    ) {
-        Err(error @ SamlError::Crypto { .. }) => {
-            Ok(std::error::Error::source(&error).map(ToString::to_string))
-        }
-        other => Err(format!("expected a Crypto error, got {other:?}").into()),
-    }
-}
-
-#[test]
-fn identity_provider_reports_the_first_key_error_when_no_key_is_usable(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let published = sp(XmlEncryptionPolicy::default())?
-        .metadata_xml()
-        .to_string();
-    let sp_cert = normalize_cert_string(CERT);
-    let ec_only = published.replace(&sp_cert, &normalize_cert_string(EC_CERT));
-    let unreadable_only = published.replace(&sp_cert, UNREADABLE_CERT);
-    let unreadable_then_ec = with_encryption_keys_first(&ec_only, &[&[&[UNREADABLE_CERT]]])?;
-    for encryption in each_encrypted_element() {
-        let first_error = crypto_error(encryption, &unreadable_only)?;
-        assert_ne!(first_error, crypto_error(encryption, &ec_only)?);
-        assert_eq!(crypto_error(encryption, &unreadable_then_ec)?, first_error);
-    }
-    Ok(())
-}
-
-#[test]
-fn attribute_encryption_needs_no_certificate_when_the_assertion_has_no_attributes(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let encryption = XmlEncryptionPolicy {
-        attributes: AttributeEncryptionPolicy::EncryptAttributes,
-        ..XmlEncryptionPolicy::default()
-    };
-    let sp = sp_with_credentials(
-        XmlEncryptionPolicy::default(),
-        sp_validation(),
-        signing_credentials(),
-    )?;
-    let idp = idp(encryption)?;
-    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-    assert!(SpMetadata::from_xml(sp.metadata_xml())?
-        .as_metadata()
-        .x509_certificates(CertUse::Encryption)
-        .is_empty());
-
-    idp.initiate_sso(
-        &sp_descriptor,
-        SsoAssertion::new(alice()),
-        RespondSso::post(),
-    )?;
-    let with_attributes = idp.initiate_sso(
-        &sp_descriptor,
-        SsoAssertion::new(alice()).attributes(attributes()),
-        RespondSso::post(),
-    );
-    assert!(
-        matches!(with_attributes, Err(SamlError::MissingMetadata(_))),
-        "{with_attributes:?}"
-    );
     Ok(())
 }

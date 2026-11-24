@@ -77,7 +77,7 @@ impl KeyCertificates {
                         .extend(x509_certificates.iter().cloned());
                     certificates.encryption.extend(x509_certificates);
                     #[cfg(crypto)]
-                    certificates.add_encryption_key(&x509_data);
+                    certificates.add_encryption_key(key_descriptor, &x509_data);
                 }
                 Some(use_) if use_ == CertUse::Signing.as_str() => {
                     certificates.signing.extend(x509_certificates);
@@ -85,7 +85,7 @@ impl KeyCertificates {
                 Some(use_) if use_ == CertUse::Encryption.as_str() => {
                     certificates.encryption.extend(x509_certificates);
                     #[cfg(crypto)]
-                    certificates.add_encryption_key(&x509_data);
+                    certificates.add_encryption_key(key_descriptor, &x509_data);
                 }
                 Some(_) => {}
             }
@@ -94,14 +94,14 @@ impl KeyCertificates {
     }
 
     #[cfg(crypto)]
-    fn add_encryption_key(&mut self, x509_data: &[&dom::Node]) {
-        let mut certificates = x509_data
+    fn add_encryption_key(&mut self, key_descriptor: &dom::Node, x509_data: &[&dom::Node]) {
+        let Some(first) = x509_data
             .iter()
-            .flat_map(|x509_data| x509_data.children_named("X509Certificate"));
-        let Some(first) = certificates.next() else {
+            .find_map(|x509_data| x509_data.child_named("X509Certificate"))
+        else {
             return;
         };
-        if self.encryption_keys.is_empty() || certificates.next().is_none() {
+        if self.encryption_keys.is_empty() || declares_only_one_certificate(key_descriptor) {
             self.encryption_keys.push(first.text.clone());
         }
     }
@@ -112,6 +112,35 @@ impl KeyCertificates {
             CertUse::Encryption => &self.encryption,
         }
     }
+}
+
+/// Whether the `KeyInfo` of `key_descriptor` names its key only by one
+/// `X509Certificate`, optionally with a `KeyName` and an `X509SubjectName`.
+#[cfg(crypto)]
+fn declares_only_one_certificate(key_descriptor: &dom::Node) -> bool {
+    let [key_info] = key_descriptor.children_named("KeyInfo").collect::<Vec<_>>()[..] else {
+        return false;
+    };
+    let mut x509_data = Vec::new();
+    for child in &key_info.children {
+        match child.local_name.as_str() {
+            "KeyName" => {}
+            "X509Data" => x509_data.push(child),
+            _ => return false,
+        }
+    }
+    let [x509_data] = x509_data[..] else {
+        return false;
+    };
+    let mut certificates = 0;
+    for child in &x509_data.children {
+        match child.local_name.as_str() {
+            "X509Certificate" => certificates += 1,
+            "X509SubjectName" => {}
+            _ => return false,
+        }
+    }
+    certificates == 1
 }
 
 #[derive(Clone, Copy)]
@@ -281,10 +310,10 @@ impl Metadata {
     /// At most one certificate for each `KeyDescriptor` declared for
     /// encryption, in document order.
     ///
-    /// The first such `KeyDescriptor` gives its first certificate. A later
-    /// one gives its certificate only when its `KeyInfo` holds exactly one,
-    /// so an issuer certificate of a chain is never chosen in place of a
-    /// later key.
+    /// The first such `KeyDescriptor` with a certificate gives its first
+    /// certificate. A later one gives its certificate only when its `KeyInfo`
+    /// names the key by that one certificate alone, so an issuer certificate
+    /// of a chain is never chosen in place of a later key.
     #[cfg(crypto)]
     pub(crate) fn encryption_key_certificates(&self) -> &[String] {
         &self.key_certificates.encryption_keys

@@ -391,10 +391,12 @@ pub enum Rsa15KeyTransportPolicy {
 ///
 /// An identity provider encrypts a response for the first service provider
 /// encryption key that the configured data encryption and key transport
-/// algorithms can use. The first `KeyDescriptor` for encryption gives the key
-/// of its first certificate, and each later one whose `KeyInfo` holds exactly
-/// one certificate gives another key. A later `KeyDescriptor` with several
-/// certificates, such as a chain, is skipped. The identity provider skips a
+/// algorithms can use. The first `KeyDescriptor` for encryption with a
+/// certificate gives the key of its first certificate. Each later one gives
+/// another key when its `KeyInfo` names the key only by one
+/// `X509Certificate`, with at most a `KeyName` and an `X509SubjectName`
+/// beside it. A later `KeyDescriptor` with a chain or another key
+/// declaration, such as `KeyValue`, is skipped. The identity provider skips a
 /// key that does not load or that the crypto provider cannot encrypt for,
 /// such as an EC key or an RSA key too small for the key transport. It needs
 /// a key only when the response has an element to encrypt, so attribute
