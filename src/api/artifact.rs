@@ -226,9 +226,10 @@ impl IdentityProvider {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::SoapChannelProtection`] before reading the
-    /// request when `channel` does not attest mutual authentication and
-    /// integrity protection.
+    /// Returns [`SamlError::TimeWindowInvalid`] when `presenter`'s metadata
+    /// has expired. Returns [`SamlError::SoapChannelProtection`] before
+    /// reading the request when `channel` does not attest mutual
+    /// authentication and integrity protection.
     /// Returns [`SamlError::RecipientEndpointNotPublished`] when `received_at`
     /// is not a published SOAP `ArtifactResolutionService` location. Returns
     /// [`SamlError::SoapEnvelope`] when `request_envelope` cannot be read as a

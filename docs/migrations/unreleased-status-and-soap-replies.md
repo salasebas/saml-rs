@@ -99,14 +99,16 @@ error is now the `source` of `SoapEnvelope`. The change applies to
 and `StartedNameIdManagement::finish`.
 
 If your SOAP handler matched those variants, match `SoapEnvelope` instead and
-send `SoapFault::new` with HTTP 500:
+send `SoapFault::new` with HTTP 500. For an error without a SAML response,
+use `SoapFaultCode::Client` only when you know the request must change, and
+`SoapFaultCode::Server` otherwise:
 
 ```rust
 match idp.answer_artifact_resolve(&sp, envelope, &received_at, &mut issued, channel) {
 	Ok(answer) => reply(200, answer.response().envelope()),
 	Err(SamlError::SoapChannelProtection) => reply(403, ""),
 	Err(SamlError::SoapEnvelope { fault, .. }) => reply(500, SoapFault::new(fault).envelope()),
-	Err(SamlError::ProtocolProfile(_) | SamlError::SignatureVerification { .. }) => {
+	Err(SamlError::SignatureVerification { .. }) => {
 		reply(500, SoapFault::new(SoapFaultCode::Client).envelope())
 	}
 	Err(_) => reply(500, SoapFault::new(SoapFaultCode::Server).envelope()),
