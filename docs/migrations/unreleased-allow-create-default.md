@@ -16,7 +16,8 @@ provider can refuse the first login of a principal with an
 The change affects a service provider that keeps the default policy and
 requests a format other than transient. No code fails to compile. The
 identity provider receives `true` and can create or link an identifier for
-the principal. Code that compares `SpValidationPolicy::default()` or
+the principal. Code that compares
+`SpValidationPolicy::default().name_id_creation` or
 `NameIdCreationPolicy::default()` with `DoNotAllowCreate` now sees
 `AllowCreate`.
 
