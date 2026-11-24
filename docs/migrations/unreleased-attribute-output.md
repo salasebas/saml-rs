@@ -27,7 +27,8 @@ rules then apply to it, and so do the `subject-id` and `pairwise-id` rules of
 
 To upgrade, leave the friendly name unset when you have no label, pass an
 empty value instead of one with only whitespace, and give a `uri` attribute
-its URI name:
+its URI name. A `subject-id` or `pairwise-id` value must still be
+`uniqueID@scope`, so it cannot be empty:
 
 ```rust
 use saml_rs::{Attribute, AttributeNameFormat, AttributeValue};

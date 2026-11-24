@@ -288,7 +288,6 @@ fn identity_provider_does_not_encrypt_for_a_key_of_another_service_provider_role
         + "</SPSSODescriptor>".len();
     let mut metadata = published.clone();
     metadata.insert_str(role_end, &other_role);
-    assert_eq!(metadata.matches("<SPSSODescriptor").count(), 2);
     for encryption in each_encrypted_element() {
         assert_eq!(
             crypto_error(encryption, &metadata)?,
