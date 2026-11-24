@@ -1,8 +1,3 @@
-//! Name identifier management over the SOAP binding.
-//!
-//! The identity provider sends `ManageNameIDRequest` to a service provider and
-//! reads its `ManageNameIDResponse`, or answers a service provider's request.
-
 use std::sync::Arc;
 
 use crate::config::{
@@ -274,7 +269,6 @@ impl StartedNameIdManagement {
     }
 }
 
-/// The identity provider's side of name identifier management.
 pub(crate) struct LocalIdentityProvider<'a> {
     pub(crate) entity_id: &'a str,
     pub(crate) metadata: &'a Metadata,
@@ -519,14 +513,11 @@ pub(crate) fn identifier_and_change(
     Ok((identifier, change))
 }
 
-/// An `EncryptedID` or `NewEncryptedID` that did not decrypt.
 pub(crate) struct Undecryptable {
     pub(crate) reason: NameIdManagementRefusal,
     pub(crate) error: SamlError,
 }
 
-/// The identifier and change of the request `xml`, with `EncryptedID` and
-/// `NewEncryptedID` decrypted by the receiver's decryption key.
 pub(crate) fn plaintext_content(
     xml: &str,
     identifier: Identifier,

@@ -68,7 +68,6 @@ pub(super) fn session_from_verified_flow(
     SsoSession::try_from_with_verified_xml_signatures(flow, verified_xml_signatures, relay_state)
 }
 
-/// Raw parse input for a typed SSO response.
 struct ResponseParseInput {
     binding: Binding,
     request: HttpRequest,
@@ -76,8 +75,6 @@ struct ResponseParseInput {
 }
 
 impl ResponseParseInput {
-    /// An artifact input is accepted only when `idp` returned the message
-    /// for the delivered artifact. Its XML is parsed as an HTTP-POST response.
     fn try_new(
         idp: &IdpDescriptor,
         input: Inbound<SsoResponse>,

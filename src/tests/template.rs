@@ -1,22 +1,16 @@
-//! XML templates and placeholder substitution for peer fixtures.
-
 use crate::binding::xml_escape;
 use crate::util::camel_case;
 
-/// Default `<AttributeStatement>` wrapper template.
 pub const ATTRIBUTE_STATEMENT_TEMPLATE: &str =
     "<saml:AttributeStatement>{Attributes}</saml:AttributeStatement>";
 
-/// Default `<Attribute>` template.
 pub const ATTRIBUTE_TEMPLATE: &str = "<saml:Attribute Name=\"{Name}\" NameFormat=\"{NameFormat}\"><saml:AttributeValue xmlns:xs=\"{ValueXmlnsXs}\" xmlns:xsi=\"{ValueXmlnsXsi}\" xsi:type=\"{ValueXsiType}\">{Value}</saml:AttributeValue></saml:Attribute>";
 
 const DEFAULT_XS: &str = "http://www.w3.org/2001/XMLSchema";
 const DEFAULT_XSI: &str = "http://www.w3.org/2001/XMLSchema-instance";
 
-/// Default login `<Response>` template.
 pub const LOGIN_RESPONSE_TEMPLATE: &str = "<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"{ID}\" Version=\"2.0\" IssueInstant=\"{IssueInstant}\" Destination=\"{Destination}\" InResponseTo=\"{InResponseTo}\"><saml:Issuer>{Issuer}</saml:Issuer><samlp:Status><samlp:StatusCode Value=\"{StatusCode}\"/></samlp:Status><saml:Assertion xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"{AssertionID}\" Version=\"2.0\" IssueInstant=\"{IssueInstant}\"><saml:Issuer>{Issuer}</saml:Issuer><saml:Subject><saml:NameID Format=\"{NameIDFormat}\">{NameID}</saml:NameID><saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"><saml:SubjectConfirmationData NotOnOrAfter=\"{SubjectConfirmationDataNotOnOrAfter}\" Recipient=\"{SubjectRecipient}\" InResponseTo=\"{InResponseTo}\"/></saml:SubjectConfirmation></saml:Subject><saml:Conditions NotBefore=\"{ConditionsNotBefore}\" NotOnOrAfter=\"{ConditionsNotOnOrAfter}\"><saml:AudienceRestriction><saml:Audience>{Audience}</saml:Audience></saml:AudienceRestriction></saml:Conditions>{AuthnStatement}{AttributeStatement}</saml:Assertion></samlp:Response>";
 
-/// Fill the fixture's `{key}` placeholders with XML-escaped values.
 pub(crate) fn fill_template(raw_xml: &str, tags: &[(&str, String)]) -> String {
     let mut result = String::with_capacity(raw_xml.len());
     let mut rest = raw_xml;
@@ -43,20 +37,13 @@ pub(crate) fn fill_template(raw_xml: &str, tags: &[(&str, String)]) -> String {
     result
 }
 
-/// A single `<Attribute>` to render in a login response.
 #[derive(Debug, Clone)]
 pub struct LoginResponseAttribute {
-    /// `Name` attribute.
     pub name: String,
-    /// `NameFormat` attribute.
     pub name_format: String,
-    /// `xsi:type` of the value.
     pub value_xsi_type: String,
-    /// Tag whose runtime value fills the `AttributeValue` (becomes `{attr<Tag>}`).
     pub value_tag: String,
-    /// Optional `xmlns:xs` override.
     pub value_xmlns_xs: Option<String>,
-    /// Optional `xmlns:xsi` override.
     pub value_xmlns_xsi: Option<String>,
 }
 

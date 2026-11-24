@@ -1,34 +1,15 @@
-//! XML field extraction over the local DOM.
-//!
-//! Operates directly on the [`super::dom`] tree, implementing the `local-name()`
-//! path subset used by the SAML field definitions: absolute element paths, `~`
-//! wildcard (substring match on local-name), attribute selection (0/1/N),
-//! whole-node context capture, and `index`+`attributePath` aggregation.
-
 use super::dom::{self, Node, XmlLimits};
 use crate::error::SamlError;
 use crate::util::{camel_case, zip_object, Value};
 
-/// A single extraction directive.
 #[derive(Debug, Clone)]
 pub struct ExtractorField {
-    /// Result key.
     pub key: String,
-    /// Element path.
     local_path: Vec<String>,
-    /// Attribute names to read (0 → text, 1 → value, N → camelCased object).
     pub attributes: Vec<String>,
-    /// Key attribute(s) for aggregation.
     pub index: Option<Vec<String>>,
-    /// Child element chain whose value is aggregated under the index key.
-    ///
-    /// Without an index, and with two or more attributes, each matched node's
-    /// object also lists the text of every node on this chain under the
-    /// camelCased name of its last element.
     pub attribute_path: Option<Vec<String>>,
-    /// Capture the whole matched node's source instead of its value.
     pub context: bool,
-    /// Parse this XML instead of the root document.
     pub shortcut: Option<String>,
 }
 
@@ -37,7 +18,6 @@ fn to_vec(items: &[&str]) -> Vec<String> {
 }
 
 impl ExtractorField {
-    /// New field with a single element path and no attributes.
     pub fn new(key: &str, path: &[&str]) -> Self {
         Self {
             key: key.to_string(),
@@ -50,36 +30,27 @@ impl ExtractorField {
         }
     }
 
-    /// Set the attributes to read.
     pub fn attrs(mut self, attributes: &[&str]) -> Self {
         self.attributes = to_vec(attributes);
         self
     }
 
-    /// Capture the whole node source.
     pub fn capture_source(mut self) -> Self {
         self.context = true;
         self
     }
 
-    /// Configure `index` + `attributePath` aggregation.
     pub fn aggregate(mut self, index: &[&str], attribute_path: &[&str]) -> Self {
         self.index = Some(to_vec(index));
         self.attribute_path = Some(to_vec(attribute_path));
         self
     }
 
-    /// List the text of each `path` descendant in every matched node's
-    /// attribute object, under the camelCased name of the last element.
-    ///
-    /// Applies when two or more attributes are read and no aggregation is
-    /// configured. The list is an array even with zero or one entry.
     pub fn child_texts(mut self, path: &[&str]) -> Self {
         self.attribute_path = Some(to_vec(path));
         self
     }
 
-    /// Parse `xml` instead of the root document for this field.
     pub fn source_xml(mut self, xml: &str) -> Self {
         self.shortcut = Some(xml.to_string());
         self
@@ -93,7 +64,6 @@ fn seg_matches(local: &str, seg: &str) -> bool {
     }
 }
 
-/// Apply an absolute path: the first segment matches the root element itself.
 fn select_path<'a>(root: &'a Node, path: &[String]) -> Vec<&'a Node> {
     let Some((first, rest)) = path.split_first() else {
         return Vec::new();
@@ -112,7 +82,6 @@ fn select_path<'a>(root: &'a Node, path: &[String]) -> Vec<&'a Node> {
     current
 }
 
-/// Descend through child element names (used for `attributePath`).
 fn descend<'a>(node: &'a Node, names: &[String]) -> Vec<&'a Node> {
     let mut current = vec![node];
     for name in names {
@@ -125,7 +94,6 @@ fn descend<'a>(node: &'a Node, names: &[String]) -> Vec<&'a Node> {
     current
 }
 
-/// Collapse a single-element vec to a scalar, otherwise to an array.
 fn one_or_array(mut values: Vec<Value>) -> Value {
     if values.len() == 1 {
         values.pop().unwrap_or(Value::Null)
@@ -223,20 +191,11 @@ fn extract_field(src: &str, root: &Node, field: &ExtractorField) -> Value {
     }
 }
 
-/// Extract `fields` from `xml`, returning a [`Value::Object`] keyed by field key.
-///
-/// `xml` and each shortcut may be one element cut out of a larger document,
-/// such as an extracted `context` value: a namespace prefix it uses may be
-/// declared on an ancestor outside it.
 #[cfg(test)]
 pub(crate) fn extract(xml: &str, fields: &[ExtractorField]) -> Result<Value, SamlError> {
     extract_with_limits(xml, fields, XmlLimits::default())
 }
 
-/// Extract `fields` from `xml` with explicit parser resource limits.
-///
-/// Each distinct shortcut string is parsed once. A shortcut equal to `xml`
-/// uses that already parsed root document.
 pub fn extract_with_limits(
     xml: &str,
     fields: &[ExtractorField],
@@ -348,7 +307,6 @@ mod tests {
             Some("https://sp.example.com/metadata")
         );
 
-        // context: existing node returns its source; missing node returns null
         let ctx = extract(
             RESPONSE,
             &[
@@ -392,7 +350,6 @@ mod tests {
 
     #[test]
     fn attribute_aggregation_and_wildcard() -> Result<(), Box<dyn std::error::Error>> {
-        // non-wildcard: SAML attributes keyed by Name with AttributeValue text
         let attrs = extract(
             RESPONSE,
             &[ExtractorField::new(
@@ -411,7 +368,6 @@ mod tests {
             Some(2)
         );
 
-        // wildcard ~SSODescriptor + certificate by `use`
         let cert = extract(
             SPMETA,
             &[ExtractorField::new(
@@ -423,7 +379,6 @@ mod tests {
         assert!(cert.get_str("certificate.signing").is_some());
         assert!(cert.get_str("certificate.encryption").is_some());
 
-        // index attr as key, another attr as value
         let sso = extract(
             SPMETA,
             &[ExtractorField::new(

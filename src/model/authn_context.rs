@@ -186,9 +186,6 @@ impl RequestedAuthnContext {
         &self.references
     }
 
-    /// Reject `achieved` when the comparison is exact and it is not one of
-    /// the requested references. The other comparisons are judged by the
-    /// caller.
     pub(crate) fn ensure_met_by(&self, achieved: &AuthnContextReference) -> Result<(), SamlError> {
         match self.comparison {
             AuthnContextComparison::Exact if !self.references.contains(achieved) => {

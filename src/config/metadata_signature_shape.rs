@@ -2,27 +2,12 @@ use crate::constants::transform_algorithm;
 use crate::error::SamlError;
 use crate::xml::dom::{self, Node, XmlLimits};
 
-/// Transform allowlist for a metadata import that requires a signature.
-///
-/// [`Self::Profile`] is enveloped signature and exclusive canonicalization.
-/// [`Self::AllowInclusiveCanonicalization`] also accepts inclusive canonicalization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MetadataSignatureTransforms {
-    /// Enveloped signature and exclusive canonicalization only.
     Profile,
-    /// Also accept inclusive canonicalization.
     AllowInclusiveCanonicalization,
 }
 
-/// Reject a signed metadata root whose shape `RequireSignature` does not import.
-///
-/// An unsigned root is left for the caller. A signed document must contain
-/// exactly one signature, and that signature must be a direct child of the root.
-///
-/// # Errors
-///
-/// Returns [`SamlError::SignedReferenceMismatch`] when a signature is present
-/// and does not have that shape.
 pub(super) fn ensure_import_signature_shape(
     xml: &str,
     transforms: MetadataSignatureTransforms,

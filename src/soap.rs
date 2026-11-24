@@ -1,7 +1,3 @@
-//! SOAP 1.1 envelope for one synchronous SAML request and response.
-//!
-//! The deployment sends the envelope. TLS and HTTP authentication stay there.
-
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::{Namespace, ResolveResult};
 use quick_xml::reader::{NsReader, Reader};
@@ -122,7 +118,6 @@ impl SoapChannel {
         self.confidentiality
     }
 
-    /// Mutual authentication with integrity protection.
     pub(crate) fn authenticates_peer(self) -> bool {
         self.authentication == PartyAuthentication::Mutual
             && self.integrity == MessageIntegrity::Protected
@@ -366,8 +361,6 @@ pub(crate) fn read_soap_status_response(
     Ok((body, response))
 }
 
-/// The `Body` of an envelope whose children are an optional `Header` and one
-/// `Body`.
 fn envelope_body(envelope: &Node) -> Result<&Node, SamlError> {
     match envelope.children.as_slice() {
         [body] if body.local_name == "Body" => Ok(body),

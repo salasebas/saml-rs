@@ -2,32 +2,26 @@
 /.lefthook-local.yml
 .DS_Store
 
-# Local scratch files and caches.
 .cache/
 .tmp/
 tmp/
 temp/
 
-# Environment secrets (never commit). Example templates stay tracked.
 .env
 .env.*
 !.env.example
 !**/.env.example
 
-# Local agent / editor tooling (not part of the project)
 .agents/
 .claude
 .cursor/
 .kiro/
 skills-lock.json
 
-# Local working parity notes (not committed)
 PARITY.md
 
-# Local advisor plans
 plans/
 
-# Doc site previews
 site/node_modules/
 site/dist/
 site/.astro/

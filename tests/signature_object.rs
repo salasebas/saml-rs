@@ -1,5 +1,3 @@
-//! A signature that authenticates a received message and contains a
-//! `ds:Object` is rejected under the Recommended XML signature profile.
 #![cfg(crypto)]
 
 use std::time::SystemTime;

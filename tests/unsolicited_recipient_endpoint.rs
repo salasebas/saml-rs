@@ -1,10 +1,3 @@
-//! `accept_unsolicited_sso` compares `Destination` and the bearer `Recipient`
-//! with the assertion consumer named by
-//! `SamlValidationContext::with_recipient_endpoint`.
-//!
-//! The service provider publishes two assertion consumers for each binding:
-//! `/acs/a`, its default, and `/acs/b`. The identity provider reads metadata
-//! that marks `/acs/b` default, so its unsolicited responses go there.
 #![cfg(crypto)]
 
 mod common;
@@ -33,7 +26,6 @@ const BINDINGS: [SsoResponseBinding; 3] = [
     SsoResponseBinding::Artifact,
 ];
 
-/// The binding of the consumer published at [`OTHER_BINDING`].
 fn other_binding(binding: SsoResponseBinding) -> Result<SsoResponseBinding, SamlError> {
     Ok(match binding {
         SsoResponseBinding::Post => SsoResponseBinding::SimpleSign,
@@ -46,8 +38,6 @@ fn other_binding(binding: SsoResponseBinding) -> Result<SsoResponseBinding, Saml
     })
 }
 
-/// A service provider with `/acs/a` and `/acs/b` for `binding`, the one at
-/// `default` marked default, and [`OTHER_BINDING`] for another binding.
 fn sp(binding: SsoResponseBinding, default: &str) -> Result<ServiceProvider, SamlError> {
     let acs = |index, location| -> Result<AcsEndpoint, SamlError> {
         let endpoint = AcsEndpoint::new(binding, EndpointUrl::try_new(location)?).with_index(index);
@@ -93,8 +83,6 @@ fn principal() -> NameId {
     NameId::new(USER)
 }
 
-/// The receiving service provider, whose default is `/acs/a`, accepts an
-/// unsolicited response the identity provider sent to `sent_to`.
 fn accept(
     binding: SsoResponseBinding,
     sent_to: &str,

@@ -698,8 +698,6 @@ fn issue_logout_request(
     };
     let name_id = subject.name_id();
     let name_id_format = name_id.format().map(NameIdFormat::as_uri);
-    // A session authority sends a subject without a format with the format
-    // its assertions carry for that subject.
     let name_id_format = match role {
         StartSloRole::SessionParticipant { .. } => name_id_format,
         StartSloRole::SessionAuthority { .. } => {
@@ -925,7 +923,6 @@ enum LogoutResponseTransport {
     SessionAuthority,
 }
 
-/// The `https` check covers the exchanges that pass through the user agent.
 fn enforce_participant_https(
     peer_metadata: &Metadata,
     binding: LogoutBinding,

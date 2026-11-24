@@ -1,7 +1,4 @@
-//! XML Signature Wrapping (XSW) attack-vector corpus. Each variant must never
-//! surface attacker-controlled content as cryptographically trusted.
 #![cfg(crypto)]
-#![allow(clippy::unwrap_used)]
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -23,10 +20,9 @@ const ATTACK: &str = include_str!("../../tests/fixtures/misc/attack_response_sig
 
 const FORGED: &str = "<saml:Assertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_forged\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\"><saml:Issuer>https://idp.example.com/metadata</saml:Issuer><saml:Subject><saml:NameID>attacker@evil.com</saml:NameID></saml:Subject></saml:Assertion>";
 
-/// Sign the assertion inside `response.xml` and return the signed Response.
-fn signed_response() -> String {
-    let key = read_private_key(PRIVKEY, None).unwrap();
-    sign_saml_xml(RESPONSE, false, &key, CERT, RSA_SHA256, &[], None).unwrap()
+fn signed_response() -> Result<String, SamlError> {
+    let key = read_private_key(PRIVKEY, None)?;
+    sign_saml_xml(RESPONSE, false, &key, CERT, RSA_SHA256, &[], None)
 }
 
 fn response_signed_over_top_level_issuer() -> Result<String, Box<dyn std::error::Error>> {
@@ -83,10 +79,9 @@ fn authn_request_signed_over_issuer() -> Result<String, Box<dyn std::error::Erro
     Ok(sign(&ctx, &template)?)
 }
 
-/// The legitimately signed Response must verify and yield the real assertion.
 #[test]
 fn xsw_baseline_signed_response_verifies() -> Result<(), Box<dyn std::error::Error>> {
-    let (verified, content) = verify_signature(&signed_response(), &[CERT.to_string()])?;
+    let (verified, content) = verify_signature(&signed_response()?, &[CERT.to_string()])?;
     assert!(verified);
     assert!(content.unwrap_or_default().contains("Assertion"));
     Ok(())
@@ -97,9 +92,7 @@ fn xsw_authn_request_reference_must_cover_consumed_root() -> Result<(), Box<dyn 
 {
     let signed = authn_request_signed_over_issuer()?;
     match verify_signature(&signed, &[CERT.to_string()]) {
-        Err(SamlError::SignedReferenceMismatch) => {
-            // Expected rejection.
-        }
+        Err(SamlError::SignedReferenceMismatch) => {}
         Ok((true, content)) => {
             return Err(format!(
                 "issuer-only signature must not verify AuthnRequest root: {content:?}"
@@ -145,8 +138,6 @@ fn xsw_reference_must_cover_returned_assertion() -> Result<(), Box<dyn std::erro
     }
 }
 
-/// A forged top-level element before the signed response is rejected as a
-/// malformed XML document before signature verification.
 #[test]
 fn xsw_multi_root_wrapping_rejected_before_signature_verification(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -157,10 +148,9 @@ fn xsw_multi_root_wrapping_rejected_before_signature_verification(
     }
 }
 
-/// A forged sibling assertion prepended before the signed one is never trusted.
 #[test]
 fn xsw_sibling_forged_assertion_not_trusted() -> Result<(), Box<dyn std::error::Error>> {
-    let signed = signed_response();
+    let signed = signed_response()?;
     let pos = signed.find("<saml:Assertion").ok_or("no assertion")?;
     let wrapped = format!("{}{}{}", &signed[..pos], FORGED, &signed[pos..]);
     match verify_signature(&wrapped, &[CERT.to_string()]) {
@@ -176,7 +166,7 @@ fn xsw_sibling_forged_assertion_not_trusted() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn xsw_duplicate_id_wrapping_rejected() -> Result<(), Box<dyn std::error::Error>> {
-    let signed = signed_response();
+    let signed = signed_response()?;
     let duplicate = FORGED.replace(
         "ID=\"_forged\"",
         "ID=\"_d71a3a8e9fcc45c9e9d248ef7049393fc8f04e5f75\"",
@@ -194,10 +184,9 @@ fn xsw_duplicate_id_wrapping_rejected() -> Result<(), Box<dyn std::error::Error>
     }
 }
 
-/// A forged sibling assertion appended after the signed one is never trusted.
 #[test]
 fn xsw_trailing_forged_assertion_not_trusted() -> Result<(), Box<dyn std::error::Error>> {
-    let signed = signed_response();
+    let signed = signed_response()?;
     let pos = signed
         .rfind("</samlp:Response>")
         .ok_or("no response close")?;
@@ -213,10 +202,9 @@ fn xsw_trailing_forged_assertion_not_trusted() -> Result<(), Box<dyn std::error:
     }
 }
 
-/// Tampering with signed content invalidates the signature.
 #[test]
 fn xsw_tampered_signed_content_rejected() -> Result<(), Box<dyn std::error::Error>> {
-    let signed = signed_response();
+    let signed = signed_response()?;
     let tampered = signed.replacen(
         "_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7",
         "_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d8",
@@ -226,7 +214,6 @@ fn xsw_tampered_signed_content_rejected() -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
-/// An XML comment inside a value must not truncate it (comment-splice resistance).
 #[test]
 fn xsw_comment_splice_reads_full_value() -> Result<(), Box<dyn std::error::Error>> {
     let xml = "<saml:Assertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"><saml:Subject><saml:NameID>user<!---->@victim.com</saml:NameID></saml:Subject></saml:Assertion>";
@@ -241,7 +228,6 @@ fn xsw_comment_splice_reads_full_value() -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-/// An unsigned response is never trusted.
 #[test]
 fn xsw_unsigned_response_not_trusted() -> Result<(), Box<dyn std::error::Error>> {
     let (verified, content) = verify_signature(RESPONSE, &[CERT.to_string()])?;

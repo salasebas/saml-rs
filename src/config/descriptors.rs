@@ -332,7 +332,6 @@ impl IdpMetadataConfig {
     }
 }
 
-/// What both peer descriptors keep from importing metadata.
 #[derive(Debug, Clone)]
 struct ImportedMetadata {
     entity_id: EntityId,
@@ -571,7 +570,6 @@ impl IdpDescriptor {
         self.imported.signed_metadata_xml()
     }
 
-    /// Parsed IdP metadata.
     pub(crate) fn metadata(&self) -> &IdpMetadata {
         &self.provider.metadata
     }
@@ -763,7 +761,6 @@ impl SpDescriptor {
         self.imported.signed_metadata_xml()
     }
 
-    /// Parsed SP metadata.
     pub(crate) fn metadata(&self) -> &SpMetadata {
         &self.provider.metadata
     }

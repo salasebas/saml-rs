@@ -94,13 +94,10 @@ enum Signing {
     Unsigned,
 }
 
-/// An `<EncryptedID>` that carries `<NameID>` for the identity provider's
-/// encryption certificate.
 fn encrypted_id(data_alg: &str) -> Result<String, Box<dyn std::error::Error>> {
     encrypted_id_for(CERT, data_alg)
 }
 
-/// An `<EncryptedID>` that carries `<NameID>` for `encryption_cert`.
 fn encrypted_id_for(
     encryption_cert: &str,
     data_alg: &str,
@@ -119,8 +116,6 @@ fn encrypted_id_for(
     ))
 }
 
-/// The requested identifier the identity provider reads from an
-/// SP-initiated HTTP-POST `<AuthnRequest>` that carries `subject`.
 fn received_identifier(
     subject: &str,
     signing: Signing,

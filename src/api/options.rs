@@ -286,7 +286,6 @@ impl<Delivery> RespondSso<Delivery> {
         self
     }
 
-    /// The same options with another delivery.
     pub(super) fn delivered<Other>(self, delivery: Other) -> RespondSso<Other> {
         RespondSso {
             binding: self.binding,
@@ -354,14 +353,10 @@ impl<Delivery> RespondSso<Delivery> {
     }
 }
 
-/// HTTPS recommendation for a message the user agent carries to a peer
-/// endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(super) enum PeerEndpointTransport {
-    /// Send the user agent to an `https` peer endpoint.
     #[default]
     RequireHttps,
-    /// Allow an `http` peer endpoint.
     AllowHttp,
 }
 

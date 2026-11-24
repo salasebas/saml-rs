@@ -1,4 +1,3 @@
-//! HTTP-POST-SimpleSign messages are decoded under the configured XML limits.
 #![cfg(crypto)]
 
 use super::common;
@@ -115,8 +114,6 @@ fn field<'a>(fields: &'a [FormField], name: &str) -> Option<&'a str> {
         .map(FormField::value)
 }
 
-/// Pads the message with whitespace before its closing root tag and signs
-/// the SimpleSign octet string again.
 fn padded(fields: &[FormField], message: &str, padding: usize) -> TestResult<Vec<FormField>> {
     let encoded = field(fields, message).ok_or("missing SimpleSign message field")?;
     let mut xml = String::from_utf8(STANDARD.decode(encoded)?)?;

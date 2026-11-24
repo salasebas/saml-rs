@@ -48,7 +48,6 @@ fn base_fields() -> Vec<ExtractorField> {
     ]
 }
 
-/// Normalise a "single object or array of objects" value into a node list.
 pub(crate) fn as_object_list(value: &Value) -> Vec<&Value> {
     match value {
         Value::Array(items) => items.iter().collect(),
@@ -57,8 +56,6 @@ pub(crate) fn as_object_list(value: &Value) -> Vec<&Value> {
     }
 }
 
-/// The range of `xml` that metadata fields are extracted from, and the
-/// `EntityDescriptor` it holds.
 fn entity_descriptor_xml<'n>(
     xml: &str,
     roots: &'n [dom::Node],
@@ -123,10 +120,6 @@ fn collect_entity_descriptors<'a>(
     }
 }
 
-/// X.509 certificates published by the `KeyDescriptor`s of the parsed SSO
-/// role descriptors, in document order.
-///
-/// A `KeyDescriptor` without `use` serves both signing and encryption.
 #[derive(Debug, Clone, Default)]
 struct KeyCertificates {
     signing: Vec<String>,
@@ -180,8 +173,6 @@ pub(crate) enum EndpointDirection {
     Response,
 }
 
-/// Non-empty locations for the binding and message direction, in document
-/// order, including repeats.
 fn published_locations(
     value: Option<&Value>,
     binding: Binding,
@@ -198,7 +189,6 @@ fn published_locations(
         })
 }
 
-/// Published locations for the binding and message direction, in document order.
 pub(crate) fn published_locations_for_binding(
     value: Option<&Value>,
     binding: Binding,
@@ -211,7 +201,6 @@ pub(crate) fn published_locations_for_binding(
         .collect()
 }
 
-/// First published location for the binding and message direction.
 pub(crate) fn first_published_location(
     value: Option<&Value>,
     binding: Binding,
@@ -413,8 +402,6 @@ impl Metadata {
         self.single_logout_service_location(binding, EndpointDirection::Response)
     }
 
-    /// First location published on `SingleLogoutService` for `binding` and
-    /// message direction.
     pub(crate) fn single_logout_service_location(
         &self,
         binding: Binding,
@@ -423,8 +410,6 @@ impl Metadata {
         first_published_location(self.meta.get("singleLogoutService"), binding, direction)
     }
 
-    /// Every location published on `SingleLogoutService` for `binding` and
-    /// message direction, in document order.
     pub(crate) fn single_logout_service_locations(
         &self,
         binding: Binding,
@@ -433,8 +418,6 @@ impl Metadata {
         published_locations_for_binding(self.meta.get("singleLogoutService"), binding, direction)
     }
 
-    /// Every location published on a `ManageNameIDService` of this role for
-    /// `binding` and message direction, in document order.
     pub(crate) fn manage_name_id_service_locations(
         &self,
         binding: Binding,

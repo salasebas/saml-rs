@@ -32,7 +32,6 @@ pub(super) struct LoginResponseXml<'a> {
     pub(super) conditions_not_before: &'a str,
     pub(super) conditions_not_on_or_after: &'a str,
     pub(super) audience: &'a str,
-    /// `<NameID>` `Format`. `None` omits the attribute.
     pub(super) name_id_format: Option<&'a str>,
     pub(super) name_id: &'a str,
     pub(super) name_id_qualifiers: OutboundNameIdQualifiers<'a>,
@@ -197,15 +196,6 @@ fn write_authn_statement(writer: &mut XmlWriter, prefix: &str, statement: &Authn
     writer.end(&name);
 }
 
-/// Write `attributes` as one `<AttributeStatement>`. No attributes writes
-/// nothing. A `subject-id` or `pairwise-id` value has no `xsi:type`.
-///
-/// # Errors
-///
-/// Returns [`SamlError::Invalid`] when a `NameFormat` is not an absolute URI
-/// reference, a basic attribute name is not an `xs:Name`, or a `subject-id`
-/// or `pairwise-id` attribute fails
-/// [`check_issued_subject_identifiers`].
 fn write_attribute_statement(
     writer: &mut XmlWriter,
     prefix: &str,

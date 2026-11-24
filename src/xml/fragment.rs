@@ -1,5 +1,3 @@
-//! Cut one element out of a document as standalone XML.
-
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::PrefixDeclaration;
 use quick_xml::Reader;
@@ -8,9 +6,7 @@ use crate::error::{xml_err, SamlError};
 use crate::xml::utf8_bom_len;
 
 struct Declaration {
-    /// Declared prefix. Empty for the default namespace.
     prefix: String,
-    /// Namespace URI as written in the document, safe inside double quotes.
     value: String,
 }
 
@@ -54,8 +50,6 @@ pub(crate) fn standalone_element(xml: &str, start: usize, end: usize) -> Result<
     Ok(standalone)
 }
 
-/// Ancestor declarations in scope at the element starting at `start` that
-/// the element does not declare itself, outermost first.
 fn inherited_declarations(xml: &str, start: usize) -> Result<Vec<Declaration>, SamlError> {
     let mut reader = Reader::from_str(xml);
     let bom_len = utf8_bom_len(xml);
@@ -106,8 +100,6 @@ fn declarations(element: &BytesStart<'_>) -> Result<Vec<Declaration>, SamlError>
     Ok(declared)
 }
 
-/// The innermost declaration of each prefix in `ancestors` that `own` does
-/// not redeclare, without undeclarations.
 fn in_scope(ancestors: Vec<Vec<Declaration>>, own: &[Declaration]) -> Vec<Declaration> {
     let mut scope: Vec<Declaration> = Vec::new();
     for declaration in ancestors.into_iter().flatten() {

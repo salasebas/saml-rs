@@ -1,5 +1,3 @@
-//! SAML Identity Provider entity.
-
 use crate::constants::{Binding, ParserType};
 use crate::entity::{
     capture_idp_issuance_window, format_idp_issuance_instant, format_saml_utc_date_time,
@@ -27,13 +25,9 @@ use login_response::{
 };
 use std::time::SystemTime;
 
-/// Optional inputs for a login `<Response>` the identity provider builds.
 #[derive(Default)]
 pub struct LoginResponseOptions<'a> {
-    /// `InResponseTo` — the SP request id being answered. `None` or an empty
-    /// value omits the attribute.
     pub in_response_to: Option<&'a str>,
-    /// RelayState to echo back to the SP.
     pub relay_state: Option<&'a str>,
 }
 
@@ -56,19 +50,13 @@ pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) transformation_algorithms: Option<&'a [String]>,
 }
 
-/// When an identity provider signs a login `<Response>` it sends over
-/// HTTP-POST.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ResponseMessageSignature {
-    /// Sign the `<Response>`.
     Always,
-    /// Sign the `<Response>` when the service provider does not want its
-    /// assertions signed.
     UnlessAssertionsSigned,
 }
 
 impl ResponseMessageSignature {
-    /// The signature that the `want_message_signed` setting of `sp` asks for.
     pub(crate) fn requested_by(sp: &sp::Engine) -> Self {
         if sp.setting.want_message_signed {
             Self::Always
@@ -105,23 +93,13 @@ struct LoginResponseRendering<'a> {
     requested_subject: Option<&'a RequestedSubject>,
 }
 
-/// A SAML 2.0 Identity Provider: runtime [`EntitySetting`] plus parsed [`IdpMetadata`].
 #[derive(Debug, Clone)]
 pub struct Engine {
-    /// Runtime configuration (keys, algorithms, flags).
     pub setting: EntitySetting,
-    /// Parsed IdP metadata.
     pub metadata: IdpMetadata,
 }
 
 impl Engine {
-    /// Build from IdP metadata XML.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when `xml` is malformed, exceeds XML limits, or cannot
-    /// be parsed as IdP metadata. Metadata parser errors include invalid entity,
-    /// SSO endpoint, certificate, or signing flag declarations.
     pub fn from_metadata(xml: &str, setting: EntitySetting) -> Result<Self, SamlError> {
         Ok(Self::from_parsed_metadata(
             IdpMetadata::from_xml(xml)?,
@@ -143,16 +121,6 @@ impl Engine {
         Self { setting, metadata }
     }
 
-    /// Build by generating IdP metadata from `config`, then importing it.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `config` cannot produce valid IdP metadata, such as
-    /// when `config.entity_id` is not an absolute URI reference of at most 1024
-    /// characters with collapsed whitespace, required IdP SSO metadata is
-    /// missing, or a configured
-    /// `<NameIDFormat>` is not an absolute URI reference, or if the generated metadata
-    /// cannot be parsed back into IdP metadata.
     pub fn from_config(
         config: &IdpMetadataInput,
         setting: EntitySetting,
@@ -161,7 +129,6 @@ impl Engine {
         Self::from_metadata(&metadata_xml, setting)
     }
 
-    /// The IdP metadata XML.
     pub fn metadata_xml(&self) -> &str {
         self.metadata.as_metadata().metadata_xml()
     }
@@ -174,13 +141,6 @@ impl Engine {
             .unwrap_or_default()
     }
 
-    /// Render the login `<Response>` XML for `sp`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when configured XML tag prefixes are invalid, a
-    /// persistent or transient `NameID` is longer than 256 characters, or the
-    /// response cannot represent the supplied authentication or assertion data.
     fn render_login_response(
         &self,
         sp: &sp::Engine,
@@ -413,7 +373,6 @@ impl Engine {
         })
     }
 
-    /// Wrap the finalized response XML into the per-binding transport context.
     #[cfg(crypto)]
     pub(crate) fn bind_response(
         &self,
@@ -457,8 +416,6 @@ impl Engine {
         ))
     }
 
-    /// The error `<Response>` `raw`, which carries no assertion, signed when
-    /// it is sent over HTTP-POST.
     #[cfg(crypto)]
     fn finalize_error_response(
         &self,
@@ -512,15 +469,12 @@ impl Engine {
 
         let mut xml = raw.to_string();
         let want_assertions_signed = sp.metadata.want_assertions_signed();
-        // POST embeds an XML-DSig message signature; redirect/SimpleSign use a
-        // detached query signature added later in `bind_response`.
         let sign_message = binding == Binding::Post
             && match response_signature {
                 ResponseMessageSignature::Always => true,
                 ResponseMessageSignature::UnlessAssertionsSigned => !want_assertions_signed,
             };
 
-        // step: encrypt identifiers and attributes -> sign assertion -> (encrypt) -> sign message
         let element_encryption = self.setting.assertion_element_encryption;
         if element_encryption.is_selected() {
             xml = encrypt_assertion_elements(
@@ -534,18 +488,6 @@ impl Engine {
         if want_assertions_signed {
             xml = credential.sign_xml(&xml, false, sig_alg, transforms, None)?;
         }
-        // Sign-then-encrypt of a sub-element would invalidate an outer message
-        // signature, so when encrypting we always sign the message *after*
-        // encryption (sound encrypt-then-sign). Without encryption, sign here.
-        if sign_message && !self.setting.is_assertion_encrypted {
-            xml = credential.sign_xml(
-                &xml,
-                true,
-                sig_alg,
-                transforms,
-                self.setting.signature_config.as_ref(),
-            )?;
-        }
         if self.setting.is_assertion_encrypted {
             xml = encrypt_assertion_with_key_transport(
                 &xml,
@@ -555,7 +497,7 @@ impl Engine {
                 &self.setting.tag_prefix_assertion,
             )?;
         }
-        if sign_message && self.setting.is_assertion_encrypted {
+        if sign_message {
             xml = credential.sign_xml(
                 &xml,
                 true,
@@ -780,7 +722,6 @@ mod crypto_tests {
     use crate::sp::LoginRequestOptions;
     use crate::tests::engine::{IdpMessages, SpMessages};
 
-    // A working RSA keypair (used as both IdP and SP signing material in tests).
     const PRIVKEY: &str = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
     const CERT: &str = include_str!("../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 

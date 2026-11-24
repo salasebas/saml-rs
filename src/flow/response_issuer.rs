@@ -1,5 +1,3 @@
-//! Issuers in a login response, for peer lookup and validation.
-
 use crate::config::validate_entity_id_syntax;
 use crate::constants::namespace;
 use crate::error::{IdpResolutionReason, SamlError};

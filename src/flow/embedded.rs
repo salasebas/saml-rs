@@ -1,6 +1,3 @@
-//! Embedded XML signatures of a received message, and the order in which the
-//! assertions it carries encrypted are decrypted and verified.
-
 use super::{
     AssertionSignatureRequirement, FlowOptions, MessageAuthentication, PreparedMessage,
     ResponseSignatureRequirement, VerifiedXmlSignatureEvidence,
@@ -63,8 +60,6 @@ pub(super) fn verify_present_signatures(
     Ok(xml_signature_evidence(&signatures))
 }
 
-/// Verify every decrypted assertion's signatures and add evidence for the
-/// assertion the session consumes.
 fn verify_decrypted_assertions(
     assertions: &[String],
     consumed_assertion: Option<&str>,
@@ -175,8 +170,6 @@ pub(super) fn prepare_after_detached_signature(
     })
 }
 
-/// Verify and optionally decrypt the message, returning the authenticated
-/// `(saml_content, assertion)`.
 pub(super) fn verify_and_prepare(
     xml: String,
     root: &Node,

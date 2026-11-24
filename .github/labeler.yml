@@ -1,5 +1,3 @@
-# Path-based PR labels for actions/labeler.
-
 area:core:
   - changed-files:
       - any-glob-to-any-file:

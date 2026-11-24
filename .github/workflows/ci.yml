@@ -102,7 +102,6 @@ jobs:
         if: matrix.provider == 'fips'
         with:
           go-version: stable
-      # Keep the workspace's existing immutable v2 cache pin.
       - uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # zizmor: ignore[ref-version-mismatch]
       - uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
         with:
@@ -156,19 +155,13 @@ jobs:
       - uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2
         with:
           package: saml-rs
-          # Provider features are mutually exclusive. The default feature set
-          # exposes the provider-neutral public API used for semver checks.
           feature-group: default-features
-          # saml-rs is still pre-1.0; intentional breaking API changes are
-          # released as 0.x minor bumps. release-plz decides the actual bump
-          # from Conventional Commits.
           release-type: major
 
   test:
     name: Test ${{ matrix.package }}
     runs-on: ubuntu-latest
     strategy:
-      # Abort the whole matrix as soon as one package fails.
       fail-fast: true
       matrix:
         package:
@@ -195,7 +188,6 @@ jobs:
     name: Compatibility ${{ matrix.package }}
     runs-on: ubuntu-latest
     strategy:
-      # Abort the whole matrix as soon as one package fails.
       fail-fast: true
       matrix:
         package:

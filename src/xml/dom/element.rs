@@ -13,21 +13,14 @@ use crate::xml::name::is_ncname;
 const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
 pub(super) const XMLNS_NAMESPACE: &str = "http://www.w3.org/2000/xmlns/";
 
-/// A parsed XML element.
 #[derive(Debug, Clone)]
 pub(crate) struct Element<N, A> {
     pub(crate) namespace: N,
-    /// Local element name (namespace prefix stripped).
     pub(crate) local_name: String,
-    /// Parsed attributes in document order.
     pub(crate) attrs: Vec<A>,
-    /// Child elements in document order.
     pub(crate) children: Vec<Self>,
-    /// Concatenated direct text content (unescaped).
     pub(crate) text: String,
-    /// Byte offset of the element's opening `<` in the source.
     pub(crate) start: usize,
-    /// Byte offset just past the element's closing `>` in the source.
     pub(crate) end: usize,
 }
 
@@ -35,19 +28,16 @@ pub(crate) type Node = Element<(), (String, String)>;
 pub(crate) type QualifiedElement = Element<String, (Option<String>, String, String)>;
 
 impl Node {
-    /// Direct children matching a local name, in document order.
     pub(crate) fn children_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Self> {
         self.children
             .iter()
             .filter(move |child| child.local_name == name)
     }
 
-    /// First direct child matching a local name.
     pub(crate) fn child_named(&self, name: &str) -> Option<&Self> {
         self.children.iter().find(|child| child.local_name == name)
     }
 
-    /// Look up an attribute by local name.
     pub fn attr(&self, name: &str) -> Option<&str> {
         self.attrs
             .iter()

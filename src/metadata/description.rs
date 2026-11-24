@@ -1,5 +1,3 @@
-//! Entity-level organization and contact metadata.
-
 use crate::error::SamlError;
 use crate::xml::any_uri::is_absolute_uri_reference;
 use crate::xml::is_xml_char;

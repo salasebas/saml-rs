@@ -170,8 +170,6 @@ struct Exchange {
     session: Result<SsoSession, SamlError>,
 }
 
-/// SP-initiated SSO over HTTP-POST between an identity provider and a service
-/// provider that each use their own encryption policy.
 fn exchange(
     idp_encryption: XmlEncryptionPolicy,
     sp_encryption: XmlEncryptionPolicy,
@@ -182,8 +180,6 @@ fn exchange(
     exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)
 }
 
-/// SP-initiated SSO over HTTP-POST, in which `idp` reads `sp` from
-/// `sp_descriptor`.
 fn exchange_between(
     sp: &saml_rs::ServiceProvider,
     sp_descriptor: &SpDescriptor,
@@ -359,8 +355,6 @@ fn next_decryption_key() -> X509Credential {
     )
 }
 
-/// Service provider metadata whose encryption certificate is
-/// `encryption_cert`, which may name a key that no service provider holds.
 fn metadata_publishing(encryption_cert: &str) -> Result<String, SamlError> {
     let published = sp_with_credentials(
         XmlEncryptionPolicy::default(),
@@ -373,8 +367,6 @@ fn metadata_publishing(encryption_cert: &str) -> Result<String, SamlError> {
     ))
 }
 
-/// SSO in which the identity provider encrypts for `encryption_cert` and the
-/// service provider decrypts with `sp_credentials`.
 fn exchange_encrypted_for(
     encryption: XmlEncryptionPolicy,
     encryption_cert: &str,
@@ -779,7 +771,6 @@ fn service_provider_builder_requires_a_decryption_key_for_encrypted_elements(
     Ok(())
 }
 
-/// An unsigned `<Assertion>` whose `<EncryptedID>` no signature covers.
 const UNSIGNED_SIBLING: &str = concat!(
     "<saml:Assertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ",
     "ID=\"_unsigned_sibling\" Version=\"2.0\" IssueInstant=\"2026-01-01T00:00:00Z\">",
@@ -850,7 +841,6 @@ fn encrypted_id_outside_the_signed_assertion_is_not_decrypted(
 const ASSERTION_NS_DECLARATION: &str = " xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"";
 const XENC_NS_DECLARATION: &str = " xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\"";
 
-/// Remove the `occurrence`th (0-based) copy of `declaration` from `xml`.
 fn without_declaration(
     xml: &str,
     declaration: &str,
@@ -867,8 +857,6 @@ fn without_declaration(
     ))
 }
 
-/// Exclusive canonicalization renders a namespace where it is used, so moving
-/// a declaration to an ancestor keeps every signature valid.
 #[test]
 fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -890,9 +878,7 @@ fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
     )?;
     let xml = response_xml(&response)?;
 
-    // The assertion prefix is declared on the Response alone.
     let saml_on_response = without_declaration(&xml, ASSERTION_NS_DECLARATION, 1)?;
-    // The XML-Enc prefix is declared on the Response alone.
     let mut xenc_on_response = xml.clone();
     while xenc_on_response.contains(XENC_NS_DECLARATION) {
         xenc_on_response = without_declaration(&xenc_on_response, XENC_NS_DECLARATION, 0)?;

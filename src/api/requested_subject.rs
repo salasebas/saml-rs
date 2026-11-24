@@ -1,5 +1,3 @@
-//! `<EncryptedID>` in the requested `<Subject>` of a received `<AuthnRequest>`.
-
 use crate::entity::EntitySetting;
 use crate::flow::{FlowResult, MessageAuthentication};
 

@@ -17,11 +17,8 @@ use super::response_acs::resolve_response_acs;
 use super::sso_outcome::OutcomeParts;
 use super::{RespondSso, SamlError, SsoOutcome};
 
-/// Where an issued response goes.
 pub(super) enum ResponseTransport<'a> {
-    /// The browser action carries the response.
     Browser,
-    /// The response is stored, and the browser action carries its artifact.
     Artifact(ArtifactDelivery, &'a mut dyn ArtifactStore),
 }
 
@@ -293,7 +290,6 @@ impl IdentityProvider {
     /// #         let _ = form;
     ///     }
     ///     Ok(request) => {
-    ///         // Continue with user authentication.
     /// #         let _ = request;
     ///     }
     ///     Err(error) => return Err(error),

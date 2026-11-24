@@ -16,7 +16,6 @@ const base = isNext ? nextBase : '/';
 const docsDir = new URL(isNext ? './src/content/docs/' : './versions/stable/docs/', import.meta.url);
 const recordsDir = new URL(isNext ? '../docs/conformance/' : './versions/stable/conformance/', import.meta.url);
 
-/** Registers the link rewriter on Astro's default Markdown processor. */
 function docLinks() {
 	return {
 		name: 'saml-doc-links',
@@ -28,7 +27,6 @@ function docLinks() {
 	};
 }
 
-// https://astro.build/config
 export default defineConfig({
 	site,
 	base,

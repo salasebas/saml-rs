@@ -1,28 +1,15 @@
-//! The [`Value`] field tree that the XML extractor returns.
-
 use std::collections::HashMap;
 
-/// A dynamically-typed value tree produced by the XML extractor.
-///
-/// Dotted-path [`Value::get`] lookups support extracted SAML field trees such
-/// as `request.id`.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Value {
-    /// Absent value.
     #[default]
     Null,
-    /// Text value.
     Str(String),
-    /// Ordered list of values.
     Array(Vec<Value>),
-    /// Ordered key/value map (insertion order preserved).
     Object(Vec<(String, Value)>),
 }
 
 impl Value {
-    /// Walk a dotted `path` through nested objects.
-    ///
-    /// Returns `None` when any segment is missing or a non-object is traversed.
     pub fn get(&self, path: &str) -> Option<&Value> {
         let mut current = self;
         for segment in path.split('.') {
@@ -34,14 +21,10 @@ impl Value {
         Some(current)
     }
 
-    /// Convenience: dotted-path lookup returning the string at that path.
     pub fn get_str(&self, path: &str) -> Option<&str> {
         self.get(path).and_then(Value::as_str)
     }
 
-    /// Look up a single key verbatim (no dotted-path splitting).
-    ///
-    /// Use this for maps whose keys may contain `.` (e.g. binding URNs).
     #[cfg(test)]
     pub(crate) fn get_key(&self, key: &str) -> Option<&Value> {
         match self {
@@ -50,7 +33,6 @@ impl Value {
         }
     }
 
-    /// Borrow the inner string, if this is a [`Value::Str`].
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Value::Str(s) => Some(s),
@@ -58,7 +40,6 @@ impl Value {
         }
     }
 
-    /// Borrow the inner slice, if this is a [`Value::Array`].
     #[cfg(test)]
     pub(crate) fn as_array(&self) -> Option<&[Value]> {
         match self {
@@ -67,13 +48,11 @@ impl Value {
         }
     }
 
-    /// True when this value is [`Value::Null`].
     #[cfg(test)]
     pub(crate) fn is_null(&self) -> bool {
         matches!(self, Value::Null)
     }
 
-    /// Insert or replace `key` in an object value (no-op on non-objects).
     pub fn insert(&mut self, key: &str, value: Value) {
         if let Value::Object(entries) = self {
             if let Some(slot) = entries.iter_mut().find(|(k, _)| k == key) {
@@ -85,15 +64,12 @@ impl Value {
     }
 }
 
-/// Strip a certificate PEM down to its bare base64 body.
 pub(crate) fn normalize_cert_string(cert: &str) -> String {
     cert.replace("-----BEGIN CERTIFICATE-----", "")
         .replace("-----END CERTIFICATE-----", "")
         .replace(['\n', '\r', ' ', '\t'], "")
 }
 
-/// camelCase an identifier, matching the npm `camelcase` defaults for the
-/// PascalCase SAML attribute names used across the field-sets and templates.
 pub(crate) fn camel_case(input: &str) -> String {
     let chars: Vec<char> = input.chars().collect();
     let mut words: Vec<String> = Vec::new();
@@ -139,10 +115,6 @@ pub(crate) fn camel_case(input: &str) -> String {
     out
 }
 
-/// Build an object from parallel key/value lists.
-///
-/// When `skip_duplicated` is true the last value for a key wins; otherwise
-/// duplicate keys are aggregated into a [`Value::Array`].
 pub(crate) fn zip_object(keys: &[String], values: Vec<Value>, skip_duplicated: bool) -> Value {
     let mut out: Vec<(String, Value)> = Vec::new();
     let mut positions: HashMap<&str, usize> = HashMap::new();
@@ -186,7 +158,6 @@ mod tests {
         )]);
         assert_eq!(v.get_str("request.id"), Some("_abc"));
         assert_eq!(v.get("request.missing"), None);
-        // default fallback, lodash-style
         assert_eq!(v.get_str("nope.id").unwrap_or(""), "");
     }
 

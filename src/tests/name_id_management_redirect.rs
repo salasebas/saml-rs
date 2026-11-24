@@ -126,7 +126,6 @@ fn response_input(
     Ok(Inbound::redirect(redirect_query(outbound)?))
 }
 
-/// The request a responder is ready to apply.
 fn request<Response>(
     received: NameIdManagementReceipt<Response>,
 ) -> Result<Received<ManageNameIdRequest>, Box<dyn std::error::Error>> {
@@ -142,7 +141,6 @@ fn alice() -> NameId {
     NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)
 }
 
-/// The SAML message XML carried by an HTTP-Redirect browser action.
 fn redirect_message_xml<Message>(
     outbound: &Outbound<Message>,
 ) -> Result<String, Box<dyn std::error::Error>> {
@@ -158,7 +156,6 @@ fn redirect_message_xml<Message>(
     )?)?)
 }
 
-/// The pending request, persisted and restored as a deployment would.
 fn restored(pending: &PendingManageNameIdRequest) -> Result<PendingManageNameIdRequest, SamlError> {
     PendingManageNameIdRequest::from_snapshot(pending.snapshot())
 }
@@ -198,8 +195,6 @@ fn unsigned_response_input(xml: &str) -> Result<Inbound<ManageNameIdResponse>, S
     Ok(Inbound::redirect(query))
 }
 
-/// An error `ManageNameIDResponse` from the service provider to the identity
-/// provider.
 fn sp_error_response_xml(in_response_to: &str) -> String {
     format!(
         concat!(

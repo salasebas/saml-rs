@@ -1,5 +1,3 @@
-//! SAML SP and IdP metadata generation.
-
 use std::collections::HashSet;
 
 use crate::config::validate_entity_id_syntax;

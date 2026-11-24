@@ -1,4 +1,3 @@
-//! Processing restrictions and content coverage for XML signature verification.
 #![cfg(crypto)]
 
 use base64::engine::general_purpose::STANDARD;

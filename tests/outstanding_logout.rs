@@ -275,8 +275,6 @@ fn outstanding_logout_at_or_after_not_on_or_after_does_not_reject(
 fn outstanding_logout_uses_the_not_on_or_after_clock_skew() -> Result<(), Box<dyn std::error::Error>>
 {
     let issued = issued_sso()?;
-    // The assertion's NotBefore is its issue instant. Validate two minutes
-    // later so a one-minute NotBefore skew still leaves that window open.
     let now = unix_seconds()? + 120;
     let accepted = finish(&issued, now, ClockSkew::strict(), None)?;
     let index = session_index(&accepted)?;

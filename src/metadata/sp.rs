@@ -1,32 +1,21 @@
-//! Service Provider metadata.
-
 use super::{as_object_list, Metadata};
 use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::xml::{extract_with_limits, ExtractorField, XmlLimits};
 
-/// Parsed AssertionConsumerService endpoint from SP metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AcsMetadataEndpoint {
-    /// Protocol binding.
     pub(crate) binding: Binding,
-    /// Endpoint location.
     pub(crate) location: String,
-    /// Metadata index, when declared.
     pub(crate) index: Option<u16>,
-    /// `isDefault`, read as an `xs:boolean`.
     pub(crate) is_default: DefaultMarking,
 }
 
-/// The `isDefault` attribute of an indexed endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DefaultMarking {
-    /// `isDefault` is `true` or `1`.
     Default,
-    /// `isDefault` is absent, or is not an `xs:boolean` value.
     Unmarked,
-    /// `isDefault` is `false` or `0`.
     NotDefault,
 }
 
@@ -161,7 +150,6 @@ impl SpMetadata {
             .map(|endpoint| endpoint.location)
     }
 
-    /// Default `AssertionConsumerService` endpoint for `binding`.
     pub(crate) fn assertion_consumer_service_endpoint(
         &self,
         binding: Binding,
@@ -174,7 +162,6 @@ impl SpMetadata {
         select_indexed_default(endpoints, |endpoint| endpoint.is_default)
     }
 
-    /// Default `AssertionConsumerService` across the SAML 2.0 role's bindings.
     pub(crate) fn default_assertion_consumer_service_endpoint(
         &self,
     ) -> Result<Option<AcsMetadataEndpoint>, SamlError> {
@@ -192,7 +179,6 @@ impl SpMetadata {
         .transpose()
     }
 
-    /// `AssertionConsumerService` endpoint with the declared metadata index.
     pub(crate) fn assertion_consumer_service_by_index(
         &self,
         index: u16,
@@ -210,8 +196,6 @@ impl SpMetadata {
         Ok(first)
     }
 
-    /// Every `AssertionConsumerService` location published for `binding`, in
-    /// metadata order.
     pub(crate) fn assertion_consumer_service_locations(&self, binding: Binding) -> Vec<String> {
         self.assertion_consumer_service_endpoints()
             .into_iter()
@@ -220,7 +204,6 @@ impl SpMetadata {
             .collect()
     }
 
-    /// Whether metadata contains `location` for `binding`.
     pub(crate) fn has_assertion_consumer_service(&self, binding: Binding, location: &str) -> bool {
         self.assertion_consumer_service_endpoints()
             .iter()

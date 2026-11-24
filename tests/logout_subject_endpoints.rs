@@ -1,4 +1,3 @@
-//! respond_slo issuer checks and SLO endpoint locations.
 #![cfg(crypto)]
 
 mod common;

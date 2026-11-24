@@ -1,6 +1,3 @@
-//! Checks on a login `<Response>` whose status is not `Success`, run before
-//! that status is reported.
-
 use super::response_issuer::validate_response_issuer;
 use super::{
     correlated_status_message, signature_is_present, validate_in_response_to,

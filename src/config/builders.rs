@@ -1,5 +1,3 @@
-//! Typed SP and IdP config builders.
-
 use std::time::Duration;
 
 use core::fmt;

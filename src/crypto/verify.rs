@@ -1,15 +1,3 @@
-//! XML-DSig verification and anti-wrapping checks, delegating cryptography to
-//! the selected `bergshamra` provider.
-//!
-//! Security model:
-//! - `trusted_keys_only`: the signature is verified against the certificate(s)
-//!   declared in IdP metadata, never an attacker-supplied inline cert.
-//! - `strict_verification`: bergshamra enforces that each signed reference
-//!   targets the document element, an ancestor, or a sibling of the Signature.
-//! - Explicit XSW guard: reject any `Assertion`/`Signature` nested under
-//!   `SubjectConfirmationData`.
-//! - Only content covered by a verified reference is returned for extraction.
-
 use super::keys::{load_certificate, load_hmac_secret};
 use super::response_root::root_uses_protocol_response_rules;
 use super::signature_profile::{
@@ -43,7 +31,6 @@ fn has_descendant(node: &Node, names: &[&str]) -> bool {
         .any(|c| names.contains(&c.local_name.as_str()) || has_descendant(c, names))
 }
 
-/// XSW guard: `Response/Assertion/Subject/SubjectConfirmation/SubjectConfirmationData//(Assertion|Signature)`.
 fn wrapping_detected(root: &Node) -> bool {
     for assertion in root.children_named("Assertion") {
         for subject in assertion.children_named("Subject") {
@@ -175,8 +162,6 @@ fn covered_root<'a>(root: &'a Node, targets: &[VerifiedTarget]) -> Result<&'a No
     Err(verified_content_not_covered())
 }
 
-/// The response signature covers every assertion, or every assertion is signed.
-/// An unsigned sibling is rejected.
 fn response_assertions_covered(root: &Node, targets: &[VerifiedTarget]) -> bool {
     let assertions: Vec<_> = root.children_named("Assertion").collect();
     !assertions.is_empty()
@@ -186,12 +171,6 @@ fn response_assertions_covered(root: &Node, targets: &[VerifiedTarget]) -> bool 
                 .all(|assertion| id_target_matches_node(targets, assertion)))
 }
 
-/// The element covered by a verified reference that a caller consumes, which
-/// can be the selected `<Assertion>` or the message root.
-///
-/// Successful coverage is also the strict-profile gate for signatures that
-/// authenticate a message without becoming SSO evidence, including
-/// `LogoutRequest` and `LogoutResponse`.
 fn covered_content<'a>(
     root: &'a Node,
     targets: &[VerifiedTarget],
@@ -212,7 +191,6 @@ fn covered_content<'a>(
     covered_root(root, targets)
 }
 
-/// Return the source of the [`covered_content`] of `root`.
 fn verified_content(
     root: &Node,
     xml: &str,
@@ -316,7 +294,6 @@ impl VerifiedEmbeddedSignature {
     }
 }
 
-/// The `<Assertion>` child of `response` whose source starts at `start`.
 fn child_assertion_at(
     document: &BergshamraDocument<'_>,
     response: BergshamraNodeId,
@@ -375,29 +352,10 @@ fn verified_embedded_signature(
     }))
 }
 
-/// True for a signed `<Reference>` URI that is not same-document (i.e. not a
-/// `#id` fragment or the whole document). Such references can pull external or
-/// local-file content into the verified set and are rejected for SAML.
 fn is_external_reference(uri: &str) -> bool {
     !uri.is_empty() && !uri.starts_with('#')
 }
 
-/// Verify the first XML-DSig signature in document order against `metadata_certs`.
-///
-/// Requires a signature directly under the root or a direct Assertion child.
-/// The processed signature's
-/// references must stay within this document. A verified signature must cover
-/// the root, or the direct assertions returned from a protocol response.
-///
-/// Returns `(verified, signed_content)`:
-/// - `(false, None)` when there is no signature or it does not verify;
-/// - `(true, Some(xml))` with the signed assertion or document root on success;
-/// - `Err(PotentialWrappingAttack)` on a detected XSW attempt.
-///
-/// # Errors
-///
-/// Returns [`SamlError`] when XML parsing, trust checks, reference resolution,
-/// cryptographic verification, or signed-content coverage checks fail.
 #[cfg(test)]
 pub(crate) fn verify_signature(
     xml: &str,
@@ -411,19 +369,12 @@ pub(crate) fn verify_signature(
     )
 }
 
-/// The parsed message or metadata document after the checks shared by every
-/// signature verifier, with one verification context that trusts every
-/// loadable metadata key.
 struct PreparedSignatureVerification {
     dom: dom::Document,
     protocol_response: bool,
     context: DsigContext,
 }
 
-/// Load every metadata certificate the profile accepts (rolling-cert support),
-/// and the peer's HMAC secret when it has one, into one trusted-key context: a
-/// signature verifies if any one of those keys matches. An unloadable or
-/// profile-rejected certificate is skipped while another key loads.
 fn metadata_verification_context(
     metadata_certs: &[String],
     hmac_secret: Option<&HmacSecret>,
@@ -460,12 +411,6 @@ fn metadata_verification_context(
         .with_insecure(true))
 }
 
-/// Run the wrapping and duplicate-ID checks shared by
-/// [`verify_first_signature_with_profile`] and
-/// [`verify_signatures_detailed_with_profile`], then load the metadata
-/// certificates.
-///
-/// Returns `None` when the document carries no SAML signature.
 fn prepare_signature_verification(
     xml: &str,
     dom: dom::Document,
@@ -482,7 +427,6 @@ fn prepare_signature_verification(
         return Err(SamlError::PotentialWrappingAttack);
     }
 
-    // Candidate signatures: message-level (root > Signature) or assertion-level.
     let signature_candidates = saml_signature_candidates(&dom.root);
     if signature_candidates.is_empty() {
         return Ok(None);
@@ -497,14 +441,6 @@ fn prepare_signature_verification(
     }))
 }
 
-/// Verify the first XML-DSig signature with explicit XML parser limits.
-///
-/// Uses the same processing and content-coverage rules as [`verify_signature`].
-///
-/// # Errors
-///
-/// Returns [`SamlError`] when XML parsing, trust checks, reference resolution,
-/// cryptographic verification, or signed-content coverage checks fail.
 #[cfg(test)]
 pub(crate) fn verify_signature_with_limits(
     xml: &str,
@@ -556,8 +492,6 @@ pub(crate) fn verify_first_signature_with_profile(
     }
 }
 
-/// Reject a `Response` or `Assertion` whose signature in a SAML signature
-/// position does not verify.
 fn reject_present_signature_that_does_not_verify(
     prepared: &PreparedSignatureVerification,
     document: &BergshamraDocument<'_>,
@@ -590,8 +524,6 @@ fn reject_present_signature_that_does_not_verify(
     Ok(())
 }
 
-/// Verify present signatures and report their coverage of the response and
-/// consumed assertion. The caller already authenticated the content.
 pub(crate) fn verify_present_signatures(
     xml: &str,
     metadata_certs: &[String],
@@ -614,7 +546,6 @@ pub(crate) fn verify_present_signatures(
     Ok(signatures)
 }
 
-/// Verify the signature of a SAML message already located by the SOAP reader.
 pub(crate) fn verify_soap_body_signature(
     envelope: &str,
     message_start: usize,
@@ -675,26 +606,14 @@ pub(crate) fn verify_soap_body_signature(
     enforce_profile_on_verified_signature(&document, signature, profile)
 }
 
-/// What [`verify_signatures_detailed_with_profile`] found in a document.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SignatureVerification {
-    /// The document carries no SAML signature.
     Absent,
-    /// The document carries a signature, and no verified signature covers
-    /// the content it accepts.
     Unverified,
-    /// Verified signatures cover the content.
     Verified(VerifiedSignedContent),
 }
 
 impl SignatureVerification {
-    /// The verified content of a document whose signature is required.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::SignatureMissing`] when the document carries no
-    /// signature, and [`SamlError::SignatureVerification`] when its signature
-    /// does not verify.
     pub(crate) fn require_verified(self) -> Result<VerifiedSignedContent, SamlError> {
         match self {
             Self::Verified(verified) => Ok(verified),
@@ -706,8 +625,6 @@ impl SignatureVerification {
     }
 }
 
-/// The content that verified signatures cover, and which parts of the
-/// document they cover.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct VerifiedSignedContent {
     content: String,
@@ -828,17 +745,6 @@ fn verified_coverage(
     Ok((targets, verified_embedded_signatures))
 }
 
-/// The signed metadata of `xml` when its signature verifies under `profile`
-/// and covers the metadata root, or `None` when it is unsigned or the
-/// signature does not verify.
-///
-/// The caller has already enforced the metadata signature shape.
-///
-/// # Errors
-///
-/// Returns [`SamlError`] when XML parsing, certificate loading, cryptographic
-/// verification, the algorithms `profile` allows, or signed-root coverage
-/// checks fail.
 pub(crate) fn verify_metadata_signature_coverage_with_limits(
     xml: &str,
     trusted_certificates: &[String],

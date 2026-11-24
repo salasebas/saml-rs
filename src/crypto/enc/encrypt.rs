@@ -1,6 +1,3 @@
-//! Assertion, `<EncryptedID>`, `<EncryptedAttribute>`, and `<NewEncryptedID>`
-//! encryption.
-
 use std::ops::Range;
 
 use super::{
@@ -50,8 +47,6 @@ impl<'a> From<&'a str> for KeyTransport<'a> {
     }
 }
 
-/// `<xenc:EncryptedData>` of type `Element` that carries `plaintext` for the
-/// holder of `encrypt_cert`.
 pub(super) fn encrypted_data_xml(
     plaintext: &[u8],
     encrypt_cert: &str,
@@ -79,14 +74,6 @@ pub(super) fn encrypted_data_xml(
     encrypt(&ctx, &template, plaintext).map_err(crypto_err)
 }
 
-/// Encrypt the `<Assertion>` in `xml`, replacing it with
-/// `<{prefix}:EncryptedAssertion>`.
-///
-/// The plaintext is the `<Assertion>` as written, with each namespace in
-/// scope from its ancestors declared on it, so it parses on its own.
-///
-/// `encrypt_cert` is the recipient's encryption certificate; `data_alg` /
-/// `key_alg` are the data and key encryption algorithm URIs.
 #[cfg(test)]
 pub(crate) fn encrypt_assertion(
     xml: &str,
@@ -139,14 +126,6 @@ fn qualified_name(document: &XmlDocument<'_>, node: NodeId, local_name: &str) ->
     }
 }
 
-/// Replace the selected children of each assertion in `xml` with their
-/// encrypted form for the holder of `encrypt_cert`.
-///
-/// Each `<NameID>` of an assertion `<Subject>` becomes an `<EncryptedID>`, and
-/// each `<Attribute>` of an `<AttributeStatement>` becomes an
-/// `<EncryptedAttribute>`. The wrapper takes the prefix of the element it
-/// replaces. The encrypted element is its inclusive canonical form, so it
-/// declares every namespace in scope.
 pub(crate) fn encrypt_assertion_elements(
     xml: &str,
     encrypt_cert: &str,
@@ -165,9 +144,6 @@ pub(crate) fn encrypt_assertion_elements(
     })
 }
 
-/// Replace the `<NameID>` of the `<LogoutRequest>` in `xml` with an
-/// `<EncryptedID>` for the holder of `encrypt_cert`, as
-/// [`encrypt_assertion_elements`] does for an assertion `<Subject>`.
 pub(crate) fn encrypt_logout_request_name_id(
     xml: &str,
     encrypt_cert: &str,
@@ -184,9 +160,6 @@ pub(crate) fn encrypt_logout_request_name_id(
     })
 }
 
-/// `xml` with each `(element, kind)` that `select` picks from its document
-/// replaced by the `kind.encrypted` form of `element` for the holder of
-/// `encrypt_cert`.
 fn encrypt_selected(
     xml: &str,
     encrypt_cert: &str,
@@ -205,10 +178,6 @@ fn encrypt_selected(
     Ok(splice(xml, replacements))
 }
 
-/// The source range of `element` and the `kind.encrypted` wrapper that
-/// replaces it. The wrapper takes the prefix of `element`, and keeps the
-/// declaration of that prefix when `element` itself declares it. The encrypted
-/// element is its inclusive canonical form.
 fn encrypted_element(
     document: &XmlDocument<'_>,
     element: NodeId,
@@ -231,7 +200,6 @@ fn encrypted_element(
     ))
 }
 
-/// The prefix of `element` when `element` itself declares it. The empty prefix is the default namespace.
 fn own_prefix_declaration<'d>(document: &'d XmlDocument<'_>, element: NodeId) -> Option<&'d str> {
     let element = document.element(element)?;
     let prefix = element.name.prefix.as_deref().unwrap_or("");
@@ -242,9 +210,6 @@ fn own_prefix_declaration<'d>(document: &'d XmlDocument<'_>, element: NodeId) ->
         .then_some(prefix)
 }
 
-/// Replace each `kind.plaintext` child of the document element of `xml`, for
-/// each of `kinds`, with its `kind.encrypted` form for the holder of
-/// `encrypt_cert`.
 pub(crate) fn encrypt_root_children(
     xml: &str,
     kinds: &[EncryptedElementKind],

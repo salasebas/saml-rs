@@ -1,5 +1,3 @@
-//! SAML HTTP binding helpers for POST forms, Redirect URLs, DEFLATE, and Base64.
-
 mod deflate;
 mod encoding;
 mod escape;

@@ -1,22 +1,9 @@
-//! SAML message field-sets for XML extraction, and the keys and paths that
-//! read the values they extract.
-//!
-//! A field that reads two or more attributes stores an object whose keys are
-//! the camelCased attribute names. A path such as [`request::ID`] reaches one
-//! of them.
-
 use super::extract::ExtractorField;
 
-/// Key of the message's own `<Issuer>`.
-///
-/// [`login_response_fields`] stores the assertion's `<Issuer>` under
-/// [`login_response::ASSERTION_ISSUER`] instead.
 pub(crate) const ISSUER: &str = "issuer";
 
-/// Key of the message's own `<Signature>` element.
 pub(crate) const SIGNATURE: &str = "signature";
 
-/// Paths into the object of a request element's attributes.
 pub(crate) mod request {
     pub(crate) const KEY: &str = "request";
     pub(crate) const ID: &str = "request.id";
@@ -33,7 +20,6 @@ pub(crate) mod request {
     pub(crate) const NOT_ON_OR_AFTER: &str = "request.notOnOrAfter";
 }
 
-/// Paths into the object of a response element's attributes.
 pub(crate) mod response {
     pub(crate) const KEY: &str = "response";
     pub(crate) const ID: &str = "response.id";
@@ -42,7 +28,6 @@ pub(crate) mod response {
     pub(crate) const IN_RESPONSE_TO: &str = "response.inResponseTo";
 }
 
-/// Keys and paths of the `<NameID>` in a login response or logout request.
 pub(crate) mod name_id {
     pub(crate) const VALUE: &str = "nameID";
     pub(crate) const FORMAT: &str = "nameIDFormat";
@@ -52,7 +37,6 @@ pub(crate) mod name_id {
     pub(crate) const SP_PROVIDED_ID: &str = "nameIDQualifiers.spProvidedId";
 }
 
-/// Keys and paths that only [`login_request_fields`] extracts.
 pub(crate) mod authn_request {
     pub(crate) const NAME_ID_POLICY: &str = "nameIDPolicy";
     pub(crate) const NAME_ID_POLICY_FORMAT: &str = "nameIDPolicy.format";
@@ -73,38 +57,31 @@ pub(crate) mod authn_request {
     pub(crate) const AUTHN_CONTEXT_DECL_REF: &str = "authnContextDeclRef";
 }
 
-/// Keys and paths that only [`login_response_fields`] extracts.
 pub(crate) mod login_response {
     pub(crate) const ASSERTION: &str = "assertion";
     pub(crate) const ASSERTION_ID: &str = "assertion.id";
     pub(crate) const ASSERTION_ISSUE_INSTANT: &str = "assertion.issueInstant";
     pub(crate) const ASSERTION_ISSUER: &str = "issuer";
-    /// The [`super::conditions`] object of the assertion `<Conditions>`.
     pub(crate) const CONDITIONS: &str = "conditions";
     pub(crate) const AUDIENCE: &str = "audience";
     pub(crate) const AUDIENCE_RESTRICTION: &str = "audienceRestriction";
     pub(crate) const SUBJECT_CONFIRMATION: &str = "subjectConfirmation";
-    /// One [`super::authn_statement`] object per `<AuthnStatement>`.
     pub(crate) const AUTHN_STATEMENTS: &str = "sessionIndex";
     pub(crate) const ATTRIBUTES: &str = "attributes";
-    /// One [`super::attribute`] object per `<Attribute>`.
     pub(crate) const ATTRIBUTE_ELEMENTS: &str = "attributeNameFormats";
 }
 
-/// Keys of the object under [`login_response::CONDITIONS`].
 pub(crate) mod conditions {
     pub(crate) const NOT_BEFORE: &str = "notBefore";
     pub(crate) const NOT_ON_OR_AFTER: &str = "notOnOrAfter";
 }
 
-/// Keys of each object under [`login_response::AUTHN_STATEMENTS`].
 pub(crate) mod authn_statement {
     pub(crate) const AUTHN_INSTANT: &str = "authnInstant";
     pub(crate) const SESSION_NOT_ON_OR_AFTER: &str = "sessionNotOnOrAfter";
     pub(crate) const SESSION_INDEX: &str = "sessionIndex";
 }
 
-/// Keys of each object under [`login_response::ATTRIBUTE_ELEMENTS`].
 pub(crate) mod attribute {
     pub(crate) const NAME: &str = "name";
     pub(crate) const NAME_FORMAT: &str = "nameFormat";
@@ -112,25 +89,20 @@ pub(crate) mod attribute {
     pub(crate) const VALUES: &str = "attributeValue";
 }
 
-/// Keys that only [`logout_request_fields`] extracts.
 pub(crate) mod logout_request {
-    /// The text of each `<SessionIndex>`.
     pub(crate) const SESSION_INDEXES: &str = "sessionIndex";
 }
 
-/// Keys that only [`logout_response_fields`] extracts.
 pub(crate) mod logout_response {
     pub(crate) const STATUS_CODE: &str = "statusCode";
     pub(crate) const SUBORDINATE_STATUS_CODE: &str = "subordinateStatusCode";
 }
 
-/// Keys of the two-tier status field sets.
 pub(crate) mod status {
     pub(crate) const TOP: &str = "top";
     pub(crate) const SECOND: &str = "second";
 }
 
-/// Fields for an `<AuthnRequest>` (`loginRequestFields`).
 pub fn login_request_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(request::KEY, &["AuthnRequest"]).attrs(&[
@@ -224,7 +196,6 @@ pub fn login_request_fields() -> Vec<ExtractorField> {
     ]
 }
 
-/// Two-tier status fields for a `<Response>` (`loginResponseStatusFields`).
 pub fn login_response_status_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(status::TOP, &["Response", "Status", "StatusCode"]).attrs(&["Value"]),
@@ -236,7 +207,6 @@ pub fn login_response_status_fields() -> Vec<ExtractorField> {
     ]
 }
 
-/// Two-tier status fields for a `<LogoutResponse>` (`logoutResponseStatusFields`).
 pub fn logout_response_status_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(status::TOP, &["LogoutResponse", "Status", "StatusCode"])
@@ -249,15 +219,10 @@ pub fn logout_response_status_fields() -> Vec<ExtractorField> {
     ]
 }
 
-/// Fields for a login `<Response>` whose status is not `Success`.
 pub(crate) fn login_error_response_fields() -> Vec<ExtractorField> {
     vec![ExtractorField::new(response::KEY, &["Response"]).attrs(&["Destination", "InResponseTo"])]
 }
 
-/// Fields for a login `<Response>` (`loginResponseFields`).
-///
-/// `assertion` is the (verified) assertion XML used as the `shortcut` document
-/// for assertion-scoped fields; `response` is read from the full message.
 pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(login_response::ASSERTION, &["Assertion"])
@@ -321,7 +286,6 @@ pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
     ]
 }
 
-/// Fields for a `<LogoutRequest>` (`logoutRequestFields`).
 pub fn logout_request_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(request::KEY, &["LogoutRequest"]).attrs(&[
@@ -347,7 +311,6 @@ pub fn logout_request_fields() -> Vec<ExtractorField> {
     ]
 }
 
-/// Fields for a `<ManageNameIDRequest>`.
 pub(crate) fn manage_name_id_request_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(request::KEY, &["ManageNameIDRequest"]).attrs(&[
@@ -359,7 +322,6 @@ pub(crate) fn manage_name_id_request_fields() -> Vec<ExtractorField> {
     ]
 }
 
-/// Fields for a `<ManageNameIDResponse>`.
 pub(crate) fn manage_name_id_response_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(response::KEY, &["ManageNameIDResponse"]).attrs(&[
@@ -372,7 +334,6 @@ pub(crate) fn manage_name_id_response_fields() -> Vec<ExtractorField> {
     ]
 }
 
-/// Two-tier status fields for a `<ManageNameIDResponse>`.
 pub(crate) fn manage_name_id_response_status_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(
@@ -388,7 +349,6 @@ pub(crate) fn manage_name_id_response_status_fields() -> Vec<ExtractorField> {
     ]
 }
 
-/// Fields for a `<LogoutResponse>` (`logoutResponseFields`).
 pub fn logout_response_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new(response::KEY, &["LogoutResponse"]).attrs(&[

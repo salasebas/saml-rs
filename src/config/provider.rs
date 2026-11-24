@@ -1,5 +1,3 @@
-//! Typed config builders to the metadata generator input and the internal providers the typed API runs on.
-
 use crate::browser::{AcsEndpoint, SloEndpoint, SsoEndpoint};
 use crate::error::SamlError;
 use crate::idp;

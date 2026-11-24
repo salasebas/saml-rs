@@ -1,5 +1,3 @@
-//! Caller-supplied schema validation at inbound XML boundaries.
-
 use crate::SamlError;
 
 /// A schema validator that rejects XML by returning an error reason.

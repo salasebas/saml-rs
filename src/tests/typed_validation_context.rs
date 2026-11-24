@@ -1,5 +1,3 @@
-//! `ReplayPolicy::NoCache` skips replay checks.
-
 use super::replay_cache::RecordingReplayCache;
 use super::sso_flow_document::set_authn_statements;
 

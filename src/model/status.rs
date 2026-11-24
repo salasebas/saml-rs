@@ -185,9 +185,6 @@ impl Status {
         }
     }
 
-    /// Status read from a received message.
-    ///
-    /// A subordinate value that collapses to an empty string is read as absent.
     pub(crate) fn received(top_level: &str, subordinate: Option<&str>) -> Result<Self, SamlError> {
         let uri = collapse_whitespace(top_level);
         if uri.is_empty() {

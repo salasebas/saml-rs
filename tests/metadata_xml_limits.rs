@@ -1,6 +1,3 @@
-//! Metadata constructors parse under the default XML limits, or under the
-//! limits of the `XmlPolicy` they are given.
-
 use saml_rs::metadata::{IdpMetadata, Metadata, SpMetadata};
 use saml_rs::{ResourceLimit, SamlError, XmlPolicy};
 

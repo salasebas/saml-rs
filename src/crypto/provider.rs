@@ -1,5 +1,3 @@
-//! Bergshamra document-crypto provider initialization and attestation.
-
 use std::fmt;
 
 use crate::error::SamlError;

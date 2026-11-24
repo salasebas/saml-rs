@@ -41,8 +41,6 @@ pub(crate) struct LogoutFlowValidation<'a> {
 }
 
 impl<'a> LogoutFlowValidation<'a> {
-    /// `expected_recipient` is the local endpoint a present `Destination`
-    /// must name. `None` is a SOAP response, which has no receiving endpoint.
     pub(crate) fn typed(
         expected_recipient: Option<&'a str>,
         now: SystemTime,
@@ -58,7 +56,6 @@ impl<'a> LogoutFlowValidation<'a> {
     }
 }
 
-/// How the flow reads a logout message from one typed input.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LogoutReceipt {
     decode_as: Binding,
@@ -75,8 +72,6 @@ impl LogoutReceipt {
         }
     }
 
-    /// The SOAP body XML arrives as an HTTP-POST message. It must carry an
-    /// XML signature unless `channel` authenticated the peer.
     pub(crate) fn of_input<Message>(input: &Inbound<Message>) -> Result<Self, SamlError> {
         match &input.transport {
             Transport::Redirect { .. } => Ok(Self::browser(Binding::Redirect)),

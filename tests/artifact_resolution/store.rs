@@ -16,7 +16,6 @@ use super::*;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-/// Serialized row representing what an external database or cache persists.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SerializedRow {
     service_provider: String,
@@ -79,8 +78,6 @@ fn store_err(message: impl Into<String>) -> SamlError {
 
 type AfterLookupHook = Arc<dyn Fn() + Send + Sync>;
 
-/// Shared external-style store where separate IdP nodes serialize and
-/// deserialize entries through a common backend.
 #[derive(Clone)]
 struct SharedExternalStore {
     lifetime: Duration,
@@ -296,8 +293,6 @@ fn two_concurrent_nodes_racing_on_one_artifact_return_the_message_only_once() ->
     let req_b = resolution_b.request().envelope().to_string();
     let sp_xml = parties.sp.metadata_xml().to_string();
 
-    // Synchronize inside lookup so both nodes deterministically read the entry
-    // before either attempts the atomic consume.
     let racing_store = issuer_store.with_after_lookup(move || {
         lookup_barrier.wait();
     });
@@ -697,7 +692,6 @@ fn existing_caller_wrappers_and_auto_traits_remain_compatible() -> TestResult {
     let parties = parties()?;
     let channel = confidential();
 
-    // MutexGuard<IssuedArtifacts>
     let mutex = Mutex::new(IssuedArtifacts::expire_after(ARTIFACT_LIFETIME));
     {
         let mut guard = mutex.lock().map_err(|_| "mutex poisoned")?;
@@ -720,7 +714,6 @@ fn existing_caller_wrappers_and_auto_traits_remain_compatible() -> TestResult {
         assert_eq!(answer.release(), ArtifactRelease::Returned);
     }
 
-    // RwLockWriteGuard<IssuedArtifacts>
     let rwlock = RwLock::new(IssuedArtifacts::expire_after(ARTIFACT_LIFETIME));
     {
         let mut guard = rwlock.write().map_err(|_| "rwlock poisoned")?;
@@ -743,7 +736,6 @@ fn existing_caller_wrappers_and_auto_traits_remain_compatible() -> TestResult {
         assert_eq!(answer.release(), ArtifactRelease::Returned);
     }
 
-    // Box<IssuedArtifacts>
     let mut boxed = Box::new(IssuedArtifacts::expire_after(ARTIFACT_LIFETIME));
     let artifact =
         parties
@@ -763,7 +755,6 @@ fn existing_caller_wrappers_and_auto_traits_remain_compatible() -> TestResult {
     )?;
     assert_eq!(answer.release(), ArtifactRelease::Returned);
 
-    // RefMut<IssuedArtifacts>
     let cell = RefCell::new(IssuedArtifacts::expire_after(ARTIFACT_LIFETIME));
     let mut borrowed = cell.borrow_mut();
     let artifact =
@@ -911,7 +902,6 @@ fn storage_failures_fail_closed_without_releasing_an_unconsumed_artifact() -> Te
         Err(SamlError::ArtifactStoreUnavailable { .. })
     ));
 
-    // The artifact was never consumed during the failed attempts.
     store.fail = FailurePoint::None;
     let recovered = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -1007,13 +997,11 @@ fn issued_artifacts_clock_expiry_debug_redaction_and_dynamic_dispatch() -> TestR
     assert!(!store_debug.contains(WEB_SSO_MARKER));
     assert_eq!(reads.load(Ordering::SeqCst), reads_before_debug);
 
-    // Duplicate live key is rejected without replacing the entry.
     assert!(matches!(
         issued.store(&artifact, entry.clone()),
         Err(SamlError::Invalid(_))
     ));
 
-    // At 159s (1s before expiry) it is still outstanding; at 160s it expires.
     clock.store(159, Ordering::SeqCst);
     assert!(issued.lookup(&artifact)?.is_some());
     clock.store(160, Ordering::SeqCst);
@@ -1036,7 +1024,6 @@ fn issued_artifacts_clock_expiry_debug_redaction_and_dynamic_dispatch() -> TestR
     );
     assert!(!issued.remove(&artifact));
 
-    // Re-inserting with a later expiry is not evicted when an older bucket drains.
     clock.store(200, Ordering::SeqCst);
     let first = IssuedArtifact::new(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -1113,7 +1100,6 @@ fn web_browser_sso_artifact_flows_work_across_two_idp_nodes_with_a_shared_store(
     let mut store_b = store_a.clone();
     let channel = confidential();
 
-    // 1. SP-initiated SSO via respond_sso_artifact on node A, resolved on node B.
     let started = sp.start_sso(
         &idp_descriptor,
         StartSso::redirect().response_binding(SsoResponseBinding::Artifact),
@@ -1164,7 +1150,6 @@ fn web_browser_sso_artifact_flows_work_across_two_idp_nodes_with_a_shared_store(
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
 
-    // 2. IdP-initiated SSO via initiate_sso_artifact on node A, resolved on node B.
     let unsolicited = node_a.initiate_sso_artifact(
         &sp_descriptor,
         SsoAssertion::new(NameId::new("bob@example.com")),
@@ -1193,7 +1178,6 @@ fn web_browser_sso_artifact_flows_work_across_two_idp_nodes_with_a_shared_store(
     )?;
     assert_eq!(session.name_id().value(), "bob@example.com");
 
-    // 3. Store write failures surface as ArtifactStoreUnavailable on SSO artifact flows.
     struct UnavailableStore;
     impl ArtifactStore for UnavailableStore {
         fn lifetime(&self) -> Result<Duration, SamlError> {

@@ -320,28 +320,6 @@ impl SsoSession {
         Some(LogoutSubject::new(self.name_id().clone()).with_session_indexes(session_indexes))
     }
 
-    /// Check and store this session's replay keys using the caller cache.
-    ///
-    /// Call it only after signature, issuer, audience, destination, recipient,
-    /// `InResponseTo`, and time validation have passed.
-    ///
-    /// The bearer assertion identifier is kept until the latest bearer
-    /// `SubjectConfirmationData@NotOnOrAfter` plus skew. A value that does not
-    /// parse as an instant counts only when no other bearer value does. An
-    /// earlier `Conditions` or `AuthnStatement` instant does not shorten it.
-    /// The Response identifier still expires at the earliest bound. Every
-    /// direct assertion identifier is stored. Another assertion uses its own
-    /// bearer `NotOnOrAfter`, chosen the same way, when that attribute is
-    /// present.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::TimeWindowInvalid`] when no valid replay
-    /// expiration can be derived or a stored deadline has already passed.
-    /// Keys recorded before a later failure remain in the cache. Returns [`SamlError::ReplayDetected`]
-    /// when any session replay key has already been seen. Cache
-    /// implementations may also return storage-specific failures mapped to
-    /// [`SamlError`].
     pub(crate) fn check_and_store_replay(
         &self,
         validation: &mut SamlValidationContext<'_>,

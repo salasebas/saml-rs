@@ -194,8 +194,6 @@ scoped_identifier!(
     "pairwise-id"
 );
 
-/// Byte offset of the `@` between the unique ID and the scope, when `value`
-/// is `uniqueID@scope`.
 fn scope_separator(value: &str) -> Option<usize> {
     let (unique_id, scope) = value.split_once('@')?;
     let is_unique_id = is_part(unique_id, |byte| matches!(byte, b'=' | b'-'));
@@ -212,8 +210,6 @@ fn is_part(part: &str, is_punctuation: impl Fn(u8) -> bool) -> bool {
             .all(|&byte| byte.is_ascii_alphanumeric() || is_punctuation(byte))
 }
 
-/// The one value of the received attributes `name`, without its leading and
-/// trailing XML whitespace.
 fn received_value<'a>(
     attributes: &'a Attributes,
     name: &str,
@@ -237,20 +233,10 @@ fn received_value<'a>(
     }
 }
 
-/// Whether `attribute` is `subject-id` or `pairwise-id`.
 pub(crate) fn is_subject_identifier(attribute: &Attribute) -> bool {
     attribute.matches_uri_name(SUBJECT_ID) || attribute.matches_uri_name(PAIRWISE_ID)
 }
 
-/// Check the `subject-id` and `pairwise-id` attributes of an assertion the
-/// identity provider issues.
-///
-/// # Errors
-///
-/// Returns [`SamlError::Invalid`] when either attribute occurs more than once,
-/// has the `unspecified` `NameFormat` or none, does not have exactly one value,
-/// has a value that is not `uniqueID@scope`, has a scope with an upper case
-/// letter, or has a unique ID with both upper and lower case letters.
 pub(crate) fn check_issued_subject_identifiers(attributes: &[Attribute]) -> Result<(), SamlError> {
     for name in [SUBJECT_ID, PAIRWISE_ID] {
         let mut issued = attributes

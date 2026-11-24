@@ -1,5 +1,3 @@
-//! Recognition of SAML protocol response document elements.
-
 use crate::constants::namespace;
 use crate::error::SamlError;
 use crate::xml::dom::reader_err;
@@ -7,7 +5,6 @@ use quick_xml::events::Event;
 use quick_xml::name::{Namespace, ResolveResult};
 use quick_xml::reader::NsReader;
 
-/// Protocol-namespace local names that use response coverage and wrapping checks.
 fn is_protocol_response_name(local_name: &str) -> bool {
     matches!(
         local_name,
@@ -43,8 +40,6 @@ fn document_element_name(xml: &str) -> Result<(String, String), SamlError> {
     }
 }
 
-/// Whether the document element is a SAML protocol response that takes the
-/// response coverage and wrapping checks.
 pub(crate) fn root_uses_protocol_response_rules(xml: &str) -> Result<bool, SamlError> {
     let (element_namespace, local_name) = document_element_name(xml)?;
     Ok(element_namespace == namespace::PROTOCOL && is_protocol_response_name(&local_name))

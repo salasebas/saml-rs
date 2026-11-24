@@ -459,13 +459,9 @@ impl XmlEncryptionPolicy {
     }
 }
 
-/// Assertion children that an [`XmlEncryptionPolicy`] carries in encrypted
-/// form.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct AssertionElementEncryption {
-    /// `<NameID>` of each assertion `<Subject>`, as `<EncryptedID>`.
     pub(crate) identifiers: IdentifierEncryptionPolicy,
-    /// `<Attribute>` of each `<AttributeStatement>`, as `<EncryptedAttribute>`.
     pub(crate) attributes: AttributeEncryptionPolicy,
 }
 

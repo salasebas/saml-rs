@@ -1,9 +1,3 @@
-//! Minimal read-only XML DOM built on quick-xml.
-//!
-//! Nodes carry their source byte span so the extractor can return the exact
-//! original substring for `context` fields (avoiding any re-serialisation /
-//! canonicalisation concerns — verification is delegated to bergshamra).
-
 use crate::error::{xml_err, ResourceLimit, SamlError};
 use crate::xml::name::is_ncname;
 use crate::xml::{is_xml_char, utf8_bom_len};
@@ -134,10 +128,8 @@ mod element;
 use element::Element;
 pub(crate) use element::{Node, QualifiedElement};
 
-/// A parsed document (its single root element).
 #[derive(Debug, Clone)]
 pub struct Document {
-    /// Document (root) element.
     pub root: Node,
 }
 
@@ -182,7 +174,6 @@ fn check_xml_chars(text: &str) -> Result<(), SamlError> {
     }
 }
 
-/// Map a quick-xml reader error. The namespace-binding cap is a limit.
 pub(crate) fn reader_err(error: quick_xml::Error) -> SamlError {
     match error {
         quick_xml::Error::Namespace(error) => namespace_error(error),
@@ -256,8 +247,6 @@ fn push_general_ref(
     Ok(())
 }
 
-/// Parse `xml` into a well-formed, namespace-well-formed [`Document`] with one
-/// document element, within `limits`.
 pub(crate) fn parse_document(xml: &str, limits: XmlLimits) -> Result<Document, SamlError> {
     parse_single_root(xml, limits, ParseMode::Document)
 }
@@ -279,9 +268,6 @@ pub(crate) fn parse_standalone_element(
     Ok((single_root(roots)?, namespace.unwrap_or_default()))
 }
 
-/// Parse one element cut out of a larger document, such as an extracted
-/// `context` value. A namespace prefix it uses may be declared on an ancestor
-/// that is not part of `xml`; every other [`parse_document`] check applies.
 pub(crate) fn parse_fragment_with_limits(
     xml: &str,
     limits: XmlLimits,
@@ -305,8 +291,6 @@ fn single_root<T>(mut roots: Vec<T>) -> Result<T, SamlError> {
         .ok_or_else(|| SamlError::xml("no document element"))
 }
 
-/// Parse every top-level element within `limits`. Each element must be
-/// well-formed and declare every namespace prefix it uses.
 #[cfg(test)]
 pub(crate) fn parse_all_roots(xml: &str, limits: XmlLimits) -> Result<Vec<Node>, SamlError> {
     parse_roots_with_element_names(xml, limits, |_, _, _| {})
@@ -409,8 +393,6 @@ fn parse_roots_inner<N, A>(
                     reject_non_document_content(mode)?;
                 }
             }
-            // Hardening (adapted from openauth-saml): reject DTDs so the parser
-            // can never be steered into entity-expansion / XXE territory.
             Event::DocType(_) => {
                 return Err(SamlError::xml("DOCTYPE is not allowed"));
             }
