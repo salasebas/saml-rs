@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine as _;
 use saml_rs::{
     CommonDomainCookie, CommonDomainCookieLifetime, EntityId, IdentityProvider, IdpConfig,
     RememberIdentityProvider, SamlError, SsoEndpoint,
@@ -238,16 +240,53 @@ fn cookie_name_counts_toward_the_4096_byte_limit() -> Result<(), Box<dyn std::er
 }
 
 #[test]
-fn existing_entry_that_is_not_a_uri_is_kept() -> Result<(), Box<dyn std::error::Error>> {
+fn writer_keeps_valid_history_and_omits_invalid_entity_ids(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let existing = [
+        "urn:example:archive-idp",
+        "legacy-idp",
+        "https://archive.example/idp%",
+        "https://other.example.net/metadata",
+    ]
+    .map(|entity_id| STANDARD.encode(entity_id))
+    .join(" ");
+    let cookie = remember(
+        IDP_ENTITY_ID,
+        "example.org",
+        CommonDomainCookieLifetime::Persistent {
+            max_age: Duration::from_secs(86_400),
+        },
+        Some(&existing),
+    )?;
+    assert_eq!(
+        cookie.set_cookie_header(),
+        concat!(
+            "_saml_idp=dXJuOmV4YW1wbGU6YXJjaGl2ZS1pZHA%3D%20",
+            "aHR0cHM6Ly9vdGhlci5leGFtcGxlLm5ldC9tZXRhZGF0YQ%3D%3D%20",
+            "aHR0cHM6Ly9pZHAuZXhhbXBsZS5jb20vbWV0YWRhdGE%3D",
+            "; Path=/; Domain=.example.org; Secure; Max-Age=86400",
+        )
+    );
+    Ok(())
+}
+
+#[test]
+fn writer_filters_existing_entity_ids_above_1024_characters(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let prefix = "https://archive.example/";
+    let longest = format!("{prefix}{}", "a".repeat(1024 - prefix.len()));
+    let within = STANDARD.encode(&longest);
+    let over = STANDARD.encode(format!("{longest}a"));
     let cookie = remember(
         IDP_ENTITY_ID,
         "example.org",
         CommonDomainCookieLifetime::Session,
-        Some("bGVnYWN5LWlkcA%3D%3D"),
+        Some(&format!("{within} {over}")),
     )?;
+
     assert_eq!(
         cookie.value(),
-        format!("bGVnYWN5LWlkcA%3D%3D%20{IDP_ENTITY_COOKIE_VALUE}")
+        format!("{}%20{IDP_ENTITY_COOKIE_VALUE}", within.replace('=', "%3D"))
     );
     Ok(())
 }
@@ -459,6 +498,15 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
     assert_invalid(
         remember(
             "https://例え.jp/metadata",
+            "example.org",
+            CommonDomainCookieLifetime::Session,
+            None,
+        ),
+        "URI",
+    )?;
+    assert_invalid(
+        remember(
+            "https://idp.example/metadata/{version}",
             "example.org",
             CommonDomainCookieLifetime::Session,
             None,

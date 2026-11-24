@@ -60,8 +60,8 @@ fn is_disallowed(value: char) -> bool {
         )
 }
 
-/// RFC 2396 `absoluteURI [ "#" fragment ]`.
-fn is_absolute_uri_reference_ascii(value: &str) -> bool {
+/// RFC 2396 `absoluteURI [ "#" fragment ]` without `xs:anyURI` text mapping.
+pub(crate) fn is_absolute_uri_reference_ascii(value: &str) -> bool {
     let (uri, fragment) = match value.split_once('#') {
         Some((uri, fragment)) => (uri, Some(fragment)),
         None => (value, None),
