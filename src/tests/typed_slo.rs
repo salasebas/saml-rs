@@ -2428,6 +2428,63 @@ fn typed_facade_rejects_slo_relay_state_mismatch() -> Result<(), Box<dyn std::er
 }
 
 #[test]
+fn finish_slo_reads_the_unqualified_in_response_to_after_whitespace_collapse(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = sp_started_exchange()?;
+    let request_id = exchange.pending.request_id().as_str();
+    let fields = exchange
+        .response_fields
+        .into_iter()
+        .map(|field| {
+            if field.name() != "SAMLResponse" {
+                return Ok(field);
+            }
+            let xml = String::from_utf8(STANDARD.decode(field.value())?)?;
+            let written = format!(" InResponseTo=\"{request_id}\"");
+            if xml.matches(&written).count() != 1 {
+                return Err(format!("expected one {written:?}").into());
+            }
+            let altered = xml.replacen(
+                &written,
+                &format!(
+                    " xmlns:InResponseTo=\"urn:example:prefix\" InResponseTo=\"&#10; {request_id}&#9;\""
+                ),
+                1,
+            );
+            let start = altered.find("<ds:Signature").ok_or("missing signature")?;
+            let end = altered
+                .find("</ds:Signature>")
+                .ok_or("unterminated signature")?
+                + "</ds:Signature>".len();
+            let mut unsigned = altered;
+            unsigned.replace_range(start..end, "");
+            let key = read_private_key(PRIVKEY, None)?;
+            let signed = sign_saml_xml(&unsigned, true, &key, CERT, RSA_SHA256, &[], None)?;
+            Ok(FormField::new(
+                "SAMLResponse",
+                STANDARD.encode(signed.as_bytes()),
+            ))
+        })
+        .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
+
+    let completed = exchange.sp.finish_slo(
+        &exchange.idp_descriptor,
+        &exchange.pending,
+        Inbound::post(fields),
+        validation(),
+    )?;
+
+    assert_eq!(
+        completed
+            .response()
+            .in_response_to()
+            .map(saml_rs::MessageId::as_str),
+        Some(request_id)
+    );
+    Ok(())
+}
+
+#[test]
 fn typed_facade_rejects_slo_wrong_pending_request_id() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = sp_started_exchange()?;
     let mut snapshot: PendingLogoutRequestSnapshot = exchange.pending.snapshot();

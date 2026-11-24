@@ -46,7 +46,7 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | Accept exactly one `ManageNameIDResponse` in the SOAP body | Mandatory | Bindings §3.2.2.1 | Always |
 | Require `ID`, `Version`, and a UTC `IssueInstant` | Mandatory | `StatusResponseType`, Core §1.3.3, §3.2.2 | Always |
 | Accept only response version `2.0` | Library policy: reason not recorded. | Core §4.1.3.2 | Always |
-| Require the response `InResponseTo`, after XML whitespace collapse, to equal the pending request ID, including on an error response | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2, `StatusResponseType`, XML Schema Part 2 §4.3.6 | Always |
+| Require the unqualified response `InResponseTo`, after XML whitespace collapse, to equal the pending request ID, including on an error response | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2, `StatusResponseType`, XML Schema Part 2 §4.3.6 | Always |
 | Require one `Status` with one direct `StatusCode` | Mandatory | `StatusResponseType`, `StatusType` | Always |
 | Report a status other than `Success` as an error | Library policy: only `Success` confirms the change, and the caller needs the peer's refusal status. | Core §3.6.3 | Always |
 | Require an `Issuer` equal to the service provider, with `Format` omitted or `entity` | Library policy: Profiles §4.5.4.2 binds the responder, and the requester attributes the response to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.2 | Always |
@@ -171,7 +171,7 @@ both clock-skew tolerances to cover the full window on either binding.
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Reject an unsigned response | Library policy: the Redirect signature authenticates the peer and protects the message across the browser redirect. | Profiles §4.5.3.2, §4.5.4.2 | Always. An HMAC signature uses the secret from `with_hmac_secret` on the peer descriptor |
-| Require the response `InResponseTo`, after XML whitespace collapse, to equal the pending request ID, including on an error response | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2, `StatusResponseType`, XML Schema Part 2 §4.3.6 | `PendingManageNameIdRequest` |
+| Require the unqualified response `InResponseTo`, after XML whitespace collapse, to equal the pending request ID, including on an error response | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2, `StatusResponseType`, XML Schema Part 2 §4.3.6 | `PendingManageNameIdRequest` |
 | Require the response to come from the peer the request went to | Library policy: another peer must not complete the pending transaction. | Profiles §4.5.4.2 | Always |
 | Require the `RelayState` the request carried, and accept any when it carried none | Library policy: Bindings §3.4.3 binds the responder, and another transaction's state must not complete this one. | Bindings §3.4.3 | Always |
 | Accept a received `RelayState` over 80 bytes, up to 4096 bytes | Library policy: Bindings §3.4.3 binds the creator and gives the receiver no rule, and the 4096-byte bound limits unauthenticated input. | Bindings §3.4.3 | `MAX_RECEIVED_RELAY_STATE_BYTES` |

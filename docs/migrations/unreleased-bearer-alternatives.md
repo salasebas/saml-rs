@@ -74,6 +74,8 @@ whitespace is now accepted. Before, it returned
 `SsoSession::in_response_to` and `LogoutResponse::in_response_to` return the
 value without the whitespace. The service provider reads the SSO `Response`
 `ID`, `IssueInstant`, `Destination`, and `InResponseTo`, and the assertion
-`ID` and `IssueInstant`, only from unqualified attributes. Before, a namespace
-declaration or a namespace-qualified attribute with the same local name could
-supply the value.
+`ID` and `IssueInstant`, only from unqualified attributes. Both providers do
+the same for the `ID`, `IssueInstant`, `Destination`, and `InResponseTo` of a
+`LogoutResponse` or `ManageNameIDResponse`. Before, a namespace declaration or
+a namespace-qualified attribute with the same local name could supply the
+value.

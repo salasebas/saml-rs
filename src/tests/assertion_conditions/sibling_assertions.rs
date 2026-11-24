@@ -118,11 +118,26 @@ fn assertions_with_distinct_ids_are_accepted_when_each_declares_a_prefix_named_i
     );
     assert_eq!(xml.matches("xmlns:ID=").count(), 2);
 
-    let session = accept_simple_sign(&exchange, &xml)?;
+    let mut cache = RecordingReplayCache::default();
+    let session = exchange.sp.accept_unsolicited_sso(
+        &exchange.idp_descriptor,
+        Inbound::simple_sign(simple_sign_fields(&exchange.response_fields, &xml)?),
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache)),
+    )?;
 
-    assert_eq!(
-        session.assertion_id().as_str(),
-        assertion_ids(&original)?[0]
-    );
+    let first_id = assertion_ids(&original)?
+        .into_iter()
+        .next()
+        .ok_or("missing assertion ID")?;
+    assert_eq!(session.assertion_id().as_str(), first_id);
+    let mut stored: Vec<&str> = cache
+        .seen
+        .keys()
+        .filter_map(|key| key.strip_prefix("assertion_id:"))
+        .collect();
+    stored.sort_unstable();
+    let mut expected = vec![first_id.as_str(), "_second_assertion"];
+    expected.sort_unstable();
+    assert_eq!(stored, expected);
     Ok(())
 }
