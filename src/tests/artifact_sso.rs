@@ -28,6 +28,7 @@ use saml_rs::{
 };
 use url::Url;
 
+mod elliptic_curve;
 mod soap_signatures;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";

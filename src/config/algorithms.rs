@@ -22,6 +22,14 @@ pub enum SignatureAlgorithm {
     RsaSha384,
     /// RSA with SHA-512.
     RsaSha512,
+    /// ECDSA with SHA-256, signed with an EC signing key.
+    EcdsaSha256,
+    /// ECDSA with SHA-384, signed with an EC signing key.
+    EcdsaSha384,
+    /// ECDSA with SHA-512, signed with an EC signing key.
+    EcdsaSha512,
+    /// EdDSA with an Ed25519 signing key. Unavailable with `crypto-fips`.
+    Ed25519,
     /// RSA with SHA-1, signed with an RSA signing key.
     ///
     /// AWS-LC and FIPS do not sign with it.
@@ -50,6 +58,10 @@ impl SignatureAlgorithm {
             Self::RsaSha256 => signature_algorithm::RSA_SHA256,
             Self::RsaSha384 => signature_algorithm::RSA_SHA384,
             Self::RsaSha512 => signature_algorithm::RSA_SHA512,
+            Self::EcdsaSha256 => signature_algorithm::ECDSA_SHA256,
+            Self::EcdsaSha384 => signature_algorithm::ECDSA_SHA384,
+            Self::EcdsaSha512 => signature_algorithm::ECDSA_SHA512,
+            Self::Ed25519 => signature_algorithm::EDDSA_ED25519,
             Self::RsaSha1 => signature_algorithm::RSA_SHA1,
             Self::DsaSha1 => signature_algorithm::DSA_SHA1,
             Self::HmacSha1 => signature_algorithm::HMAC_SHA1,

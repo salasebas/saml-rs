@@ -299,6 +299,9 @@ impl SpConfigBuilder {
     /// - with a crypto provider, a key or certificate in the credentials does
     ///   not load, a key holds only a public key, or a key does not match its
     ///   certificate ([`SamlError::Crypto`]);
+    /// - an ECDSA or Ed25519 signature method does not match the configured
+    ///   signing key ([`SamlError::Invalid`]), or the `crypto-fips` build selects
+    ///   Ed25519 signing ([`SamlError::Unsupported`]);
     /// - without a crypto provider, a certificate is empty or has malformed
     ///   base64 ([`SamlError::Invalid`] or [`SamlError::Base64`]);
     /// - the crypto provider does not support the selected combination of
@@ -313,7 +316,10 @@ impl SpConfigBuilder {
     ///   through 9999.
     pub fn build(self) -> Result<SpConfig, SamlError> {
         #[cfg(crypto)]
-        crate::crypto::keys::check_credentials(&self.credentials)?;
+        crate::crypto::keys::check_credentials(
+            &self.credentials,
+            self.algorithms.signature.as_uri(),
+        )?;
         let engine = self.engine()?;
         validate_sp_policy(&self)?;
         Ok(SpConfig {
@@ -641,6 +647,9 @@ impl IdpConfigBuilder {
     /// - with a crypto provider, a key or certificate in the credentials does
     ///   not load, a key holds only a public key, or a key does not match its
     ///   certificate ([`SamlError::Crypto`]);
+    /// - an ECDSA or Ed25519 signature method does not match the configured
+    ///   signing key ([`SamlError::Invalid`]), or the `crypto-fips` build selects
+    ///   Ed25519 signing ([`SamlError::Unsupported`]);
     /// - without a crypto provider, a certificate is empty or has malformed
     ///   base64 ([`SamlError::Invalid`] or [`SamlError::Base64`]);
     /// - the crypto provider does not support the selected combination of
@@ -655,7 +664,10 @@ impl IdpConfigBuilder {
     pub fn build(self) -> Result<IdpConfig, SamlError> {
         let issuance_lifetime = validated_idp_issuance_lifetime(self.issuance_lifetime)?;
         #[cfg(crypto)]
-        crate::crypto::keys::check_credentials(&self.credentials)?;
+        crate::crypto::keys::check_credentials(
+            &self.credentials,
+            self.algorithms.signature.as_uri(),
+        )?;
         let engine = self.engine()?;
         validate_idp_policy(&self)?;
         Ok(IdpConfig {
