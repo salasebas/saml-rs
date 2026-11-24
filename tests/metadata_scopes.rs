@@ -133,6 +133,21 @@ fn builder_rejects_a_scope_with_invalid_xml_text() -> TestResult {
 }
 
 #[test]
+fn builder_rejects_a_literal_scope_with_uppercase_letters() -> TestResult {
+    let result = IdpConfig::builder(
+        EntityId::try_new(IDP)?,
+        SsoEndpoint::post("https://idp.example.org/sso")?,
+    )
+    .scopes([MetadataScope {
+        value: "Research.example.org".into(),
+        regexp: false,
+    }])
+    .build();
+    assert!(matches!(result, Err(SamlError::Invalid(_))), "{result:?}");
+    Ok(())
+}
+
+#[test]
 fn publishes_scopes_in_role_extensions_alongside_existing_entity_extensions() -> TestResult {
     let scopes = [
         MetadataScope {
@@ -140,7 +155,7 @@ fn publishes_scopes_in_role_extensions_alongside_existing_entity_extensions() ->
             regexp: false,
         },
         MetadataScope {
-            value: "^research&teaching$".into(),
+            value: "^Research&Teaching$".into(),
             regexp: true,
         },
     ];
@@ -172,7 +187,7 @@ fn publishes_scopes_in_role_extensions_alongside_existing_entity_extensions() ->
         literals,
         [
             (Some("example.org"), Some("false")),
-            (Some("^research&teaching$"), Some("true")),
+            (Some("^Research&Teaching$"), Some("true")),
         ]
     );
     let parsed = IdpMetadata::from_xml(idp.metadata_xml())?;

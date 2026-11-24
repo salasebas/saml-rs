@@ -6,12 +6,20 @@ use crate::sp;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+const SP_CERT: &str = include_str!("../../../tests/fixtures/key/sp/cert.cer");
+const IDP_CERT: &str = include_str!("../../../tests/fixtures/key/idp/cert.cer");
+
+fn pem_body(pem: &str) -> String {
+    pem.lines().filter(|line| !line.starts_with('-')).collect()
+}
+
 #[test]
 fn sp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+    let encryption_cert = pem_body(IDP_CERT);
     let cfg = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
-        signing_certs: vec!["MIIBsigning".into()],
-        encrypt_certs: vec!["MIIBencrypt".into()],
+        signing_certs: vec![SP_CERT.into()],
+        encrypt_certs: vec![encryption_cert.clone()],
         authn_requests_signed: true,
         want_assertions_signed: true,
         name_id_format: vec![name_id_format::EMAIL_ADDRESS.to_string()],
@@ -60,7 +68,7 @@ fn sp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
             .x509_certificates(CertUse::Signing)
             .first()
             .map(String::as_str),
-        Some("MIIBsigning")
+        Some(pem_body(SP_CERT).as_str())
     );
     assert_eq!(
         parsed
@@ -68,7 +76,7 @@ fn sp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
             .x509_certificates(CertUse::Encryption)
             .first()
             .map(String::as_str),
-        Some("MIIBencrypt")
+        Some(encryption_cert.as_str())
     );
     Ok(())
 }
@@ -298,7 +306,7 @@ fn metadata_writes_is_default_only_on_indexed_endpoints() -> TestResult {
 fn idp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
-        signing_certs: vec!["MIIBidp".into()],
+        signing_certs: vec![IDP_CERT.into()],
         want_authn_requests_signed: true,
         single_sign_on_service: vec![Endpoint::new(
             Binding::Redirect,
@@ -319,7 +327,7 @@ fn idp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
             .x509_certificates(CertUse::Signing)
             .first()
             .map(String::as_str),
-        Some("MIIBidp")
+        Some(pem_body(IDP_CERT).as_str())
     );
     Ok(())
 }
@@ -390,35 +398,44 @@ fn sp_metadata_escapes_entity_id_attribute_markup() -> TestResult {
 }
 
 #[test]
-fn sp_metadata_escapes_certificate_text_markup() -> TestResult {
-    let injected_cert = concat!(
-        "MIIB</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>",
-        "<NameIDFormat>evil</NameIDFormat>",
-        "<KeyDescriptor><ds:KeyInfo><ds:X509Data><ds:X509Certificate>tail"
-    );
-    let cfg = SpMetadataInput {
+fn sp_metadata_rejects_a_certificate_path_instead_of_certificate_text() {
+    let result = generate_sp_metadata(&SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
-        signing_certs: vec![injected_cert.into()],
+        signing_certs: vec!["certs/sp-signing.pem".into()],
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
         ..Default::default()
-    };
-
-    let xml = generate_sp_metadata(&cfg)?;
-    let parsed = SpMetadata::from_xml(&xml)?;
-
-    assert!(xml.contains("&lt;NameIDFormat&gt;evil&lt;/NameIDFormat&gt;"));
-    assert_eq!(
-        parsed.as_metadata().name_id_formats(),
-        [crate::NameIdFormat::EmailAddress]
+    });
+    assert!(
+        matches!(result, Err(SamlError::Base64 { .. })),
+        "{result:?}"
     );
-    assert_eq!(
-        parsed
-            .as_metadata()
-            .x509_certificates(CertUse::Signing)
-            .len(),
-        1
-    );
+}
+
+#[test]
+fn idp_metadata_rejects_an_encryption_certificate_with_missing_base64_padding() -> TestResult {
+    let certificate = pem_body(IDP_CERT);
+    let missing_padding = certificate
+        .strip_suffix('=')
+        .ok_or("expected a padded certificate fixture")?;
+    let result = generate_idp_metadata(&IdpMetadataInput {
+        entity_id: "https://idp.example.com/metadata".into(),
+        encrypt_certs: vec![missing_padding.into()],
+        single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+        ..Default::default()
+    });
+    assert!(matches!(result, Err(SamlError::Base64 { .. })));
     Ok(())
+}
+
+#[test]
+fn sp_metadata_rejects_an_empty_certificate_file() {
+    let result = generate_sp_metadata(&SpMetadataInput {
+        entity_id: "https://sp.example.com/metadata".into(),
+        signing_certs: vec![String::new()],
+        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+        ..Default::default()
+    });
+    assert!(matches!(result, Err(SamlError::Invalid(_))), "{result:?}");
 }
 
 #[test]
@@ -470,7 +487,7 @@ fn idp_metadata_omits_empty_groups() -> TestResult {
 fn role_children_follow_schema_order_and_keep_endpoint_order() -> TestResult {
     let idp = generate_idp_metadata(&IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
-        signing_certs: vec!["MIIBsigning".into()],
+        signing_certs: vec![IDP_CERT.into()],
         name_id_format: vec![name_id_format::PERSISTENT.to_string()],
         single_sign_on_service: vec![
             Endpoint::new(Binding::Redirect, "https://idp/z"),
@@ -486,7 +503,7 @@ fn role_children_follow_schema_order_and_keep_endpoint_order() -> TestResult {
     })?;
     let sp = generate_sp_metadata(&SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
-        signing_certs: vec!["MIIBsigning".into()],
+        signing_certs: vec![SP_CERT.into()],
         name_id_format: vec![name_id_format::PERSISTENT.to_string()],
         single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
         manage_name_id_service: vec![Endpoint::new(Binding::Redirect, "https://sp/nameid")],

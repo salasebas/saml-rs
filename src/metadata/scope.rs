@@ -68,6 +68,11 @@ pub(super) fn write_scopes(
                 "shibmd:Scope contains invalid XML text".into(),
             ));
         }
+        if !scope.regexp && scope.value.bytes().any(|byte| byte.is_ascii_uppercase()) {
+            return Err(SamlError::Invalid(
+                "literal shibmd:Scope must be lower case".into(),
+            ));
+        }
         let regexp = if scope.regexp { "true" } else { "false" };
         w.text_element_with_attrs("shibmd:Scope", &[("regexp", regexp)], &scope.value);
     }

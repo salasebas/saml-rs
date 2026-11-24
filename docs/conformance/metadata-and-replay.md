@@ -88,6 +88,7 @@ The SP and IdP build metadata with `generate_sp_metadata` and
 | Write `cacheDuration="PT86400S"` when no lifetime is configured | Library policy: a daily refresh target without a fixed expiration for metadata generated once at config build. | Metadata §2.3.2, E94 | `metadata_lifetime` on `SpConfigBuilder` and `IdpConfigBuilder` |
 | Publish several signing `KeyDescriptor` elements | Optional | Metadata §2.4.1, E68 | `Credentials::with_additional_signing_certificate` |
 | Publish several encryption `KeyDescriptor` elements | Optional | Metadata §2.4.1, E68 | `Credentials::with_decryption_credential` |
+| Check that every published `ds:X509Certificate` contains nonempty standard base64. The caller supplies the X.509 certificate bytes | Mandatory | Metadata §2.4.1.1, XML Signature §4.4.4, XML Schema Datatypes §3.2.16 | Always |
 | With a crypto provider, load the signing and decryption keys and all their certificates, including additional signing certificates. Check that each private key matches its certificate | Library policy: peers use the published certificates to verify signatures and encrypt messages. | Metadata §2.4.1.1 | `SpConfigBuilder::build`, `IdpConfigBuilder::build` |
 | Allow decryption with any locally configured key published for encryption. Keys are tried in the order added | Recommended | E68 | `Credentials::with_decryption_credential` |
 
@@ -134,6 +135,7 @@ subject identifiers it supports. The deployment supplies that list.
 | Read direct `shibmd:Scope` declarations in the entity's `Extensions` and in the selected SAML 2.0 IdP roles' `Extensions` | Mandatory capability for relying parties that consume metadata under the Subject Identifier Profile. Recommended by saml2int. | Subject Identifier §3.5.2, §4.2, saml2int SDP-SP17 | `IdpMetadata::scopes`, `IdpDescriptor::scopes` |
 | Preserve the scope text and the `regexp` flag. Treat an omitted flag as false and report malformed declarations when scopes are read | Mandatory | Subject Identifier §3.5.2.1 | Always |
 | Support publishing scopes in the IdP role's `Extensions`. Write `regexp` explicitly on every declaration | Mandatory capability, recommended explicit flag | Subject Identifier §3.5.2, §3.5.2.2, §4.1, `RoleDescriptorType` | `IdpConfigBuilder::scopes`, `IdpMetadataInput::scopes` |
+| Reject uppercase ASCII letters in literal scopes at publication | Library policy: a case-sensitive literal has to match the lowercase scope the typed IdP issues. | Subject Identifier §3.3.1 and §3.5.2 | Always |
 | Verify a pinned root signature for scope authorization under a certificate the SP pins as a trusted third-party registration authority | Library policy: distinguish the authority's signature from a generic metadata publisher's signature. | Subject Identifier §3.5.2, saml2int SDP-SP17, Metadata §3.1.1–§3.1.6 (E91) | `MetadataTrustPolicy::RequireRegistrationAuthoritySignature` |
 
 For the use of declarations after login, see [scoped attributes](web-browser-sso-acceptance.md#scoped-attributes).

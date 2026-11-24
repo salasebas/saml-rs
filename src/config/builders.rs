@@ -301,6 +301,8 @@ impl SpConfigBuilder {
     /// - with a crypto provider, a key or certificate in the credentials does
     ///   not load, a key holds only a public key, or a key does not match its
     ///   certificate ([`SamlError::Crypto`]);
+    /// - without a crypto provider, a certificate is empty or has malformed
+    ///   base64 ([`SamlError::Invalid`] or [`SamlError::Base64`]);
     /// - the crypto provider does not support the selected combination of
     ///   RSA-OAEP digest and mask generation function;
     /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
@@ -312,6 +314,8 @@ impl SpConfigBuilder {
     ///   `unsignedShort` indexes, or a `validUntil` outside the years 0001
     ///   through 9999.
     pub fn build(self) -> Result<SpConfig, SamlError> {
+        #[cfg(crypto)]
+        crate::crypto::keys::check_credentials(&self.credentials)?;
         let engine = self.engine()?;
         validate_sp_policy(&self)?;
         Ok(SpConfig {
@@ -566,6 +570,8 @@ impl IdpConfigBuilder {
     }
 
     /// Append scope declarations to the generated IdP role, in iteration order.
+    ///
+    /// [`Self::build`] rejects literal scopes with uppercase ASCII letters.
     pub fn scopes(
         mut self,
         scopes: impl IntoIterator<Item = crate::metadata::MetadataScope>,
@@ -637,6 +643,8 @@ impl IdpConfigBuilder {
     /// - with a crypto provider, a key or certificate in the credentials does
     ///   not load, a key holds only a public key, or a key does not match its
     ///   certificate ([`SamlError::Crypto`]);
+    /// - without a crypto provider, a certificate is empty or has malformed
+    ///   base64 ([`SamlError::Invalid`] or [`SamlError::Base64`]);
     /// - the crypto provider does not support the selected combination of
     ///   RSA-OAEP digest and mask generation function;
     /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
@@ -648,6 +656,8 @@ impl IdpConfigBuilder {
     ///   `validUntil` outside the years 0001 through 9999.
     pub fn build(self) -> Result<IdpConfig, SamlError> {
         let issuance_lifetime = validated_idp_issuance_lifetime(self.issuance_lifetime)?;
+        #[cfg(crypto)]
+        crate::crypto::keys::check_credentials(&self.credentials)?;
         let engine = self.engine()?;
         validate_idp_policy(&self)?;
         Ok(IdpConfig {
@@ -665,15 +675,11 @@ impl IdpConfigBuilder {
 }
 
 fn validate_shared_policy(
-    _credentials: &Credentials,
     _algorithms: &AlgorithmPolicy,
     templates: &TemplatePolicy,
 ) -> Result<(), SamlError> {
     #[cfg(crypto)]
-    {
-        crate::crypto::keys::check_credentials(_credentials)?;
-        super::encryption::validate_algorithms(_algorithms)?;
-    }
+    super::encryption::validate_algorithms(_algorithms)?;
     validate_tag_prefixes(
         &templates.tag_prefix_protocol,
         &templates.tag_prefix_assertion,
@@ -690,7 +696,7 @@ fn validate_shared_policy(
 fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
     #[cfg(not(crypto))]
     validate_sp_crypto_support(config)?;
-    validate_shared_policy(&config.credentials, &config.algorithms, &config.templates)?;
+    validate_shared_policy(&config.algorithms, &config.templates)?;
     #[cfg(crypto)]
     if authn_request_signing_enabled(config.validation.authn_request_signing) {
         validate_signing_credentials(&config.credentials, config.algorithms.signature.as_uri())?;
@@ -706,7 +712,7 @@ fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
 fn validate_idp_policy(config: &IdpConfigBuilder) -> Result<(), SamlError> {
     #[cfg(not(crypto))]
     validate_idp_crypto_support(config)?;
-    validate_shared_policy(&config.credentials, &config.algorithms, &config.templates)
+    validate_shared_policy(&config.algorithms, &config.templates)
 }
 
 fn validated_idp_issuance_lifetime(
