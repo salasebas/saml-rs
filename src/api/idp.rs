@@ -195,8 +195,8 @@ impl IdentityProvider {
     /// [`SsoOutcome::Failure`] with a top-level `Success` status or a
     /// subordinate code that is not an absolute URI reference, an error
     /// diagnostic contains characters XML 1.0 forbids or has no
-    /// non-whitespace character. Returns
-    /// [`SamlError`] when the request issuer does not match the SP
+    /// non-whitespace character, or the request `ID` is not an `xs:NCName`.
+    /// Returns [`SamlError`] when the request issuer does not match the SP
     /// descriptor, relay state is invalid, the request ACS selection conflicts
     /// with the response binding or SP metadata, required metadata or signing
     /// keys are missing, a request without ACS or binding selection has an
@@ -306,7 +306,8 @@ impl IdentityProvider {
     ///
     /// Returns [`SamlError`] when the descriptor or delivery endpoint cannot
     /// be used, the selected binding conflicts with the ACS, the caller sets
-    /// RelayState, or the response cannot be created or signed.
+    /// RelayState, the request `ID` is not an `xs:NCName`, or the response
+    /// cannot be created or signed.
     pub fn respond_sso_refusal(
         &self,
         sp: &SpDescriptor,

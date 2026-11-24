@@ -66,6 +66,7 @@ unsigned request from an SP whose metadata declares `AuthnRequestsSigned`.
 | Write `Destination` as the assertion consumer service URL. A signed message needs it, and the crate writes it on every response | Mandatory | Bindings §3.5.5.2, CD-04 §2.4 | Always |
 | Write every time value in UTC, and never a leap second | Mandatory | Core §1.3.3 | Always |
 | Match `InResponseTo`, on the `Response` and on the bearer `SubjectConfirmationData`, to the `AuthnRequest` `ID` | Mandatory | Core §3.2.2, Profiles §4.1.4.2, E26 | Always |
+| Reject a response to a request whose `ID` is not an `xs:NCName`, because `InResponseTo` cannot carry it | Mandatory | Core §1.3.4, `StatusResponseType`, `SubjectConfirmationDataType` | Always |
 | Omit `InResponseTo` from an unsolicited `Response` | Mandatory | Core §3.2.2, Profiles §4.1.5 | Always |
 | Omit `InResponseTo` from the bearer `SubjectConfirmationData` of an unsolicited response | Recommended | Profiles §4.1.5 | Always |
 | Write a bearer assertion that has an `AuthnStatement` | Mandatory | Profiles §4.1.4.2, E26 | Always |

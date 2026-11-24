@@ -21,6 +21,8 @@ The response is rejected in these cases:
   `NameId` has `NameQualifier`, `SPNameQualifier`, or `SPProvidedID`. The
   effective format is the first configured NameID format when the `NameId`
   has none.
+- The received `AuthnRequest` `ID` is not an `xs:NCName`, so it cannot be
+  written as `InResponseTo`. `receive_sso` still accepts such a request.
 
 To upgrade, pass an absolute URI, such as a constant from
 `saml_rs::constants::authn_context_class_ref`, or build the value with
@@ -34,3 +36,5 @@ use saml_rs::{NameId, NameIdFormat};
 let partner = NameId::new("https://partner.example.org/metadata")
     .with_format(NameIdFormat::Entity);
 ```
+
+A request whose `ID` is not an `xs:NCName` cannot get a response.

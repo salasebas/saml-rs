@@ -188,3 +188,36 @@ fn a_name_id_without_a_format_follows_the_configured_entity_format(
     );
     Ok(())
 }
+
+#[test]
+fn a_request_id_that_is_not_an_ncname_is_not_written_as_in_response_to(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default(), false)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let request_id = started.pending.request_id().as_str();
+    let xml = authn_request_xml(&started.outbound)?
+        .replace(&format!("ID=\"{request_id}\""), "ID=\"1-not-an-ncname\"");
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        Inbound::post(vec![FormField::new(
+            "SAMLRequest",
+            STANDARD.encode(xml.as_bytes()),
+        )]),
+        validation(),
+    )?;
+    assert_eq!(received.message().id().as_str(), "1-not-an-ncname");
+
+    for outcome in [
+        SsoOutcome::Success(SsoAssertion::new(principal())),
+        SsoOutcome::Failure(Status::responder()),
+    ] {
+        let response = idp.respond_sso(&sp_descriptor, &received, outcome, RespondSso::post());
+        assert!(
+            matches!(response, Err(SamlError::Invalid(_))),
+            "{response:?}"
+        );
+    }
+    Ok(())
+}
