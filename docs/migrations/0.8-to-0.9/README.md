@@ -27,6 +27,7 @@ Check the topics that affect your integration.
 - [Honor the requested NameID namespace](name-id-policy-namespace.md)
 - [Update metadata configuration and trust](metadata.md)
 - [Update metadata imports and accessors](metadata-api.md)
+- [Supply the collapsed metadata entity ID](metadata-entity-id.md)
 - [Correct metadata signing flags](metadata-signing-flags.md)
 - [Keep response signatures for SPs with several SAML 2.0 roles](sso-response-signatures.md)
 - [Move schema validation into XML policy](xml-policy.md)

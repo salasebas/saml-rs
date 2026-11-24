@@ -1,5 +1,6 @@
 use crate::constants::namespace;
 use crate::error::SamlError;
+use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::dom::{self, XmlLimits};
 use crate::xml::protocol_element::{self, SamlElement};
 use crate::xml::{xs_boolean, ExtractorField};
@@ -13,6 +14,7 @@ pub(super) enum SsoDescriptorRole {
 
 pub(super) struct SelectedDescriptors<'a> {
     pub(super) nodes: Vec<&'a dom::Node>,
+    pub(super) entity_id: Option<String>,
     pub(super) valid_until_bounds: Vec<String>,
     pub(super) signing_flags: SigningFlags,
     pub(super) scope_elements: Vec<SamlElement>,
@@ -53,6 +55,9 @@ impl SsoDescriptorRole {
                         .flat_map(|entity| &entity.children)
                         .filter(|child| is_sso_descriptor(child))
                         .collect(),
+                    entity_id: entity
+                        .and_then(|node| node.attr("entityID"))
+                        .map(str::to_owned),
                     valid_until_bounds: Vec::new(),
                     signing_flags: SigningFlags::default(),
                     scope_elements: Vec::new(),
@@ -64,10 +69,14 @@ impl SsoDescriptorRole {
         let document = protocol_element::parse_saml_with_limits(xml, limits)?;
         let entity = entity.ok_or_else(|| SamlError::MissingMetadata(local_name.into()))?;
         let (namespaced, mut valid_until_bounds) = namespaced_entity(document, entity)?;
+        let is_metadata_entity = namespaced.is(namespace::METADATA, "EntityDescriptor");
+        let entity_id = if is_metadata_entity {
+            namespaced.attr("entityID").map(collapse_whitespace)
+        } else {
+            None
+        };
         let mut scope_elements = Vec::new();
-        if matches!(self, Self::IdentityProvider)
-            && namespaced.is(namespace::METADATA, "EntityDescriptor")
-        {
+        if matches!(self, Self::IdentityProvider) && is_metadata_entity {
             scope_elements.extend(super::scope::scope_elements(&namespaced).cloned());
         }
         let mut nodes = Vec::new();
@@ -100,6 +109,7 @@ impl SsoDescriptorRole {
         }
         Ok(SelectedDescriptors {
             nodes,
+            entity_id,
             valid_until_bounds,
             signing_flags,
             scope_elements,
