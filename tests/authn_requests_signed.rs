@@ -267,26 +267,25 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
 fn default_idp_reports_whether_a_signature_authenticated_the_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = idp(IdpValidationPolicy::default())?;
-    for (policy, expected) in [
-        (
-            AuthnRequestSigningPolicy::Sign,
-            MessageAuthentication::Authenticated,
-        ),
-        (
-            AuthnRequestSigningPolicy::DoNotSign,
-            MessageAuthentication::Unauthenticated,
-        ),
+    let unsigned_sp = sp(AuthnRequestSigningPolicy::DoNotSign)?;
+    let (receiving_descriptor, idp_descriptor) = descriptors(&unsigned_sp, &idp)?;
+    assert!(!unsigned_sp
+        .metadata_xml()
+        .contains("AuthnRequestsSigned=\"true\""));
+    let signing_sp = sp(AuthnRequestSigningPolicy::Sign)?;
+    for (sender, expected) in [
+        (&signing_sp, MessageAuthentication::Authenticated),
+        (&unsigned_sp, MessageAuthentication::Unauthenticated),
     ] {
-        let sp = sp(policy)?;
-        let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-        let post = sp.start_sso(&idp_descriptor, StartSso::post())?;
-        let redirect = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+        let post = sender.start_sso(&idp_descriptor, StartSso::post())?;
+        let redirect = sender.start_sso(&idp_descriptor, StartSso::redirect())?;
         for input in [
             post_input(&post.outbound)?,
+            Inbound::simple_sign(post.outbound.post_form()?.fields().to_vec()),
             redirect_input(&redirect.outbound)?,
         ] {
-            let received = idp.receive_sso(&sp_descriptor, input, validation())?;
-            assert_eq!(received.authentication(), expected, "{policy:?}");
+            let received = idp.receive_sso(&receiving_descriptor, input, validation())?;
+            assert_eq!(received.authentication(), expected);
         }
     }
     Ok(())

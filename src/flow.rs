@@ -193,7 +193,7 @@ pub(crate) enum SignedMessageDestination {
     Optional,
 }
 
-/// Whether the identity provider authenticated a received request.
+/// Whether a received request was authenticated.
 ///
 /// [`Received::authentication`](crate::Received::authentication) reports it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

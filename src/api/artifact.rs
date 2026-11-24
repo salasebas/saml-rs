@@ -155,7 +155,7 @@ impl IdentityProvider {
     ///
     /// # Errors
     ///
-    /// Returns the delivery and signing errors of [`Self::respond_sso_refusal`].
+    /// Returns the errors of [`Self::respond_sso_refusal`].
     /// Also returns an error when the SOAP resolution endpoint is missing
     /// or the artifact cannot be stored. Returns [`SamlError::LimitExceeded`]
     /// when the response cannot fit in a SOAP `ArtifactResponse` under the

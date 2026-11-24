@@ -2,9 +2,9 @@
 
 If you run an identity provider, `IdentityProvider::respond_sso`,
 `initiate_sso`, `respond_sso_refusal`, and their artifact variants now
-return `SamlError::Invalid` for values that a SAML response cannot carry.
-Before, the identity provider wrote them and the service provider received a
-response that breaks SAML Core.
+return `SamlError::Invalid` for values that SAML Core does not allow in a
+response, and for `entity` identifiers with surrounding whitespace. Before,
+the identity provider wrote these values.
 
 The response is rejected in these cases:
 
@@ -21,8 +21,9 @@ The response is rejected in these cases:
   `NameId` has `NameQualifier`, `SPNameQualifier`, or `SPProvidedID`. The
   effective format is the first configured NameID format when the `NameId`
   has none.
-- The received `AuthnRequest` `ID` is not an `xs:NCName`, so it cannot be
-  written as `InResponseTo`. `receive_sso` still accepts such a request.
+- The received `AuthnRequest` `ID`, with XML whitespace collapsed, is not an
+  `xs:NCName`, so it cannot be written as `InResponseTo`. `receive_sso` still
+  accepts such a request.
 
 To upgrade, pass an absolute URI, such as a constant from
 `saml_rs::constants::authn_context_class_ref`, or build the value with

@@ -26,9 +26,9 @@ fn entity_name_id_of_length(length: usize) -> NameId {
     NameId::new(value).with_format(NameIdFormat::Entity)
 }
 
-#[test]
-fn a_forwarded_status_with_a_relative_subordinate_code_is_not_written(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn forward_upstream_status(
+    upstream_code: &str,
+) -> Result<Result<Outbound<SsoResponse>, SamlError>, Box<dyn std::error::Error>> {
     let sp = sp_with(SpValidationPolicy::default())?;
     let idp = idp_with(IdpValidationPolicy::default(), false)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -41,7 +41,7 @@ fn a_forwarded_status_with_a_relative_subordinate_code_is_not_written(
         RespondSso::post(),
     )?;
     let xml = without_signature(&response_xml(&sent)?)?
-        .replace("urn:example:status:upstream", "upstream-failure");
+        .replace("urn:example:status:upstream", upstream_code);
 
     let received =
         match sp.accept_unsolicited_sso(&idp_descriptor, post_response(&xml), validation()) {
@@ -50,38 +50,58 @@ fn a_forwarded_status_with_a_relative_subordinate_code_is_not_written(
         };
     assert_eq!(
         received.subordinate().map(SubordinateStatusCode::as_uri),
-        Some("upstream-failure")
+        Some(upstream_code)
     );
-
-    let forwarded = idp.initiate_sso(
+    Ok(idp.initiate_sso(
         &sp_descriptor,
         SsoOutcome::Failure(received),
         RespondSso::post(),
-    );
+    ))
+}
+
+#[test]
+fn a_forwarded_status_is_written_only_with_an_absolute_subordinate_code(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let relative = forward_upstream_status("upstream-failure")?;
     assert!(
-        matches!(forwarded, Err(SamlError::Invalid(_))),
-        "{forwarded:?}"
+        matches!(relative, Err(SamlError::Invalid(_))),
+        "{relative:?}"
     );
+
+    let with_space = "https://idp.example.com/status/needs review";
+    let xml = response_xml(&forward_upstream_status(with_space)??)?;
+    assert!(xml.contains(&format!("Value=\"{with_space}\"")), "{xml}");
     Ok(())
 }
 
 #[test]
-fn a_status_message_without_a_non_whitespace_character_is_rejected(
+fn a_status_message_needs_a_character_other_than_xml_whitespace(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(SpValidationPolicy::default())?;
     let idp = idp_with(IdpValidationPolicy::default(), false)?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-    for message in [" ", "\r\n\t"] {
-        let response = idp.initiate_sso(
+    let respond = |message: &str| {
+        idp.initiate_sso(
             &sp_descriptor,
             SsoOutcome::Failure(Status::responder()),
             RespondSso::post().status_message(message),
-        );
+        )
+    };
+    for message in [" ", "\r\n\t"] {
+        let response = respond(message);
         assert!(
             matches!(response, Err(SamlError::Invalid(_))),
             "{message:?}: {response:?}"
         );
     }
+    let no_break_space = "\u{a0}";
+    let xml = response_xml(&respond(no_break_space)?)?;
+    assert!(
+        xml.contains(&format!(
+            "<samlp:StatusMessage>{no_break_space}</samlp:StatusMessage>"
+        )),
+        "{xml}"
+    );
     Ok(())
 }
 
@@ -189,16 +209,25 @@ fn a_name_id_without_a_format_follows_the_configured_entity_format(
     Ok(())
 }
 
-#[test]
-fn a_request_id_that_is_not_an_ncname_is_not_written_as_in_response_to(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn receive_with_request_id(
+    request_id: &str,
+) -> Result<
+    (
+        IdentityProvider,
+        SpDescriptor,
+        saml_rs::Received<AuthnRequest>,
+    ),
+    Box<dyn std::error::Error>,
+> {
     let sp = sp_with(SpValidationPolicy::default())?;
     let idp = idp_with(IdpValidationPolicy::default(), false)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
-    let request_id = started.pending.request_id().as_str();
-    let xml = authn_request_xml(&started.outbound)?
-        .replace(&format!("ID=\"{request_id}\""), "ID=\"1-not-an-ncname\"");
+    let generated = started.pending.request_id().as_str();
+    let xml = authn_request_xml(&started.outbound)?.replace(
+        &format!("ID=\"{generated}\""),
+        &format!("ID=\"{request_id}\""),
+    );
     let received = idp.receive_sso(
         &sp_descriptor,
         Inbound::post(vec![FormField::new(
@@ -207,8 +236,14 @@ fn a_request_id_that_is_not_an_ncname_is_not_written_as_in_response_to(
         )]),
         validation(),
     )?;
-    assert_eq!(received.message().id().as_str(), "1-not-an-ncname");
+    assert_eq!(received.message().id().as_str(), request_id);
+    Ok((idp, sp_descriptor, received))
+}
 
+#[test]
+fn a_request_id_is_written_as_in_response_to_only_as_an_ncname(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (idp, sp_descriptor, received) = receive_with_request_id("1-not-an-ncname")?;
     for outcome in [
         SsoOutcome::Success(SsoAssertion::new(principal())),
         SsoOutcome::Failure(Status::responder()),
@@ -219,5 +254,15 @@ fn a_request_id_that_is_not_an_ncname_is_not_written_as_in_response_to(
             "{response:?}"
         );
     }
+
+    let (idp, sp_descriptor, received) = receive_with_request_id(" _padded ")?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(principal()),
+        RespondSso::post(),
+    )?;
+    let xml = response_xml(&response)?;
+    assert_eq!(xml.matches("InResponseTo=\"_padded\"").count(), 2, "{xml}");
     Ok(())
 }

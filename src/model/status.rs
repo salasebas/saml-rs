@@ -127,23 +127,17 @@ impl SubordinateStatusCode {
     /// Returns [`SamlError::Invalid`] when `uri` has whitespace, contains
     /// `"`, `<`, or `>`, or is not an absolute URI reference.
     pub fn try_new(uri: impl Into<String>) -> Result<Self, SamlError> {
-        let code = Self { uri: uri.into() };
-        code.check_writable()?;
-        Ok(code)
-    }
-
-    fn check_writable(&self) -> Result<(), SamlError> {
-        let uri = &self.uri;
+        let uri = uri.into();
         if uri.chars().any(char::is_whitespace)
             || uri.contains(['"', '<', '>'])
-            || !is_absolute_uri_reference(uri)
+            || !is_absolute_uri_reference(&uri)
         {
             return Err(SamlError::Invalid(
                 "subordinate status code must be an absolute URI without whitespace, double quotes, or angle brackets"
                     .into(),
             ));
         }
-        Ok(())
+        Ok(Self { uri })
     }
 
     /// URI carried in the nested `StatusCode/@Value`.
@@ -232,9 +226,16 @@ impl Status {
     }
 
     pub(crate) fn check_writable(&self) -> Result<(), SamlError> {
-        self.subordinate
+        if self
+            .subordinate
             .as_ref()
-            .map_or(Ok(()), SubordinateStatusCode::check_writable)
+            .is_some_and(|code| !is_absolute_uri_reference(code.as_uri()))
+        {
+            return Err(SamlError::Invalid(
+                "a subordinate status code must be an absolute URI reference".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// Top-level status code.
