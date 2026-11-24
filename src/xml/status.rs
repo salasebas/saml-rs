@@ -29,6 +29,9 @@ struct Shape {
 pub(crate) fn read_status(xml: &str, limits: XmlLimits) -> Result<Status, SamlError> {
     limits.check_input_bytes(xml.len())?;
     let mut reader = NsReader::from_str(xml);
+    reader
+        .resolver_mut()
+        .set_max_namespace_bindings(limits.max_attributes_per_element);
     let mut open = Vec::new();
     let mut shape = Shape::default();
     loop {

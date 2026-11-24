@@ -297,6 +297,23 @@ mod tests {
     }
 
     #[test]
+    fn status_reader_uses_the_configured_namespace_budget() -> Result<(), SamlError> {
+        let declarations: String = (0..129)
+            .map(|index| format!(r#" xmlns:n{index}="urn:example:{index}""#))
+            .collect();
+        let response = RESPONSE.replacen(
+            "<samlp:Response ",
+            &format!("<samlp:Response{declarations} "),
+            1,
+        );
+        let raised = XmlLimits {
+            max_attributes_per_element: 256,
+            ..XmlLimits::default()
+        };
+        check_status(&response, ParserType::SamlResponse, raised)
+    }
+
+    #[test]
     fn received_top_level_status_compares_the_any_uri_value() -> Result<(), SamlError> {
         let success = crate::constants::status_code::SUCCESS;
         let padded = RESPONSE.replace(success, &format!("&#9;{success} &#13;"));

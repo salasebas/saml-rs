@@ -263,7 +263,7 @@ impl std::fmt::Display for SoapFaultCode {
 ///   [`Self::headers`] when processing fails before a SAML response exists.
 ///   Use the `fault` code of a [`SamlError::SoapEnvelope`]. For another error,
 ///   use [`SoapFaultCode::Client`] only when you know the request must
-///   change, such as after a failed signature check, and
+///   change, such as a missing required signature, and
 ///   [`SoapFaultCode::Server`] otherwise.
 ///
 /// # Examples
@@ -435,7 +435,7 @@ pub(crate) fn read_soap_body(envelope: &str, limits: XmlLimits) -> Result<SoapBo
 
 fn read_envelope_body(envelope: &str, limits: XmlLimits) -> Result<SoapBody, SamlError> {
     let document = dom::parse_document(envelope, limits)?;
-    let scan = scan_envelope(envelope)?;
+    let scan = scan_envelope(envelope, limits)?;
     let child_namespace = scan
         .child
         .ok_or_else(|| SamlError::xml("SOAP body must contain one SAML protocol element"))?;
@@ -554,8 +554,11 @@ fn single_element_child(body: &Node) -> Result<&Node, SamlError> {
     Ok(child)
 }
 
-fn scan_envelope(xml: &str) -> Result<SoapScan, SamlError> {
+fn scan_envelope(xml: &str, limits: XmlLimits) -> Result<SoapScan, SamlError> {
     let mut reader = NsReader::from_str(xml);
+    reader
+        .resolver_mut()
+        .set_max_namespace_bindings(limits.max_attributes_per_element);
     let mut buf = Vec::new();
     let mut depth = 0usize;
     let mut scan = SoapScan::default();
@@ -614,18 +617,12 @@ fn observe_start(
     scan: &mut SoapScan,
     empty: bool,
 ) -> Result<(), SamlError> {
-    let (namespace, local_name) = reader.resolver().resolve_element(element.name());
-    let local_name = local_name.as_ref().to_string();
-    let namespace = bound_namespace(&namespace)
-        .map(|uri| quick_xml::escape::unescape(uri).map_err(xml_err))
-        .transpose()?;
-    let namespace = namespace.as_deref();
-
     if depth == 1 {
+        let (local_name, namespace) = expanded_name(reader, element)?;
         if local_name != "Envelope" {
             return Err(SamlError::xml("SOAP message root must be Envelope"));
         }
-        if namespace != Some(SOAP_NAMESPACE) {
+        if namespace.as_deref() != Some(SOAP_NAMESPACE) {
             return Err(SamlError::soap_envelope(
                 SoapFaultCode::VersionMismatch,
                 SamlError::xml("SOAP message must use the SOAP 1.1 envelope namespace"),
@@ -636,7 +633,8 @@ fn observe_start(
     }
 
     if depth == 2 && scan.saw_envelope {
-        if namespace != Some(SOAP_NAMESPACE) {
+        let (local_name, namespace) = expanded_name(reader, element)?;
+        if namespace.as_deref() != Some(SOAP_NAMESPACE) {
             return Err(SamlError::xml(
                 "SOAP Header and Body must use the SOAP 1.1 namespace",
             ));
@@ -676,12 +674,28 @@ fn observe_start(
                 "SOAP body must contain exactly one SAML protocol element".into(),
             ));
         }
+        let (local_name, namespace) = expanded_name(reader, element)?;
         scan.child = Some(NamedNamespace {
             local_name,
-            namespace: namespace.unwrap_or("").to_string(),
+            namespace: namespace.unwrap_or_default(),
         });
     }
     Ok(())
+}
+
+fn expanded_name(
+    reader: &NsReader<&[u8]>,
+    element: &BytesStart<'_>,
+) -> Result<(String, Option<String>), SamlError> {
+    let (namespace, local_name) = reader.resolver().resolve_element(element.name());
+    let namespace = bound_namespace(&namespace)
+        .map(|uri| {
+            quick_xml::escape::unescape(uri)
+                .map(std::borrow::Cow::into_owned)
+                .map_err(xml_err)
+        })
+        .transpose()?;
+    Ok((local_name.as_ref().to_owned(), namespace))
 }
 
 /// Whether a header entry is addressed to this receiver, through no SOAP
@@ -803,6 +817,25 @@ mod tests {
             fault_of(SoapBodyElement::from_envelope(envelope)),
             Some(SoapFaultCode::MustUnderstand)
         );
+    }
+
+    #[test]
+    fn soap_envelope_scan_uses_the_configured_namespace_budget() -> Result<(), SamlError> {
+        let declarations: String = (0..129)
+            .map(|index| format!(r#" xmlns:n{index}="urn:example:{index}""#))
+            .collect();
+        let envelope = format!(
+            r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"{declarations}><soap:Body><samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></soap:Body></soap:Envelope>"#
+        );
+        let raised = XmlLimits {
+            max_attributes_per_element: 256,
+            ..XmlLimits::default()
+        };
+        assert_eq!(
+            read_soap_body(&envelope, raised)?.local_name,
+            "ArtifactResolve"
+        );
+        Ok(())
     }
 
     #[test]
