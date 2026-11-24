@@ -4,14 +4,15 @@ use crate::constants::Binding;
 use crate::entity::{capture_idp_issuance_window, now_iso8601, EntitySetting};
 use crate::logout::{
     create_logout_request_for_subject_inner, create_logout_response_inner, decrypt_encrypted_id,
-    parse_logout_request_at, parse_logout_response_at, CreatedLogoutRequest, LogoutFlowValidation,
-    LogoutReceipt, LogoutRequestInput, LogoutRequestSubject, LogoutRequestValidation,
-    LogoutResponseInput,
+    has_async_slo_marker, parse_logout_request_at, parse_logout_response_at, CreatedLogoutRequest,
+    LogoutFlowValidation, LogoutReceipt, LogoutRequestInput, LogoutRequestSubject,
+    LogoutRequestValidation, LogoutResponseInput,
 };
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
-    LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, Received, RefusedLogoutRequest,
-    RelayState, ReplayKey, SamlInstant, SamlValidationContext, SessionIndex, Status,
+    IdpLogoutAction, LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, Received,
+    RefusedLogoutRequest, RelayState, ReplayKey, SamlInstant, SamlValidationContext, SessionIndex,
+    Status,
 };
 use crate::xml::protocol_element::parse_saml_with_limits;
 use crate::xml::OutboundNameIdQualifiers;
@@ -160,7 +161,9 @@ impl ServiceProvider {
             peer,
             input,
             validation,
+            SloReceiveMode::Standard,
         )
+        .map(|(request, _)| request)
     }
 
     /// Respond to a received IdP LogoutRequest.
@@ -371,6 +374,8 @@ impl IdentityProvider {
     ///
     /// Browser requests require a verified signature. SOAP also accepts an
     /// unsigned request over a mutually authenticated, integrity-protected channel.
+    /// To support browser requests with the Asynchronous Single Logout
+    /// extension, use [`Self::receive_slo_with_async`].
     ///
     /// The identifier requirement is the same as for [`ServiceProvider::receive_slo`].
     ///
@@ -429,7 +434,49 @@ impl IdentityProvider {
             peer,
             input,
             validation,
+            SloReceiveMode::Standard,
         )
+        .map(|(request, _)| request)
+    }
+
+    /// Receive an SP LogoutRequest with support for Asynchronous Single Logout
+    /// on HTTP-Redirect and HTTP-POST.
+    ///
+    /// For [`IdpLogoutAction::CompleteLocally`], use the request's issuer,
+    /// `NameID`, and session indexes to find the relevant sessions. End those
+    /// sessions and present the outcome at the IdP, including on failure.
+    /// Session lookup, termination, and propagation to other SPs belong to
+    /// the application.
+    ///
+    /// For [`IdpLogoutAction::Respond`], process the request and pass it to
+    /// [`Self::respond_slo`] with the outcome.
+    ///
+    /// # Errors
+    ///
+    /// Applies the same validation as [`Self::receive_slo`]. An authenticated
+    /// newer version with the asynchronous marker returns
+    /// [`SamlError::ProtocolProfile`] for local error feedback. An ordinary
+    /// request with a newer version still returns a refusal to send.
+    pub fn receive_slo_with_async(
+        &self,
+        sp: &SpDescriptor,
+        input: Inbound<LogoutRequest>,
+        validation: SamlValidationContext<'_>,
+    ) -> Result<IdpLogoutAction, SamlError> {
+        let peer = Peer::from_sp(sp, validation.now())?;
+        let (request, asynchronous) = receive_slo_impl(
+            &self.engine().setting,
+            self.engine().metadata.as_metadata(),
+            peer,
+            input,
+            validation,
+            SloReceiveMode::RecognizeAsynchronous,
+        )?;
+        Ok(if asynchronous {
+            IdpLogoutAction::CompleteLocally(request.into_message())
+        } else {
+            IdpLogoutAction::Respond(request)
+        })
     }
 
     /// Respond to a received SP LogoutRequest.
@@ -684,13 +731,20 @@ fn issue_logout_request(
     })
 }
 
+#[derive(Clone, Copy)]
+enum SloReceiveMode {
+    Standard,
+    RecognizeAsynchronous,
+}
+
 fn receive_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
     peer: Peer<'_>,
     input: Inbound<LogoutRequest>,
     mut validation: SamlValidationContext<'_>,
-) -> Result<Received<LogoutRequest>, SamlError> {
+    mode: SloReceiveMode,
+) -> Result<(Received<LogoutRequest>, bool), SamlError> {
     let relay_state = relay_state_from_input(&input)?;
     let binding = LogoutBinding::try_from(input.binding())?;
     let expected_recipient = logout_recipient_endpoint(
@@ -714,9 +768,24 @@ fn receive_slo_impl(
             peer.hmac_secret,
         ),
     )?;
+    let recognizes_async = matches!(
+        (mode, binding),
+        (
+            SloReceiveMode::RecognizeAsynchronous,
+            LogoutBinding::Redirect | LogoutBinding::Post
+        )
+    );
+    let parse_document = || parse_saml_with_limits(&flow.saml_content, local_setting.xml_limits);
+    let async_document = recognizes_async.then(parse_document).transpose()?;
+    let asynchronous = async_document.as_ref().is_some_and(has_async_slo_marker);
     if let Some(refusal) =
         RefusedLogoutRequest::for_version(&flow, peer.entity_id, relay_state.as_ref(), binding)?
     {
+        if asynchronous {
+            return Err(SamlError::ProtocolProfile(
+                "Asynchronous LogoutRequest uses an unsupported SAML version".into(),
+            ));
+        }
         return Err(SamlError::LogoutRequestRefused {
             refusal: Box::new(refusal),
         });
@@ -726,7 +795,10 @@ fn receive_slo_impl(
         validation.now_offset()?,
         validation.clock_skew().not_on_or_after_millis(),
     )?;
-    let document = parse_saml_with_limits(&flow.saml_content, local_setting.xml_limits)?;
+    let document = match async_document {
+        Some(document) => document,
+        None => parse_document()?,
+    };
     let reason = document.attr("Reason").map(str::to_owned);
     let logout = LogoutRequest::from_flow(flow, reason)?;
     validation.check_and_store_message_replay_until(
@@ -734,7 +806,7 @@ fn receive_slo_impl(
         replay_deadline,
     )?;
     let logout = decrypt_encrypted_id(logout, local_setting, &document)?;
-    Ok(Received::new(logout, relay_state))
+    Ok((Received::new(logout, relay_state), asynchronous))
 }
 
 #[derive(Clone, Copy)]

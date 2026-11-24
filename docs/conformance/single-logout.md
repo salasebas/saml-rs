@@ -34,6 +34,17 @@ to the initiator.
 | Cover the extension with the query signature on Redirect and the embedded signature on POST | Mandatory | Profiles §4.4.4.1, Bindings §3.4.4.1, §3.5.5.2 | Always |
 | Use an explicit call for an IdP endpoint that the application knows supports asynchronous logout | Library policy: support can be configured out of band because publishing it in metadata is optional. | Async SLO §2.3 | `start_async_slo` |
 
+### Asynchronous Single Logout at the session authority
+
+`IdentityProvider::receive_slo_with_async` supports HTTP-Redirect and HTTP-POST.
+The [logout acceptance rules](#logout-acceptance) apply. The application owns
+session lookup, session termination, and propagation to other participants.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Recognize an empty `aslo:Asynchronous` element only as a direct child of `samlp:LogoutRequest/samlp:Extensions` in the authenticated request | Mandatory | Async SLO §2.1, `AsynchronousType`, `RequestAbstractType` | `receive_slo_with_async` |
+| Finish at the IdP without a `LogoutResponse` to the initiator. The application presents the outcome on success or failure | Mandatory | Async SLO §2.2, Core §3.7.3.2 | `IdpLogoutAction::CompleteLocally` |
+
 ## LogoutRequest from a session authority
 
 `IdentityProvider::start_slo` is this actor.

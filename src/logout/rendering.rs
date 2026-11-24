@@ -6,6 +6,8 @@ use crate::model::Status;
 use crate::xml::write::{Prefixes, XmlWriter};
 use crate::xml::OutboundNameIdQualifiers;
 
+use super::ASYNC_SLO_NAMESPACE;
+
 pub(crate) fn issuer_of(setting: &EntitySetting, meta: &Metadata) -> String {
     setting
         .entity_id
@@ -117,13 +119,7 @@ pub(crate) fn render_logout_request(
     if asynchronous {
         let extensions_name = prefixes.protocol("Extensions");
         writer.start(&extensions_name, &[]);
-        writer.empty(
-            "aslo:Asynchronous",
-            &[(
-                "xmlns:aslo",
-                "urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo",
-            )],
-        );
+        writer.empty("aslo:Asynchronous", &[("xmlns:aslo", ASYNC_SLO_NAMESPACE)]);
         writer.end(&extensions_name);
     }
     let qualifiers = subject.qualifiers;

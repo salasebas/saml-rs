@@ -57,7 +57,7 @@ For HTTP-POST, use `StartSlo::post()` and get the form with
 `outbound.post_form()?`. After building the request, end the local
 application session. Then redirect the browser to `url` or return the POST form.
 This flow ends at dispatch for the SP. It returns no pending state for
-`finish_slo`. This crate supports the SP initiator role for the extension.
+`finish_slo`.
 
 ### Receive a logout from the IdP
 
@@ -109,6 +109,42 @@ let status = match end_session(&logout_request) {
 };
 let logout_response = idp.respond_slo(&sp, &logout_request, &status, RespondSlo::post())?;
 ```
+
+### Receive asynchronous logout
+
+Use `IdentityProvider::receive_slo_with_async` on an IdP endpoint that supports
+asynchronous logout over HTTP-Redirect or HTTP-POST. The method verifies the
+request before it looks for the extension.
+
+```rust
+use saml_rs::{IdpLogoutAction, Inbound, RespondSlo, SamlError, Status};
+
+match idp.receive_slo_with_async(&sp, Inbound::post(request_fields), validation) {
+    Ok(IdpLogoutAction::CompleteLocally(request)) => {
+        let outcome = end_sessions(request.issuer(), request.name_id(), request.session_indexes());
+        render_logout_result(outcome)
+    }
+    Ok(IdpLogoutAction::Respond(request)) => {
+        let status = match end_session(&request) {
+            Ok(()) => Status::success(),
+            Err(_) => Status::responder(),
+        };
+        send_post(idp.respond_slo(&sp, &request, &status, RespondSlo::post())?)
+    }
+    Err(SamlError::LogoutRequestRefused { refusal, .. }) => {
+        send_post(idp.respond_slo_refusal(&sp, &refusal, RespondSlo::post())?)
+    }
+    Err(error) => render_logout_failure(error),
+}
+```
+
+In the local branch, look up sessions associated with the requesting SP and
+use the full `NameID` and the supplied session indexes to select which sessions
+to end. Your application owns the session store and any logout propagation to
+other SPs. Render the result at the IdP for both success and failure. The local
+branch sends no `LogoutResponse` to the initiating SP.
+
+### Start logout at the IdP
 
 When the identity provider starts logout itself, `IdentityProvider::start_slo` is the session authority. It always emits `LogoutRequest@NotOnOrAfter`. The deadline comes from the same issuance lifetime used for assertion time bounds. The five-minute default is library policy. Why that does not claim an ordering against every historical assertion is in [Logout expiration](../explanation/logout-expiration.md).
 

@@ -12,6 +12,16 @@ use crate::error::SamlError;
 use crate::flow::FlowResult;
 use crate::xml::fields::{logout_request, logout_response, name_id, request, response, ISSUER};
 
+/// How the IdP completes an authenticated SP logout request.
+#[derive(Debug, Clone)]
+pub enum IdpLogoutAction {
+    /// End the relevant sessions and send a LogoutResponse with the outcome.
+    Respond(Received<LogoutRequest>),
+    /// End the relevant sessions and present the outcome at the IdP without
+    /// sending a LogoutResponse to the initiating SP.
+    CompleteLocally(LogoutRequest),
+}
+
 /// An authenticated LogoutRequest that requires a version mismatch response.
 #[derive(Debug, Clone)]
 pub struct RefusedLogoutRequest {
