@@ -20,5 +20,6 @@ additions.
 - [Configure ECDSA and Ed25519 signing](unreleased-elliptic-curve-signing.md)
 - [Read received formats without surrounding whitespace](unreleased-format-whitespace.md)
 - [Import peers from a federation aggregate](unreleased-metadata-aggregate.md)
+- [Check messages against the URL that received them](unreleased-receiving-url-checks.md)
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

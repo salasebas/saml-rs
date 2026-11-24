@@ -346,18 +346,27 @@ pub enum SamlError {
         /// What prevented lookup of the identity provider.
         reason: IdpResolutionReason,
     },
-    /// Response `Destination` does not match the expected recipient URL.
+    /// A message `Destination` does not match the expected recipient URL or is
+    /// missing where required, an outbound response would go to an
+    /// unpublished assertion consumer, or
+    /// `finish_sso` received the response at another assertion consumer than
+    /// the pending request asked for.
     #[error("destination mismatch: expected {expected}, got {actual:?}")]
     #[non_exhaustive]
     DestinationMismatch {
         /// Expected recipient URL.
         expected: String,
-        /// Actual destination value extracted from the message, when available.
+        /// The URL compared with `expected`, when one is available: the
+        /// message's `Destination`, the published default assertion consumer
+        /// for an outbound response, or the receiving URL supplied with
+        /// [`crate::SamlValidationContext::with_recipient_endpoint`] that
+        /// `finish_sso` rejects before parsing.
         actual: Option<String>,
     },
-    /// The URL given to
-    /// [`crate::SamlValidationContext::with_recipient_endpoint`] is not
-    /// published in local metadata for the message's binding and direction.
+    /// The receiving URL given to
+    /// [`crate::SamlValidationContext::with_recipient_endpoint`] or
+    /// [`crate::IdentityProvider::answer_artifact_resolve`] is not published
+    /// in local metadata for the message's binding and direction.
     #[error("receiving endpoint is not published for this binding and message direction")]
     RecipientEndpointNotPublished,
     /// Local metadata publishes several endpoints for the message's binding

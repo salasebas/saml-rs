@@ -89,6 +89,7 @@ fn parse_attested_soap_logout_response(
         &logout_response_request(issue_instant_attribute),
         "_req1",
         LogoutFlowValidation::typed(None, SystemTime::now(), ClockSkew::strict(), None),
+        None,
     )
     .map(|parsed| parsed.flow)
 }

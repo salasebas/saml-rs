@@ -1,5 +1,5 @@
 use crate::browser::{
-    Inbound, Outbound, PendingAuthnRequest, SsoResponseBinding, Started, Transport,
+    AcsEndpoint, Inbound, Outbound, PendingAuthnRequest, SsoResponseBinding, Started, Transport,
 };
 use crate::config::{EntityId, IdpDescriptor, SpConfig};
 use crate::constants::Binding;
@@ -278,6 +278,13 @@ impl ServiceProvider {
     /// The service provider verifies every signature on the response and its
     /// assertions, including any embedded signatures on HTTP-POST-SimpleSign.
     ///
+    /// A present `Destination` and the bearer `Recipient` must name the
+    /// assertion consumer that received the response, which must be the one
+    /// [`PendingAuthnRequest::acs`] asked for. Supply the receiving URL with
+    /// [`SamlValidationContext::with_recipient_endpoint`]; it must be published
+    /// for the pending request's binding. When omitted, the library assumes
+    /// the response arrived at the requested assertion consumer.
+    ///
     /// HTTP-POST requires [`crate::ReplayPolicy::RequireCache`]. After response
     /// parsing and verification, a missing cache returns
     /// [`SamlError::ReplayCacheRequired`]. A storage failure returns
@@ -310,6 +317,11 @@ impl ServiceProvider {
     /// and the pending request's `RelayState` if it carried one. A successful
     /// HTTP-Artifact response with no XML signature on the `Response` or on
     /// each assertion returns [`SamlError::SignatureMissing`].
+    /// Returns [`SamlError::RecipientEndpointNotPublished`] when the supplied
+    /// recipient endpoint is not an assertion consumer published for the
+    /// pending request's binding, and [`SamlError::DestinationMismatch`] with
+    /// the requested location as `expected` and the supplied URL as `actual`
+    /// when it is another published assertion consumer.
     /// An `Attribute` without an unqualified `Name` returns
     /// [`SamlError::ProtocolProfile`]. The `Conditions` time window returns
     /// [`SamlError::TimeWindowInvalid`] when both bounds are present and
@@ -569,13 +581,14 @@ impl ServiceProvider {
         ensure_sso_response_binding(input.binding(), pending.acs().binding())?;
         let relay_state = relay_state_from_input(&input)?;
         let peer_idp = idp_engine_at(idp, validation.now())?;
+        let expected_recipient = self.solicited_recipient(pending.acs(), validation)?;
         let parse = ResponseParseInput::try_new(idp, input, self.engine().setting.xml_limits)?;
         let parsed = self.engine().parse_login_response_with_request_id_at(
             peer_idp,
             self.engine()
                 .decode_login_response(parse.binding, &parse.request)?,
             pending.request_id().as_str(),
-            parse.options(validation, pending.acs().location().as_str()),
+            parse.options(validation, &expected_recipient),
         );
         let relay_state_check = ensure_relay_state(pending.relay_state(), relay_state.as_ref());
         let flow = parsed.map_err(|error| match relay_state_check {
@@ -607,6 +620,30 @@ impl ServiceProvider {
             relay_state,
             validation,
         )
+    }
+
+    fn solicited_recipient(
+        &self,
+        requested: &AcsEndpoint,
+        validation: &SamlValidationContext<'_>,
+    ) -> Result<String, SamlError> {
+        let requested_location = requested.location().as_str();
+        if validation.recipient_endpoint().is_none() {
+            return Ok(requested_location.to_string());
+        }
+        let received_at = validation.resolve_recipient_endpoint(
+            &self
+                .engine()
+                .metadata
+                .assertion_consumer_service_locations(Binding::from(requested.binding())),
+        )?;
+        if received_at != requested_location {
+            return Err(SamlError::destination_mismatch(
+                requested_location,
+                Some(&received_at),
+            ));
+        }
+        Ok(received_at)
     }
 
     fn unsolicited_recipient(

@@ -251,6 +251,7 @@ fn present_artifact_signatures_require_a_crypto_provider() -> Result<(), Box<dyn
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &with_signature(request),
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     );
@@ -259,10 +260,13 @@ fn present_artifact_signatures_require_a_crypto_provider() -> Result<(), Box<dyn
         "{answer:?}"
     );
 
-    let answer =
-        parties
-            .idp
-            .answer_artifact_resolve(&parties.sp_metadata, request, &mut issued, channel)?;
+    let answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        request,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
+        &mut issued,
+        channel,
+    )?;
     let envelope = answer.response().envelope();
     let result = resolution.finish(&with_signature(envelope));
     assert!(
@@ -317,6 +321,7 @@ fn web_browser_sso_round_trip_returns_the_stored_response() -> Result<(), Box<dy
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         request.envelope(),
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     )?;
@@ -362,6 +367,7 @@ fn a_different_presenter_does_not_receive_the_message() -> Result<(), Box<dyn st
     let answer = parties.idp.answer_artifact_resolve(
         &parties.other_metadata,
         hostile.request().envelope(),
+        hostile.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -382,6 +388,7 @@ fn a_different_presenter_does_not_receive_the_message() -> Result<(), Box<dyn st
     let second = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         legitimate.request().envelope(),
+        legitimate.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -407,6 +414,7 @@ fn web_sso_without_confidentiality_withholds_the_message() -> Result<(), Box<dyn
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         weak,
     )?;
@@ -434,6 +442,7 @@ fn the_issuer_returns_a_web_sso_message_only_once() -> Result<(), Box<dyn std::e
     let first = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         first_resolution.request().envelope(),
+        first_resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -447,6 +456,7 @@ fn the_issuer_returns_a_web_sso_message_only_once() -> Result<(), Box<dyn std::e
     let second = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         second_resolution.request().envelope(),
+        second_resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -550,6 +560,7 @@ fn artifact_source_id_is_the_sha1_of_the_issuer_entity_id() -> Result<(), Box<dy
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &request,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     )?;
@@ -574,12 +585,19 @@ fn a_version_mismatch_does_not_consume_the_artifact() -> Result<(), Box<dyn std:
     let old_request = envelope.replacen("Version=\"2.0\"", "Version=\"1.1\"", 1);
     assert!(parties
         .idp
-        .answer_artifact_resolve(&parties.sp_metadata, &old_request, &mut issued, channel)
+        .answer_artifact_resolve(
+            &parties.sp_metadata,
+            &old_request,
+            &EndpointUrl::try_new(RESOLUTION_URL)?,
+            &mut issued,
+            channel
+        )
         .is_err());
     let mismatched = envelope.replacen("Version=\"2.0\"", "Version=\"3.0\"", 1);
     let rejected = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &mismatched,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     )?;
@@ -595,6 +613,7 @@ fn a_version_mismatch_does_not_consume_the_artifact() -> Result<(), Box<dyn std:
     let accepted = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -626,6 +645,7 @@ fn an_unknown_or_unreadable_artifact_does_not_consume_another(
     let withheld = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &unknown_request,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     )?;
@@ -640,10 +660,13 @@ fn an_unknown_or_unreadable_artifact_does_not_consume_another(
         .request()
         .envelope()
         .replace(artifact.as_str(), &broken);
-    let unreadable =
-        parties
-            .idp
-            .answer_artifact_resolve(&parties.sp_metadata, &spaced, &mut issued, channel)?;
+    let unreadable = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &spaced,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
+        &mut issued,
+        channel,
+    )?;
     assert_eq!(
         unreadable.release(),
         ArtifactRelease::Withheld(ArtifactWithheld::NotOutstanding)
@@ -652,6 +675,7 @@ fn an_unknown_or_unreadable_artifact_does_not_consume_another(
     let accepted = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -679,6 +703,7 @@ fn a_destination_mismatch_withholds_the_message_and_leaves_it_outstanding(
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &redirected,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     )?;
@@ -692,11 +717,100 @@ fn a_destination_mismatch_withholds_the_message_and_leaves_it_outstanding(
         &format!("Destination=\" {RESOLUTION_URL}&#10;\""),
     );
     assert_ne!(padded, resolution.request().envelope());
-    let accepted =
-        parties
-            .idp
-            .answer_artifact_resolve(&parties.sp_metadata, &padded, &mut issued, channel)?;
+    let accepted = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &padded,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
+        &mut issued,
+        channel,
+    )?;
     assert_eq!(accepted.release(), ArtifactRelease::Returned);
+    Ok(())
+}
+
+#[test]
+fn a_request_addressed_to_another_published_endpoint_is_withheld(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let second = EndpointUrl::try_new("https://idp.example.com/artifact/second")?;
+    let idp = IdentityProvider::new(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect("https://idp.example.com/sso")?,
+        )
+        .artifact_resolution_service(ArtifactResolutionService::new(
+            0,
+            EndpointUrl::try_new(RESOLUTION_URL)?,
+        ))
+        .artifact_resolution_service(ArtifactResolutionService::new(1, second.clone()))
+        .build()?,
+    );
+    let idp_metadata = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        idp.metadata_xml(),
+        MetadataTrustPolicy::Unverified,
+    )?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let artifact = idp.issue_artifact(&parties.sp_metadata, &web_sso_response(), 0, &mut issued)?;
+    let channel = confidential();
+    let resolution =
+        parties
+            .sp
+            .resolve_artifact(&idp_metadata, &artifact, channel, without_replay_cache())?;
+    assert_eq!(resolution.request().endpoint().as_str(), RESOLUTION_URL);
+
+    let misrouted = idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        resolution.request().envelope(),
+        &second,
+        &mut issued,
+        channel,
+    )?;
+    assert_eq!(
+        misrouted.release(),
+        ArtifactRelease::Withheld(ArtifactWithheld::DestinationMismatch)
+    );
+    assert!(!misrouted.response().envelope().contains(WEB_SSO_MARKER));
+
+    let unpublished = idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        resolution.request().envelope(),
+        &EndpointUrl::try_new("https://idp.example.com/sso")?,
+        &mut issued,
+        channel,
+    );
+    assert!(
+        matches!(unpublished, Err(SamlError::RecipientEndpointNotPublished)),
+        "{unpublished:?}"
+    );
+
+    let answered = idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        resolution.request().envelope(),
+        resolution.request().endpoint(),
+        &mut issued,
+        channel,
+    )?;
+    assert_eq!(answered.release(), ArtifactRelease::Returned);
+
+    let artifact = idp.issue_artifact(&parties.sp_metadata, &web_sso_response(), 0, &mut issued)?;
+    let resolution =
+        parties
+            .sp
+            .resolve_artifact(&idp_metadata, &artifact, channel, without_replay_cache())?;
+    let addressed_to_second = resolution.request().envelope().replace(
+        &format!("Destination=\"{RESOLUTION_URL}\""),
+        &format!("Destination=\"{}\"", second.as_str()),
+    );
+    assert_ne!(addressed_to_second, resolution.request().envelope());
+    let answered_at_second = idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &addressed_to_second,
+        &second,
+        &mut issued,
+        channel,
+    )?;
+    assert_eq!(answered_at_second.release(), ArtifactRelease::Returned);
     Ok(())
 }
 
@@ -854,6 +968,7 @@ fn the_issuer_releases_another_protocol_message_without_confidentiality(
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         authenticated_without_confidentiality(),
     )?;
@@ -882,10 +997,13 @@ fn a_header_the_responder_must_understand_is_refused_without_consuming_the_artif
         "<soap:Header><ext:Trace xmlns:ext=\"urn:example:trace\" soap:mustUnderstand=\"1\">note</ext:Trace></soap:Header><soap:Body>",
         1,
     );
-    let refused =
-        parties
-            .idp
-            .answer_artifact_resolve(&parties.sp_metadata, &required, &mut issued, channel);
+    let refused = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &required,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
+        &mut issued,
+        channel,
+    );
     assert!(matches!(refused, Err(SamlError::Xml { .. })));
 
     let for_router = resolution.request().envelope().replacen(
@@ -896,6 +1014,7 @@ fn a_header_the_responder_must_understand_is_refused_without_consuming_the_artif
     let accepted = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &for_router,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     )?;
@@ -921,6 +1040,7 @@ fn the_service_provider_rejects_an_artifact_response_it_cannot_attribute(
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -976,6 +1096,7 @@ fn a_non_entity_resolve_issuer_does_not_receive_the_message(
     let withheld = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &email_issuer,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     )?;
@@ -992,6 +1113,7 @@ fn a_non_entity_resolve_issuer_does_not_receive_the_message(
     let withheld = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &padded_issuer,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     )?;
@@ -1006,6 +1128,7 @@ fn a_non_entity_resolve_issuer_does_not_receive_the_message(
     let accepted = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &padded_entity_format,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     )?;
@@ -1043,6 +1166,7 @@ fn the_service_provider_rejects_an_artifact_response_without_id_or_instant(
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -1084,15 +1208,19 @@ fn a_foreign_artifact_sibling_does_not_release_the_message(
         "</samlp:Artifact><other:Artifact xmlns:other=\"urn:example:other\">extra</other:Artifact>",
         1,
     );
-    let refused =
-        parties
-            .idp
-            .answer_artifact_resolve(&parties.sp_metadata, &foreign, &mut issued, channel);
+    let refused = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &foreign,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
+        &mut issued,
+        channel,
+    );
     assert!(matches!(refused, Err(SamlError::ProtocolProfile(_))));
 
     let accepted = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -1154,6 +1282,7 @@ fn a_duplicate_resolve_issuer_is_refused_as_malformed() -> Result<(), Box<dyn st
     let refused = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &duplicated,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     );
@@ -1162,6 +1291,7 @@ fn a_duplicate_resolve_issuer_is_refused_as_malformed() -> Result<(), Box<dyn st
     let accepted = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -1185,6 +1315,7 @@ fn the_service_provider_rejects_an_artifact_response_with_two_statuses(
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -1222,6 +1353,7 @@ fn the_service_provider_reports_an_artifact_response_without_a_status(
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -1271,6 +1403,7 @@ fn namespaces_declared_on_the_soap_envelope_reach_the_protocol_message(
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &hoisted_request,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     )?;
@@ -1359,6 +1492,7 @@ fn a_removed_artifact_is_no_longer_outstanding() -> Result<(), Box<dyn std::erro
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -1385,6 +1519,7 @@ fn an_artifact_past_its_lifetime_is_no_longer_outstanding() -> Result<(), Box<dy
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -1430,6 +1565,7 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits(
     let refused = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &deep_request,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     );
@@ -1452,6 +1588,7 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits(
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &wide_request,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
     )?;

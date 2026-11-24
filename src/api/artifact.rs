@@ -4,7 +4,7 @@ use crate::artifact::{
 use crate::browser::{ArtifactDelivery, Outbound};
 use crate::config::{IdpDescriptor, SpDescriptor};
 use crate::model::{
-    AuthnRequest, Received, RefusedAuthnRequest, SamlValidationContext, SsoResponse,
+    AuthnRequest, EndpointUrl, Received, RefusedAuthnRequest, SamlValidationContext, SsoResponse,
 };
 use crate::soap::SoapChannel;
 use std::time::SystemTime;
@@ -202,13 +202,19 @@ impl IdentityProvider {
 
     /// Answer `ArtifactResolve` with `ArtifactResponse`.
     ///
+    /// `received_at` is the URL of the HTTP handler that received
+    /// `request_envelope`. Take it from the handler, never from the request.
+    /// It must be a SOAP `ArtifactResolutionService` location that this
+    /// identity provider publishes. A present `Destination` must equal it.
+    ///
     /// The protocol message is included only when `presenter` is the service
     /// provider the artifact was issued to, `channel` supplies the protection
     /// that message requires, and `issued` atomically consumes the matching
     /// outstanding entry. [`AnsweredArtifact::release`] says whether the
-    /// response includes the message. An unknown artifact, a different
-    /// destination or presenter, insufficient channel protection, or a race
-    /// lost to another responder gets `Success` without the message. An
+    /// response includes the message. An unknown artifact, a `Destination`
+    /// other than `received_at`, a different presenter, insufficient channel
+    /// protection, or a race lost to another responder gets `Success` without
+    /// the message. An
     /// unsupported newer version gets `VersionMismatch`, with
     /// `RequestVersionTooHigh` for a newer major version. A present XML
     /// signature must cover the `ArtifactResolve` and verify against
@@ -216,7 +222,9 @@ impl IdentityProvider {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when `request_envelope` cannot be read as a SOAP
+    /// Returns [`SamlError::RecipientEndpointNotPublished`] when `received_at`
+    /// is not a published SOAP `ArtifactResolutionService` location. Returns
+    /// [`SamlError`] when `request_envelope` cannot be read as a SOAP
     /// 1.1 envelope. Returns [`SamlError::ProtocolProfile`] when the body is
     /// not one `ArtifactResolve`, the request lacks exactly one `Artifact`
     /// value or has a second `Issuer`, or the required `ID`, `Version`, or UTC
@@ -279,9 +287,11 @@ impl IdentityProvider {
     ///     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut replay))
     ///         .with_replay_retention(Duration::from_secs(10 * 60)),
     /// )?;
+    /// let received_at = EndpointUrl::try_new("https://idp.example.com/artifact")?;
     /// let answer = idp.answer_artifact_resolve(
     ///     &sp_descriptor,
     ///     resolution.request().envelope(),
+    ///     &received_at,
     ///     &mut issued,
     ///     channel,
     /// )?;
@@ -293,6 +303,7 @@ impl IdentityProvider {
         &self,
         presenter: &SpDescriptor,
         request_envelope: &str,
+        received_at: &EndpointUrl,
         issued: &mut (impl ArtifactStore + ?Sized),
         channel: SoapChannel,
     ) -> Result<AnsweredArtifact, SamlError> {
@@ -301,6 +312,7 @@ impl IdentityProvider {
             &self.engine().metadata,
             presenter,
             request_envelope,
+            received_at,
             issued,
             channel,
             &self.engine().setting,

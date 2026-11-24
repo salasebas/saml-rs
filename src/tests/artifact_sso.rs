@@ -254,6 +254,7 @@ fn an_artifact_response_keeps_exclusive_canonicalization_inside_soap(
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         confidential(),
     )?;
@@ -451,6 +452,7 @@ fn resolve(
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         issued,
         confidential(),
     )?;
@@ -588,6 +590,7 @@ fn artifact_error_exposes_only_diagnostic_signed_by_inner_response(
         let answer = parties.idp.answer_artifact_resolve(
             &parties.sp_metadata,
             resolution.request().envelope(),
+            resolution.request().endpoint(),
             &mut issued,
             confidential(),
         )?;
@@ -901,6 +904,7 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
     let answer = other.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         confidential(),
     )?;
@@ -1035,6 +1039,7 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
     let answer = parties.idp.answer_artifact_resolve(
         &sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         confidential(),
     )?;
@@ -1325,6 +1330,7 @@ fn a_typed_sso_artifact_response_is_withheld_without_confidentiality(
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         SoapChannel::new(
             PartyAuthentication::Mutual,

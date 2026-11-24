@@ -238,6 +238,7 @@ fn one_idp_node_issues_and_another_node_answers_from_a_shared_store() -> TestRes
     let answer = node_b.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut store_b,
         channel,
     )?;
@@ -255,6 +256,7 @@ fn one_idp_node_issues_and_another_node_answers_from_a_shared_store() -> TestRes
     let replay = node_a.answer_artifact_resolve(
         &parties.sp_metadata,
         second_resolution.request().envelope(),
+        second_resolution.request().endpoint(),
         &mut store_a,
         channel,
     )?;
@@ -313,8 +315,10 @@ fn two_concurrent_nodes_racing_on_one_artifact_return_the_message_only_once() ->
                 MetadataTrustPolicy::Unverified,
             )
             .map_err(|err| err.to_string())?;
+            let received_at =
+                EndpointUrl::try_new(RESOLUTION_URL).map_err(|err| err.to_string())?;
             let answer = node
-                .answer_artifact_resolve(&sp, &request_envelope, &mut store, channel)
+                .answer_artifact_resolve(&sp, &request_envelope, &received_at, &mut store, channel)
                 .map_err(|err| err.to_string())?;
             if answer.release() == ArtifactRelease::Returned {
                 if !answer.response().envelope().contains(WEB_SSO_MARKER) {
@@ -380,13 +384,27 @@ fn shared_mutex_issued_artifacts_returns_a_message_only_once_across_threads() ->
                 MetadataTrustPolicy::Unverified,
             )
             .map_err(|err| err.to_string())?;
+            let received_at =
+                EndpointUrl::try_new(RESOLUTION_URL).map_err(|err| err.to_string())?;
             barrier.wait();
             let answer = if index % 2 == 0 {
                 let mut owned = Arc::clone(&shared);
-                node.answer_artifact_resolve(&sp, &request_envelope, &mut owned, channel)
+                node.answer_artifact_resolve(
+                    &sp,
+                    &request_envelope,
+                    &received_at,
+                    &mut owned,
+                    channel,
+                )
             } else {
                 let mut borrowed = shared.as_ref();
-                node.answer_artifact_resolve(&sp, &request_envelope, &mut borrowed, channel)
+                node.answer_artifact_resolve(
+                    &sp,
+                    &request_envelope,
+                    &received_at,
+                    &mut borrowed,
+                    channel,
+                )
             }
             .map_err(|err| err.to_string())?;
             Ok(answer.release())
@@ -434,8 +452,9 @@ fn withheld_requests_never_consume_the_artifact_from_the_store() -> TestResult {
             .answer_artifact_resolve(
                 &parties.other_metadata,
                 hostile.request().envelope(),
+                hostile.request().endpoint(),
                 &mut store,
-                channel,
+                channel
             )?
             .release(),
         ArtifactRelease::Withheld(ArtifactWithheld::DifferentPresenter)
@@ -446,8 +465,9 @@ fn withheld_requests_never_consume_the_artifact_from_the_store() -> TestResult {
             .answer_artifact_resolve(
                 &parties.sp_metadata,
                 resolution.request().envelope(),
+                resolution.request().endpoint(),
                 &mut store,
-                authenticated_without_confidentiality(),
+                authenticated_without_confidentiality()
             )?
             .release(),
         ArtifactRelease::Withheld(ArtifactWithheld::InsufficientChannelProtection)
@@ -462,8 +482,9 @@ fn withheld_requests_never_consume_the_artifact_from_the_store() -> TestResult {
             .answer_artifact_resolve(
                 &parties.sp_metadata,
                 &wrong_destination,
+                &EndpointUrl::try_new(RESOLUTION_URL)?,
                 &mut store,
-                channel,
+                channel
             )?
             .release(),
         ArtifactRelease::Withheld(ArtifactWithheld::DestinationMismatch)
@@ -473,6 +494,7 @@ fn withheld_requests_never_consume_the_artifact_from_the_store() -> TestResult {
     let accepted = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut store,
         channel,
     )?;
@@ -561,6 +583,7 @@ fn conditional_consume_does_not_delete_a_replaced_entry() -> TestResult {
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut store,
         channel,
     )?;
@@ -599,6 +622,7 @@ fn expiration_between_lookup_and_consume_withholds_the_message() -> TestResult {
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut store,
         channel,
     )?;
@@ -670,6 +694,7 @@ fn expiration_at_consume_time_withholds_the_message() -> TestResult {
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut store,
         channel,
     )?;
@@ -712,6 +737,7 @@ fn existing_caller_wrappers_and_auto_traits_remain_compatible() -> TestResult {
         let answer = parties.idp.answer_artifact_resolve(
             &parties.sp_metadata,
             resolution.request().envelope(),
+            resolution.request().endpoint(),
             &mut guard,
             channel,
         )?;
@@ -734,6 +760,7 @@ fn existing_caller_wrappers_and_auto_traits_remain_compatible() -> TestResult {
         let answer = parties.idp.answer_artifact_resolve(
             &parties.sp_metadata,
             resolution.request().envelope(),
+            resolution.request().endpoint(),
             &mut guard,
             channel,
         )?;
@@ -754,6 +781,7 @@ fn existing_caller_wrappers_and_auto_traits_remain_compatible() -> TestResult {
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut boxed,
         channel,
     )?;
@@ -774,6 +802,7 @@ fn existing_caller_wrappers_and_auto_traits_remain_compatible() -> TestResult {
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut borrowed,
         channel,
     )?;
@@ -886,6 +915,7 @@ fn storage_failures_fail_closed_without_releasing_an_unconsumed_artifact() -> Te
     let lookup_failed = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut store,
         channel,
     );
@@ -898,6 +928,7 @@ fn storage_failures_fail_closed_without_releasing_an_unconsumed_artifact() -> Te
     let consume_failed = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut store,
         channel,
     );
@@ -910,6 +941,7 @@ fn storage_failures_fail_closed_without_releasing_an_unconsumed_artifact() -> Te
     let recovered = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut store,
         channel,
     )?;
@@ -956,8 +988,9 @@ fn poisoned_mutex_artifact_store_fails_closed() -> TestResult {
             parties.idp.answer_artifact_resolve(
                 &parties.sp_metadata,
                 resolution.request().envelope(),
+                resolution.request().endpoint(),
                 store,
-                channel,
+                channel
             ),
             Err(SamlError::ArtifactStoreUnavailable { .. })
         ));
@@ -1019,6 +1052,7 @@ fn issued_artifacts_clock_expiry_debug_redaction_and_dynamic_dispatch() -> TestR
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;
@@ -1141,6 +1175,7 @@ fn web_browser_sso_artifact_flows_work_across_two_idp_nodes_with_a_shared_store(
     let answer = node_b.answer_artifact_resolve(
         &sp_descriptor,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut store_b,
         channel,
     )?;
@@ -1170,6 +1205,7 @@ fn web_browser_sso_artifact_flows_work_across_two_idp_nodes_with_a_shared_store(
     let answer = node_b.answer_artifact_resolve(
         &sp_descriptor,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut store_b,
         channel,
     )?;

@@ -353,6 +353,7 @@ fn unsigned_request_refusal_reaches_an_artifact_acs() -> Result<(), Box<dyn std:
     let answer = idp.answer_artifact_resolve(
         &sp_descriptor,
         resolution.request().envelope(),
+        resolution.request().endpoint(),
         &mut issued,
         channel,
     )?;

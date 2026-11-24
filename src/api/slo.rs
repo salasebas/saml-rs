@@ -240,6 +240,11 @@ impl ServiceProvider {
     /// accepts a response over any of those bindings that the local metadata
     /// publishes. A SOAP request accepts only its SOAP response.
     ///
+    /// A present `Destination` must name the local `SingleLogoutService` that
+    /// received the response. For a SOAP response, that is the local SOAP
+    /// `SingleLogoutService` location; a SOAP response without `Destination`
+    /// needs no local SOAP endpoint.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the response does not match the pending
@@ -568,6 +573,11 @@ impl IdentityProvider {
     /// accepts a response over any of those bindings that the local metadata
     /// publishes. A SOAP request accepts only its SOAP response.
     ///
+    /// A present `Destination` must name the local `SingleLogoutService` that
+    /// received the response. For a SOAP response, that is the local SOAP
+    /// `SingleLogoutService` location; a SOAP response without `Destination`
+    /// needs no local SOAP endpoint.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the response does not match the pending
@@ -883,18 +893,25 @@ fn finish_slo_impl(
     let binding = logout_response_binding(input.binding(), pending.request_binding())?;
     let relay_state = relay_state_from_input(&input)?;
     ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
-    // A SOAP response returns on this party's own HTTP exchange, so no local
-    // endpoint received it.
-    let expected_recipient = match binding {
-        LogoutBinding::Soap => None,
-        binding @ (LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign) => {
+    let (expected_recipient, unresolved_recipient) = match binding {
+        LogoutBinding::Soap => match logout_recipient_endpoint(
+            local_metadata,
+            LogoutBinding::Soap,
+            EndpointDirection::Request,
+            &validation,
+        ) {
+            Ok(recipient) => (Some(recipient), None),
+            Err(error) => (None, Some(error)),
+        },
+        binding @ (LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign) => (
             Some(logout_recipient_endpoint(
                 local_metadata,
                 binding,
                 EndpointDirection::Response,
                 &validation,
-            )?)
-        }
+            )?),
+            None,
+        ),
     };
     let receipt = LogoutReceipt::of_input(&input)?;
     let request =
@@ -911,6 +928,7 @@ fn finish_slo_impl(
             validation.clock_skew(),
             peer.hmac_secret,
         ),
+        unresolved_recipient,
     )?;
     let response = LogoutResponse::from_flow(&parsed.flow, parsed.status_message)?;
     validation.check_and_store_message_replay(ReplayKey::LogoutResponse(response.id().clone()))?;
