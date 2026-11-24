@@ -76,6 +76,7 @@ value without the whitespace. The service provider reads the SSO `Response`
 `ID`, `IssueInstant`, `Destination`, and `InResponseTo`, and the assertion
 `ID` and `IssueInstant`, only from unqualified attributes. Both providers do
 the same for the `ID`, `IssueInstant`, `Destination`, and `InResponseTo` of a
-`LogoutResponse` or `ManageNameIDResponse`, and read a `SubjectConfirmation`
-`Method` the same way. Before, a namespace declaration with the same local
-name, such as `xmlns:InResponseTo`, could supply the value.
+`LogoutResponse` or `ManageNameIDResponse`. The service provider also reads
+`SubjectConfirmation@Method` only from an unqualified attribute. Before, a
+namespace declaration with the same local name, such as `xmlns:InResponseTo`,
+could supply the value.
