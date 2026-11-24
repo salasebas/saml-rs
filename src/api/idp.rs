@@ -220,9 +220,8 @@ impl IdentityProvider {
     /// [`SamlError::NameIdPolicyRequiresEncryptedId`] if the request asks for
     /// `encrypted` and identifier encryption is disabled.
     ///
-    /// For an assertion, it also returns [`SamlError`] when a basic attribute
-    /// name is not an XML name, its format is not an absolute URI, a
-    /// `subject-id` or `pairwise-id` attribute breaks the rules of
+    /// For an assertion, it also returns [`SamlError`] when an attribute
+    /// breaks the rules of
     /// [`SsoAssertion::attributes`](crate::SsoAssertion::attributes), the
     /// persistent or transient `NameId` is longer than 256 characters, also
     /// when the format is the first configured NameID format, an `entity`
@@ -351,9 +350,8 @@ impl IdentityProvider {
     /// selected binding is unsupported, the configured issuance expiration
     /// overflows the supported timestamp range, or response creation fails.
     ///
-    /// For an assertion, it also returns [`SamlError`] when a basic attribute
-    /// name is not an XML name, its format is not an absolute URI, a
-    /// `subject-id` or `pairwise-id` attribute breaks the rules of
+    /// For an assertion, it also returns [`SamlError`] when an attribute
+    /// breaks the rules of
     /// [`SsoAssertion::attributes`](crate::SsoAssertion::attributes),
     /// [`SsoAssertion::authn_context`](crate::SsoAssertion::authn_context) is
     /// not an absolute URI reference,

@@ -24,11 +24,14 @@ The identity provider writes `<Attribute>` elements with `SsoAssertion::attribut
 | Allow another `NameFormat` URI or an omitted `NameFormat`, which means `unspecified` | Optional | Core §2.7.3.1 | `Attribute::with_name_format` |
 | Reject a written `NameFormat` that is not an absolute URI reference | Mandatory | Core §1.3.2 | Always |
 | Reject a `basic` attribute name that is not an `xs:Name` | Mandatory | Core §8.2.3 | Always |
+| Reject a `uri` attribute name that is not an absolute URI reference, checked as written without whitespace collapse because `Name` is an `xs:string` | Mandatory | Core §1.3.2, §8.2.2 | Always |
+| Reject a written `Name` or `FriendlyName` with no non-whitespace character | Mandatory | Core §1.3.1, `AttributeType` | Always |
 | Omit `AttributeStatement` when the assertion has no attributes | Mandatory | Core §2.7.3, `AttributeStatementType` | Always |
 | Omit `AttributeValue` for an attribute without values | Mandatory | Core §2.7.3.1 | Always |
 | Write each value as its own `AttributeValue` | Recommended | Core §2.7.3.1 | Always |
+| Write an empty value as an empty `AttributeValue` | Mandatory | Core §2.7.3.1.1 | Always |
 | When an attribute has several values and any declares `xsi:type`, give every value the same datatype. The writer uses `xs:string` when it declares a type | Mandatory | Core §2.7.3.1 | Always |
-| Write a `FriendlyName` only when the caller sets one, XML-escaped. Any string of XML characters is written, the empty string included | Optional | Core §2.7.3.1 | `Attribute::with_friendly_name` |
+| Write a `FriendlyName` only when the caller sets one, XML-escaped | Optional | Core §2.7.3.1 | `Attribute::with_friendly_name` |
 | Write no `AttributeStatement` in an error `Response` | Mandatory | Profiles §4.1.4.2 | `SsoOutcome::Failure` |
 | Support every Core §8.2 `NameFormat` on input | Mandatory | Conformance §3.3, Core §8.2 | `Attribute::name_format` |
 | Read a received `NameFormat` with XML Schema whitespace collapse, and the `Name` as sent | Mandatory | `AttributeType`, XML Schema Part 2 §3.2.17, §4.3.6 | Always |

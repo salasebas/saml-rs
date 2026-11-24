@@ -1,6 +1,7 @@
 use crate::constants::attribute_name_format;
 use crate::error::SamlError;
-use crate::xml::any_uri::is_absolute_uri_reference;
+use crate::xml::any_uri::{is_absolute_uri_reference, is_absolute_uri_reference_ascii};
+use crate::xml::dom::is_xml_whitespace_char;
 use crate::xml::name::is_name;
 
 /// A single SAML attribute value.
@@ -105,7 +106,9 @@ impl Attribute {
     /// [`AttributeNameFormat::Custom`] with the URI of another variant is
     /// stored as that variant. [`crate::SsoAssertion::attributes`] rejects an
     /// [`AttributeNameFormat::Basic`] attribute whose name is not an XML name,
-    /// and a `NameFormat` that is not an absolute URI reference.
+    /// an [`AttributeNameFormat::Uri`] attribute whose name is not an absolute
+    /// URI reference, and a `NameFormat` that is not an absolute URI
+    /// reference.
     pub fn with_name_format(mut self, name_format: AttributeNameFormat) -> Self {
         self.name_format = Some(match name_format {
             AttributeNameFormat::Custom(uri) => AttributeNameFormat::from_uri(&uri),
@@ -121,6 +124,8 @@ impl Attribute {
     ///
     /// A friendly name labels the attribute and does not identify it.
     /// [`Attributes::get_by_friendly_name`] finds an attribute by its label.
+    /// [`crate::SsoAssertion::attributes`] rejects one with no
+    /// non-whitespace character.
     pub fn with_friendly_name(mut self, friendly_name: impl Into<String>) -> Self {
         self.friendly_name = Some(friendly_name.into());
         self
@@ -177,6 +182,17 @@ impl Attribute {
     }
 
     pub(crate) fn check_writable(&self) -> Result<(), SamlError> {
+        if is_blank(&self.name) {
+            return Err(SamlError::Invalid(
+                "attribute Name must contain a non-whitespace character".into(),
+            ));
+        }
+        if self.friendly_name.as_deref().is_some_and(is_blank) {
+            return Err(SamlError::Invalid(format!(
+                "attribute `{}` FriendlyName must contain a non-whitespace character",
+                self.name
+            )));
+        }
         if let Some(name_format) = self.name_format.as_ref().map(AttributeNameFormat::as_uri) {
             if !is_absolute_uri_reference(name_format) {
                 return Err(SamlError::Invalid(format!(
@@ -185,14 +201,29 @@ impl Attribute {
                 )));
             }
         }
-        if self.name_format == Some(AttributeNameFormat::Basic) && !is_name(&self.name) {
-            return Err(SamlError::Invalid(format!(
-                "basic attribute name `{}` is not an XML name",
-                self.name
-            )));
+        match self.name_format {
+            Some(AttributeNameFormat::Basic) if !is_name(&self.name) => Err(SamlError::Invalid(
+                format!("basic attribute name `{}` is not an XML name", self.name),
+            )),
+            Some(AttributeNameFormat::Uri) if !is_absolute_uri_reference_ascii(&self.name) => {
+                Err(SamlError::Invalid(format!(
+                    "uri attribute name `{}` is not an absolute URI reference",
+                    self.name
+                )))
+            }
+            Some(
+                AttributeNameFormat::Basic
+                | AttributeNameFormat::Uri
+                | AttributeNameFormat::Unspecified
+                | AttributeNameFormat::Custom(_),
+            )
+            | None => Ok(()),
         }
-        Ok(())
     }
+}
+
+fn is_blank(value: &str) -> bool {
+    value.chars().all(is_xml_whitespace_char)
 }
 
 /// The attributes of an assertion, in order.

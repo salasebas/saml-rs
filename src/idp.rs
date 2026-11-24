@@ -460,7 +460,10 @@ impl Engine {
         transforms: &[String],
     ) -> Result<String, SamlError> {
         use crate::crypto::{
-            enc::{encrypt_assertion_elements, encrypt_assertion_with_key_transport, KeyTransport},
+            enc::{
+                encrypt_assertion_elements, encrypt_assertion_with_key_transport,
+                EncryptionRecipient,
+            },
             SigningCredential,
         };
 
@@ -476,15 +479,15 @@ impl Engine {
                 ResponseMessageSignature::UnlessAssertionsSigned => !want_assertions_signed,
             };
 
+        let recipient = EncryptionRecipient::from_setting(
+            sp.metadata
+                .as_metadata()
+                .x509_certificates(crate::constants::CertUse::Encryption),
+            &self.setting,
+        );
         let element_encryption = self.setting.assertion_element_encryption;
         if element_encryption.is_selected() {
-            xml = encrypt_assertion_elements(
-                &xml,
-                sp_encryption_certificate(sp)?,
-                &self.setting.data_encryption_algorithm,
-                KeyTransport::from_setting(&self.setting),
-                element_encryption,
-            )?;
+            xml = encrypt_assertion_elements(&xml, &recipient, element_encryption)?;
         }
         if want_assertions_signed {
             xml = credential.sign_xml(&xml, false, sig_alg, transforms, None)?;
@@ -492,9 +495,7 @@ impl Engine {
         if self.setting.is_assertion_encrypted {
             xml = encrypt_assertion_with_key_transport(
                 &xml,
-                sp_encryption_certificate(sp)?,
-                &self.setting.data_encryption_algorithm,
-                KeyTransport::from_setting(&self.setting),
+                &recipient,
                 &self.setting.tag_prefix_assertion,
             )?;
         }
@@ -608,16 +609,6 @@ fn written_session_not_on_or_after(deadline: SystemTime) -> Result<String, SamlE
         deadline,
         deadline.nanosecond() != 0,
     ))
-}
-
-#[cfg(crypto)]
-fn sp_encryption_certificate(sp: &sp::Engine) -> Result<&str, SamlError> {
-    sp.metadata
-        .as_metadata()
-        .x509_certificates(crate::constants::CertUse::Encryption)
-        .first()
-        .map(String::as_str)
-        .ok_or_else(|| SamlError::MissingMetadata("encryption certificate".into()))
 }
 
 #[cfg(test)]

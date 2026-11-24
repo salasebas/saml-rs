@@ -909,3 +909,121 @@ fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
     }
     Ok(())
 }
+
+const EC_CERT: &str = include_str!("../../tests/fixtures/key/prime256v1/cert.pem");
+const UNREADABLE_CERT: &str = "AAAA";
+
+fn with_encryption_certificate_first(metadata: &str, certificate: &str) -> Result<String, String> {
+    let first_encryption_key = metadata
+        .find("use=\"encryption\"")
+        .and_then(|attribute| metadata[..attribute].rfind('<'))
+        .ok_or("metadata publishes no encryption key")?;
+    let key_descriptor = format!(
+        "<KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><ds:X509Data><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>",
+        normalize_cert_string(certificate)
+    );
+    let mut metadata = metadata.to_string();
+    metadata.insert_str(first_encryption_key, &key_descriptor);
+    Ok(metadata)
+}
+
+#[test]
+fn identity_provider_encrypts_for_a_later_certificate_its_key_transport_can_use(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let first_certificates = [EC_CERT, UNREADABLE_CERT];
+    for (encryption, first) in each_encrypted_element()
+        .into_iter()
+        .flat_map(|encryption| first_certificates.map(|first| (encryption, first)))
+    {
+        let sp = sp(XmlEncryptionPolicy::default())?;
+        let idp = idp(encryption)?;
+        let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+        let metadata = with_encryption_certificate_first(sp.metadata_xml(), first)?;
+        let sp_descriptor = SpDescriptor::from_metadata_xml(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            &metadata,
+            MetadataTrustPolicy::Unverified,
+        )?;
+        assert_eq!(
+            SpMetadata::from_xml(&metadata)?
+                .as_metadata()
+                .x509_certificates(CertUse::Encryption)
+                .first(),
+            Some(&normalize_cert_string(first))
+        );
+
+        let exchange = exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)?;
+
+        assert!(
+            !exchange.xml.contains("alice-persistent-id")
+                || !exchange.xml.contains("alice@example.com")
+        );
+        let session = exchange.session?;
+        assert_eq!(session.name_id(), &alice());
+        assert_eq!(session.attributes(), &attributes());
+    }
+    Ok(())
+}
+
+#[test]
+fn identity_provider_refuses_to_encrypt_for_a_service_provider_without_a_usable_certificate(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp(XmlEncryptionPolicy::default())?;
+    let metadata = sp.metadata_xml().replace(
+        &normalize_cert_string(CERT),
+        &normalize_cert_string(EC_CERT),
+    );
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &metadata,
+        MetadataTrustPolicy::Unverified,
+    )?;
+    for encryption in each_encrypted_element() {
+        let response = idp(encryption)?.initiate_sso(
+            &sp_descriptor,
+            SsoAssertion::new(alice()).attributes(attributes()),
+            RespondSso::post(),
+        );
+        assert!(
+            matches!(response, Err(SamlError::Crypto { .. })),
+            "{response:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn attribute_encryption_needs_no_certificate_when_the_assertion_has_no_attributes(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let encryption = XmlEncryptionPolicy {
+        attributes: AttributeEncryptionPolicy::EncryptAttributes,
+        ..XmlEncryptionPolicy::default()
+    };
+    let sp = sp_with_credentials(
+        XmlEncryptionPolicy::default(),
+        sp_validation(),
+        signing_credentials(),
+    )?;
+    let idp = idp(encryption)?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    assert!(SpMetadata::from_xml(sp.metadata_xml())?
+        .as_metadata()
+        .x509_certificates(CertUse::Encryption)
+        .is_empty());
+
+    idp.initiate_sso(
+        &sp_descriptor,
+        SsoAssertion::new(alice()),
+        RespondSso::post(),
+    )?;
+    let with_attributes = idp.initiate_sso(
+        &sp_descriptor,
+        SsoAssertion::new(alice()).attributes(attributes()),
+        RespondSso::post(),
+    );
+    assert!(
+        matches!(with_attributes, Err(SamlError::MissingMetadata(_))),
+        "{with_attributes:?}"
+    );
+    Ok(())
+}

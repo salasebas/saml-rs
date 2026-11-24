@@ -26,7 +26,7 @@ pub(crate) use decrypt::{decrypt_assertion_with_limits, AssertionDecryptionOptio
 pub(crate) use encrypt::encrypt_assertion;
 pub(crate) use encrypt::{
     encrypt_assertion_elements, encrypt_assertion_with_key_transport,
-    encrypt_logout_request_name_id, encrypt_root_children, KeyTransport,
+    encrypt_logout_request_name_id, encrypt_root_children, EncryptionRecipient, KeyTransport,
 };
 pub(crate) use policy::response_uses_cbc_encrypted_assertion;
 
@@ -300,9 +300,7 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let encrypted = encrypt_assertion_elements(
             RESPONSE,
-            SP_CERT,
-            AES_256,
-            RSA_OAEP_MGF1P.into(),
+            &EncryptionRecipient::new([SP_CERT], AES_256, RSA_OAEP_MGF1P.into()),
             encrypted_ids(),
         )?;
         assert!(encrypted.contains("<saml:Subject><saml:EncryptedID><xenc:EncryptedData"));
@@ -335,9 +333,7 @@ mod tests {
     ) -> Result<String, Box<dyn std::error::Error>> {
         let encrypted_data = encrypted_data_xml(
             plaintext.as_bytes(),
-            SP_CERT,
-            AES_256,
-            RSA_OAEP_MGF1P.into(),
+            &EncryptionRecipient::new([SP_CERT], AES_256, RSA_OAEP_MGF1P.into()).key()?,
         )?;
         let start = RESPONSE.find("<saml:NameID").ok_or("missing NameID")?;
         let end_tag = "</saml:NameID>";
@@ -456,9 +452,7 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let encrypted = encrypt_assertion_elements(
             RESPONSE,
-            SP_CERT,
-            AES_256,
-            RSA_OAEP_MGF1P.into(),
+            &EncryptionRecipient::new([SP_CERT], AES_256, RSA_OAEP_MGF1P.into()),
             encrypted_ids(),
         )?;
         let encrypted_data = only_encrypted_data(&encrypted)?;

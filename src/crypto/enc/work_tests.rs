@@ -15,9 +15,12 @@ fn unsigned_requested_subject_uses_the_canonicalized_data_algorithm(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let data = encrypt::encrypted_data_xml(
         b"<saml:NameID xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\">alice</saml:NameID>",
-        CERT,
-        crate::constants::data_encryption_algorithm::AES_256,
-        RSA_OAEP_MGF1P.into(),
+        &encrypt::EncryptionRecipient::new(
+            [CERT],
+            crate::constants::data_encryption_algorithm::AES_256,
+            RSA_OAEP_MGF1P.into(),
+        )
+        .key()?,
     )?;
     let shadowed = data.replacen(
         "<xenc:EncryptionMethod ",
@@ -53,9 +56,7 @@ fn other_inbound_encrypted_elements_preflight_the_document(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let data = encrypt::encrypted_data_xml(
         b"<saml:NameID xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\">alice</saml:NameID>",
-        CERT,
-        AES_256_GCM,
-        RSA_OAEP_MGF1P.into(),
+        &encrypt::EncryptionRecipient::new([CERT], AES_256_GCM, RSA_OAEP_MGF1P.into()).key()?,
     )?;
     let document = parse_xml_document(&data)?;
     let key_info = document

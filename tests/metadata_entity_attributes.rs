@@ -368,8 +368,12 @@ fn typed_builders_publish_entity_attributes_to_peers() -> TestResult {
 }
 
 #[test]
-fn generation_rejects_entity_attributes_xml_cannot_carry() -> TestResult {
+fn generation_rejects_entity_attributes_it_cannot_write() -> TestResult {
     for (case, attribute) in [
+        (
+            "blank FriendlyName",
+            uri_attribute(ENTITY_CATEGORY, &[RESEARCH_AND_SCHOLARSHIP]).with_friendly_name(" "),
+        ),
         (
             "relative NameFormat",
             Attribute::new(
