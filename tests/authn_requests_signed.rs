@@ -15,10 +15,12 @@ use std::time::SystemTime;
 
 use base64::Engine;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, EntityId, IdentityProvider, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, Outbound, ReplayPolicy,
-    SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartSso,
+    AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, AuthnRequest,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, DeliveredArtifact, EndpointUrl,
+    EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    IssuedArtifacts, MetadataTrustPolicy, Outbound, RelayState, ReplayPolicy, RespondSso,
+    SamlError, SamlValidationContext, ServiceProvider, SoapChannel, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSso, Status, StatusMessage,
 };
 use url::Url;
 
@@ -35,17 +37,21 @@ fn validation() -> SamlValidationContext<'static> {
 fn sp(
     authn_request_signing: AuthnRequestSigningPolicy,
 ) -> Result<saml_rs::ServiceProvider, SamlError> {
+    sp_with_acs(authn_request_signing, AcsEndpoint::post(SP_ACS)?)
+}
+
+fn sp_with_acs(
+    authn_request_signing: AuthnRequestSigningPolicy,
+    acs: AcsEndpoint,
+) -> Result<ServiceProvider, SamlError> {
     let mut validation = SpValidationPolicy::default();
     validation.authn_request_signing = authn_request_signing;
     Ok(ServiceProvider::new(
-        SpConfig::builder(
-            EntityId::try_new(SP_ENTITY_ID)?,
-            AcsEndpoint::post(SP_ACS)?.with_default(),
-        )
-        .templates(tag_prefixes::templates("p", "a"))
-        .credentials(signing_credentials())
-        .validation(validation)
-        .build()?,
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, acs.with_default())
+            .templates(tag_prefixes::templates("p", "a"))
+            .credentials(signing_credentials())
+            .validation(validation)
+            .build()?,
     ))
 }
 
@@ -57,6 +63,10 @@ fn idp(validation: IdpValidationPolicy) -> Result<saml_rs::IdentityProvider, Sam
         )
         .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
         .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_POST)?)
+        .artifact_resolution_service(ArtifactResolutionService::new(
+            0,
+            EndpointUrl::try_new("https://idp.example.com/artifact")?,
+        ))
         .credentials(signing_credentials())
         .validation(validation)
         .build()?,
@@ -104,16 +114,69 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
         .metadata_xml()
         .contains("AuthnRequestsSigned=\"true\""));
 
-    let unsigned_post = unsigned_sp.start_sso(&idp_descriptor, StartSso::post())?;
-    let unsigned_redirect = unsigned_sp.start_sso(&idp_descriptor, StartSso::redirect())?;
-    for input in [
-        post_input(&unsigned_post.outbound)?,
-        Inbound::simple_sign(unsigned_post.outbound.post_form()?.fields().to_vec()),
-        redirect_input(&unsigned_redirect.outbound)?,
+    let unsigned_post = unsigned_sp.start_sso(
+        &idp_descriptor,
+        StartSso::post().relay_state(RelayState::try_new("login-42")?),
+    )?;
+    let unsigned_redirect = unsigned_sp.start_sso(
+        &idp_descriptor,
+        StartSso::redirect().relay_state(RelayState::try_new("login-42")?),
+    )?;
+    for (started, input) in [
+        (&unsigned_post, post_input(&unsigned_post.outbound)?),
+        (
+            &unsigned_post,
+            Inbound::simple_sign(unsigned_post.outbound.post_form()?.fields().to_vec()),
+        ),
+        (
+            &unsigned_redirect,
+            redirect_input(&unsigned_redirect.outbound)?,
+        ),
     ] {
-        match idp.receive_sso(&signing_descriptor, input, validation()) {
-            Err(SamlError::SignatureMissing) => {}
-            other => return Err(format!("expected SignatureMissing, got {other:?}").into()),
+        let refusal = match idp.receive_sso(&signing_descriptor, input, validation()) {
+            Err(SamlError::AuthnRequestRefused { refusal, .. }) => refusal,
+            other => return Err(format!("expected a sendable SAML refusal, got {other:?}").into()),
+        };
+        assert!(matches!(
+            idp.respond_sso_refusal(&signing_descriptor, &refusal, RespondSso::simple_sign()),
+            Err(SamlError::Invalid(_))
+        ));
+        let options = RespondSso::post().status_message("Send a signed authentication request.");
+        let response = idp.respond_sso_refusal(&signing_descriptor, &refusal, options)?;
+        let form = response.post_form()?;
+        assert_eq!(form.action().as_str(), SP_ACS);
+        assert_eq!(form.value("RelayState"), Some("login-42"));
+        let xml = base64::engine::general_purpose::STANDARD
+            .decode(form.value("SAMLResponse").ok_or("missing SAMLResponse")?)?;
+        let document = roxmltree::Document::parse(std::str::from_utf8(&xml)?)?;
+        let root = document.root_element();
+        assert_eq!(
+            root.attribute("InResponseTo"),
+            Some(started.pending.request_id().as_str())
+        );
+        assert!(!root
+            .children()
+            .any(|child| matches!(child.tag_name().name(), "Assertion" | "EncryptedAssertion")));
+        match unsigned_sp.finish_sso(
+            &idp_descriptor,
+            &started.pending,
+            Inbound::post(form.fields().to_vec()),
+            validation(),
+        ) {
+            Err(SamlError::StatusNotSuccess {
+                status,
+                status_message,
+                ..
+            }) => {
+                assert_eq!(status, Status::requester());
+                assert_eq!(
+                    status_message.as_ref().map(StatusMessage::as_str),
+                    Some("Send a signed authentication request.")
+                );
+            }
+            other => {
+                return Err(format!("expected a verified requester error, got {other:?}").into())
+            }
         }
     }
 
@@ -145,5 +208,121 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
         validation(),
     )?;
     assert_eq!(received.message().id(), unsigned_post.pending.request_id());
+    Ok(())
+}
+
+#[test]
+fn strict_idp_can_refuse_an_unsigned_request_but_cannot_use_a_removed_acs(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let unsigned_sp = sp(AuthnRequestSigningPolicy::DoNotSign)?;
+    let permissive = idp(IdpValidationPolicy::default())?;
+    let (_, old_idp_descriptor) = descriptors(&unsigned_sp, &permissive)?;
+    let started = unsigned_sp.start_sso(&old_idp_descriptor, StartSso::post())?;
+
+    let mut policy = IdpValidationPolicy::default();
+    policy.authn_request_signatures = AuthnRequestValidationPolicy::RequireSigned;
+    let strict = idp(policy)?;
+    let updated_sp = sp_with_acs(
+        AuthnRequestSigningPolicy::Sign,
+        AcsEndpoint::post("https://sp.example.com/acs/current")?,
+    )?;
+    let (updated_descriptor, _) = descriptors(&updated_sp, &strict)?;
+    let refusal = match strict.receive_sso(
+        &updated_descriptor,
+        post_input(&started.outbound)?,
+        validation(),
+    ) {
+        Err(SamlError::AuthnRequestRefused { refusal, .. }) => refusal,
+        other => {
+            return Err(
+                format!("expected a SAML refusal under RequireSigned, got {other:?}").into(),
+            )
+        }
+    };
+    assert!(matches!(
+        strict.respond_sso_refusal(&updated_descriptor, &refusal, RespondSso::post()),
+        Err(SamlError::DestinationMismatch { .. })
+    ));
+    Ok(())
+}
+
+#[test]
+fn unsigned_request_refusal_reaches_an_artifact_acs() -> Result<(), Box<dyn std::error::Error>> {
+    let signing_sp = sp_with_acs(
+        AuthnRequestSigningPolicy::Sign,
+        AcsEndpoint::artifact(SP_ACS)?,
+    )?;
+    let unsigned_sp = sp_with_acs(
+        AuthnRequestSigningPolicy::DoNotSign,
+        AcsEndpoint::artifact(SP_ACS)?,
+    )?;
+    let idp = idp(IdpValidationPolicy::default())?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&signing_sp, &idp)?;
+    let started = unsigned_sp.start_sso(
+        &idp_descriptor,
+        StartSso::redirect().response_binding(SsoResponseBinding::Artifact),
+    )?;
+    let refusal = match idp.receive_sso(
+        &sp_descriptor,
+        redirect_input(&started.outbound)?,
+        validation(),
+    ) {
+        Err(SamlError::AuthnRequestRefused { refusal, .. }) => refusal,
+        other => return Err(format!("expected a sendable SAML refusal, got {other:?}").into()),
+    };
+    let mut issued = IssuedArtifacts::expire_after(std::time::Duration::from_secs(60));
+    assert!(matches!(
+        idp.respond_sso_refusal_artifact(
+            &sp_descriptor,
+            &refusal,
+            RespondSso::artifact(ArtifactDelivery::redirect(0))
+                .relay_state(RelayState::try_new("login-43")?),
+            &mut issued,
+        ),
+        Err(SamlError::ProtocolProfile(_))
+    ));
+    let diagnostic = "Send a signed authentication request.";
+    let response = idp.respond_sso_refusal_artifact(
+        &sp_descriptor,
+        &refusal,
+        RespondSso::artifact(ArtifactDelivery::redirect(0)).status_message(diagnostic),
+        &mut issued,
+    )?;
+    let url = Url::parse(response.redirect_url()?)?;
+    assert_eq!(url.path(), "/acs");
+    let delivered = DeliveredArtifact::from_query(url.query().ok_or("missing artifact query")?)?;
+    let channel = SoapChannel::mutually_authenticated_confidential();
+    let resolution = unsigned_sp.resolve_artifact(
+        &idp_descriptor,
+        delivered.artifact(),
+        channel,
+        validation(),
+    )?;
+    let answer = idp.answer_artifact_resolve(
+        &sp_descriptor,
+        resolution.request().envelope(),
+        &mut issued,
+        channel,
+    )?;
+    let resolved = resolution.finish(answer.response().envelope())?;
+    match unsigned_sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        Inbound::artifact(delivered, resolved),
+        validation(),
+    ) {
+        Err(SamlError::StatusNotSuccess {
+            status,
+            status_message,
+            ..
+        }) => {
+            assert_eq!(status, Status::requester());
+            assert_eq!(
+                status_message.as_ref().map(StatusMessage::as_str),
+                Some(diagnostic)
+            );
+        }
+        other => return Err(format!("expected a verified requester error, got {other:?}").into()),
+    }
     Ok(())
 }

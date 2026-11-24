@@ -34,7 +34,7 @@ pub(crate) use subject_identifier::{check_issued_subject_identifiers, is_subject
 pub use attribute_scope::{AttributeScopePolicy, ScopedAttributeViolation};
 pub use attributes::{Attribute, AttributeNameFormat, AttributeValue, Attributes};
 pub use audience_restriction::AudienceRestriction;
-pub use authn::{AuthnRequest, ForceAuthn, IsPassive};
+pub use authn::{AuthnRequest, ForceAuthn, IsPassive, RefusedAuthnRequest};
 pub use authn_context::{
     AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind, RequestedAuthnContext,
 };

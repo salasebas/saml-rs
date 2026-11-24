@@ -3,11 +3,13 @@ use crate::artifact::{
 };
 use crate::browser::{ArtifactDelivery, Outbound};
 use crate::config::{IdpDescriptor, SpDescriptor};
-use crate::model::{AuthnRequest, Received, SamlValidationContext, SsoResponse};
+use crate::model::{
+    AuthnRequest, Received, RefusedAuthnRequest, SamlValidationContext, SsoResponse,
+};
 use crate::soap::SoapChannel;
 use std::time::SystemTime;
 
-use super::idp::ResponseTransport;
+use super::idp::{ResponseTransport, SsoResponseTo};
 use super::{IdentityProvider, RespondSso, SamlError, ServiceProvider, SsoOutcome};
 
 impl IdentityProvider {
@@ -60,7 +62,8 @@ impl IdentityProvider {
     ///
     /// `outcome` says what the response reports, as for
     /// [`Self::respond_sso`]. An [`SsoOutcome::Failure`] is stored and
-    /// delivered the same way.
+    /// delivered the same way, including the metadata default ACS fallback
+    /// if the request's ACS index is no longer published.
     ///
     /// # Errors
     ///
@@ -112,8 +115,55 @@ impl IdentityProvider {
         let transport = ResponseTransport::Artifact(options.delivery, &mut issued);
         self.issue_sso(
             sp,
-            Some(request),
-            &outcome.into(),
+            SsoResponseTo::Request(request, &outcome.into()),
+            options.delivered(transport),
+        )
+    }
+
+    /// Store a signed, correlated `Requester` response and deliver its HTTP-Artifact.
+    ///
+    /// Pass the refusal from [`SamlError::AuthnRequestRefused`]. Send the
+    /// returned browser action and use `issued` to answer the artifact
+    /// resolution request, as for [`Self::respond_sso_artifact`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use saml_rs::{
+    ///     ArtifactDelivery, IdentityProvider, IssuedArtifacts, RefusedAuthnRequest,
+    ///     RespondSso, SamlError, SpDescriptor,
+    /// };
+    ///
+    /// # fn respond(
+    /// #     idp: &IdentityProvider,
+    /// #     sp: &SpDescriptor,
+    /// #     refusal: &RefusedAuthnRequest,
+    /// #     issued: &mut IssuedArtifacts,
+    /// # ) -> Result<(), SamlError> {
+    /// let response = idp.respond_sso_refusal_artifact(
+    ///     sp, refusal, RespondSso::artifact(ArtifactDelivery::redirect(0)), issued,
+    /// )?;
+    /// let location = response.redirect_url()?;
+    /// # let _ = location;
+    /// # Ok(()) }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns the delivery and signing errors of [`Self::respond_sso_refusal`].
+    /// Also returns an error when the SOAP resolution endpoint is missing
+    /// or the artifact cannot be stored.
+    pub fn respond_sso_refusal_artifact(
+        &self,
+        sp: &SpDescriptor,
+        refusal: &RefusedAuthnRequest,
+        options: RespondSso<ArtifactDelivery>,
+        mut issued: &mut (impl ArtifactStore + ?Sized),
+    ) -> Result<Outbound<SsoResponse>, SamlError> {
+        let transport = ResponseTransport::Artifact(options.delivery, &mut issued);
+        self.issue_sso(
+            sp,
+            SsoResponseTo::Refusal(refusal),
             options.delivered(transport),
         )
     }
@@ -136,7 +186,11 @@ impl IdentityProvider {
         mut issued: &mut (impl ArtifactStore + ?Sized),
     ) -> Result<Outbound<SsoResponse>, SamlError> {
         let transport = ResponseTransport::Artifact(options.delivery, &mut issued);
-        self.issue_sso(sp, None, &outcome.into(), options.delivered(transport))
+        self.issue_sso(
+            sp,
+            SsoResponseTo::Unsolicited(&outcome.into()),
+            options.delivered(transport),
+        )
     }
 
     /// Answer `ArtifactResolve` with `ArtifactResponse`.

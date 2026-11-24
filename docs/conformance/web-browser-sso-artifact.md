@@ -29,7 +29,7 @@ For the SP and SP Lite columns, the claim covers only sessions where an XML sign
 | For `Success`, sign the assertion when the SP metadata sets `WantAssertionsSigned`, and sign the `Response` otherwise. For an error, sign the `Response` | Library policy: reason not recorded. | Profiles §4.1.3.5 | `RespondSso::sign_response` also signs a `Success` `Response` |
 | Sign the `Response` when an `EncryptedAssertion` uses a CBC algorithm | Recommended | Profiles §4.1.3.5, E93 | `RespondSso::allow_unsigned_encrypted_cbc` |
 | Write the assertion consumer URL in `Destination` | Library policy: reason not recorded. | Core §3.2.2, Bindings §3.6.5.2, E59 | Always |
-| Support error delivery by artifact when the user agent remains available and an acceptable response location exists | Recommended | Profiles §4.1.3.5, E85 | `SsoOutcome::Failure` |
+| Support error delivery by artifact when the user agent remains available and an acceptable response location exists | Recommended | Profiles §4.1.3.5, E85 | `SsoOutcome::Failure`, `respond_sso_refusal_artifact` |
 | Omit all assertions from an error `Response` | Mandatory | Profiles §4.1.4.2 | `SsoOutcome::Failure` |
 | Reject `SsoOutcome::Failure` with a top-level `Success` status | Mandatory | Profiles §4.1.4.2, E26 | Always |
 

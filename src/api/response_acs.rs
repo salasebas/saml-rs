@@ -3,12 +3,13 @@ use crate::constants::Binding;
 use crate::metadata::SpMetadata;
 use crate::model::AuthnRequest;
 
-use super::SamlError;
+use super::{SamlError, SsoOutcome};
 
 pub(super) fn resolve_response_acs(
     metadata: &SpMetadata,
     request: Option<&AuthnRequest>,
     binding: SsoResponseBinding,
+    outcome: &SsoOutcome,
 ) -> Result<String, SamlError> {
     let acs_url = request.and_then(AuthnRequest::acs_url);
     let acs_index = request.and_then(AuthnRequest::acs_index);
@@ -36,23 +37,30 @@ pub(super) fn resolve_response_acs(
         return Ok(url.as_str().to_string());
     }
 
-    let endpoint = if let Some(index) = acs_index {
-        metadata.assertion_consumer_service_by_index(index)?
-    } else if protocol_binding.is_some() {
+    if let Some(index) = acs_index {
+        if let Some(endpoint) = metadata.assertion_consumer_service_by_index(index)? {
+            if SsoResponseBinding::try_from(endpoint.binding)? != binding {
+                return Err(SamlError::Invalid(
+                    "response binding conflicts with AuthnRequest ACS index".into(),
+                ));
+            }
+            return Ok(endpoint.location);
+        }
+        if protocol_binding.is_some() || !matches!(outcome, SsoOutcome::Failure(_)) {
+            return Err(SamlError::MissingMetadata(
+                "AssertionConsumerService".into(),
+            ));
+        }
+    }
+
+    let endpoint = if protocol_binding.is_some() {
         metadata.assertion_consumer_service_endpoint(Binding::from(binding))
     } else {
         metadata.default_assertion_consumer_service_endpoint()?
     }
     .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
 
-    if acs_index.is_some() {
-        let indexed_binding = SsoResponseBinding::try_from(endpoint.binding)?;
-        if indexed_binding != binding {
-            return Err(SamlError::Invalid(
-                "response binding conflicts with AuthnRequest ACS index".into(),
-            ));
-        }
-    } else if endpoint.binding != Binding::from(binding) {
+    if endpoint.binding != Binding::from(binding) {
         return Err(SamlError::Invalid(
             "response binding conflicts with default AssertionConsumerService".into(),
         ));
