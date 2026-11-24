@@ -105,6 +105,10 @@ fn typed_slo_preserves_received_reason_as_xml_string_for_both_roles(
         ),
         (r#"Reason="""#, Some("")),
         (
+            r#"Reason="urn:oasis:names:tc:SAML:2.0:logout:sp-timeout""#,
+            Some("urn:oasis:names:tc:SAML:2.0:logout:sp-timeout"),
+        ),
+        (
             r#"xmlns:x="urn:example:foreign" x:Reason="urn:example:foreign""#,
             None,
         ),
@@ -203,6 +207,53 @@ fn typed_slo_omits_reason_by_default_and_collapses_supplied_whitespace(
         let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
         let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
         assert_eq!(document.root.attr("Reason"), expected);
+    }
+    Ok(())
+}
+
+const SESSION_AUTHORITY_REASONS: [&str; 2] = [
+    "urn:oasis:names:tc:SAML:2.0:logout:global-timeout",
+    "urn:oasis:names:tc:SAML:2.0:logout:sp-timeout",
+];
+
+#[test]
+fn service_provider_refuses_session_authority_reasons_on_ordinary_and_async_slo(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+    let padded = format!(" {} ", SESSION_AUTHORITY_REASONS[0]);
+    for reason in SESSION_AUTHORITY_REASONS
+        .into_iter()
+        .chain([padded.as_str()])
+    {
+        let options = StartSlo::redirect().reason(reason);
+        let ordinary = sp.start_slo(&idp_descriptor, subject()?, options.clone());
+        assert!(
+            matches!(ordinary, Err(SamlError::Invalid(_))),
+            "{reason:?} {ordinary:?}"
+        );
+        let asynchronous = sp.start_async_slo(&idp_descriptor, subject()?, options);
+        assert!(
+            matches!(asynchronous, Err(SamlError::Invalid(_))),
+            "{reason:?} {asynchronous:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn identity_provider_sends_session_authority_reasons_that_the_service_provider_reads(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    for reason in SESSION_AUTHORITY_REASONS {
+        let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post().reason(reason))?;
+        let received = sp.receive_slo(
+            &idp_descriptor,
+            logout_request_input(&started.outbound, LogoutBinding::Post)?,
+            validation(),
+        )?;
+        assert_eq!(received.message().reason(), Some(reason));
     }
     Ok(())
 }

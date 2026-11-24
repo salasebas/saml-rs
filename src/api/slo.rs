@@ -34,6 +34,8 @@ impl ServiceProvider {
     /// be parsed, a compatible logout endpoint or signing key is missing, the
     /// selected binding is unsupported, the subject's NameID format is not an
     /// absolute URI reference, or logout request creation fails.
+    /// Returns [`SamlError::Invalid`] when [`StartSlo::reason`] holds a
+    /// timeout reason reserved for the session authority.
     /// The participant must supply a `SessionIndex`. A browser endpoint must
     /// use HTTPS unless [`StartSlo::allow_http`] is selected.
     /// [`StartSlo::identifier_encryption`] returns
