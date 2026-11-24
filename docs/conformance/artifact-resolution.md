@@ -89,7 +89,8 @@ with a higher receive limit could accept. [OpenSAML 5.2.3 source release](https:
 | Expire the artifact after the configured lifetime. The issuer should choose the shortest practical lifetime | Recommended | Core §3.5.3 | `ArtifactStore::lifetime`, `IssuedArtifacts::expire_after` |
 | Include the artifact issuer's entity ID in `Issuer` and omit `Format` or set it to `entity` | Mandatory | Profiles §5.4.2 | Always |
 | Set `InResponseTo` to the request `ID` | Mandatory | Core §3.2.2, §3.5.3 | Always |
-| Authenticate the responder and protect integrity | Mandatory | Profiles §5.3.2, §5.4.2 | `SoapChannel` |
+| Authenticate the responder and protect integrity on every `ArtifactResponse`, including one that withholds the message or reports `VersionMismatch`. saml-rs does not sign it, so `SoapChannel` must attest both | Mandatory | Profiles §5.3.2, §5.4.2 | `SoapChannel` |
+| Refuse the exchange before reading the request when `SoapChannel` does not attest mutual authentication and integrity | Library policy: `SoapChannel` cannot attest responder-only authentication, and the issuer needs the presenter authenticated before it releases a message. | Profiles §5.3.2, §5.4.1 | Always |
 
 ## Web Browser SSO response artifact
 

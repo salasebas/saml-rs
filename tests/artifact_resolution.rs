@@ -1444,6 +1444,64 @@ fn namespaces_declared_on_the_soap_envelope_reach_the_protocol_message(
 }
 
 #[test]
+fn the_issuer_answers_only_over_a_channel_that_authenticates_it(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let artifact = issue(&parties, &logout_request(), &mut issued)?;
+    let resolution = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        &artifact,
+        confidential(),
+        without_replay_cache(),
+    )?;
+    let unknown = recode(&artifact, |bytes| {
+        bytes[43] ^= 0xff;
+    })?;
+    let unknown_request = resolution
+        .request()
+        .envelope()
+        .replace(artifact.as_str(), unknown.as_str());
+    let received_at = EndpointUrl::try_new(RESOLUTION_URL)?;
+    for weak in [
+        SoapChannel::unattested(),
+        SoapChannel::new(
+            PartyAuthentication::Unattested,
+            MessageIntegrity::Protected,
+            MessageConfidentiality::Protected,
+        ),
+        SoapChannel::new(
+            PartyAuthentication::Mutual,
+            MessageIntegrity::Unattested,
+            MessageConfidentiality::Protected,
+        ),
+    ] {
+        for request in [resolution.request().envelope(), unknown_request.as_str()] {
+            let refused = parties.idp.answer_artifact_resolve(
+                &parties.sp_metadata,
+                request,
+                &received_at,
+                &mut issued,
+                weak,
+            );
+            assert!(
+                matches!(refused, Err(SamlError::SoapChannelProtection)),
+                "{weak:?}: {refused:?}"
+            );
+        }
+    }
+    let answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        resolution.request().envelope(),
+        &received_at,
+        &mut issued,
+        confidential(),
+    )?;
+    assert_eq!(answer.release(), ArtifactRelease::Returned);
+    Ok(())
+}
+
+#[test]
 fn the_service_provider_resolves_only_over_a_confidential_channel(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;

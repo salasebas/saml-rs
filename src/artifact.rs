@@ -100,7 +100,8 @@ pub enum ArtifactWithheld {
     NotOutstanding,
     /// The presenter is not the service provider the artifact was issued to.
     DifferentPresenter,
-    /// The SOAP channel lacks the protection required for the stored message.
+    /// The SOAP channel is not confidential, and the stored message requires
+    /// confidentiality.
     InsufficientChannelProtection,
     /// The request's `Destination` differs from the URL that received it.
     DestinationMismatch,
@@ -474,6 +475,9 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     channel: SoapChannel,
     setting: &EntitySetting,
 ) -> Result<AnsweredArtifact, SamlError> {
+    if !channel.authenticates_peer() {
+        return Err(SamlError::SoapChannelProtection);
+    }
     let entity_id = metadata
         .as_metadata()
         .entity_id()

@@ -28,3 +28,32 @@ the top-level code instead of inside it, ask the peer to nest it:
 	</samlp:StatusCode>
 </samlp:Status>
 ```
+
+## Attest an authenticated channel for every artifact answer
+
+Profiles §5.3.2 and §5.4.2 require the artifact issuer to authenticate itself
+and protect the integrity of every `ArtifactResponse`, including one without
+the message. saml-rs does not sign `ArtifactResponse`, so the SOAP channel
+must provide that protection.
+
+`IdentityProvider::answer_artifact_resolve` now returns
+`SamlError::SoapChannelProtection` before it reads the request when `channel`
+does not attest `PartyAuthentication::Mutual` and
+`MessageIntegrity::Protected`. Before, it answered an unknown artifact, a
+different presenter, or a newer request version over any channel.
+`ArtifactWithheld::InsufficientChannelProtection` now means only that the
+channel is not confidential and the stored message requires confidentiality.
+
+If your handler passes `SoapChannel::unattested()` or another weaker value,
+pass the protection your TLS and HTTP layer establishes. Answer
+`SoapChannelProtection` as a refused exchange, for example with HTTP 403.
+
+```rust
+let answer = idp.answer_artifact_resolve(
+	&sp,
+	envelope,
+	&received_at,
+	&mut issued,
+	SoapChannel::mutually_authenticated_confidential(),
+)?;
+```
