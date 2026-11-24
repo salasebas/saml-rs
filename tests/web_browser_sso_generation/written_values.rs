@@ -1,5 +1,8 @@
 use super::*;
 
+const ENTITY_FORMAT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:entity";
+const PARTNER: &str = "https://partner.example.org/metadata";
+
 fn post_response(xml: &str) -> Inbound<SsoResponse> {
     Inbound::post(vec![FormField::new(
         "SAMLResponse",
@@ -15,6 +18,12 @@ fn without_signature(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
             .ok_or("unclosed ds:Signature")?
         + "</ds:Signature>".len();
     Ok(format!("{}{}", &xml[..start], &xml[end..]))
+}
+
+fn entity_name_id_of_length(length: usize) -> NameId {
+    let prefix = "https://partner.example.org/";
+    let value = format!("{prefix}{}", "a".repeat(length - prefix.len()));
+    NameId::new(value).with_format(NameIdFormat::Entity)
 }
 
 #[test]
@@ -73,5 +82,109 @@ fn a_status_message_without_a_non_whitespace_character_is_rejected(
             "{message:?}: {response:?}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn an_entity_name_id_is_a_uri_of_at_most_1024_characters() -> Result<(), Box<dyn std::error::Error>>
+{
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default(), false)?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+
+    let longest = entity_name_id_of_length(1024);
+    let response = idp.initiate_sso(
+        &sp_descriptor,
+        SsoAssertion::new(longest.clone()),
+        RespondSso::post(),
+    )?;
+    let xml = response_xml(&response)?;
+    assert!(
+        xml.contains(&format!(
+            "<saml:NameID Format=\"{ENTITY_FORMAT}\">{}</saml:NameID>",
+            longest.value()
+        )),
+        "{xml}"
+    );
+
+    for name_id in [
+        entity_name_id_of_length(1025),
+        NameId::new("partner.example.org").with_format(NameIdFormat::Entity),
+        NameId::new(format!(" {PARTNER}")).with_format(NameIdFormat::Entity),
+    ] {
+        let response = idp.initiate_sso(
+            &sp_descriptor,
+            SsoAssertion::new(name_id.clone()),
+            RespondSso::post(),
+        );
+        assert!(
+            matches!(response, Err(SamlError::Invalid(_))),
+            "{name_id:?}: {response:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn an_entity_name_id_omits_every_qualifier() -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default(), false)?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let entity = NameId::new(PARTNER).with_format(NameIdFormat::Entity);
+    for name_id in [
+        entity.clone().with_name_qualifier(IDP_ENTITY_ID),
+        entity.clone().with_sp_name_qualifier(SP_ENTITY_ID),
+        entity.with_sp_provided_id("partner-7"),
+    ] {
+        let response = idp.initiate_sso(
+            &sp_descriptor,
+            SsoAssertion::new(name_id.clone()),
+            RespondSso::post(),
+        );
+        assert!(
+            matches!(response, Err(SamlError::Invalid(_))),
+            "{name_id:?}: {response:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_name_id_without_a_format_follows_the_configured_entity_format(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = IdentityProvider::new(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .name_id_format(NameIdFormat::Entity)
+        .credentials(signing_credentials())
+        .build()?,
+    );
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+
+    let response = idp.initiate_sso(
+        &sp_descriptor,
+        SsoAssertion::new(NameId::new(PARTNER)),
+        RespondSso::post(),
+    )?;
+    let xml = response_xml(&response)?;
+    assert!(
+        xml.contains(&format!(
+            "<saml:NameID Format=\"{ENTITY_FORMAT}\">{PARTNER}</saml:NameID>"
+        )),
+        "{xml}"
+    );
+
+    let response = idp.initiate_sso(
+        &sp_descriptor,
+        SsoAssertion::new(NameId::new("partner")),
+        RespondSso::post(),
+    );
+    assert!(
+        matches!(response, Err(SamlError::Invalid(_))),
+        "{response:?}"
+    );
     Ok(())
 }

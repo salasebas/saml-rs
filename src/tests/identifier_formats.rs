@@ -936,7 +936,7 @@ fn existing_name_id_format_uris_resolve_as_before() -> Result<(), Box<dyn std::e
         ),
     ] {
         assert_eq!(format.as_uri(), uri);
-        let name_id = NameId::new("subject-1").with_format(format);
+        let name_id = NameId::new("https://idp.example.com/subjects/1").with_format(format);
         let exchange = exchange(SsoAssertion::new(name_id.clone()), RespondSso::post())?;
         assert!(
             name_id_element(&exchange.xml)?.contains(&format!("Format=\"{uri}\"")),

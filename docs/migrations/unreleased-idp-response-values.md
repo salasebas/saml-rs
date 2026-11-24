@@ -16,9 +16,21 @@ The response is rejected in these cases:
   absolute URI reference. A status you read from a received response, such as
   `SamlError::StatusNotSuccess` in a proxy, can have one.
 - `RespondSso::status_message` has only whitespace.
+- The effective NameID format is `entity`, and the value is not an absolute
+  URI reference of at most 1024 characters with collapsed whitespace, or the
+  `NameId` has `NameQualifier`, `SPNameQualifier`, or `SPProvidedID`. The
+  effective format is the first configured NameID format when the `NameId`
+  has none.
 
 To upgrade, pass an absolute URI, such as a constant from
 `saml_rs::constants::authn_context_class_ref`, or build the value with
 `AuthnContextReference::class` or `SubordinateStatusCode::try_new` and handle
-their errors. Leave the status message unset when you have no text.
+their errors. Leave the status message unset when you have no text. Issue an
+`entity` identifier without qualifiers:
 
+```rust
+use saml_rs::{NameId, NameIdFormat};
+
+let partner = NameId::new("https://partner.example.org/metadata")
+    .with_format(NameIdFormat::Entity);
+```

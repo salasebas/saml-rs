@@ -214,9 +214,11 @@ impl IdentityProvider {
     /// `subject-id` or `pairwise-id` attribute breaks the rules of
     /// [`SsoAssertion::attributes`](crate::SsoAssertion::attributes), the
     /// persistent or transient `NameId` is longer than 256 characters, also
-    /// when the format is the first configured NameID format, the
+    /// when the format is the first configured NameID format, an `entity`
+    /// `NameId` breaks the rules of [`NameId`](crate::NameId), the
     /// NameID format is not an absolute URI reference,
-    /// [`SsoAssertion::authn_context`](crate::SsoAssertion::authn_context) does not meet an exact
+    /// [`SsoAssertion::authn_context`](crate::SsoAssertion::authn_context) is
+    /// not an absolute URI reference or does not meet an exact
     /// `RequestedAuthnContext`,
     /// [`SsoAssertion::authn_instant`](crate::SsoAssertion::authn_instant) is
     /// later than the response `IssueInstant`,
@@ -345,8 +347,9 @@ impl IdentityProvider {
     /// not an absolute URI reference,
     /// [`SsoAssertion::authn_instant`](crate::SsoAssertion::authn_instant) is
     /// later than the response `IssueInstant`,
-    /// or is before year 1, or the persistent or transient `NameId` is longer
-    /// than 256 characters.
+    /// or is before year 1, the persistent or transient `NameId` is longer
+    /// than 256 characters, or an `entity` `NameId` breaks the rules of
+    /// [`NameId`](crate::NameId).
     ///
     /// # Examples
     ///
