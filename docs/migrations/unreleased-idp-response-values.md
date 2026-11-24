@@ -23,12 +23,17 @@ The response is rejected in these cases:
   effective format is the first configured NameID format when the `NameId`
   has none.
 - The received `AuthnRequest` `ID` is not an `xs:NCName`, so it cannot be
-  written as `InResponseTo`. `receive_sso` still accepts such a request.
+  written as `InResponseTo`. `receive_sso` adds no `xs:NCName` check, so it
+  still returns a receipt for such an ID unless a configured
+  `SchemaValidator` rejects the request.
 
 `AuthnRequest::id` now returns the `ID` with XML whitespace collapsed, as
 `xs:ID` reads it, and the replay cache and `InResponseTo` use that value. If
 you compare a request ID with text you read from the request XML, collapse the
-whitespace in that text first.
+whitespace in that text first. If a request ID had leading, trailing, or
+repeated XML whitespace, a replay cache entry stored by an earlier release has
+a different key. A durable cache that outlives the upgrade can then accept that
+request once more until the old entry expires.
 
 To upgrade, pass an absolute URI, such as a constant from
 `saml_rs::constants::authn_context_class_ref`, or build the value with
