@@ -1,3 +1,6 @@
+#[path = "artifact_resolution/budget.rs"]
+mod budget;
+
 #[path = "artifact_resolution/schema_validation.rs"]
 mod schema_validation;
 
@@ -1007,46 +1010,6 @@ fn a_non_entity_resolve_issuer_does_not_receive_the_message(
         channel,
     )?;
     assert_eq!(accepted.release(), ArtifactRelease::Returned);
-    Ok(())
-}
-
-#[test]
-fn a_release_that_cannot_be_built_leaves_the_artifact_outstanding(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let parties = parties()?;
-    let prefix = format!(
-        r#"<samlp:Response xmlns:samlp="{PROTOCOL}" ID="_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">"#
-    );
-    let suffix = "</samlp:Response>";
-    let limit = XmlLimits::default().max_bytes;
-    let text_len = limit
-        .checked_sub(prefix.len() + suffix.len() + 256)
-        .ok_or("XML byte limit is smaller than the response shell")?;
-    let message = format!("{prefix}{}{suffix}", "m".repeat(text_len));
-    assert!(message.len() < limit);
-    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, &message, &mut issued)?;
-    let channel = confidential();
-    let resolution = parties.sp.resolve_artifact(
-        &parties.idp_metadata,
-        &artifact,
-        channel,
-        without_replay_cache(),
-    )?;
-    let first = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        resolution.request().envelope(),
-        &mut issued,
-        channel,
-    );
-    assert!(matches!(&first, Err(SamlError::LimitExceeded { .. })));
-    let second = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        resolution.request().envelope(),
-        &mut issued,
-        channel,
-    );
-    assert!(matches!(second, Err(SamlError::LimitExceeded { .. })));
     Ok(())
 }
 

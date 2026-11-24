@@ -18,7 +18,6 @@ use crate::soap::{
     read_soap_body, read_soap_status_response, reject_processing_instructions,
     MessageConfidentiality, SoapChannel, SoapRequest, SoapResponse,
 };
-use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::fragment::standalone_element;
 use crate::xml::protocol_element::{
     issuer, issuer_format_is_entity, parse_saml, parse_saml_with_limits, read_status, PartyName,
@@ -26,6 +25,7 @@ use crate::xml::protocol_element::{
 };
 use crate::xml::write::{Prefixes, XmlWriter};
 use crate::xml::XmlLimits;
+use crate::xml::{any_uri::collapse_whitespace, dom};
 
 const ARTIFACT_TYPE_CODE: u16 = 0x0004;
 const ARTIFACT_LEN: usize = 44;
@@ -289,6 +289,7 @@ pub(crate) fn issue<S: ArtifactStore + ?Sized>(
     protocol_xml: &str,
     endpoint_index: u16,
     issued: &mut S,
+    setting: &EntitySetting,
 ) -> Result<Artifact, SamlError> {
     let (message_xml, local_name) = stored_message(protocol_xml)?;
     let required_channel = if local_name == "Response" {
@@ -303,6 +304,7 @@ pub(crate) fn issue<S: ArtifactStore + ?Sized>(
         required_channel,
         endpoint_index,
         issued,
+        setting,
     )?;
     issued.store(&artifact, entry)?;
     Ok(artifact)
@@ -314,6 +316,7 @@ pub(crate) fn prepare_sso_response<S: ArtifactStore + ?Sized>(
     response_xml: &str,
     endpoint_index: u16,
     issued: &S,
+    setting: &EntitySetting,
 ) -> Result<(Artifact, IssuedArtifact), SamlError> {
     let (message_xml, local_name) = stored_message(response_xml)?;
     if local_name != "Response" {
@@ -328,6 +331,7 @@ pub(crate) fn prepare_sso_response<S: ArtifactStore + ?Sized>(
         ArtifactChannelRequirement::Confidential,
         endpoint_index,
         issued,
+        setting,
     )
 }
 
@@ -338,12 +342,24 @@ fn prepare_entry<S: ArtifactStore + ?Sized>(
     required_channel: ArtifactChannelRequirement,
     endpoint_index: u16,
     issued: &S,
+    setting: &EntitySetting,
 ) -> Result<(Artifact, IssuedArtifact), SamlError> {
     let entity_id = metadata
         .as_metadata()
         .entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?;
     let _service = soap_service(metadata, endpoint_index)?;
+    let prefixes = Prefixes::of(setting)?;
+    // A schema-valid xs:ID needs no XML escaping. Reserve the largest one the response can echo.
+    let request_id = "_".repeat(XmlLimits::default().max_attribute_value_bytes);
+    answered(
+        &prefixes,
+        entity_id,
+        &request_id,
+        &Status::success(),
+        Some(&message_xml),
+        ArtifactRelease::Returned,
+    )?;
     let now = issued.now()?;
     let lifetime = issued.lifetime()?;
     let expires_at = now.checked_add(lifetime).ok_or_else(|| {
@@ -577,10 +593,9 @@ fn answered(
         writer.raw(message_xml);
     }
     writer.end(&prefixes.protocol("ArtifactResponse"));
-    Ok(AnsweredArtifact {
-        response: SoapResponse::try_new(&writer.finish())?,
-        release,
-    })
+    let response = SoapResponse::try_new(&writer.finish())?;
+    dom::parse_document(response.envelope(), XmlLimits::default())?;
+    Ok(AnsweredArtifact { response, release })
 }
 
 fn channel_allows(channel: SoapChannel, required: ArtifactChannelRequirement) -> bool {

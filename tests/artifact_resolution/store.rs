@@ -14,6 +14,10 @@ use saml_rs::{
 
 use super::*;
 
+#[cfg(crypto)]
+#[path = "store/budget.rs"]
+mod budget;
+
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
