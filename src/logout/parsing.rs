@@ -11,9 +11,9 @@ use crate::flow::{
 };
 use crate::metadata::Metadata;
 use crate::model::{ClockSkew, Status, StatusMessage};
-use crate::validator::received_status;
 use crate::xml::fields;
 use crate::xml::protocol_element::SamlElement;
+use crate::xml::status::read_status;
 use std::time::SystemTime;
 
 use super::ASYNC_SLO_NAMESPACE;
@@ -172,7 +172,7 @@ pub(crate) fn parse_logout_response_at(
             return Err(error);
         }
     }
-    let status = received_status(&flow.saml_content, self_setting.xml_limits)
+    let status = read_status(&flow.saml_content, self_setting.xml_limits)
         .and_then(|status| status.clone().require_success().map(|()| status));
     let status_message = correlated_status_message(
         &flow.saml_content,

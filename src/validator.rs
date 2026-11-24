@@ -1,8 +1,8 @@
 use crate::constants::ParserType;
 use crate::error::{SamlError, TimeWindowField};
-use crate::model::{ClockSkew, Status};
+use crate::model::ClockSkew;
 use crate::util::Value;
-use crate::xml::protocol_element::{parse_saml_with_limits, read_status};
+use crate::xml::status::read_status;
 use crate::xml::{fields, parse_saml_utc_instant, XmlLimits};
 use std::time::SystemTime;
 use time::{Duration, OffsetDateTime};
@@ -115,10 +115,6 @@ pub(crate) fn conditions_time_window(extracted: &Value) -> Result<TimeWindow<'_>
     }
 }
 
-pub(crate) fn received_status(content: &str, limits: XmlLimits) -> Result<Status, SamlError> {
-    read_status(&parse_saml_with_limits(content, limits)?)
-}
-
 pub fn check_status(
     content: &str,
     parser_type: ParserType,
@@ -127,7 +123,7 @@ pub fn check_status(
     match parser_type {
         ParserType::SamlResponse
         | ParserType::LogoutResponse
-        | ParserType::ManageNameIdResponse => received_status(content, limits)?.require_success(),
+        | ParserType::ManageNameIdResponse => read_status(content, limits)?.require_success(),
         ParserType::SamlRequest | ParserType::LogoutRequest | ParserType::ManageNameIdRequest => {
             Ok(())
         }
@@ -284,8 +280,14 @@ mod tests {
                     "{root} {children}: {result:?}"
                 );
             }
-            let accepted = check_status(&response(&status), parser_type, XmlLimits::default());
-            assert!(accepted.is_ok(), "{root}: {accepted:?}");
+            for children in [
+                status.clone(),
+                format!(r#"<ext:Status xmlns:ext="urn:example:extension"/>{status}"#),
+            ] {
+                let accepted =
+                    check_status(&response(&children), parser_type, XmlLimits::default());
+                assert!(accepted.is_ok(), "{root} {children}: {accepted:?}");
+            }
             let missing = check_status(&response(""), parser_type, XmlLimits::default());
             assert!(
                 matches!(missing, Err(SamlError::StatusMissing)),

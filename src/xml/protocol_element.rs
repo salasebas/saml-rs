@@ -1,6 +1,6 @@
 use crate::constants::{name_id_format, namespace};
 use crate::error::SamlError;
-use crate::model::{SamlInstant, Status, StatusMessage};
+use crate::model::{SamlInstant, StatusMessage};
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::dom::XmlLimits;
 pub(crate) use crate::xml::dom::{
@@ -76,24 +76,6 @@ pub(crate) fn issuer_format_is_entity(format: Option<&str>) -> bool {
         None => true,
         Some(format) => format == name_id_format::ENTITY,
     }
-}
-
-pub(crate) fn read_status(response: &SamlElement) -> Result<Status, SamlError> {
-    let status = at_most_one_child(response, namespace::PROTOCOL, "Status")?
-        .ok_or(SamlError::StatusMissing)?;
-    let code = at_most_one_child(status, namespace::PROTOCOL, "StatusCode")?
-        .ok_or(SamlError::StatusMissing)?;
-    let top = code.attr("Value").ok_or(SamlError::StatusMissing)?;
-    let subordinate = at_most_one_child(code, namespace::PROTOCOL, "StatusCode")?
-        .map(|subordinate| {
-            subordinate.attr("Value").ok_or_else(|| {
-                SamlError::ProtocolProfile(
-                    "subordinate StatusCode is missing required attribute Value".into(),
-                )
-            })
-        })
-        .transpose()?;
-    Status::received(top, subordinate)
 }
 
 fn at_most_one_child<'a>(

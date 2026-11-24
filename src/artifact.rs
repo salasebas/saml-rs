@@ -20,9 +20,9 @@ use crate::soap::{
 };
 use crate::xml::fragment::standalone_element;
 use crate::xml::protocol_element::{
-    issuer, issuer_format_is_entity, parse_saml, parse_saml_with_limits, read_status, PartyName,
-    SamlElement,
+    issuer, issuer_format_is_entity, parse_saml, parse_saml_with_limits, PartyName, SamlElement,
 };
+use crate::xml::status::read_status;
 use crate::xml::write::{Prefixes, XmlWriter};
 use crate::xml::XmlLimits;
 use crate::xml::{any_uri::collapse_whitespace, dom};
@@ -235,7 +235,7 @@ impl ArtifactResolution {
             self.hmac_secret.as_ref(),
             self.signature_profile,
         )?;
-        read_status(&response)?.require_success()?;
+        read_status(&body.xml, self.xml_limits)?.require_success()?;
         let Some(message) = protocol_payload(&response)? else {
             return Err(SamlError::ArtifactNotReturned);
         };

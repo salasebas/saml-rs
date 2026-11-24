@@ -18,8 +18,9 @@ use crate::soap::{
 };
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::protocol_element::{
-    issuer, issuer_format_is_entity, parse_saml_with_limits, read_status, SamlElement,
+    issuer, issuer_format_is_entity, parse_saml_with_limits, SamlElement,
 };
+use crate::xml::status::read_status;
 use crate::xml::write::Prefixes;
 use crate::xml::XmlLimits;
 
@@ -265,7 +266,7 @@ impl StartedNameIdManagement {
             self.hmac_secret.as_ref(),
             self.signature_profile,
         )?;
-        read_status(&response)?.require_success()
+        read_status(&body.xml, self.xml_limits)?.require_success()
     }
 }
 
