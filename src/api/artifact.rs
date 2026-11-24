@@ -28,7 +28,9 @@ impl IdentityProvider {
     /// Returns [`SamlError::Xml`] when `protocol_xml` is not one well-formed
     /// element or the element contains a processing instruction. Returns
     /// [`SamlError::ProtocolProfile`] when the element is outside the SAML
-    /// protocol namespace, [`SamlError::ArtifactStoreUnavailable`] when
+    /// protocol namespace, [`SamlError::LimitExceeded`] when it cannot fit
+    /// in a SOAP `ArtifactResponse` under the default [`crate::XmlLimits`],
+    /// [`SamlError::ArtifactStoreUnavailable`] when
     /// `issued` cannot store the artifact, and another [`SamlError`] when
     /// metadata has no SOAP `ArtifactResolutionService` at `endpoint_index`,
     /// the artifact expiration overflows the supported time range, or the
@@ -47,6 +49,7 @@ impl IdentityProvider {
             protocol_xml,
             endpoint_index,
             issued,
+            &self.engine().setting,
         )
     }
 
@@ -76,6 +79,8 @@ impl IdentityProvider {
     /// with a top-level `Success` status. Returns
     /// [`SamlError::ProtocolProfile`] when [`RespondSso::relay_state`] is set
     /// and `request` carried `RelayState`.
+    /// Returns [`SamlError::LimitExceeded`] when the generated response
+    /// cannot fit in a SOAP `ArtifactResponse` under the default [`crate::XmlLimits`].
     ///
     /// # Examples
     ///
@@ -152,7 +157,9 @@ impl IdentityProvider {
     ///
     /// Returns the delivery and signing errors of [`Self::respond_sso_refusal`].
     /// Also returns an error when the SOAP resolution endpoint is missing
-    /// or the artifact cannot be stored.
+    /// or the artifact cannot be stored. Returns [`SamlError::LimitExceeded`]
+    /// when the response cannot fit in a SOAP `ArtifactResponse` under the
+    /// default [`crate::XmlLimits`].
     pub fn respond_sso_refusal_artifact(
         &self,
         sp: &SpDescriptor,
@@ -220,6 +227,8 @@ impl IdentityProvider {
     /// unconsumed message. An invalid signature returns a verification error
     /// and leaves the artifact outstanding. A present signature without a
     /// crypto provider returns [`SamlError::Unsupported`].
+    /// Returns [`SamlError::LimitExceeded`] when the response cannot fit
+    /// within the default [`crate::XmlLimits`]. The artifact stays outstanding.
     ///
     /// # Examples
     ///

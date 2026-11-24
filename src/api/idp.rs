@@ -503,6 +503,7 @@ impl IdentityProvider {
                     &rendered.xml,
                     delivery.endpoint_index(),
                     issued,
+                    idp_setting,
                 )?;
                 let outbound = Outbound::<SsoResponse>::artifact(
                     rendered.id,

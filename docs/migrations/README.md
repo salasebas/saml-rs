@@ -14,4 +14,8 @@ additions.
 - [How to upgrade from 0.7 to 0.8](0.7-to-0.8/README.md)
 - [How to upgrade from 0.8 to 0.9](0.8-to-0.9/README.md)
 
+## Unreleased changes
+
+- [Handle SOAP artifact response size errors](unreleased-artifact-response-budget.md)
+
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

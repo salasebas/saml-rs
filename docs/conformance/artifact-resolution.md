@@ -23,6 +23,7 @@ Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browse
 | Associate the stored message with the service provider it is for | Mandatory | Core §3.5.3, Profiles §4.1.4.4 | Always |
 | Store only one element in the SAML protocol namespace | Library policy: `ArtifactResolution::finish` rejects any other payload, so another element could never be resolved. | Bindings §3.6 | Always |
 | Reject processing instructions inside the element before issuing an artifact | Library policy: the stored element must be deliverable in a SOAP response when the artifact resolves. | SOAP 1.1 §3 | Always |
+| Check the complete SOAP response against default XML limits before storing the message. Reserve space for the largest `InResponseTo` those limits permit | Library policy: an artifact must fit its return envelope. | — | Always |
 
 ## ArtifactResolve
 
@@ -60,6 +61,7 @@ Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browse
 | Return the stored message at most once | Mandatory | Core §3.5.3, Bindings §3.6.5.2 | Always |
 | Resolve artifacts across clustered nodes through a shared atomic store, or route each node's artifacts through a per-node `ArtifactResolutionService` `EndpointIndex` | Optional | Core §3.5.3, Bindings §3.6.4.2, §3.6.5.2, Profiles §5.5 | `ArtifactStore`, `IdpConfigBuilder::artifact_resolution_service` |
 | Keep an outstanding artifact after withholding its message | Library policy: the intended recipient can still resolve it within its lifetime. | Core §3.5.3 | Always |
+| Check the actual SOAP response against default XML limits before consuming the artifact | Library policy: the requester may retry an artifact whose response could not be sent. | — | Always |
 | Fail closed without releasing the message when the artifact store cannot verify or consume the entry | Library policy: releasing an unconsumed artifact would violate single-use enforcement across retries or concurrent nodes. | Core §3.5.3, Bindings §3.6.5.2 | Always |
 | Withhold the message when a present `Destination`, after XML whitespace collapse, differs from this endpoint | Mandatory | Core §3.2.1, `RequestAbstractType`, XML Schema Part 2 §4.3.6 | Always |
 | Expire the artifact after the configured lifetime. The issuer should choose the shortest practical lifetime | Recommended | Core §3.5.3 | `ArtifactStore::lifetime`, `IssuedArtifacts::expire_after` |
