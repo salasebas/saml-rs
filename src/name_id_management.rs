@@ -408,6 +408,7 @@ pub(crate) fn receive(
                 name_id,
                 change,
             },
+            Binding::Soap,
             None,
         )))),
         Err(undecryptable) => refused(idp, &id, Refusal::Undecryptable(undecryptable)),
@@ -420,6 +421,11 @@ pub(crate) fn respond(
     request: &Received<ManageNameIdRequest>,
     status: &Status,
 ) -> Result<SoapResponse, SamlError> {
+    if request.binding() != Binding::Soap {
+        return Err(SamlError::UnsupportedBinding {
+            binding: Binding::Soap,
+        });
+    }
     let sp_entity_id = service_provider.entity_id();
     let issuer = request.message().issuer();
     if issuer != sp_entity_id {

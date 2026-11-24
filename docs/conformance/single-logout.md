@@ -91,7 +91,8 @@ on both roles exposes the received attribute through `LogoutRequest::reason`.
 | Sign the response on HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign. CD-04 §2.4 makes the SimpleSign signature optional, but the profile requires the responder to authenticate by signing, so for logout it is mandatory | Mandatory | Profiles §4.4.3.4, §4.4.4.2, CD-04 §2.4 | Always |
 | A session participant sends the response to an `https` `SingleLogoutService`. A session authority's response has no such check | Recommended | Profiles §4.4.3.4 | `RespondSlo::allow_http` |
 | Return the exact `RelayState` of the request, including a value over 80 bytes up to the receive limit, with no setter to replace or drop it | Mandatory | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
-| Refuse to answer over SOAP a request that carried `RelayState` | Mandatory | Bindings §3.4.3, §3.5.3 | Always |
+| Return a SOAP reply on the request's exchange. Return a reply to a browser request through the user agent | Mandatory | Profiles §4.4.3.4, §4.4.3.5 | `respond_slo`, `respond_slo_refusal` |
+| Choose any supported browser response binding that the peer publishes | Optional | Profiles §4.4.3.4, §4.4.3.5 | `RespondSlo` |
 | Reject a `LogoutRequest` whose issuer is not the peer descriptor entity | Library policy: a response must not go to another party's `SingleLogoutService`. | — | Always |
 | Write a top-level `StatusCode` of `Success`, `Requester`, `Responder`, or `VersionMismatch`, with an optional subordinate code | Mandatory | Core §3.2.2.2 | `status` argument |
 | Write caller-supplied plain text as `StatusMessage` after `StatusCode` before signing. Omit the element by default | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType` | `RespondSlo::status_message` |
@@ -179,7 +180,7 @@ Typed logout send and receive use HTTP-Redirect, HTTP-POST, and HTTP-POST-Simple
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Send the request on a synchronous binding, and return the response on the same exchange | Optional | Profiles §4.4.3.1, §4.4.3.3, §4.4.3.4 | `StartSlo::soap`, `RespondSlo::soap` |
+| Send the request on a synchronous binding | Optional | Profiles §4.4.3.1, §4.4.3.3 | `StartSlo::soap` |
 | Put exactly one SAML request or response in the SOAP body, with no other element | Mandatory | Bindings §3.2.2.1, E19 | Always |
 | Authenticate the requester and protect message integrity. Typed SOAP generation signs the `LogoutRequest` | Mandatory | Profiles §4.4.3.1, §4.4.4.1 | Always |
 | Authenticate the responder and protect message integrity. Typed SOAP generation signs the `LogoutResponse` | Mandatory | Profiles §4.4.3.4, §4.4.4.2 | Always |

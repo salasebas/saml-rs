@@ -168,6 +168,8 @@ impl ServiceProvider {
 
     /// Respond to a received IdP LogoutRequest.
     ///
+    /// Return a SOAP response on the request's HTTP exchange. For a browser
+    /// request, choose a browser binding supported by the peer.
     /// The response carries the exact RelayState received with the request.
     /// `status` is what the response reports. Pass [`Status::success`] after
     /// invalidating the sessions the request names that this identity
@@ -181,8 +183,8 @@ impl ServiceProvider {
     /// IdP descriptor, IdP metadata cannot be parsed, relay state is invalid,
     /// a compatible logout endpoint or signing key is missing, the selected
     /// binding is unsupported, or logout response creation fails.
-    /// [`RespondSlo::soap`] returns [`SamlError::ProtocolProfile`] when the
-    /// request carried RelayState.
+    /// Returns [`SamlError::UnsupportedBinding`] when the selected response
+    /// binding crosses between SOAP and browser delivery.
     /// Browser bindings also reject an
     /// `http` peer endpoint unless
     /// [`RespondSlo::allow_http`] is
@@ -315,9 +317,9 @@ impl IdentityProvider {
     /// With no configured format, `Format` is omitted, as in the assertion.
     ///
     /// `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` on the subject
-    /// `NameId` are sent as given. [`Self::respond_sso`] writes `SPProvidedID`
-    /// but not the other two, so pass those only when the assertion carried
-    /// them.
+    /// `NameId` are sent as given. Use the identifier from the issued
+    /// assertion, including any of those attributes that [`Self::respond_sso`]
+    /// wrote.
     ///
     /// # Errors
     ///
@@ -481,6 +483,8 @@ impl IdentityProvider {
 
     /// Respond to a received SP LogoutRequest.
     ///
+    /// Return a SOAP response on the request's HTTP exchange. For a browser
+    /// request, choose a browser binding supported by the peer.
     /// The response carries the exact RelayState received with the request.
     /// `status` is what the response reports. Pass [`Status::success`] after
     /// ending this identity provider's own session with the principal. When
@@ -496,8 +500,8 @@ impl IdentityProvider {
     /// SP descriptor, SP metadata cannot be parsed, relay state is invalid, a
     /// compatible logout endpoint or signing key is missing, the selected
     /// binding is unsupported, or logout response creation fails.
-    /// [`RespondSlo::soap`] returns [`SamlError::ProtocolProfile`] when the
-    /// request carried RelayState.
+    /// Returns [`SamlError::UnsupportedBinding`] when the selected response
+    /// binding crosses between SOAP and browser delivery.
     ///
     /// # Examples
     ///
@@ -806,7 +810,10 @@ fn receive_slo_impl(
         replay_deadline,
     )?;
     let logout = decrypt_encrypted_id(logout, local_setting, &document)?;
-    Ok((Received::new(logout, relay_state), asynchronous))
+    Ok((
+        Received::new(logout, binding.into(), relay_state),
+        asynchronous,
+    ))
 }
 
 #[derive(Clone, Copy)]
@@ -826,28 +833,28 @@ fn respond_slo_impl(
     options: RespondSlo,
     transport: LogoutResponseTransport,
 ) -> Result<Outbound<LogoutResponse>, SamlError> {
-    let (issuer, in_response_to, relay_state, status) = match response_to {
+    let (request_binding, issuer, in_response_to, relay_state, status) = match response_to {
         LogoutResponseTo::Request { request, status } => (
+            LogoutBinding::try_from(request.binding())?,
             request.message().issuer(),
             request.message().id(),
             request.relay_state(),
             status,
         ),
-        LogoutResponseTo::Refusal(refusal) => {
-            logout_response_binding(Binding::from(options.binding), refusal.binding)?;
-            (
-                &refusal.issuer,
-                &refusal.id,
-                refusal.relay_state.as_ref(),
-                refusal.status(),
-            )
-        }
+        LogoutResponseTo::Refusal(refusal) => (
+            refusal.binding,
+            &refusal.issuer,
+            &refusal.id,
+            refusal.relay_state.as_ref(),
+            refusal.status(),
+        ),
     };
+    let binding = logout_response_binding(options.binding.into(), request_binding)?;
     ensure_entity_id(issuer, peer.entity_id)?;
     if matches!(transport, LogoutResponseTransport::SessionParticipant) {
         enforce_participant_https(
             peer.metadata,
-            options.binding,
+            binding,
             options.transport(),
             EndpointDirection::Response,
         )?;
@@ -857,7 +864,7 @@ fn respond_slo_impl(
         init_setting: local_setting,
         init_meta: local_metadata,
         target_meta: peer.metadata,
-        binding: Binding::from(options.binding),
+        binding: binding.into(),
         in_response_to: Some(in_response_to.as_str()),
         relay_state: relay_state.map(RelayState::as_str),
         status,

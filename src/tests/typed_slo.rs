@@ -3432,6 +3432,22 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
         validation(),
     )?;
     assert_eq!(received.relay_state(), None);
+    let post_response = idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    );
+    assert!(
+        matches!(
+            post_response,
+            Err(SamlError::UnsupportedBinding {
+                binding: Binding::Post
+            })
+        ),
+        "POST response error: {:?}",
+        post_response.err()
+    );
     let response = idp.respond_slo(
         &sp_descriptor,
         &received,
@@ -3486,6 +3502,22 @@ fn soap_slo_round_trips_when_the_session_authority_starts_it(
         validation(),
     )?;
     assert_eq!(received.message().issuer().as_str(), IDP_ENTITY_ID);
+    let post_response = sp.respond_slo(
+        &idp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    );
+    assert!(
+        matches!(
+            post_response,
+            Err(SamlError::UnsupportedBinding {
+                binding: Binding::Post
+            })
+        ),
+        "POST response error: {:?}",
+        post_response.err()
+    );
     let response = sp.respond_slo(
         &idp_descriptor,
         &received,
@@ -3666,29 +3698,37 @@ fn soap_start_slo_always_applies_the_generation_rules() -> Result<(), Box<dyn st
 }
 
 #[test]
-fn soap_respond_slo_rejects_a_request_with_relay_state() -> Result<(), Box<dyn std::error::Error>> {
+fn a_post_logout_request_cannot_be_answered_over_soap() -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let relay_state = RelayState::try_new("state")?;
-    let started = sp.start_slo(
-        &idp_descriptor,
-        subject()?,
-        StartSlo::post().relay_state(relay_state),
-    )?;
-    let received = idp.receive_slo(
-        &sp_descriptor,
-        Inbound::post(post_fields(&started.outbound)?),
-        validation(),
-    )?;
-    match idp.respond_slo(
-        &sp_descriptor,
-        &received,
-        &Status::success(),
-        RespondSlo::soap(),
-    ) {
-        Err(SamlError::ProtocolProfile(_)) => Ok(()),
-        other => Err(format!("expected ProtocolProfile, got {other:?}").into()),
+    for options in [
+        StartSlo::post(),
+        StartSlo::post().relay_state(RelayState::try_new("state")?),
+    ] {
+        let started = sp.start_slo(&idp_descriptor, subject()?, options)?;
+        let received = idp.receive_slo(
+            &sp_descriptor,
+            Inbound::post(post_fields(&started.outbound)?),
+            validation(),
+        )?;
+        let response = idp.respond_slo(
+            &sp_descriptor,
+            &received,
+            &Status::success(),
+            RespondSlo::soap(),
+        );
+        assert!(
+            matches!(
+                response,
+                Err(SamlError::UnsupportedBinding {
+                    binding: Binding::Soap
+                })
+            ),
+            "SOAP response error: {:?}",
+            response.err()
+        );
     }
+    Ok(())
 }
 
 fn mutual_tls() -> SoapChannel {

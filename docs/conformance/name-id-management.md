@@ -86,6 +86,7 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Answer every processed request with a `ManageNameIDResponse` | Mandatory | Core §3.6.2, Profiles §4.5.3.2 | `respond_name_id_management` |
+| Return the SOAP response on the request's HTTP exchange | Mandatory | Profiles §4.5.3.2 | `respond_name_id_management` |
 | For a `2.0` request, write `ID`, `Version` `2.0`, a UTC `IssueInstant`, and `InResponseTo` equal to the request `ID` | Mandatory | `StatusResponseType`, Core §3.2.2, §4.1.3.2 | Always |
 | Write the responding entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.2 | Always |
 | Answer only a request received from the given service provider | Library policy: reason not recorded. | — | Always |
@@ -143,6 +144,7 @@ both clock-skew tolerances to cover the full window on either binding.
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Answer every processed request with a `ManageNameIDResponse` | Mandatory | Core §3.6.2, Profiles §4.5.3.2 | `respond_name_id_management_redirect` |
+| Return the response to a Redirect request through the user agent | Mandatory | Profiles §4.5.3.2 | `respond_name_id_management_redirect` |
 | For a `2.0` request, write `ID`, `Version` `2.0`, a UTC `IssueInstant`, and `InResponseTo` equal to the request `ID` | Mandatory | `StatusResponseType`, Core §3.2.2, §4.1.3.2 | Always |
 | Write the responding entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.2 | Always |
 | Answer only a request received from the given peer | Library policy: no response is built for another party's endpoint. | — | Always |
