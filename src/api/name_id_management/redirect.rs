@@ -59,8 +59,9 @@ impl ServiceProvider {
     /// Returns [`SamlError::ProtocolProfile`] for a transient identifier.
     /// When no identity-provider endpoint is `https` and
     /// [`StartNameIdManagement::allow_http`] is not selected, the first
-    /// endpoint decides the error: [`SamlError::ProtocolProfile`] for an
-    /// `http` URL, [`SamlError::Invalid`] for a value that is not a URL.
+    /// endpoint decides the error: [`SamlError::ProtocolProfile`] for a
+    /// URL that is not `https`, [`SamlError::Invalid`] for a value that is not
+    /// a URL.
     /// Returns [`SamlError::Invalid`] when the NameID format is not an
     /// absolute URI reference, or when `allow_http` is selected and the first
     /// endpoint is not an `http` or `https` URL. With
@@ -126,11 +127,10 @@ impl ServiceProvider {
     /// HTTP-Redirect `ManageNameIDService` or several without
     /// [`SamlValidationContext::with_recipient_endpoint`], the message is
     /// malformed, its version is too low for a SAML 2.0 response, or replay
-    /// validation detects a duplicate. Returns
-    /// [`SamlError::ProtocolProfile`] or [`SamlError::Invalid`] when a refused
-    /// request would be answered at an endpoint that
-    /// [`Self::respond_name_id_management_redirect`] rejects under `options`.
-    /// Returns [`SamlError::TimeWindowInvalid`] when
+    /// validation detects a duplicate. Returns the endpoint errors of
+    /// [`Self::respond_name_id_management_redirect`], under `options`, when a
+    /// refused request would be answered. Returns
+    /// [`SamlError::TimeWindowInvalid`] when
     /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
     /// selected and `validation` has no
     /// [`SamlValidationContext::with_replay_retention`].
@@ -174,8 +174,9 @@ impl ServiceProvider {
     /// the signing key is missing, or no crypto provider is enabled. When none
     /// of its endpoints is `https` and
     /// [`RespondNameIdManagement::allow_http`] is not selected, the first
-    /// endpoint decides the error: [`SamlError::ProtocolProfile`] for an
-    /// `http` URL, [`SamlError::Invalid`] for a value that is not a URL. With
+    /// endpoint decides the error: [`SamlError::ProtocolProfile`] for a
+    /// URL that is not `https`, [`SamlError::Invalid`] for a value that is not
+    /// a URL. With
     /// `allow_http`, returns [`SamlError::Invalid`] when the first endpoint is
     /// not an `http` or `https` URL.
     pub fn respond_name_id_management_redirect(
@@ -265,8 +266,9 @@ impl IdentityProvider {
     /// Returns [`SamlError::ProtocolProfile`] for a transient identifier.
     /// When no service-provider endpoint is `https` and
     /// [`StartNameIdManagement::allow_http`] is not selected, the first
-    /// endpoint decides the error: [`SamlError::ProtocolProfile`] for an
-    /// `http` URL, [`SamlError::Invalid`] for a value that is not a URL.
+    /// endpoint decides the error: [`SamlError::ProtocolProfile`] for a
+    /// URL that is not `https`, [`SamlError::Invalid`] for a value that is not
+    /// a URL.
     /// Returns [`SamlError::Invalid`] when a persistent value is longer than
     /// 256 characters, the NameID format is not an absolute URI reference, or
     /// `allow_http` is selected and the first endpoint is not an `http` or
