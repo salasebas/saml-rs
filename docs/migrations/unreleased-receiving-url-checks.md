@@ -44,8 +44,8 @@ supplied URL, nothing changes.
 
 A supplied URL now returns:
 
-- `SamlError::DestinationMismatch` when it is not the assertion consumer of
-  the pending request. `expected` is the requested location and `actual` is
+- `SamlError::DestinationMismatch` when it is another published assertion
+  consumer than the one the pending request asked for. `expected` is the requested location and `actual` is
   the supplied URL.
 - `SamlError::RecipientEndpointNotPublished` when it is not an assertion
   consumer for the pending request's binding.

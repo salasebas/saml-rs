@@ -346,13 +346,18 @@ pub enum SamlError {
         /// What prevented lookup of the identity provider.
         reason: IdpResolutionReason,
     },
-    /// Response `Destination` does not match the expected recipient URL.
+    /// A message `Destination` or bearer `Recipient` does not match the
+    /// expected recipient URL, or `finish_sso` received the response at
+    /// another assertion consumer than the pending request asked for.
     #[error("destination mismatch: expected {expected}, got {actual:?}")]
     #[non_exhaustive]
     DestinationMismatch {
         /// Expected recipient URL.
         expected: String,
-        /// Actual destination value extracted from the message, when available.
+        /// The destination value extracted from the message, when available.
+        /// For a receiving URL that `finish_sso` rejects before parsing, the
+        /// URL supplied with
+        /// [`crate::SamlValidationContext::with_recipient_endpoint`].
         actual: Option<String>,
     },
     /// The receiving URL given to

@@ -792,6 +792,25 @@ fn a_request_addressed_to_another_published_endpoint_is_withheld(
         channel,
     )?;
     assert_eq!(answered.release(), ArtifactRelease::Returned);
+
+    let artifact = idp.issue_artifact(&parties.sp_metadata, &web_sso_response(), 0, &mut issued)?;
+    let resolution =
+        parties
+            .sp
+            .resolve_artifact(&idp_metadata, &artifact, channel, without_replay_cache())?;
+    let addressed_to_second = resolution.request().envelope().replace(
+        &format!("Destination=\"{RESOLUTION_URL}\""),
+        &format!("Destination=\"{}\"", second.as_str()),
+    );
+    assert_ne!(addressed_to_second, resolution.request().envelope());
+    let answered_at_second = idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &addressed_to_second,
+        &second,
+        &mut issued,
+        channel,
+    )?;
+    assert_eq!(answered_at_second.release(), ArtifactRelease::Returned);
     Ok(())
 }
 

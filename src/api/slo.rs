@@ -934,6 +934,15 @@ fn soap_reply_recipient(
     local_metadata: &Metadata,
     validation: &SamlValidationContext<'_>,
 ) -> Result<Option<String>, SamlError> {
+    let unresolved = match logout_recipient_endpoint(
+        local_metadata,
+        LogoutBinding::Soap,
+        EndpointDirection::Request,
+        validation,
+    ) {
+        Ok(recipient) => return Ok(Some(recipient)),
+        Err(error) => error,
+    };
     let Transport::Soap { envelope, .. } = &input.transport else {
         return Err(SamlError::UnsupportedBinding {
             binding: input.binding(),
@@ -941,16 +950,10 @@ fn soap_reply_recipient(
     };
     let body = read_soap_body(envelope, local_setting.xml_limits)?;
     let response = parse_saml_with_limits(&body.xml, local_setting.xml_limits)?;
-    if response.attr("Destination").is_none() {
-        return Ok(None);
+    match response.attr("Destination") {
+        Some(_) => Err(unresolved),
+        None => Ok(None),
     }
-    logout_recipient_endpoint(
-        local_metadata,
-        LogoutBinding::Soap,
-        EndpointDirection::Request,
-        validation,
-    )
-    .map(Some)
 }
 
 #[derive(Debug, Clone, Copy)]
