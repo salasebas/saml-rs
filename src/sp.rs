@@ -147,7 +147,8 @@ impl Engine {
         options: &LoginRequestOptions<'_>,
         preferences: &AuthnRequestPreferences<'_>,
     ) -> Result<BindingContext, SamlError> {
-        preferences.validate()?;
+        let name_id_format = self.setting.default_name_id_format();
+        preferences.validate(name_id_format)?;
         if idp.metadata.want_authn_requests_signed() && !self.metadata.authn_requests_signed() {
             return Err(SamlError::AuthnRequestSigningRequired);
         }
@@ -167,7 +168,6 @@ impl Engine {
             )
         };
         let protocol_binding = (!uses_acs_index).then(|| response_binding.urn().to_string());
-        let name_id_format = self.setting.default_name_id_format();
         validate_name_id_format(name_id_format)?;
         let id = generate_id();
         let issue_instant = now_iso8601();
@@ -186,6 +186,7 @@ impl Engine {
             extensions: preferences.extensions,
             issuer: &issuer,
             name_id_format,
+            sp_name_qualifier: preferences.sp_name_qualifier,
             allow_create: self.setting.allow_create,
         };
         let xml = render_default_authn_request_xml(Prefixes::of(&self.setting)?, &request);

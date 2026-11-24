@@ -4,6 +4,8 @@
 #[path = "web_browser_sso_generation/assertion_prefix.rs"]
 mod assertion_prefix;
 mod common;
+#[path = "web_browser_sso_generation/name_id_policy.rs"]
+mod name_id_policy;
 #[path = "common/tag_prefixes.rs"]
 mod tag_prefixes;
 
@@ -580,6 +582,7 @@ fn typed_sso_optional_generation_capabilities_stay_off_until_selected(
     assert!(!redirect.contains("Signature="));
     assert!(!request.contains("ForceAuthn="));
     assert!(request.contains("AllowCreate=\"false\""));
+    assert!(!request.contains("SPNameQualifier="));
     assert!(request.contains("Format=\"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress\""));
     assert!(!request.contains("Format=\"\""));
     assert!(request.contains(&format!("<saml:Issuer>{SP_ENTITY_ID}</saml:Issuer>")));

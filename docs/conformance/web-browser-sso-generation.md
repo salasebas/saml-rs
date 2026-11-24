@@ -34,6 +34,9 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | For a non-transient format, write `AllowCreate="true"` when identifier creation is enabled, and `false` otherwise | Optional | Core §3.4.1.1, E14 | `SpValidationPolicy::name_id_creation` |
 | Omit `AllowCreate` when the `NameIDPolicy` format is transient | Mandatory | Core §3.4.1.1, E14 | Always |
 | Request the first configured NameID format as an absolute URI reference. With none configured, the typed service provider advertises and requests `emailAddress` | Mandatory | Core §1.3.2 | Always |
+| Write the requested SP or affiliation as `NameIDPolicy@SPNameQualifier`. Omit it by default | Optional | Core §3.4.1.1, `NameIDPolicyType` | `StartSso::sp_name_qualifier` |
+| Require the qualifier to be an absolute URI reference of at most 1024 characters with collapsed whitespace | Library policy: the API uses the syntax of a SAML entity identifier for the requested namespace. | Core §3.4.1.1, §8.3.6 | Always |
+| Return an error when a qualifier is set and the requested format is `entity` | Library policy: no issued entity identifier can satisfy both request conditions. | Core §8.3.6, E15 | Always |
 | Write `AssertionConsumerServiceURL` and `ProtocolBinding` from the default endpoint of the response binding, unless an index is set | Library policy: the request then names its endpoint explicitly. | Core §3.4.1 | `StartSso::acs_index` |
 | Return `Cache-Control: no-cache, no-store` and `Pragma: no-cache` for the redirect, the POST form, and the SimpleSign form | Recommended | Bindings §3.4.5.1, §3.5.5.1, CD-04 §2.7.1 | Always |
 

@@ -1,7 +1,7 @@
 use crate::browser::{
     Inbound, Outbound, PendingAuthnRequest, SsoResponseBinding, Started, Transport,
 };
-use crate::config::{IdpDescriptor, SpConfig};
+use crate::config::{EntityId, IdpDescriptor, SpConfig};
 use crate::constants::Binding;
 use crate::error::IdpResolutionReason;
 use crate::flow::{
@@ -175,7 +175,9 @@ impl ServiceProvider {
     /// with the selected binding, a requested authentication reference is not an absolute URI,
     /// [`StartSso::require_exact_authn_context`] is set without an exact
     /// [`RequestedAuthnContext`](crate::RequestedAuthnContext),
-    /// `ProviderName` contains invalid XML characters, or request creation fails
+    /// `ProviderName` contains invalid XML characters, the requested
+    /// [`StartSso::sp_name_qualifier`] is invalid or cannot be combined with
+    /// the configured NameID format, or request creation fails
     /// because required metadata, signing keys, or supported bindings are unavailable.
     /// Returns [`SamlError::Invalid`] for [`StartSso::simple_sign`] when the
     /// service provider's [`AuthnRequestSigningPolicy`](crate::AuthnRequestSigningPolicy)
@@ -254,6 +256,7 @@ impl ServiceProvider {
             &AuthnRequestPreferences {
                 is_passive: options.passive.map(super::IsPassive::as_bool),
                 provider_name: options.provider_name.as_deref(),
+                sp_name_qualifier: options.sp_name_qualifier.as_ref().map(EntityId::as_str),
                 requested_authn_context: options.requested_authn_context.as_ref(),
                 extensions: &options.extensions,
             },
