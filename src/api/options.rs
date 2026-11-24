@@ -252,7 +252,8 @@ impl<Delivery> RespondSso<Delivery> {
     /// Choose text suitable for disclosure to the service provider and the
     /// browser. A later call replaces the message. An empty string clears it.
     /// Only error responses include it. Issuing an error response with text
-    /// outside XML 1.0's character set, or with only whitespace, returns
+    /// outside XML 1.0's character set, or with only spaces, tabs, carriage
+    /// returns, and line feeds, returns
     /// [`SamlError::Invalid`](crate::SamlError::Invalid).
     ///
     /// # Examples

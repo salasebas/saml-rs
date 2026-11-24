@@ -15,15 +15,20 @@ The response is rejected in these cases:
 - `SsoOutcome::Failure` carries a `Status` whose subordinate code is not an
   absolute URI reference. A status you read from a received response, such as
   `SamlError::StatusNotSuccess` in a proxy, can have one.
-- `RespondSso::status_message` has only whitespace.
+- `RespondSso::status_message` has only spaces, tabs, carriage returns, and
+  line feeds.
 - The effective NameID format is `entity`, and the value is not an absolute
   URI reference of at most 1024 characters with collapsed whitespace, or the
   `NameId` has `NameQualifier`, `SPNameQualifier`, or `SPProvidedID`. The
   effective format is the first configured NameID format when the `NameId`
   has none.
-- The received `AuthnRequest` `ID`, with XML whitespace collapsed, is not an
-  `xs:NCName`, so it cannot be written as `InResponseTo`. `receive_sso` still
-  accepts such a request.
+- The received `AuthnRequest` `ID` is not an `xs:NCName`, so it cannot be
+  written as `InResponseTo`. `receive_sso` still accepts such a request.
+
+`AuthnRequest::id` now returns the `ID` with XML whitespace collapsed, as
+`xs:ID` reads it, and the replay cache and `InResponseTo` use that value. If
+you compare a request ID with text you read from the request XML, collapse the
+whitespace in that text first.
 
 To upgrade, pass an absolute URI, such as a constant from
 `saml_rs::constants::authn_context_class_ref`, or build the value with

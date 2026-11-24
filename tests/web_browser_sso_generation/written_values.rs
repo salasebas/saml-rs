@@ -209,41 +209,35 @@ fn a_name_id_without_a_format_follows_the_configured_entity_format(
     Ok(())
 }
 
-fn receive_with_request_id(
+fn authn_request_with_id(
+    sp: &ServiceProvider,
+    idp_descriptor: &IdpDescriptor,
     request_id: &str,
-) -> Result<
-    (
-        IdentityProvider,
-        SpDescriptor,
-        saml_rs::Received<AuthnRequest>,
-    ),
-    Box<dyn std::error::Error>,
-> {
-    let sp = sp_with(SpValidationPolicy::default())?;
-    let idp = idp_with(IdpValidationPolicy::default(), false)?;
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+) -> Result<Inbound<AuthnRequest>, Box<dyn std::error::Error>> {
+    let started = sp.start_sso(idp_descriptor, StartSso::post())?;
     let generated = started.pending.request_id().as_str();
     let xml = authn_request_xml(&started.outbound)?.replace(
         &format!("ID=\"{generated}\""),
         &format!("ID=\"{request_id}\""),
     );
-    let received = idp.receive_sso(
-        &sp_descriptor,
-        Inbound::post(vec![FormField::new(
-            "SAMLRequest",
-            STANDARD.encode(xml.as_bytes()),
-        )]),
-        validation(),
-    )?;
-    assert_eq!(received.message().id().as_str(), request_id);
-    Ok((idp, sp_descriptor, received))
+    Ok(Inbound::post(vec![FormField::new(
+        "SAMLRequest",
+        STANDARD.encode(xml.as_bytes()),
+    )]))
 }
 
 #[test]
 fn a_request_id_is_written_as_in_response_to_only_as_an_ncname(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (idp, sp_descriptor, received) = receive_with_request_id("1-not-an-ncname")?;
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default(), false)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        authn_request_with_id(&sp, &idp_descriptor, "1-not-an-ncname")?,
+        validation(),
+    )?;
+    assert_eq!(received.message().id().as_str(), "1-not-an-ncname");
     for outcome in [
         SsoOutcome::Success(SsoAssertion::new(principal())),
         SsoOutcome::Failure(Status::responder()),
@@ -254,8 +248,27 @@ fn a_request_id_is_written_as_in_response_to_only_as_an_ncname(
             "{response:?}"
         );
     }
+    Ok(())
+}
 
-    let (idp, sp_descriptor, received) = receive_with_request_id(" _padded ")?;
+fn replay_checked(cache: &mut saml_rs::InMemoryReplayCache) -> SamlValidationContext<'_> {
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(cache))
+        .with_replay_retention(Duration::from_secs(300))
+}
+
+#[test]
+fn a_padded_request_id_is_one_id_for_replay_and_correlation(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default(), false)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let mut cache = saml_rs::InMemoryReplayCache::new();
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        authn_request_with_id(&sp, &idp_descriptor, " _padded ")?,
+        replay_checked(&mut cache),
+    )?;
+    assert_eq!(received.message().id().as_str(), "_padded");
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
@@ -264,5 +277,15 @@ fn a_request_id_is_written_as_in_response_to_only_as_an_ncname(
     )?;
     let xml = response_xml(&response)?;
     assert_eq!(xml.matches("InResponseTo=\"_padded\"").count(), 2, "{xml}");
+
+    let replayed = idp.receive_sso(
+        &sp_descriptor,
+        authn_request_with_id(&sp, &idp_descriptor, "_padded")?,
+        replay_checked(&mut cache),
+    );
+    assert!(
+        matches!(replayed, Err(SamlError::ReplayDetected { .. })),
+        "{replayed:?}"
+    );
     Ok(())
 }

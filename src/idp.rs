@@ -20,8 +20,8 @@ mod login_response;
 mod posted_response;
 
 use login_response::{
-    render_default_login_response, render_error_login_response, written_in_response_to,
-    ErrorLoginResponseXml, LoginResponseXml,
+    render_default_login_response, render_error_login_response, ErrorLoginResponseXml,
+    LoginResponseXml,
 };
 use std::time::SystemTime;
 
@@ -150,11 +150,7 @@ impl Engine {
         rendering: LoginResponseRendering<'_>,
     ) -> Result<RenderedLoginResponse, SamlError> {
         let prefixes = Prefixes::of(&self.setting)?;
-        let in_response_to = in_response_to
-            .filter(|id| !id.is_empty())
-            .map(written_in_response_to)
-            .transpose()?;
-        let in_response_to = in_response_to.as_deref();
+        let in_response_to = in_response_to.filter(|id| !id.is_empty());
         let fallback_status = Status::success();
         let status = rendering.status.unwrap_or(&fallback_status);
         if status.top_level() != TopLevelStatusCode::Success {

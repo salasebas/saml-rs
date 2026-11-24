@@ -4,7 +4,6 @@ use crate::model::{
     check_issued_subject_identifiers, is_subject_identifier, Attribute, AttributeNameFormat,
     AuthnContextReference, AuthnContextReferenceKind, Status,
 };
-use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::name::is_ncname;
 use crate::xml::write::{Prefixes, XmlWriter};
 use crate::xml::{is_xml_char, OutboundNameIdQualifiers};
@@ -45,6 +44,7 @@ pub(super) struct LoginResponseXml<'a> {
 pub(super) fn render_default_login_response(
     input: &LoginResponseXml<'_>,
 ) -> Result<String, SamlError> {
+    check_in_response_to(input.in_response_to)?;
     input.authn_statement.authn_context.ensure_absolute_uri()?;
     let prefixes = &input.prefixes;
     let assertion_prefix = prefixes.assertion_prefix();
@@ -143,6 +143,7 @@ pub(super) struct ErrorLoginResponseXml<'a> {
 pub(super) fn render_error_login_response(
     input: &ErrorLoginResponseXml<'_>,
 ) -> Result<String, SamlError> {
+    check_in_response_to(input.in_response_to)?;
     input.status.check_writable()?;
     if let Some(message) = input.status_message {
         check_status_message(message)?;
@@ -171,14 +172,13 @@ pub(super) fn render_error_login_response(
     Ok(writer.finish())
 }
 
-pub(super) fn written_in_response_to(request_id: &str) -> Result<String, SamlError> {
-    let request_id = collapse_whitespace(request_id);
-    if !is_ncname(&request_id) {
+fn check_in_response_to(in_response_to: Option<&str>) -> Result<(), SamlError> {
+    if in_response_to.is_some_and(|id| !is_ncname(id)) {
         return Err(SamlError::Invalid(
             "the request ID is not an xs:NCName, so it cannot be written as InResponseTo".into(),
         ));
     }
-    Ok(request_id)
+    Ok(())
 }
 
 fn check_status_message(message: &str) -> Result<(), SamlError> {

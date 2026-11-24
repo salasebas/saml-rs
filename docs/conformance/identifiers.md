@@ -126,6 +126,9 @@ The caller owns these rules, and the crate has no identifier store or log.
 - Treat a transient value as opaque and temporary. Recommended, Core §8.3.8.
 - Set `NameQualifier` and `SPNameQualifier` to the entities Core §8.3.7
   names. Mandatory, Core §8.3.7.
+- Omit `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` on an
+  `entity`-format `<NameID>` in a `LogoutRequest`, which writes every
+  qualifier it is given. Mandatory, Core §8.3.6.
 
 A requested `NameIDPolicy` `SPNameQualifier` is checked as in
 [Web Browser SSO generation](web-browser-sso-generation.md#identity-provider-response).
