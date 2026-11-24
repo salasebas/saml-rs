@@ -1035,6 +1035,81 @@ fn http_name_identifier_management_endpoint_needs_an_explicit_relaxation() -> Te
 }
 
 #[test]
+fn an_https_peer_endpoint_is_chosen_over_an_earlier_http_one() -> TestResult {
+    const SP_MANAGE_HTTP: &str = "http://sp.example.com/manage-name-id";
+    const IDP_RESPONSE_HTTPS: &str = "https://idp.example.com/manage-name-id/response";
+    const REDIRECT: &str = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect";
+    let idp = idp()?;
+    let sp = sp()?;
+    let sp_peer = sp_descriptor(&sp_with(&[SP_MANAGE_HTTP, SP_MANAGE])?)?;
+    let published =
+        format!(r#"<ManageNameIDService Binding="{REDIRECT}" Location="{IDP_MANAGE}"/>"#);
+    let idp_metadata = idp.metadata_xml();
+    if !idp_metadata.contains(&published) {
+        return Err("identity provider metadata does not publish the expected endpoint".into());
+    }
+    let idp_peer = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        &idp_metadata.replace(
+            &published,
+            &format!(
+                r#"<ManageNameIDService Binding="{REDIRECT}" Location="{IDP_MANAGE}" ResponseLocation="http://idp.example.com/manage-name-id/response"/><ManageNameIDService Binding="{REDIRECT}" Location="http://idp.example.com/manage-name-id" ResponseLocation="{IDP_RESPONSE_HTTPS}"/>"#
+            ),
+        ),
+        MetadataTrustPolicy::Unverified,
+    )?;
+
+    let started = idp.start_name_id_management_redirect(
+        &sp_peer,
+        &alice(),
+        &NameIdChange::Terminate,
+        StartNameIdManagement::new(),
+    )?;
+    assert!(started
+        .outbound
+        .redirect_url()?
+        .starts_with(&format!("{SP_MANAGE}?")));
+    let relaxed = idp.start_name_id_management_redirect(
+        &sp_peer,
+        &alice(),
+        &NameIdChange::Terminate,
+        StartNameIdManagement::new().allow_http(),
+    )?;
+    assert!(relaxed
+        .outbound
+        .redirect_url()?
+        .starts_with(&format!("{SP_MANAGE_HTTP}?")));
+
+    let request = request(sp.receive_name_id_management_redirect(
+        &idp_peer,
+        request_input(&started.outbound)?,
+        ReceiveNameIdManagement::new(),
+        validation(),
+    )?)?;
+    let response = sp.respond_name_id_management_redirect(
+        &idp_peer,
+        &request,
+        &Status::success(),
+        RespondNameIdManagement::new(),
+    )?;
+    assert!(response
+        .redirect_url()?
+        .starts_with(&format!("{IDP_RESPONSE_HTTPS}?")));
+
+    let sp_started = sp.start_name_id_management_redirect(
+        &idp_peer,
+        &alice(),
+        &NameIdChange::Terminate,
+        StartNameIdManagement::new(),
+    )?;
+    assert!(sp_started
+        .outbound
+        .redirect_url()?
+        .starts_with(&format!("{IDP_MANAGE}?")));
+    Ok(())
+}
+
+#[test]
 fn peer_without_a_name_identifier_management_endpoint_is_missing_metadata() -> TestResult {
     let sp = sp_with(&[])?;
     let idp = idp()?;

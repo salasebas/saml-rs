@@ -44,6 +44,10 @@ impl ServiceProvider {
     /// identifier. To end the principal's sessions too, send `LogoutRequest`
     /// first: a `LogoutRequest` must not follow the termination.
     ///
+    /// The request goes to the identity provider's first HTTP-Redirect
+    /// `ManageNameIDService` with an `https` `Location`. With
+    /// [`StartNameIdManagement::allow_http`], it goes to the first one.
+    ///
     /// Store [`Started::pending`] and redirect the browser to
     /// [`Started::outbound`]. [`Self::finish_name_id_management_redirect`]
     /// reads the answer.
@@ -52,11 +56,15 @@ impl ServiceProvider {
     ///
     /// Returns [`SamlError::MissingMetadata`] when this service provider or
     /// the identity provider publishes no HTTP-Redirect `ManageNameIDService`.
-    /// Returns [`SamlError::ProtocolProfile`] for a transient identifier, and
-    /// for an `http` identity-provider endpoint unless
-    /// [`StartNameIdManagement::allow_http`] is selected.
+    /// Returns [`SamlError::ProtocolProfile`] for a transient identifier.
+    /// When no identity-provider endpoint is `https` and
+    /// [`StartNameIdManagement::allow_http`] is not selected, the first
+    /// endpoint decides the error: [`SamlError::ProtocolProfile`] for a
+    /// URL that is not `https`, [`SamlError::Invalid`] for a value that is not
+    /// a URL.
     /// Returns [`SamlError::Invalid`] when the NameID format is not an
-    /// absolute URI reference. With
+    /// absolute URI reference, or when `allow_http` is selected and the first
+    /// endpoint is not an `http` or `https` URL. With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers),
     /// returns [`SamlError::MissingMetadata`] when the identity provider
     /// publishes no encryption certificate. Returns another [`SamlError`] when
@@ -108,7 +116,8 @@ impl ServiceProvider {
     /// request outside the configured age window, or an unsupported newer
     /// version. A newer major version adds `RequestVersionTooHigh` to
     /// `VersionMismatch`. The action goes to the identity provider's
-    /// `ManageNameIDService` under `options`.
+    /// `ManageNameIDService` that
+    /// [`Self::respond_name_id_management_redirect`] would choose.
     ///
     /// # Errors
     ///
@@ -118,11 +127,10 @@ impl ServiceProvider {
     /// HTTP-Redirect `ManageNameIDService` or several without
     /// [`SamlValidationContext::with_recipient_endpoint`], the message is
     /// malformed, its version is too low for a SAML 2.0 response, or replay
-    /// validation detects a duplicate. Returns
-    /// [`SamlError::ProtocolProfile`] when a refused request would be answered
-    /// at an `http` endpoint and
-    /// [`ReceiveNameIdManagement::allow_http`] is not
-    /// selected. Returns [`SamlError::TimeWindowInvalid`] when
+    /// validation detects a duplicate. Returns the endpoint errors of
+    /// [`Self::respond_name_id_management_redirect`], under `options`, when a
+    /// refused request would be answered. Returns
+    /// [`SamlError::TimeWindowInvalid`] when
     /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
     /// selected and `validation` has no
     /// [`SamlValidationContext::with_replay_retention`].
@@ -152,16 +160,25 @@ impl ServiceProvider {
     /// [`Status::responder`], optionally with
     /// [`SubordinateStatusCode::unknown_principal`](crate::SubordinateStatusCode::unknown_principal).
     ///
+    /// The response goes to the first of the identity provider's
+    /// HTTP-Redirect `ManageNameIDService` endpoints whose `ResponseLocation`,
+    /// or `Location` when it has none, is `https`. With
+    /// [`RespondNameIdManagement::allow_http`], it goes to the first one.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError::UnsupportedBinding`] when the request arrived over
     /// SOAP.
     /// Returns [`SamlError`] when the request was not received from `idp`,
     /// the identity provider publishes no HTTP-Redirect `ManageNameIDService`,
-    /// that endpoint is `http` and
-    /// [`RespondNameIdManagement::allow_http`] is not
-    /// selected, the signing key is missing, or no crypto provider is
-    /// enabled.
+    /// the signing key is missing, or no crypto provider is enabled. When none
+    /// of its endpoints is `https` and
+    /// [`RespondNameIdManagement::allow_http`] is not selected, the first
+    /// endpoint decides the error: [`SamlError::ProtocolProfile`] for a
+    /// URL that is not `https`, [`SamlError::Invalid`] for a value that is not
+    /// a URL. With
+    /// `allow_http`, returns [`SamlError::Invalid`] when the first endpoint is
+    /// not an `http` or `https` URL.
     pub fn respond_name_id_management_redirect(
         &self,
         idp: &IdpDescriptor,
@@ -225,7 +242,10 @@ impl IdentityProvider {
     /// `name_id` is the identifier as both providers know it, with the
     /// `SPProvidedID` the service provider most recently set, if any. A
     /// `NameId` without a format is sent with the first configured NameID
-    /// format, the one [`Self::respond_sso`] writes for it. A persistent
+    /// format, if any, the one [`Self::respond_sso`] writes for it. Pass an
+    /// identifier established in another format with that format:
+    /// [`NameIdFormat::Unspecified`](crate::NameIdFormat::Unspecified) for
+    /// one established without `Format`. A persistent
     /// identifier without `NameQualifier` is sent with this identity
     /// provider's entity ID, and one without `SPNameQualifier` with the
     /// service provider's. [`NameIdChange::NewId`] replaces the `NameID`
@@ -235,15 +255,24 @@ impl IdentityProvider {
     /// `LogoutRequest` first: a `LogoutRequest` must not follow the
     /// termination.
     ///
+    /// The request goes to the service provider's first HTTP-Redirect
+    /// `ManageNameIDService` with an `https` `Location`. With
+    /// [`StartNameIdManagement::allow_http`], it goes to the first one.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError::MissingMetadata`] when this identity provider or
     /// the service provider publishes no HTTP-Redirect `ManageNameIDService`.
-    /// Returns [`SamlError::ProtocolProfile`] for a transient identifier, and
-    /// for an `http` service-provider endpoint unless
-    /// [`StartNameIdManagement::allow_http`] is selected.
+    /// Returns [`SamlError::ProtocolProfile`] for a transient identifier.
+    /// When no service-provider endpoint is `https` and
+    /// [`StartNameIdManagement::allow_http`] is not selected, the first
+    /// endpoint decides the error: [`SamlError::ProtocolProfile`] for a
+    /// URL that is not `https`, [`SamlError::Invalid`] for a value that is not
+    /// a URL.
     /// Returns [`SamlError::Invalid`] when a persistent value is longer than
-    /// 256 characters or the NameID format is not an absolute URI reference.
+    /// 256 characters, the NameID format is not an absolute URI reference, or
+    /// `allow_http` is selected and the first endpoint is not an `http` or
+    /// `https` URL.
     /// With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers),
     /// returns [`SamlError::MissingMetadata`] when the service provider
@@ -373,6 +402,8 @@ impl IdentityProvider {
     /// recognize, pass an error status:
     /// [`Status::requester`] or [`Status::responder`], optionally with
     /// [`SubordinateStatusCode::unknown_principal`](crate::SubordinateStatusCode::unknown_principal).
+    /// The service provider's endpoint is chosen as in
+    /// [`ServiceProvider::respond_name_id_management_redirect`].
     ///
     /// # Errors
     ///
@@ -457,8 +488,7 @@ fn start(
         relay_state.ensure_sendable()?;
     }
     local_locations(local.metadata, EndpointDirection::Response)?;
-    let destination = peer_location(&peer, EndpointDirection::Request)?;
-    ensure_management_transport(&destination, options.transport())?;
+    let destination = peer_destination(&peer, EndpointDirection::Request, options.transport())?;
     let issuer = local.entity_id()?;
     let (idp_entity_id, sp_entity_id) = match local.requester {
         Requester::IdentityProvider => (issuer.as_str(), peer.entity_id.as_str()),
@@ -584,8 +614,7 @@ fn response_outbound(
     relay_state: Option<&str>,
     transport: PeerEndpointTransport,
 ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
-    let destination = peer_location(peer, EndpointDirection::Response)?;
-    ensure_management_transport(&destination, transport)?;
+    let destination = peer_destination(peer, EndpointDirection::Response, transport)?;
     let context = create_response(
         local.setting,
         &ResponseXml {
@@ -640,29 +669,34 @@ fn require_redirect_input<Message>(input: &Inbound<Message>) -> Result<(), SamlE
     Err(SamlError::UnsupportedBinding { binding })
 }
 
-fn ensure_management_transport(
-    destination: &str,
+fn peer_destination(
+    peer: &Peer<'_>,
+    direction: EndpointDirection,
     transport: PeerEndpointTransport,
-) -> Result<(), SamlError> {
-    match transport {
-        PeerEndpointTransport::AllowHttp => Ok(()),
-        PeerEndpointTransport::RequireHttps => ensure_https_endpoint(
-            destination,
-            "name identifier management",
-            "ManageNameIDService",
-        ),
+) -> Result<String, SamlError> {
+    let locations = peer.metadata.manage_name_id_service_locations(
+        Binding::from(NameIdManagementBinding::Redirect),
+        direction,
+    );
+    let mut first_error = None;
+    for location in locations {
+        match transport {
+            PeerEndpointTransport::AllowHttp => return Ok(location),
+            PeerEndpointTransport::RequireHttps => {
+                match ensure_https_endpoint(
+                    &location,
+                    "name identifier management",
+                    "ManageNameIDService",
+                ) {
+                    Ok(()) => return Ok(location),
+                    Err(error) => {
+                        first_error.get_or_insert(error);
+                    }
+                }
+            }
+        }
     }
-}
-
-fn peer_location(peer: &Peer<'_>, direction: EndpointDirection) -> Result<String, SamlError> {
-    peer.metadata
-        .manage_name_id_service_locations(
-            Binding::from(NameIdManagementBinding::Redirect),
-            direction,
-        )
-        .into_iter()
-        .next()
-        .ok_or_else(|| SamlError::MissingMetadata("ManageNameIDService".into()))
+    Err(first_error.unwrap_or_else(|| SamlError::MissingMetadata("ManageNameIDService".into())))
 }
 
 fn local_locations(

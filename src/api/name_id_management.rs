@@ -20,7 +20,10 @@ impl IdentityProvider {
     ///
     /// `name_id` is the identifier as both providers currently know it. A
     /// `NameId` without a format is sent with the first configured NameID
-    /// format, the one [`Self::respond_sso`] writes for it. A persistent
+    /// format, if any, the one [`Self::respond_sso`] writes for it. Pass an
+    /// identifier established in another format with that format:
+    /// [`NameIdFormat::Unspecified`](crate::NameIdFormat::Unspecified) for
+    /// one established without `Format`. A persistent
     /// identifier without `NameQualifier` or `SPNameQualifier` is sent with
     /// this identity provider and the service provider as those qualifiers.
     ///

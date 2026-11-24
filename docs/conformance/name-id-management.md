@@ -12,7 +12,7 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | Publish a `ManageNameIDService` per configured endpoint | Optional | Metadata §2.4.2 | `IdpConfigBuilder::manage_name_id_service`, `SpConfigBuilder::manage_name_id_redirect_service` |
 | Write `ManageNameIDService` after `SingleLogoutService` and before `NameIDFormat` | Mandatory | `SSODescriptorType` | Always |
 | Neither send nor accept the protocol on a binding without a published `ManageNameIDService` for it | Library policy: Table 2 prohibits the protocol for IdP Lite and SP Lite, and only the endpoint tells a full configuration from a Lite one. | Conformance Table 2 | `IdpConfigBuilder::manage_name_id_service`, `SpConfigBuilder::manage_name_id_redirect_service` |
-| Address the peer by its role descriptor: `Binding`, `Location`, and `ResponseLocation` of its first endpoint for the binding | Optional | Profiles §4.5.3.1, §4.5.3.2 | Always |
+| Address the peer by its role descriptor: `Binding`, `Location`, and `ResponseLocation` of an endpoint for the binding | Optional | Profiles §4.5.3.1, §4.5.3.2 | Always |
 | Reject a request for a transient identifier, including an unformatted `NameId` whose identity-provider default format is transient | Mandatory | Core §3.6, E14 | Always |
 | Return a received transient `NameID` to the caller, who answers with an error status | Library policy: E14 binds the requester, and Core §3.6.2 still requires an answer. | E14, Core §3.6.2 | Always |
 
@@ -27,7 +27,8 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | Write `ID`, `Version` `2.0`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §1.3.3 | Always |
 | Set `Destination` to the service provider's endpoint | Optional | Core §3.2.1 | Always |
 | Write the requesting entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.1 | Always |
-| Write the `NameID` as both providers know it, preserving supplied attributes. For an omitted `Format`, the IdP uses its configured default and the SP leaves it absent | Mandatory | Core §3.6.3 | Always |
+| Write the `NameID` as both providers know it, preserving supplied attributes | Mandatory | Core §3.6.3 | Always |
+| Write an IdP `NameId` without a format with the first configured NameID format, if any. A caller passes any other established format, `Unspecified` for an omitted one | Library policy: responses and `LogoutRequest` write that `NameId` the same way. | Core §2.2.2, E60 | `NameId::with_format` |
 | For a persistent identifier, write each qualifier whose established value differs from `Issuer`. `NameQualifier` identifies the originating IdP and `SPNameQualifier` identifies the SP or affiliation | Mandatory | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Also write each qualifier whose established value equals `Issuer` | Recommended | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Write `NewID` with the new value only, or an empty `Terminate` | Mandatory | E12, E55, `TerminateType` | `NameIdChange` |
@@ -101,14 +102,16 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | --- | --- | --- | --- |
 | Write `ID`, `Version` `2.0`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §1.3.3 | Always |
 | Write the requesting entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.1 | Always |
-| Write the `NameID` as both providers know it, preserving supplied attributes. For an omitted `Format`, the IdP uses its configured default and the SP leaves it absent | Mandatory | Core §3.6.1, §3.6.3 | Always |
+| Write the `NameID` as both providers know it, preserving supplied attributes | Mandatory | Core §3.6.1, §3.6.3 | Always |
+| Write an IdP `NameId` without a format with the first configured NameID format, if any, and an SP one without `Format`. A caller passes any other established format, `Unspecified` for an omitted one | Library policy: responses and `LogoutRequest` write that `NameId` the same way. | Core §2.2.2, E60 | `NameId::with_format` |
 | For a persistent identifier, write each qualifier whose established value differs from `Issuer`. `NameQualifier` identifies the originating IdP and `SPNameQualifier` identifies the SP or affiliation | Mandatory | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Also write each qualifier whose established value equals `Issuer` | Recommended | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Write `NewID` with the new value only, or an empty `Terminate` | Mandatory | E12, E55, `TerminateType` | `NameIdChange` |
 | Reject an identity provider's persistent `NameID` value or `NewID` over 256 characters. A service provider's `NewID` sets `SPProvidedID` and has no 256-character limit | Mandatory | Core §8.3.7 | Always |
 | Reject a service provider's persistent `NameID` value over 256 characters | Library policy: reason not recorded. | Core §8.3.7 | Always |
 | Sign the request | Mandatory | Profiles §4.5.3.1 | Always |
-| Set `Destination` to the peer's first HTTP-Redirect `ManageNameIDService` `Location` | Mandatory | Bindings §3.4.5.2 | Always |
+| Send to the peer's first HTTP-Redirect `ManageNameIDService` with an `https` `Location`, or its first under `allow_http` | Library policy: an earlier `http` entry would otherwise hide an advertised `https` one. | Metadata §2.2.2, Profiles §4.5.3.1 | `StartNameIdManagement::allow_http` |
+| Set `Destination` to that `Location` | Mandatory | Bindings §3.4.5.2 | Always |
 | Send only to an `https` peer endpoint | Recommended | Profiles §4.5.3.1 | `StartNameIdManagement::allow_http` |
 | Reject a `RelayState` over 80 bytes | Mandatory | Bindings §3.4.3 | `StartNameIdManagement::relay_state` |
 | Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Recommended | Bindings §3.4.5.1 | Always |
@@ -149,7 +152,8 @@ both clock-skew tolerances to cover the full window on either binding.
 | Write the responding entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.2 | Always |
 | Answer only a request received from the given peer | Library policy: no response is built for another party's endpoint. | — | Always |
 | Sign the response | Mandatory | Profiles §4.5.3.2 | Always |
-| Take the response endpoint from the peer's first HTTP-Redirect `ManageNameIDService`: `ResponseLocation`, else `Location` | Optional | Metadata §2.2.2, E41, Profiles §4.5.3.2 | Always |
+| Take each response endpoint from the peer's HTTP-Redirect `ManageNameIDService`: `ResponseLocation`, else `Location` | Optional | Metadata §2.2.2, E41, Profiles §4.5.3.2 | Always |
+| Answer at the first of those endpoints that is `https`, or the first under `allow_http` | Library policy: an earlier `http` entry would otherwise hide an advertised `https` one. | Metadata §2.2.2, Profiles §4.5.3.2 | `RespondNameIdManagement::allow_http`, `ReceiveNameIdManagement::allow_http` for a refusal |
 | Set `Destination` to that endpoint | Mandatory | Bindings §3.4.5.2 | Always |
 | Return the exact `RelayState` received with the request | Mandatory | Bindings §3.4.3 | Always |
 | Send only to an `https` peer endpoint | Recommended | Profiles §4.5.3.2 | `RespondNameIdManagement::allow_http`, `ReceiveNameIdManagement::allow_http` for a refusal |
