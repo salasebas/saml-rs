@@ -76,11 +76,12 @@ in an accepted assertion. The raw values remain in `SsoSession::attributes`.
 | Require exactly one value across matching attributes, in the profile grammar, when the caller reads the identifier | Library policy: the typed accessor needs one identifier. | Subject Identifier §3.2, §3.3.1 | `SsoSession::subject_id`, `SsoSession::pairwise_id` |
 | Read a received identifier by its text regardless of `xsi:type` | Library policy: the type requirement applies to the producer. | Subject Identifier §3.3.1 | Always |
 
-Neither conformance clause of the profile is claimed. The identity provider
-cannot publish `<shibmd:Scope>` (§4.1). The service provider publishes
-[`subject-id:req`](metadata-and-replay.md#entity-attributes), and the caller
-owns scope authorization because the crate cannot filter by `<shibmd:Scope>`
-(§3.5.2 and §4.2).
+An identity provider can [publish scope declarations](metadata-and-replay.md#idp-scope-declarations)
+under §4.1. A service provider can publish
+[`subject-id:req`](metadata-and-replay.md#entity-attributes) and
+[check an accepted session](web-browser-sso-acceptance.md#scoped-attributes)
+under §4.2. The application configures the policy and acts on its result
+before using the identifiers.
 
 ## Name identifier formats
 

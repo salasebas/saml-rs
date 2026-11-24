@@ -59,6 +59,16 @@ pub enum MetadataTrustPolicy<'a> {
         /// Caller-pinned certificates trusted to sign the metadata.
         trusted_certificates: &'a [CertificatePem],
     },
+    /// Require a metadata signature from a trusted third-party registration
+    /// authority that independently authorizes the scopes of the listed IdP.
+    ///
+    /// The signature requirements are the same as [`Self::RequireSignature`].
+    /// Pin only certificates of authorities the SP trusts to authorize scope
+    /// claims for this entity. A peer's own certificate cannot serve this role.
+    RequireRegistrationAuthoritySignature {
+        /// Independently obtained certificates of the registration authority.
+        trusted_certificates: &'a [CertificatePem],
+    },
     /// Require a pinned metadata signature and also accept inclusive
     /// Canonical XML 1.0 and 1.1 reference transforms, with or without comments.
     ///
@@ -114,6 +124,9 @@ pub(super) fn ensure_metadata_trust(
     match trust {
         MetadataTrustPolicy::Unverified => Ok(AppliedMetadataTrust::Unverified),
         MetadataTrustPolicy::RequireSignature {
+            trusted_certificates,
+        }
+        | MetadataTrustPolicy::RequireRegistrationAuthoritySignature {
             trusted_certificates,
         } => verify_pinned_metadata_signature(
             metadata,

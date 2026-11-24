@@ -1,6 +1,9 @@
 #![cfg(crypto)]
 
+use std::time::{Duration, UNIX_EPOCH};
+
 use bergshamra::{sign, DsigContext, KeysManager};
+use saml_rs::constants::attribute_name::{PAIRWISE_ID, SUBJECT_ID};
 use saml_rs::constants::digest_algorithm::SHA256;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
@@ -9,9 +12,12 @@ use saml_rs::crypto::sign_saml_xml;
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::util::normalize_cert_string;
 use saml_rs::{
-    CertificatePem, EntityId, IdpDescriptor, MetadataTrustPolicy, SamlError, SpDescriptor,
+    AttributeScopePolicy, Attributes, CertificatePem, EntityId, IdpDescriptor, MetadataTrustPolicy,
+    PairwiseId, RespondSso, SamlError, SpDescriptor, SsoAssertion, SubjectId,
 };
 use saml_rs::{SignatureAction, SignatureConfig, XmlPolicy};
+
+use super::identifier_formats::{alice, exchange};
 
 const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -194,6 +200,108 @@ fn metadata_trust_accepts_signed_idp_descriptor_with_pinned_certificate(
         Err(SamlError::SignatureVerification {
             reason: SignatureVerificationReason::XmlSignature
         })
+    ));
+    Ok(())
+}
+
+#[test]
+fn metadata_scopes_require_a_current_registration_authority_signature(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let xml = idp_metadata_xml()
+        .replacen(
+            "<EntityDescriptor ",
+            r#"<EntityDescriptor validUntil="2030-01-01T00:00:00Z" "#,
+            1,
+        )
+        .replacen(
+            "<IDPSSODescriptor ",
+            concat!(
+                r#"<Extensions xmlns:s="urn:mace:shibboleth:metadata:1.0">"#,
+                r#"<s:Scope regexp="false">example.com</s:Scope>"#,
+                r#"<s:Scope regexp="true">regex.example.com</s:Scope>"#,
+                "</Extensions><IDPSSODescriptor ",
+            ),
+            1,
+        );
+    let peer_signed = sign_root_metadata(&xml)?;
+    let peer_certificates = [CertificatePem::new(CERT)];
+    let authority_certificate = include_str!("../../tests/fixtures/key/idp/cert.cer");
+    let authority_certificates = [CertificatePem::new(authority_certificate)];
+    let authority_policy = MetadataTrustPolicy::RequireRegistrationAuthoritySignature {
+        trusted_certificates: &authority_certificates,
+    };
+    let authority_key = read_private_key(
+        include_str!("../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem"),
+        None,
+    )?;
+    let signature = SignatureConfig {
+        prefix: "ds".into(),
+        reference: Some("/*[local-name(.)='EntityDescriptor']".into()),
+        action: SignatureAction::Prepend,
+    };
+    let authority_signed = sign_saml_xml(
+        &xml,
+        true,
+        &authority_key,
+        authority_certificate,
+        RSA_SHA256,
+        &[],
+        Some(&signature),
+    )?;
+    let idp = import_idp(&authority_signed, authority_policy)?;
+    let signed_by_peer = import_idp(&peer_signed, trust(&peer_certificates))?;
+    let unverified = import_idp(&authority_signed, MetadataTrustPolicy::Unverified)?;
+    assert!(signed_by_peer.signed_metadata_xml().is_some());
+    assert!(matches!(
+        import_idp(&peer_signed, authority_policy),
+        Err(SamlError::SignatureVerification { .. })
+    ));
+
+    let session = exchange(
+        SsoAssertion::new(alice()).attributes(Attributes::new([
+            SubjectId::try_new("alice@example.com")?.into(),
+            PairwiseId::try_new("pairwise@regex.example.com")?.into(),
+        ])),
+        RespondSso::post(),
+    )?
+    .session;
+
+    let valid_until = UNIX_EPOCH + Duration::from_secs(1_893_456_000);
+    let before_expiration = valid_until - Duration::from_secs(1);
+    let names = [SUBJECT_ID, PAIRWISE_ID];
+    let violations = session.scoped_attribute_violations(
+        &names,
+        AttributeScopePolicy::RegistrationAuthority {
+            idp: &idp,
+            now: before_expiration,
+        },
+    )?;
+    assert_eq!(violations.len(), 1);
+    assert_eq!(violations[0].attribute.name(), PAIRWISE_ID);
+    assert_eq!(violations[0].scope, Some("regex.example.com"));
+    let verified_scopes = idp.scopes()?;
+    for idp in [&signed_by_peer, &unverified] {
+        assert_eq!(idp.scopes()?, verified_scopes);
+        assert!(matches!(
+            session.scoped_attribute_violations(
+                &names,
+                AttributeScopePolicy::RegistrationAuthority {
+                    idp,
+                    now: before_expiration
+                },
+            ),
+            Err(SamlError::Invalid(_))
+        ));
+    }
+    assert!(matches!(
+        session.scoped_attribute_violations(
+            &names,
+            AttributeScopePolicy::RegistrationAuthority {
+                idp: &idp,
+                now: valid_until
+            },
+        ),
+        Err(SamlError::TimeWindowInvalid { .. })
     ));
     Ok(())
 }

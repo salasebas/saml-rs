@@ -2,6 +2,7 @@
 //!
 //! References: SAML Core 2.0 <https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf> and SAML Profiles 2.0 <https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf>.
 
+mod attribute_scope;
 mod attributes;
 mod audience_restriction;
 mod authn;
@@ -30,6 +31,7 @@ pub(crate) use subject::{
 };
 pub(crate) use subject_identifier::{check_issued_subject_identifiers, is_subject_identifier};
 
+pub use attribute_scope::{AttributeScopePolicy, ScopedAttributeViolation};
 pub use attributes::{Attribute, AttributeNameFormat, AttributeValue, Attributes};
 pub use audience_restriction::AudienceRestriction;
 pub use authn::{AuthnRequest, ForceAuthn, IsPassive};

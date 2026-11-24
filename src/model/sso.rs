@@ -181,9 +181,8 @@ impl SsoSession {
     /// XML whitespace of the value is removed.
     ///
     /// The scope is not checked against the issuer. Before you trust the
-    /// value, confirm that [`Self::issuer`] may assert identifiers in
-    /// [`SubjectId::scope`]. Otherwise one identity provider can name the
-    /// subjects of another.
+    /// value, use [`Self::scoped_attribute_violations`] or another policy to
+    /// confirm that [`Self::issuer`] may assert identifiers in [`SubjectId::scope`].
     ///
     /// # Errors
     ///
@@ -202,9 +201,8 @@ impl SsoSession {
     /// XML whitespace of the value is removed.
     ///
     /// The scope is not checked against the issuer. Before you trust the
-    /// value, confirm that [`Self::issuer`] may assert identifiers in
-    /// [`PairwiseId::scope`]. Otherwise one identity provider can name the
-    /// subjects of another.
+    /// value, use [`Self::scoped_attribute_violations`] or another policy to
+    /// confirm that [`Self::issuer`] may assert identifiers in [`PairwiseId::scope`].
     ///
     /// # Errors
     ///

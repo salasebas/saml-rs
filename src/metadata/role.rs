@@ -15,6 +15,7 @@ pub(super) struct SelectedDescriptors<'a> {
     pub(super) nodes: Vec<&'a dom::Node>,
     pub(super) valid_until_bounds: Vec<String>,
     pub(super) signing_flags: SigningFlags,
+    pub(super) scope_elements: Vec<SamlElement>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -54,6 +55,7 @@ impl SsoDescriptorRole {
                         .collect(),
                     valid_until_bounds: Vec::new(),
                     signing_flags: SigningFlags::default(),
+                    scope_elements: Vec::new(),
                 })
             }
             Self::ServiceProvider => "SPSSODescriptor",
@@ -62,6 +64,12 @@ impl SsoDescriptorRole {
         let document = protocol_element::parse_saml_with_limits(xml, limits)?;
         let entity = entity.ok_or_else(|| SamlError::MissingMetadata(local_name.into()))?;
         let (namespaced, mut valid_until_bounds) = namespaced_entity(document, entity)?;
+        let mut scope_elements = Vec::new();
+        if matches!(self, Self::IdentityProvider)
+            && namespaced.is(namespace::METADATA, "EntityDescriptor")
+        {
+            scope_elements.extend(super::scope::scope_elements(&namespaced).cloned());
+        }
         let mut nodes = Vec::new();
         let mut signing_flags = SigningFlags::default();
         for (child, descriptor) in entity.children.iter().zip(namespaced.children) {
@@ -79,6 +87,7 @@ impl SsoDescriptorRole {
                         signing_flags.want_authn_requests_signed = signing_flags
                             .want_authn_requests_signed
                             .or(want_authn_requests_signed);
+                        scope_elements.extend(super::scope::scope_elements(&descriptor).cloned());
                     }
                     Self::Any => {}
                 }
@@ -93,6 +102,7 @@ impl SsoDescriptorRole {
             nodes,
             valid_until_bounds,
             signing_flags,
+            scope_elements,
         })
     }
 }

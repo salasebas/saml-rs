@@ -119,6 +119,8 @@ pub struct IdpMetadataInput {
     /// Entity attributes, in publication order, written in one
     /// `mdattr:EntityAttributes`. Empty writes no `Extensions`.
     pub entity_attributes: Vec<Attribute>,
+    /// Scope declarations published in the IdP role's `Extensions`, in order.
+    pub scopes: Vec<super::MetadataScope>,
 }
 
 fn generate_entity_descriptor(
@@ -370,7 +372,8 @@ fn write_sp_role(w: &mut MetadataWriter, cfg: &SpMetadataInput) -> Result<(), Sa
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry,
 /// and for an entity attribute whose `NameFormat` is not an absolute URI
 /// reference, whose [`crate::AttributeNameFormat::Basic`] name is not an XML
-/// name, or whose text XML cannot carry.
+/// name, or whose text XML cannot carry. Scope declarations must also contain
+/// text XML can carry.
 pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError> {
     if cfg.single_sign_on_service.is_empty() {
         return Err(SamlError::MissingMetadata(
@@ -400,6 +403,7 @@ fn write_idp_role(w: &mut MetadataWriter, cfg: &IdpMetadataInput) -> Result<(), 
         role_attributes.push(("errorURL", error_url));
     }
     w.start("IDPSSODescriptor", &role_attributes);
+    super::scope::write_scopes(w, &cfg.scopes)?;
     write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs);
     write_artifact_resolution_service(w, &cfg.artifact_resolution_service)?;
     write_endpoints(w, "SingleLogoutService", &cfg.single_logout_service)?;

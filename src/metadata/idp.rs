@@ -43,6 +43,19 @@ pub struct IdpMetadata {
 }
 
 impl IdpMetadata {
+    /// Scope declarations on the entity and its selected SAML 2.0 IdP roles,
+    /// entity first, then role declarations in document order.
+    ///
+    /// These declarations carry no scope authorization by themselves.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for nested elements or an invalid or
+    /// qualified `regexp` attribute.
+    pub fn scopes(&self) -> Result<Vec<super::MetadataScope>, SamlError> {
+        super::scope::read_scopes(&self.inner.scope_elements)
+    }
+
     /// Borrow shared metadata fields selected from this SAML 2.0 role.
     pub fn as_metadata(&self) -> &Metadata {
         &self.inner

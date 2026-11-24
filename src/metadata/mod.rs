@@ -8,6 +8,7 @@ mod generate;
 mod idp;
 mod lifetime;
 mod role;
+mod scope;
 mod sp;
 mod validity;
 mod write;
@@ -19,6 +20,7 @@ pub use generate::{
 };
 pub use idp::{ArtifactResolutionServiceEndpoint, IdpMetadata};
 pub use lifetime::MetadataLifetime;
+pub use scope::MetadataScope;
 pub(crate) use sp::DefaultMarking;
 pub use sp::SpMetadata;
 pub(crate) use validity::MetadataValidity;
@@ -232,6 +234,7 @@ pub struct Metadata {
     key_certificates: KeyCertificates,
     valid_until_bounds: Vec<String>,
     signing_flags: SigningFlags,
+    scope_elements: Vec<SamlElement>,
     description: description_read::EntityDescription,
     entity_attributes: Vec<SamlElement>,
 }
@@ -314,6 +317,7 @@ impl Metadata {
             key_certificates: KeyCertificates::from_descriptors(&descriptors.nodes),
             valid_until_bounds: descriptors.valid_until_bounds,
             signing_flags: descriptors.signing_flags,
+            scope_elements: descriptors.scope_elements,
             description: description_read::EntityDescription::read(xml, entity, limits)?,
             entity_attributes: entity_attributes::read_bound_attributes(
                 xml, &roots, entity, limits,

@@ -6,12 +6,14 @@ mod post_validation;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use saml_rs::constants::attribute_name::{PAIRWISE_ID, SUBJECT_ID};
 use saml_rs::constants::Binding;
 use saml_rs::{
-    AcsEndpoint, AssertionSignaturePolicy, CertificatePem, Credentials, EntityId, FormField,
-    IdentityProvider, IdpConfig, IdpDescriptor, IdpResolutionReason, Inbound, MetadataTrustPolicy,
-    NameId, PrivateKeyPem, ResourceLimit, RespondSso, SamlError, ServiceProvider, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, X509Credential, XmlPolicy,
+    AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeScopePolicy, AttributeValue,
+    Attributes, CertificatePem, Credentials, EntityId, FormField, IdentityProvider, IdpConfig,
+    IdpDescriptor, IdpResolutionReason, Inbound, MetadataTrustPolicy, NameId, PairwiseId,
+    PrivateKeyPem, ResourceLimit, RespondSso, SamlError, ServiceProvider, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoAssertion, SsoEndpoint, SubjectId, X509Credential, XmlPolicy,
 };
 
 use common::signing_credentials;
@@ -81,6 +83,120 @@ fn response_fields(
         options,
     )?;
     Ok(response.post_form()?.fields().to_vec())
+}
+
+#[test]
+fn scoped_values_are_checked_against_only_the_assertion_issuers_policy() -> TestResult {
+    const AFFILIATION: &str = "urn:oid:1.3.6.1.4.1.5923.1.1.1.9";
+    let sp = service_provider()?;
+    let first = identity_provider(FIRST_IDP, signing_credentials())?;
+    let second = identity_provider(SECOND_IDP, second_credentials())?;
+    let trusted = [
+        descriptor(&first, FIRST_IDP)?,
+        descriptor(&second, SECOND_IDP)?,
+    ];
+    let sp_peer = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP)?,
+        sp.metadata_xml(),
+        MetadataTrustPolicy::Unverified,
+    )?;
+    for (idp, peer, other_peer, scope, other_scope) in [
+        (
+            &first,
+            &trusted[0],
+            &trusted[1],
+            "first.example.com",
+            "second.example.com",
+        ),
+        (
+            &second,
+            &trusted[1],
+            &trusted[0],
+            "second.example.com",
+            "first.example.com",
+        ),
+    ] {
+        let foreign_subject = format!("alice@{other_scope}");
+        let uppercase_scope = scope.to_ascii_uppercase();
+        let uppercase_affiliation = format!("staff@{uppercase_scope}");
+        let missing_local = format!("@{scope}");
+        let extra_delimiter = format!("a@b@{scope}");
+        let attributes = Attributes::new([
+            SubjectId::try_new(&foreign_subject)?.into(),
+            PairwiseId::try_new(format!("p123@{scope}"))?.into(),
+            Attribute::new(
+                AFFILIATION,
+                [
+                    AttributeValue::new(format!(" member@{scope}\n")),
+                    AttributeValue::new(&uppercase_affiliation),
+                    AttributeValue::new("affiliate"),
+                    AttributeValue::new(&missing_local),
+                    AttributeValue::new("alice@"),
+                    AttributeValue::new(&extra_delimiter),
+                ],
+            ),
+            Attribute::new("displayName", [AttributeValue::new("Alice")]),
+        ]);
+        let response = idp.initiate_sso(
+            &sp_peer,
+            SsoAssertion::new(NameId::new("alice")).attributes(attributes),
+            RespondSso::post(),
+        )?;
+        let session = sp.accept_unsolicited_sso_with_resolver(
+            Inbound::post(response.post_form()?.fields().to_vec()),
+            post_validation(&mut Default::default()),
+            |issuer| {
+                trusted
+                    .iter()
+                    .find(|idp| idp.entity_id().as_str() == issuer)
+            },
+        )?;
+
+        assert_eq!(session.issuer(), peer.entity_id());
+        let violations = session.scoped_attribute_violations(
+            &[SUBJECT_ID, PAIRWISE_ID, AFFILIATION],
+            AttributeScopePolicy::Explicit {
+                issuer: peer.entity_id(),
+                scopes: &[scope],
+            },
+        )?;
+        let reported: Vec<_> = violations
+            .iter()
+            .map(|violation| {
+                (
+                    violation.attribute.name(),
+                    violation.value.as_str(),
+                    violation.scope,
+                )
+            })
+            .collect();
+        assert_eq!(
+            reported,
+            [
+                (SUBJECT_ID, foreign_subject.as_str(), Some(other_scope)),
+                (
+                    AFFILIATION,
+                    uppercase_affiliation.as_str(),
+                    Some(uppercase_scope.as_str()),
+                ),
+                (AFFILIATION, "affiliate", None),
+                (AFFILIATION, missing_local.as_str(), None),
+                (AFFILIATION, "alice@", None),
+                (AFFILIATION, extra_delimiter.as_str(), None),
+            ]
+        );
+        assert!(matches!(
+            session.scoped_attribute_violations(
+                &[SUBJECT_ID],
+                AttributeScopePolicy::Explicit {
+                    issuer: other_peer.entity_id(),
+                    scopes: &[other_scope]
+                },
+            ),
+            Err(SamlError::Invalid(_)),
+        ));
+    }
+    Ok(())
 }
 
 #[test]
