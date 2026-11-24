@@ -122,11 +122,12 @@ metadata scopes.
 
 ### Status codes
 
-This rule applies to response recipients in SSO, Single Logout, name
+These rules apply to response recipients in SSO, Single Logout, name
 identifier management, and artifact resolution.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
+| Require one `Status` with one top-level `StatusCode`, at most one subordinate `StatusCode`, and a `Value` on each of them | Mandatory | `StatusResponseType`, `StatusType`, `StatusCodeType` | Always |
 | Collapse XML whitespace in both `StatusCode` values before comparing or reporting them | Mandatory | Core §3.2.2.2, `StatusCodeType`, [XML Schema Part 2 §4.3.6](https://www.w3.org/TR/xmlschema-2/#rf-whiteSpace) | Always |
 
 ### Operator diagnostics

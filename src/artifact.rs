@@ -214,7 +214,7 @@ impl ArtifactResolution {
             "SOAP body must be an ArtifactResponse",
             &self.request_id,
         )?;
-        let issuer = issuer(&response)
+        let issuer = issuer(&response)?
             .ok_or_else(|| SamlError::issuer_mismatch(&self.identity_provider, None))?;
         if issuer.value != self.identity_provider {
             return Err(SamlError::issuer_mismatch(
@@ -687,22 +687,11 @@ fn parse_resolve(element: &SamlElement) -> Result<ResolveRequest, SamlError> {
             "ArtifactResolve requires one Artifact value".into(),
         ));
     }
-    if element
-        .children
-        .iter()
-        .filter(|child| child.local_name == "Issuer" && child.namespace == namespace::ASSERTION)
-        .count()
-        > 1
-    {
-        return Err(SamlError::ProtocolProfile(
-            "ArtifactResolve requires at most one Issuer".into(),
-        ));
-    }
     Ok(ResolveRequest {
         id,
         version,
         destination: element.attr("Destination").map(collapse_whitespace),
-        issuer: issuer(element),
+        issuer: issuer(element)?,
         artifact,
     })
 }

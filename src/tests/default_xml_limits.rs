@@ -8,7 +8,7 @@ use saml_rs::XmlLimits;
 #[test]
 fn internal_parsers_enforce_xml_limits() -> Result<(), Box<dyn std::error::Error>> {
     let xml = format!(
-        "<Response><Status><StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\"/></Status>{}</Response>",
+        "<Response xmlns=\"urn:oasis:names:tc:SAML:2.0:protocol\"><Status><StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\"/></Status>{}</Response>",
         " ".repeat(XmlLimits::default().max_bytes)
     );
     let raised = XmlLimits {

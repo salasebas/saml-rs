@@ -265,7 +265,6 @@ impl StartedNameIdManagement {
             self.hmac_secret.as_ref(),
             self.signature_profile,
         )?;
-        require_one_status_code(&response)?;
         read_status(&response)?.require_success()
     }
 }
@@ -353,17 +352,6 @@ pub(crate) fn receive(
     let version = request.required_attr("Version")?;
     let issue_instant = request.required_issue_instant()?;
     let sp_entity_id = service_provider.entity_id();
-    if request
-        .children
-        .iter()
-        .filter(|child| child.is(namespace::ASSERTION, "Issuer"))
-        .count()
-        > 1
-    {
-        return Err(SamlError::ProtocolProfile(
-            "ManageNameIDRequest requires at most one Issuer".into(),
-        ));
-    }
     require_peer_issuer(&request, sp_entity_id.as_str())?;
     let recipient = validation.resolve_recipient_endpoint(&locations)?;
     if let Some(destination) = request.attr("Destination") {
@@ -545,28 +533,6 @@ pub(crate) fn plaintext_content(
     Ok((name_id, change))
 }
 
-pub(crate) fn require_one_status_code(response: &SamlElement) -> Result<(), SamlError> {
-    let statuses: Vec<&SamlElement> = response
-        .children
-        .iter()
-        .filter(|child| child.is(namespace::PROTOCOL, "Status"))
-        .collect();
-    let codes = match statuses.as_slice() {
-        [status] => status
-            .children
-            .iter()
-            .filter(|child| child.is(namespace::PROTOCOL, "StatusCode"))
-            .count(),
-        _ => 0,
-    };
-    if codes == 1 {
-        return Ok(());
-    }
-    Err(SamlError::ProtocolProfile(
-        "ManageNameIDResponse requires one Status with one StatusCode".into(),
-    ))
-}
-
 fn simple_content(element: &SamlElement) -> Result<&SamlElement, SamlError> {
     if element.children.is_empty() {
         return Ok(element);
@@ -589,7 +555,7 @@ fn name_id(element: &SamlElement) -> NameId {
 }
 
 fn require_peer_issuer(element: &SamlElement, expected: &str) -> Result<(), SamlError> {
-    let issuer = issuer(element).ok_or_else(|| SamlError::issuer_mismatch(expected, None))?;
+    let issuer = issuer(element)?.ok_or_else(|| SamlError::issuer_mismatch(expected, None))?;
     if issuer.value != expected {
         return Err(SamlError::issuer_mismatch(expected, Some(&issuer.value)));
     }

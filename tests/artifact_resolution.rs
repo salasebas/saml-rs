@@ -1071,6 +1071,11 @@ fn the_service_provider_rejects_an_artifact_response_it_cannot_attribute(
         resolution.finish(&email_issuer),
         Err(SamlError::ProtocolProfile(_))
     ));
+    let repeated_issuer = envelope.replace(&issuer, &issuer.repeat(2));
+    assert!(matches!(
+        resolution.finish(&repeated_issuer),
+        Err(SamlError::ProtocolProfile(_))
+    ));
     let without_correlation = remove_attribute(envelope, "InResponseTo")?;
     assert!(matches!(
         resolution.finish(&without_correlation),
