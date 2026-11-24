@@ -28,7 +28,7 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | Set `Destination` to the service provider's endpoint | Optional | Core §3.2.1 | Always |
 | Write the requesting entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.1 | Always |
 | Write the `NameID` as both providers know it, preserving supplied attributes | Mandatory | Core §3.6.3 | Always |
-| Write an identity provider's `NameId` without a format with its first configured NameID format. After that format changes, the caller passes the identifier's original format, `NameIdFormat::Unspecified` for an omitted `Format` | Library policy: responses and `LogoutRequest` write a `NameId` without a format the same way. | Core §2.2.2, E60 | `NameId::with_format` |
+| Write an IdP `NameId` without a format with the first configured NameID format. The caller passes another established format, `NameIdFormat::Unspecified` for an omitted `Format` | Library policy: responses and `LogoutRequest` write that `NameId` the same way. | Core §2.2.2, E60 | `NameId::with_format` |
 | For a persistent identifier, write each qualifier whose established value differs from `Issuer`. `NameQualifier` identifies the originating IdP and `SPNameQualifier` identifies the SP or affiliation | Mandatory | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Also write each qualifier whose established value equals `Issuer` | Recommended | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Write `NewID` with the new value only, or an empty `Terminate` | Mandatory | E12, E55, `TerminateType` | `NameIdChange` |
@@ -102,15 +102,15 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | --- | --- | --- | --- |
 | Write `ID`, `Version` `2.0`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §1.3.3 | Always |
 | Write the requesting entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.1 | Always |
-| Write the `NameID` as both providers know it, preserving supplied attributes. A service provider leaves an omitted `Format` absent | Mandatory | Core §3.6.1, §3.6.3 | Always |
-| Write an identity provider's `NameId` without a format with its first configured NameID format. After that format changes, the caller passes the identifier's original format, `NameIdFormat::Unspecified` for an omitted `Format` | Library policy: responses and `LogoutRequest` write a `NameId` without a format the same way. | Core §2.2.2, E60 | `NameId::with_format` |
+| Write the `NameID` as both providers know it, preserving supplied attributes | Mandatory | Core §3.6.1, §3.6.3 | Always |
+| Write an IdP `NameId` without a format with the first configured NameID format. The caller passes another established format, `NameIdFormat::Unspecified` for an omitted `Format` | Library policy: responses and `LogoutRequest` write that `NameId` the same way. | Core §2.2.2, E60 | `NameId::with_format` |
 | For a persistent identifier, write each qualifier whose established value differs from `Issuer`. `NameQualifier` identifies the originating IdP and `SPNameQualifier` identifies the SP or affiliation | Mandatory | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Also write each qualifier whose established value equals `Issuer` | Recommended | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Write `NewID` with the new value only, or an empty `Terminate` | Mandatory | E12, E55, `TerminateType` | `NameIdChange` |
 | Reject an identity provider's persistent `NameID` value or `NewID` over 256 characters. A service provider's `NewID` sets `SPProvidedID` and has no 256-character limit | Mandatory | Core §8.3.7 | Always |
 | Reject a service provider's persistent `NameID` value over 256 characters | Library policy: reason not recorded. | Core §8.3.7 | Always |
 | Sign the request | Mandatory | Profiles §4.5.3.1 | Always |
-| Send to the peer's first HTTP-Redirect `ManageNameIDService` with an `https` `Location`, or to its first one under `allow_http` | Library policy: taking the first endpoint alone lets an earlier `http` entry hide an advertised `https` one and turns the TLS default into a failure. | Metadata §2.2.2, Profiles §4.5.3.1 | `StartNameIdManagement::allow_http` |
+| Send to the peer's first HTTP-Redirect `ManageNameIDService` with an `https` `Location`, or its first under `allow_http` | Library policy: an earlier `http` entry would otherwise hide an advertised `https` one. | Metadata §2.2.2, Profiles §4.5.3.1 | `StartNameIdManagement::allow_http` |
 | Set `Destination` to that `Location` | Mandatory | Bindings §3.4.5.2 | Always |
 | Send only to an `https` peer endpoint | Recommended | Profiles §4.5.3.1 | `StartNameIdManagement::allow_http` |
 | Reject a `RelayState` over 80 bytes | Mandatory | Bindings §3.4.3 | `StartNameIdManagement::relay_state` |
@@ -153,7 +153,7 @@ both clock-skew tolerances to cover the full window on either binding.
 | Answer only a request received from the given peer | Library policy: no response is built for another party's endpoint. | — | Always |
 | Sign the response | Mandatory | Profiles §4.5.3.2 | Always |
 | Take each response endpoint from the peer's HTTP-Redirect `ManageNameIDService`: `ResponseLocation`, else `Location` | Optional | Metadata §2.2.2, E41, Profiles §4.5.3.2 | Always |
-| Answer at the first of those endpoints that is `https`, or at the first one under `allow_http` | Library policy: taking the first endpoint alone lets an earlier `http` entry hide an advertised `https` one and turns the TLS default into a failure. | Metadata §2.2.2, Profiles §4.5.3.2 | `RespondNameIdManagement::allow_http`, `ReceiveNameIdManagement::allow_http` for a refusal |
+| Answer at the first of those endpoints that is `https`, or the first under `allow_http` | Library policy: an earlier `http` entry would otherwise hide an advertised `https` one. | Metadata §2.2.2, Profiles §4.5.3.2 | `RespondNameIdManagement::allow_http`, `ReceiveNameIdManagement::allow_http` for a refusal |
 | Set `Destination` to that endpoint | Mandatory | Bindings §3.4.5.2 | Always |
 | Return the exact `RelayState` received with the request | Mandatory | Bindings §3.4.3 | Always |
 | Send only to an `https` peer endpoint | Recommended | Profiles §4.5.3.2 | `RespondNameIdManagement::allow_http`, `ReceiveNameIdManagement::allow_http` for a refusal |

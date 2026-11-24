@@ -60,8 +60,8 @@ impl ServiceProvider {
     /// when no identity-provider endpoint is `https` unless
     /// [`StartNameIdManagement::allow_http`] is selected.
     /// Returns [`SamlError::Invalid`] when the NameID format is not an
-    /// absolute URI reference, or when no endpoint is `https` and the first is
-    /// not a URL. With
+    /// absolute URI reference, or when the chosen endpoint is not a URL, as is
+    /// the first when none is `https`. With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers),
     /// returns [`SamlError::MissingMetadata`] when the identity provider
     /// publishes no encryption certificate. Returns another [`SamlError`] when
@@ -128,8 +128,8 @@ impl ServiceProvider {
     /// [`SamlError::ProtocolProfile`] when a refused request would be answered,
     /// no identity-provider endpoint is `https`, and
     /// [`ReceiveNameIdManagement::allow_http`] is not
-    /// selected, or [`SamlError::Invalid`] when the first of those endpoints
-    /// is not a URL. Returns [`SamlError::TimeWindowInvalid`] when
+    /// selected, or [`SamlError::Invalid`] when the chosen endpoint is not a
+    /// URL, as is the first when none is `https`. Returns [`SamlError::TimeWindowInvalid`] when
     /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
     /// selected and `validation` has no
     /// [`SamlValidationContext::with_replay_retention`].
@@ -237,10 +237,10 @@ impl IdentityProvider {
     /// `name_id` is the identifier as both providers know it, with the
     /// `SPProvidedID` the service provider most recently set, if any. A
     /// `NameId` without a format is sent with the first configured NameID
-    /// format, the one [`Self::respond_sso`] writes for it. After that
-    /// format changes, pass the identifier's original format:
+    /// format, the one [`Self::respond_sso`] writes for it. Pass an
+    /// identifier established in another format with that format:
     /// [`NameIdFormat::Unspecified`](crate::NameIdFormat::Unspecified) for
-    /// one issued without `Format`. A persistent
+    /// one established without `Format`. A persistent
     /// identifier without `NameQualifier` is sent with this identity
     /// provider's entity ID, and one without `SPNameQualifier` with the
     /// service provider's. [`NameIdChange::NewId`] replaces the `NameID`
@@ -263,7 +263,7 @@ impl IdentityProvider {
     /// [`StartNameIdManagement::allow_http`] is selected.
     /// Returns [`SamlError::Invalid`] when a persistent value is longer than
     /// 256 characters, the NameID format is not an absolute URI reference, or
-    /// no endpoint is `https` and the first is not a URL.
+    /// the chosen endpoint is not a URL, as is the first when none is `https`.
     /// With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers),
     /// returns [`SamlError::MissingMetadata`] when the service provider

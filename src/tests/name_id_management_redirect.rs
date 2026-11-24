@@ -1095,6 +1095,17 @@ fn an_https_peer_endpoint_is_chosen_over_an_earlier_http_one() -> TestResult {
     assert!(response
         .redirect_url()?
         .starts_with(&format!("{IDP_RESPONSE_HTTPS}?")));
+
+    let sp_started = sp.start_name_id_management_redirect(
+        &idp_peer,
+        &alice(),
+        &NameIdChange::Terminate,
+        StartNameIdManagement::new(),
+    )?;
+    assert!(sp_started
+        .outbound
+        .redirect_url()?
+        .starts_with(&format!("{IDP_MANAGE}?")));
     Ok(())
 }
 
