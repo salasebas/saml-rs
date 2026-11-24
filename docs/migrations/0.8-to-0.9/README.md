@@ -35,6 +35,7 @@ Check the topics that affect your integration.
 - [Update truncated XML HMAC signatures](hmac-truncation.md)
 - [Authenticate browser logout messages](logout-authentication.md)
 - [Send one principal identifier per logout request](logout-request-identifier.md)
+- [Record the issuer of outstanding logouts](outstanding-logout.md)
 - [Upgrade logout, validation, and replay code](logout-validation-replay.md)
 - [Answer logout and NameID Management requests on the correct channel](response-bindings.md)
 - [Match typed `SamlError` variants](errors.md)

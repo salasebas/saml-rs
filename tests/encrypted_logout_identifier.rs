@@ -787,6 +787,7 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
     )?;
     let logout = received.message();
     let outstanding = OutstandingLogout::try_new(
+        logout.issuer().clone(),
         logout
             .name_id()
             .ok_or("decrypted LogoutRequest has no NameID")?
