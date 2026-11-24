@@ -224,7 +224,8 @@ impl fmt::Display for ResourceLimit {
 /// - configuration and unsupported binding failures.
 ///
 /// A variant that wraps a lower-level failure returns it from
-/// [`std::error::Error::source`]. Its type is not part of the API.
+/// [`std::error::Error::source`]. Its type is not part of the API, except
+/// for [`Self::SoapEnvelope`].
 ///
 /// This enum is `#[non_exhaustive]`; downstream callers should include a
 /// fallback arm when matching. Each variant with named fields is
@@ -476,13 +477,15 @@ pub enum SamlError {
     /// message was read.
     ///
     /// A SOAP responder answers with HTTP 500 and
-    /// [`SoapFault::new`](crate::SoapFault::new) with `fault`.
+    /// [`SoapFault::new`](crate::SoapFault::new) with `fault`. A requester
+    /// that reads a reply gets the same variant and has no fault to send.
     #[error("SOAP envelope processing failed with a {fault} fault")]
     #[non_exhaustive]
     SoapEnvelope {
         /// SOAP fault code that answers the failure.
         fault: SoapFaultCode,
-        /// What could not be processed.
+        /// The [`SamlError`] that stopped the envelope reader, such as
+        /// [`Self::LimitExceeded`]. Read it with `downcast_ref::<SamlError>()`.
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     /// Response status has no top-level `StatusCode` value.
