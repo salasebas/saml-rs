@@ -14,7 +14,7 @@ fn recommended_presets_select_the_classified_validation() {
             xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
             authn_request_signing: AuthnRequestSigningPolicy::DoNotSign,
             audience: AudienceValidationPolicy::EvaluatePresentRestrictions,
-            name_id_creation: NameIdCreationPolicy::DoNotAllowCreate,
+            name_id_creation: NameIdCreationPolicy::AllowCreate,
         }
     );
     assert_eq!(

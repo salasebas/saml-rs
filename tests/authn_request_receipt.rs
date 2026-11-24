@@ -444,10 +444,10 @@ fn received_authn_request_collapses_xml_schema_whitespace_in_booleans_and_index(
         let xml = insert_root_attribute(xml, "ForceAuthn", " true ")?;
         let xml = insert_root_attribute(xml, "IsPassive", "&#9;0&#10;")?;
         let xml = insert_root_attribute(xml, "AssertionConsumerServiceIndex", " 0 ")?;
-        if !xml.contains("AllowCreate=\"false\"") {
+        if !xml.contains("AllowCreate=\"true\"") {
             return Err("missing AllowCreate".into());
         }
-        Ok(xml.replace("AllowCreate=\"false\"", "AllowCreate=\"&#13; true \""))
+        Ok(xml.replace("AllowCreate=\"true\"", "AllowCreate=\"&#13; false \""))
     })?;
     let message = receipt.received.message();
     assert_eq!(message.force_authn(), Some(ForceAuthn::Required));
@@ -455,7 +455,7 @@ fn received_authn_request_collapses_xml_schema_whitespace_in_booleans_and_index(
     assert_eq!(message.acs_index(), Some(0));
     assert_eq!(
         message.name_id_policy().map(NameIdPolicy::creation_request),
-        Some(NameIdCreationRequest::AllowCreate)
+        Some(NameIdCreationRequest::DoNotAllowCreate)
     );
     Ok(())
 }
