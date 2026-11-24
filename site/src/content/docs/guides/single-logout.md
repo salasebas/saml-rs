@@ -5,7 +5,7 @@ description: "End a session that a typed SSO flow already created. You have an `
 
 End a session that a typed SSO flow already created. You have an `SsoSession` and a peer that advertises a `SingleLogoutService`.
 
-`start_slo`, `receive_slo`, `respond_slo`, and `finish_slo` run on both roles. One call talks to one peer. Sending logout on to every other participant is outside that call.
+`start_slo`, `receive_slo`, `respond_slo`, and `finish_slo` run on both roles. Each exchange covers one peer. Your application owns the session store and coordinates logout across peers.
 
 ## Service provider
 
@@ -91,10 +91,11 @@ indexes, and `NotOnOrAfter` of the same authenticated request.
 ## Identity provider
 
 1. Call `receive_slo` with the browser fields from the `LogoutRequest`.
-2. End the principal's session at the identity provider.
-3. Call `respond_slo` with the outcome as its `status` argument. Typed `respond_slo` always signs the response.
+2. Use the authenticated requester, the principal identifier, and any `SessionIndex` values to determine the affected sessions and their participants. Keep the full `NameID` you issued to each SP, including its qualifiers, and the corresponding session indexes.
+3. Attempt logout for the other participants using a binding each one supports. Skip the initiating SP. Use `start_slo` and `finish_slo` for each peer. Continue with the other participants if an exchange fails. An inbound SOAP request constrains propagation to a synchronous binding that can run without the browser.
+4. End the matching local sessions. Call `respond_slo` with a `Status` that reflects the local outcome and any missing confirmations.
 
-Pass `Status::success()` after the identity provider ends its own session with the principal. If another session participant did not confirm its logout, add `SubordinateStatusCode::partial_logout()` with `Status::with_subordinate`. If the session could not be ended, pass an error status such as `Status::responder()`. saml-rs tracks no sessions, so `respond_slo` has no default status.
+Profiles §4.4.3.2 requires the IdP to determine the affected sessions. Core §3.7.3.2 recommends propagating logout before ending the local session. When the IdP responds to the initiating SP, the top-level status reports the IdP's own result. Use `Status::success()` if it ended the local session or an error such as `Status::responder()` if it could not. If an applicable participant could not be contacted or failed to confirm logout, add `SubordinateStatusCode::partial_logout()` with `Status::with_subordinate`. [Single Logout rules](../reference/conformance/single-logout.md#session-authority-application-duties)
 
 The response carries the exact `RelayState` that arrived with the request. It may use another front-channel binding than the request; the service provider's `finish_slo` accepts any front-channel binding its metadata publishes.
 
@@ -104,12 +105,14 @@ let logout_request = idp.receive_slo(
     Inbound::post(request_fields),
     validation,
 )?;
-let status = match end_session(&logout_request) {
-    Ok(()) => Status::success(),
-    Err(_) => Status::responder(),
-};
+let status = logout_status_for(&logout_request)?;
 let logout_response = idp.respond_slo(&sp, &logout_request, &status, RespondSlo::post())?;
 ```
+
+`logout_status_for` is application code that determines the affected sessions,
+propagates the logout, ends the local sessions, and builds the status. When the
+initiating SP is the only participant and local logout succeeds, return
+`Status::success()`.
 
 ### Receive asynchronous logout
 
@@ -118,7 +121,7 @@ asynchronous logout over HTTP-Redirect or HTTP-POST. The method verifies the
 request before it looks for the extension.
 
 ```rust
-use saml_rs::{IdpLogoutAction, Inbound, RespondSlo, SamlError, Status};
+use saml_rs::{IdpLogoutAction, Inbound, RespondSlo, SamlError};
 
 match idp.receive_slo_with_async(&sp, Inbound::post(request_fields), validation) {
     Ok(IdpLogoutAction::CompleteLocally(request)) => {
@@ -126,10 +129,7 @@ match idp.receive_slo_with_async(&sp, Inbound::post(request_fields), validation)
         render_logout_result(outcome)
     }
     Ok(IdpLogoutAction::Respond(request)) => {
-        let status = match end_session(&request) {
-            Ok(()) => Status::success(),
-            Err(_) => Status::responder(),
-        };
+        let status = logout_status_for(&request)?;
         send_post(idp.respond_slo(&sp, &request, &status, RespondSlo::post())?)
     }
     Err(SamlError::LogoutRequestRefused { refusal, .. }) => {
@@ -171,11 +171,15 @@ The receiving side reads the posted body and returns the response envelope as th
 
 ```rust
 let logout_request = idp.receive_slo(&sp, Inbound::soap(body, SoapChannel::unattested()), validation)?;
-let logout_response = idp.respond_slo(&sp, &logout_request, &Status::success(), RespondSlo::soap())?;
+let status = logout_status_for(&logout_request)?;
+let logout_response = idp.respond_slo(&sp, &logout_request, &status, RespondSlo::soap())?;
 let reply_body = logout_response.soap_response()?.envelope();
 ```
 
 ## Next
+
+Follow the [checkout and Rust setup](../tutorial/run-the-sso-example.md),
+then run the logout example from the repository root.
 
 ```sh
 cargo run -p saml-rs --example slo

@@ -98,8 +98,25 @@ on both roles exposes the received attribute through `LogoutRequest::reason`.
 | Write caller-supplied plain text as `StatusMessage` after `StatusCode` before signing. Omit the element by default | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType` | `RespondSlo::status_message` |
 | Write a subordinate `StatusCode` `Value` that is an absolute URI reference | Mandatory | Core §1.3.2 | `SubordinateStatusCode::try_new` |
 | Reject whitespace, `"`, `<`, and `>` in a caller-supplied subordinate code, and whitespace in the outbound response `Issuer` | Library policy: reason not recorded. | Core §1.3.2 | Always |
-| A session authority returns `Success` only when it ended its own session, and adds `PartialLogout` when another participant did not confirm. The caller passes the status | Mandatory | Core §3.7.3.2 | `IdentityProvider::respond_slo` `status` |
+| Return the application's local logout status and any required `PartialLogout` in the reply to the initiator | Mandatory for the session authority. See [application duties](#session-authority-application-duties) | Core §3.7.3.2 | `IdentityProvider::respond_slo` `status` |
 | A session participant returns an appropriate status after processing the request or on error. The caller passes the status | Mandatory | Profiles §4.4.3.4, Core §3.7.3.1 | `ServiceProvider::respond_slo` `status` |
+
+## Session authority application duties
+
+The IdP application owns the session store, participant tracking, propagation,
+and the aggregate outcome. The typed APIs build and validate individual
+exchanges.
+
+| Rule | Level | Section | Actor |
+| --- | --- | --- | --- |
+| Determine the sessions to terminate from the identifier and any session indexes when starting logout or handling a valid `LogoutRequest` | Mandatory | Profiles §4.4.3.2 | IdP application |
+| For a request from a participant in the current session, contact the upstream authority when applicable, then the other participants, then end the local session. Skip the originator and continue attempting other peers after failures | Recommended | Core §3.7.3.2, Profiles §4.4.3.2–§4.4.3.3 | IdP application |
+| When replying to the original requester, use top-level `Success` if local logout succeeded or a top-level error if it failed. Include second-level `PartialLogout` if an applicable participant could not be contacted or failed to confirm logout | Mandatory | Core §3.7.3.2, Profiles §4.4.3.5 | IdP application |
+
+The standard describes an upstream propagation step for a proxy. This crate's
+IdP APIs cover per-peer exchanges with SPs. [Core §3.7.3.2](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf#page=62)
+and [Profiles §4.4.3](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf#page=34)
+describe the deployment flow.
 
 ## Logout acceptance
 
@@ -176,7 +193,11 @@ Typed logout send and receive use HTTP-Redirect, HTTP-POST, and HTTP-POST-Simple
 
 ## SOAP binding
 
-`StartSlo::soap` and `RespondSlo::soap` run the four calls over the SAML SOAP binding, which [artifact resolution](artifact-resolution.md) also uses. The generation rules above apply on SOAP. The deployment owns the connection, TLS, and HTTP authentication. This claims the IdP and SP cells of Single Logout – SOAP in Conformance Requirements Table 2, not the IdP or SP operational mode.
+`StartSlo::soap` and `RespondSlo::soap` cover one SOAP request and response
+between an SP and an IdP. Either role can initiate the exchange.
+The generation rules above apply on SOAP. The deployment owns the connection,
+TLS, and HTTP authentication. The IdP application handles
+[propagation and the aggregate status](#session-authority-application-duties).
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
@@ -201,7 +222,7 @@ Typed logout send and receive use HTTP-Redirect, HTTP-POST, and HTTP-POST-Simple
 ## Outside this flow
 
 - Setting `Consent` or caller-defined extensions on outbound logout messages, or `StatusDetail` on outbound responses. Optional, `RequestAbstractType`, `StatusResponseType`, `StatusType`.
-- Propagating logout to other participants. Each call addresses one peer. After a synchronous participant request, the IdP should use a synchronous binding for required propagation. Recommended, Core §3.7.3.2, Profiles §4.4.3.1.
+- Propagating logout to other participants. See [session authority application duties](#session-authority-application-duties).
 - Session invalidation and session tracking. The caller owns them. Mandatory for the participant, Core §3.7.3.1.
 - Setting `NotOnOrAfter` at or after the latest assertion `NotOnOrAfter`. Recommended, Core §3.7.3.2. Typed `start_slo` receives no assertion, and [ADR 0001](https://samlrs.vercel.app/explanation/logout-expiration/) records the choice.
 - Adding `RelayState` in `respond_slo` when the request carried none. Optional for the responder, Bindings §3.4.3, §3.5.3, CD-04 §2.3.

@@ -7,7 +7,7 @@ You will run one program that plays both sides of a login. It prints `alice@exam
 
 ## Run it
 
-Clone the release and run the example from its repository root.
+Clone the release and run the example from its repository root with current stable Rust.
 
 ```sh
 git clone --branch v0.8.0 https://github.com/salasebas/saml-rs.git
@@ -22,6 +22,19 @@ SP  <- authenticated   = alice@example.com
 ```
 
 The request id changes every run. The example does not open a browser. It posts the same fields a browser would.
+
+### Run on Rust 1.88
+
+The release's `Cargo.lock` pins a version of `uuid` that requires Rust 1.89.
+Select Rust 1.88 before you run these commands. If you use rustup, set a
+toolchain override in the checkout with `rustup override set 1.88`.
+
+```sh
+CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback cargo update
+cargo run -p saml-rs --example sso
+```
+
+`cargo update` rewrites the checkout's lockfile. Keep that change local.
 
 ## What it skips
 

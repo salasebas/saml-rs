@@ -709,14 +709,21 @@ and `urn:oasis:names:tc:SAML:2.0:logout:admin` reason URIs. No saml-rs API
 wrote them to the `Reason` attribute of a `<LogoutRequest>` or read them from
 it.
 
-**Now:** both constants are removed. saml-rs has no API for the logout
-`Reason`.
+**Now:** both constants are removed. `StartSlo::reason` writes the optional
+`Reason` attribute. `LogoutRequest::reason` reads it from an authenticated
+request.
 
-**Upgrade:** define the URI in your own code:
+**Upgrade:** define the URI in your own code and pass it when you start logout.
 
 ```rust
+use saml_rs::StartSlo;
+
 const USER_LOGOUT: &str = "urn:oasis:names:tc:SAML:2.0:logout:user";
+let options = StartSlo::post().reason(USER_LOGOUT);
 ```
+
+At the receiver, `received.message().reason()` returns `Option<&str>` for a request
+returned by `receive_slo`.
 
 ## 1.21 Write the binding parameter names
 

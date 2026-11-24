@@ -5,12 +5,13 @@ Conformance Requirements Table 2, and of Conformance §§3.3 to 3.7, 4, and 5.
 Each row names the obligated actor, the level for each column, and one
 disposition. The rules of a claimed feature are on the record it links to.
 
-The IdP operational mode and the SP operational mode are not claimed. Every
-Table 2 `MUST` cell of the IdP and SP columns has a claimed feature. Two
-limits remain: the unsigned CBC `AuthnRequest` subject that the identity
-provider leaves unread by library policy under §3.4, and the HTTP Redirect
-rows, which are claimed for the default build only. This page is the
-inventory, not the claim.
+The crate claims the individual exchanges in the linked records.
+It claims none of the IdP, IdP Lite, SP, or SP Lite operational modes.
+The HTTP Artifact rows cover IdP-issued artifacts. The Single Logout rows
+cover one peer at a time, with the IdP application responsible for session
+tracking, propagation, and the aggregate status. The HTTP Redirect rows
+apply to the default build only. The unsigned CBC `AuthnRequest` subject
+also has a library-policy limit under §3.4.
 
 Normative text is Conformance Requirements, as corrected by Approved
 Errata 05. E11 relabels the name identifier management rows. E25 adds the

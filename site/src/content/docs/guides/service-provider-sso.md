@@ -32,7 +32,7 @@ let idp = IdpDescriptor::from_metadata_xml(
     },
 )?;
 
-let started = sp.start_sso(&idp, StartSso::redirect())?;
+let started = sp.start_sso(&idp, StartSso::post())?;
 store_with_session(started.pending.snapshot());
 send_to_browser(started.outbound);
 
@@ -61,7 +61,7 @@ With the `serde` feature, the snapshot serializes to JSON for your session store
 
 Before you use an identifier, call `session.scoped_attribute_violations()` with the attribute's SAML name and an issuer-specific policy. With local configuration, pass `AttributeScopePolicy::Explicit` with the configured issuer and allowed scopes. For federation metadata, import the descriptor with `MetadataTrustPolicy::RequireRegistrationAuthoritySignature` and pass it in `AttributeScopePolicy::RegistrationAuthority`. Pin the trusted authority's certificate independently of the IdP. The policy compares literal scopes case-sensitively and reports each value to discard or reject before account lookup. See [scoped attributes](../reference/conformance/web-browser-sso-acceptance.md#scoped-attributes).
 
-`start_sso` also accepts `StartSso::post()` and `StartSso::simple_sign()`. All three constructors enforce the producer rules in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
+The paired [identity provider guide](identity-provider-sso.md) publishes an HTTP-POST SSO endpoint. For another IdP, match the request binding to a `SingleSignOnService` in its metadata. Use `StartSso::redirect()` for HTTP-Redirect or `StartSso::simple_sign()` for HTTP-POST-SimpleSign. All three constructors enforce the producer rules in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
 
 ## Cap the application session
 
@@ -92,9 +92,7 @@ The builder uses the recommended policy by default. It does not require a signat
 
 ## Next
 
-```sh
-cargo run -p saml-rs --example sso
-```
+Follow [Run the example](../tutorial/run-the-sso-example.md) to run both sides from a checkout.
 
 The same calls are in the [crate-root SSO example](https://github.com/salasebas/saml-rs/blob/main/src/lib.rs). Run `cargo doc -p saml-rs --open` from the repository root to read the API reference for `main`.
 

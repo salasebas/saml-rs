@@ -5,7 +5,7 @@ description: "End a session that a typed SSO flow already created. You have an `
 
 End a session that a typed SSO flow already created. You have an `SsoSession` and a peer that advertises a `SingleLogoutService`.
 
-`start_slo`, `receive_slo`, `respond_slo`, and `finish_slo` run on both roles. One call talks to one peer. Sending logout on to every other participant is outside that call.
+`start_slo`, `receive_slo`, `respond_slo`, and `finish_slo` run on both roles. Each exchange covers one peer. Your application owns the session store and coordinates logout across peers.
 
 ## Service provider
 
@@ -39,7 +39,10 @@ let status = completed.status();
 ## Identity provider
 
 1. Call `receive_slo` with the browser fields from the `LogoutRequest`.
-2. Call `respond_slo`. Typed `respond_slo` always signs the response.
+2. Determine the affected sessions from the principal identifier and any `SessionIndex` values. Attempt logout at the other participants before ending the matching local sessions. Skip the initiating SP.
+3. Call `respond_slo` with the outcome in `RespondSlo::status`.
+
+Use top-level `Success` when the IdP ends the local session or an error when it cannot. Add subordinate `PartialLogout` when another participant could not be contacted or failed to confirm logout. Omitting `RespondSlo::status` emits `Success`. [Single Logout rules](../reference/conformance/single-logout.md)
 
 The response carries the exact `RelayState` that arrived with the request. It may use another front-channel binding than the request; the service provider's `finish_slo` accepts any front-channel binding its metadata publishes.
 
@@ -49,8 +52,12 @@ let logout_request = idp.receive_slo(
     BrowserInput::<LogoutRequest>::post(request_fields),
     validation,
 )?;
-let logout_response = idp.respond_slo(&sp, &logout_request, RespondSlo::post())?;
+let status = logout_status_for(&logout_request)?;
+let logout_response = idp.respond_slo(&sp, &logout_request, RespondSlo::post().status(status))?;
 ```
+
+`logout_status_for` is application code that processes the sessions and
+their participants and builds the status.
 
 When the identity provider starts logout itself, `Saml<Idp>::start_slo` is the session authority. It always emits `LogoutRequest@NotOnOrAfter`. The deadline comes from the same issuance lifetime used for assertion time bounds. The five-minute default is library policy. Why that does not claim an ordering against every historical assertion is in [Logout expiration](../explanation/logout-expiration.md).
 
@@ -76,11 +83,15 @@ The receiving side reads the posted body and returns the response envelope as th
 
 ```rust
 let logout_request = idp.receive_slo(&sp, BrowserInput::<LogoutRequest>::soap(body), validation)?;
-let logout_response = idp.respond_slo(&sp, &logout_request, RespondSlo::soap())?;
+let status = logout_status_for(&logout_request)?;
+let logout_response = idp.respond_slo(&sp, &logout_request, RespondSlo::soap().status(status))?;
 let reply_body = logout_response.soap_response()?.envelope();
 ```
 
 ## Next
+
+Follow the [release checkout and Rust setup](../tutorial/run-the-sso-example.md),
+then run the logout example from the repository root.
 
 ```sh
 cargo run -p saml-rs --example slo

@@ -31,7 +31,7 @@ let idp = IdpDescriptor::from_metadata_xml_for(
     },
 )?;
 
-let started = sp.start_sso(&idp, StartSso::redirect())?;
+let started = sp.start_sso(&idp, StartSso::post())?;
 store_with_session(started.pending.snapshot());
 send_to_browser(started.outbound);
 
@@ -54,7 +54,7 @@ let name_id = session.subject().name_id().value();
 
 `session.attributes()` holds the attributes of the assertion. `Attribute::format()` is the attribute's `AttributeNameFormat`, and is `None` when the identity provider sent no `NameFormat`. A persistent or transient name identifier is reported as it was sent. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
 
-`start_sso` also accepts `StartSso::post()` and `StartSso::simple_sign()`. Those constructors leave the generation rules off. Call `apply_web_browser_sso_generation_rules()` when you want the producer rules in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
+The paired [identity provider guide](identity-provider-sso.md) publishes an HTTP-POST SSO endpoint. For another IdP, match the request binding to a `SingleSignOnService` in its metadata. Use `StartSso::redirect()` for HTTP-Redirect or `StartSso::simple_sign()` for HTTP-POST-SimpleSign. Call `apply_web_browser_sso_generation_rules()` to enable the producer rules in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
 
 ## Replay
 
@@ -70,9 +70,7 @@ A new validation context allows five minutes of clock skew. Pass `ClockSkew::str
 
 ## Next
 
-```sh
-cargo run -p saml-rs --example sso
-```
+Follow [Run the example](../tutorial/run-the-sso-example.md) to run both sides from the release checkout.
 
 The same calls, checked by `cargo test --doc`, are in the [crate-root SSO example](https://docs.rs/saml-rs/0.8.0/saml_rs/#sp-initiated-sso).
 

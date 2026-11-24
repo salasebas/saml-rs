@@ -489,8 +489,20 @@ builders and configs accept typed SSO settings only.
 **Upgrade:** delete the template from your configuration. Set the ACS, binding,
 and NameID formats on the role that advertises them. Use `StartSso` for request
 preferences, `SsoAssertion` for the subject, attributes, authentication context
-and instant, and `SsoOutcome::Failure` for an error status. Arbitrary XML
-extensions have no typed replacement.
+and instant, and `SsoOutcome::Failure` for an error status. To carry a custom
+`<AuthnRequest>` extension forward, parse its standalone XML element with
+`ExtensionElement::from_xml` and pass it to `StartSso::extension`. Declare
+the namespaces the element uses in the standalone XML. Its root uses a
+namespace outside the SAML protocol, assertion, and metadata namespaces.
+
+```rust
+use saml_rs::{ExtensionElement, StartSso};
+
+let extension = ExtensionElement::from_xml(
+    r#"<app:Context xmlns:app="urn:example:app">employee</app:Context>"#,
+)?;
+let options = StartSso::post().extension(extension);
+```
 
 The built-in renderer writes failure responses from `SsoOutcome::Failure`.
 Change handlers that expected an error when combining a failure status with

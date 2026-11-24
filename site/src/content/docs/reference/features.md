@@ -43,7 +43,7 @@ The `serde` feature is off by default. It implements `Serialize` and `Deserializ
 | `PendingManageNameIdRequestSnapshot` | `PendingManageNameIdRequest::snapshot` |
 
 ```sh
-cargo add saml-rs --features serde
+cargo add saml-rs --git https://github.com/salasebas/saml-rs.git --branch main --features serde
 ```
 
 ```rust
