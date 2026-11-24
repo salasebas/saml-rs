@@ -21,8 +21,8 @@ use saml_rs::{
     MetadataTrustPolicy, NameId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound,
     OutboundDelivery, Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier,
     RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, StartSso, Status,
-    SubordinateStatusCode,
+    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponseBinding, StartSso,
+    Status, SubordinateStatusCode,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -456,6 +456,42 @@ fn received_authn_request_collapses_xml_schema_whitespace_in_booleans_and_index(
     assert_eq!(
         message.name_id_policy().map(NameIdPolicy::creation_request),
         Some(NameIdCreationRequest::AllowCreate)
+    );
+    Ok(())
+}
+
+#[test]
+fn received_authn_request_collapses_protocol_binding_whitespace(
+) -> Result<(), Box<dyn std::error::Error>> {
+    const POST: &str = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
+    const UNKNOWN: &str = "urn:example:unsupported-binding";
+    let receive_with_binding = |binding: &str| {
+        receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+            let attribute = format!("ProtocolBinding=\"{POST}\"");
+            if !xml.contains(&attribute) {
+                return Err("missing HTTP-POST ProtocolBinding".into());
+            }
+            Ok(xml.replacen(&attribute, &format!("ProtocolBinding=\"{binding}\""), 1))
+        })
+    };
+
+    let canonical = receive_with_binding(POST)?;
+    assert_eq!(
+        canonical.received.message().protocol_binding(),
+        Some(SsoResponseBinding::Post)
+    );
+
+    let unknown = receive_with_binding(UNKNOWN);
+    assert!(matches!(
+        unknown,
+        Err(error) if matches!(error.downcast_ref::<SamlError>(), Some(SamlError::Invalid(message))
+            if message == &format!("unsupported AuthnRequest ProtocolBinding {UNKNOWN}"))
+    ));
+
+    let padded = receive_with_binding(&format!(" &#x9;{POST}&#xD;&#xA; "))?;
+    assert_eq!(
+        padded.received.message().protocol_binding(),
+        Some(SsoResponseBinding::Post)
     );
     Ok(())
 }
