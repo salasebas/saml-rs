@@ -3140,7 +3140,11 @@ fn logout_request_name_id(xml: &str) -> Result<NameIdView, Box<dyn std::error::E
         .iter()
         .find(|child| child.local_name == "NameID")
         .ok_or("missing LogoutRequest NameID")?;
-    let mut attrs = name_id.attrs.clone();
+    let mut attrs: Vec<_> = name_id
+        .attrs
+        .iter()
+        .map(|attribute| (attribute.name.clone(), attribute.value.clone()))
+        .collect();
     attrs.sort();
     Ok((name_id.text.clone(), attrs))
 }
@@ -3329,7 +3333,11 @@ fn assertion_name_id(xml: &str) -> Result<NameIdView, Box<dyn std::error::Error>
                 .find(|node| node.local_name == "NameID")
         })
         .ok_or("missing assertion NameID")?;
-    let mut attrs = name_id.attrs.clone();
+    let mut attrs: Vec<_> = name_id
+        .attrs
+        .iter()
+        .map(|attribute| (attribute.name.clone(), attribute.value.clone()))
+        .collect();
     attrs.sort();
     Ok((name_id.text.clone(), attrs))
 }

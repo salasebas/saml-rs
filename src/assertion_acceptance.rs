@@ -92,7 +92,7 @@ pub(crate) fn reject_unsolicited_bearer_in_response_to(
                 .children
                 .iter()
                 .filter(|child| child.local_name == "SubjectConfirmationData")
-                .find_map(|data| data.attr("InResponseTo"));
+                .find_map(|data| data.unqualified_attr("InResponseTo"));
             if request_id.is_some() && is_bearer_confirmation(confirmation) {
                 return Err(SamlError::in_response_to_mismatch(None, request_id));
             }
@@ -182,7 +182,7 @@ pub(crate) fn latest_bearer_not_on_or_after<'a>(
             .children
             .iter()
             .find(|child| child.local_name == "SubjectConfirmationData")
-            .and_then(|data| data.attr("NotOnOrAfter"))
+            .and_then(|data| data.unqualified_attr("NotOnOrAfter"))
         else {
             continue;
         };
@@ -436,13 +436,13 @@ fn check_bearer_subject_confirmation(
             SubjectConfirmationReason::MissingNotOnOrAfter,
         ));
     };
-    let Some(not_on_or_after) = data.attr("NotOnOrAfter") else {
+    let Some(not_on_or_after) = data.unqualified_attr("NotOnOrAfter") else {
         return Ok(SubjectConfirmationCheck::Invalid(
             SubjectConfirmationReason::MissingNotOnOrAfter,
         ));
     };
     let window = TimeWindow {
-        not_before: data.attr("NotBefore"),
+        not_before: data.unqualified_attr("NotBefore"),
         not_on_or_after: Some(not_on_or_after),
     };
     if !window.contains(opts.validation_now()?, opts.clock_skew) {
@@ -452,7 +452,12 @@ fn check_bearer_subject_confirmation(
     }
 
     if let Some(expected) = expected_recipient {
-        if data.attr("Recipient").map(collapse_whitespace).as_deref() != Some(expected) {
+        if data
+            .unqualified_attr("Recipient")
+            .map(collapse_whitespace)
+            .as_deref()
+            != Some(expected)
+        {
             return Ok(SubjectConfirmationCheck::Invalid(
                 SubjectConfirmationReason::RecipientMismatch,
             ));
@@ -460,7 +465,7 @@ fn check_bearer_subject_confirmation(
     }
 
     if let Some(expected) = opts.expected_in_response_to {
-        if data.attr("InResponseTo") != Some(expected) {
+        if data.unqualified_attr("InResponseTo") != Some(expected) {
             return Ok(SubjectConfirmationCheck::Invalid(
                 SubjectConfirmationReason::InResponseToMismatch,
             ));

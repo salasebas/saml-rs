@@ -12,6 +12,7 @@ mod assertion_conditions;
 mod authentication_context;
 mod authn_request_options;
 mod binding;
+mod browser_namespace_profile;
 mod browser_signing_bindings;
 mod conformance;
 mod decryption_work;

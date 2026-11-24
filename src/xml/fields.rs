@@ -275,12 +275,14 @@ pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
             &["Assertion", "AttributeStatement", "Attribute"],
         )
         .aggregate(&["Name"], &["AttributeValue"])
+        .unqualified_attributes()
         .source_xml(assertion),
         ExtractorField::new(
             login_response::ATTRIBUTE_ELEMENTS,
             &["Assertion", "AttributeStatement", "Attribute"],
         )
         .attrs(&["Name", "NameFormat", "FriendlyName"])
+        .unqualified_attributes()
         .child_texts(&["AttributeValue"])
         .source_xml(assertion),
     ]

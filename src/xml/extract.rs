@@ -7,6 +7,7 @@ pub struct ExtractorField {
     pub key: String,
     local_path: Vec<String>,
     pub attributes: Vec<String>,
+    unqualified_attributes: bool,
     pub index: Option<Vec<String>>,
     pub attribute_path: Option<Vec<String>>,
     pub context: bool,
@@ -23,6 +24,7 @@ impl ExtractorField {
             key: key.to_string(),
             local_path: to_vec(path),
             attributes: Vec::new(),
+            unqualified_attributes: false,
             index: None,
             attribute_path: None,
             context: false,
@@ -33,6 +35,19 @@ impl ExtractorField {
     pub fn attrs(mut self, attributes: &[&str]) -> Self {
         self.attributes = to_vec(attributes);
         self
+    }
+
+    pub(crate) fn unqualified_attributes(mut self) -> Self {
+        self.unqualified_attributes = true;
+        self
+    }
+
+    fn attribute<'a>(&self, node: &'a Node, name: &str) -> Option<&'a str> {
+        if self.unqualified_attributes {
+            node.unqualified_attr(name)
+        } else {
+            node.attr(name)
+        }
     }
 
     pub fn capture_source(mut self) -> Self {
@@ -106,21 +121,26 @@ fn aggregate(
     nodes: &[&Node],
     index: &[String],
     attribute_path: &[String],
-    attributes: &[String],
+    field: &ExtractorField,
 ) -> Value {
     let key_attr = index.first().map(String::as_str).unwrap_or_default();
     let mut keys: Vec<String> = Vec::new();
     let mut values: Vec<Value> = Vec::new();
     for node in nodes {
-        keys.push(node.attr(key_attr).unwrap_or_default().to_string());
+        keys.push(
+            field
+                .attribute(node, key_attr)
+                .unwrap_or_default()
+                .to_string(),
+        );
         let targets = descend(node, attribute_path);
-        let vals: Vec<Value> = if attributes.is_empty() {
+        let vals: Vec<Value> = if field.attributes.is_empty() {
             targets.iter().map(|t| Value::Str(t.text.clone())).collect()
         } else {
-            let attr = &attributes[0];
+            let attr = &field.attributes[0];
             targets
                 .iter()
-                .filter_map(|t| t.attr(attr))
+                .filter_map(|target| field.attribute(target, attr))
                 .map(|v| Value::Str(v.to_string()))
                 .collect()
         };
@@ -133,7 +153,7 @@ fn extract_field(src: &str, root: &Node, field: &ExtractorField) -> Value {
     let nodes = select_path(root, &field.local_path);
 
     if let (Some(index), Some(attribute_path)) = (&field.index, &field.attribute_path) {
-        return aggregate(&nodes, index, attribute_path, &field.attributes);
+        return aggregate(&nodes, index, attribute_path, field);
     }
 
     if field.context {
@@ -157,7 +177,8 @@ fn extract_field(src: &str, root: &Node, field: &ExtractorField) -> Value {
                     .attributes
                     .iter()
                     .filter_map(|a| {
-                        n.attr(a)
+                        field
+                            .attribute(n, a)
                             .map(|v| (camel_case(a), Value::Str(v.to_string())))
                     })
                     .collect();
@@ -178,7 +199,7 @@ fn extract_field(src: &str, root: &Node, field: &ExtractorField) -> Value {
 
     if field.attributes.len() == 1 {
         let attr = &field.attributes[0];
-        return match nodes.iter().find_map(|n| n.attr(attr)) {
+        return match nodes.iter().find_map(|n| field.attribute(n, attr)) {
             Some(v) => Value::Str(v.to_string()),
             None => Value::Null,
         };

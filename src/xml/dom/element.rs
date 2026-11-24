@@ -24,8 +24,15 @@ pub(crate) struct Element<N, A> {
     pub(crate) end: usize,
 }
 
-pub(crate) type Node = Element<(), (String, String)>;
+pub(crate) type Node = Element<(), LocalAttribute>;
 pub(crate) type QualifiedElement = Element<String, (Option<String>, String, String)>;
+
+#[derive(Debug, Clone)]
+pub(crate) struct LocalAttribute {
+    pub(crate) name: String,
+    pub(crate) value: String,
+    pub(super) qualified: bool,
+}
 
 impl Node {
     pub(crate) fn children_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Self> {
@@ -41,8 +48,15 @@ impl Node {
     pub fn attr(&self, name: &str) -> Option<&str> {
         self.attrs
             .iter()
-            .find(|(k, _)| k == name)
-            .map(|(_, v)| v.as_str())
+            .find(|attribute| attribute.name == name)
+            .map(|attribute| attribute.value.as_str())
+    }
+
+    pub(crate) fn unqualified_attr(&self, name: &str) -> Option<&str> {
+        self.attrs
+            .iter()
+            .find(|attribute| !attribute.qualified && attribute.name == name)
+            .map(|attribute| attribute.value.as_str())
     }
 }
 
@@ -53,13 +67,9 @@ pub(super) fn read_element<N, A>(
     mode: ParseMode,
     span: Range<usize>,
     element_namespace: impl FnOnce(Option<&str>, &str) -> N,
-    attribute: impl Fn(&str, Option<&str>, String) -> Option<A>,
+    attribute: impl Fn(QName<'_>, Option<&str>, String) -> Option<A>,
 ) -> Result<Element<N, A>, SamlError> {
-    let level = resolver
-        .level()
-        .checked_add(1)
-        .ok_or_else(|| namespace_error(NamespaceError::TooDeeplyNested(usize::from(u16::MAX))))?;
-    resolver.set_level(level);
+    begin_scope(resolver)?;
     check_qname(e.name().into_inner())?;
     check_attribute_separation(e.attributes_raw())?;
     let attrs = read_attrs(e, resolver, limits)?;
@@ -75,11 +85,7 @@ pub(super) fn read_element<N, A>(
     let mut attributes = Vec::with_capacity(attrs.len());
     for (name, value) in attrs {
         if name.as_namespace_binding().is_some() {
-            attributes.extend(attribute(
-                name.local_name().into_inner(),
-                Some(XMLNS_NAMESPACE),
-                value,
-            ));
+            attributes.extend(attribute(name, Some(XMLNS_NAMESPACE), value));
             continue;
         }
         let (namespace, local_name) = resolver.resolve_attribute(name);
@@ -91,11 +97,7 @@ pub(super) fn read_element<N, A>(
                 name.into_inner()
             )));
         }
-        attributes.extend(attribute(
-            local_name.into_inner(),
-            namespace_uri(&expanded_name.1),
-            value,
-        ));
+        attributes.extend(attribute(name, namespace_uri(&expanded_name.1), value));
         expanded_names.push(expanded_name);
     }
 
@@ -108,6 +110,32 @@ pub(super) fn read_element<N, A>(
         start: span.start,
         end: span.end,
     })
+}
+
+fn begin_scope(resolver: &mut NamespaceResolver) -> Result<(), SamlError> {
+    let level = resolver
+        .level()
+        .checked_add(1)
+        .ok_or_else(|| namespace_error(NamespaceError::TooDeeplyNested(usize::from(u16::MAX))))?;
+    resolver.set_level(level);
+    Ok(())
+}
+
+pub(crate) fn push_normalized_namespaces(
+    resolver: &mut NamespaceResolver,
+    element: &BytesStart<'_>,
+) -> Result<(), SamlError> {
+    begin_scope(resolver)?;
+    for attribute in element.attributes() {
+        let attribute = attribute.map_err(xml_err)?;
+        if let Some(declaration) = attribute.key.as_namespace_binding() {
+            let value = attribute
+                .normalized_value(XmlVersion::Implicit1_0)
+                .map_err(xml_err)?;
+            bind_namespace(resolver, declaration, &value)?;
+        }
+    }
+    Ok(())
 }
 
 fn read_attrs<'a>(
