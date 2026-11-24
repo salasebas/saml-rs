@@ -356,18 +356,16 @@ impl SsoSession {
                     if replay.id == self.assertion_id.as_str() {
                         continue;
                     }
-                    let expires_at = match replay.bearer_not_on_or_after {
-                        Some(instant) => {
-                            let Some(expires_at) = bearer_confirmable_until(
-                                &instant,
-                                validation_now,
-                                not_on_or_after_skew_ms,
-                            )?
-                            else {
-                                continue;
-                            };
-                            system_time_from_offset_datetime(expires_at)?
-                        }
+                    let bearer_expires = match replay.bearer_not_on_or_after {
+                        Some(instant) => bearer_confirmable_until(
+                            &instant,
+                            validation_now,
+                            not_on_or_after_skew_ms,
+                        )?,
+                        None => None,
+                    };
+                    let expires_at = match bearer_expires {
+                        Some(instant) => system_time_from_offset_datetime(instant)?,
                         None => assertion_expires,
                     };
                     cache.check_and_store(

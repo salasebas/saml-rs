@@ -14,7 +14,7 @@ fn expire_last_bearer_confirmation(xml: &str) -> Result<String, Box<dyn std::err
 }
 
 #[test]
-fn an_expired_sibling_assertion_is_discarded_without_a_replay_entry(
+fn an_expired_sibling_assertion_is_discarded_and_kept_until_the_session_replay_deadline(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let xml = resigned(&expire_last_bearer_confirmation(&duplicate_assertion(
@@ -30,12 +30,14 @@ fn an_expired_sibling_assertion_is_discarded_without_a_replay_entry(
     )?;
 
     assert_ne!(session.assertion_id().as_str(), "_second_assertion");
-    let stored: Vec<&str> = cache
+    let session_deadline = cache
         .seen
-        .keys()
-        .filter_map(|key| key.strip_prefix("assertion_id:"))
-        .collect();
-    assert_eq!(stored, [session.assertion_id().as_str()]);
+        .get(&format!("assertion_id:{}", session.assertion_id().as_str()))
+        .ok_or("the session assertion was not stored")?;
+    assert_eq!(
+        cache.seen.get("assertion_id:_second_assertion"),
+        Some(session_deadline)
+    );
     Ok(())
 }
 
@@ -82,4 +84,25 @@ fn an_unsolicited_assertion_is_confirmed_by_a_bearer_confirmation_without_in_res
     assert_eq!(session.in_response_to(), None);
     assert_eq!(session.name_id().value(), "alice@example.com");
     Ok(())
+}
+
+#[test]
+fn assertions_that_share_an_id_are_rejected_without_an_embedded_signature(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_simple_sign(SpValidationPolicy::default())?;
+    let xml = strip_embedded_signatures(&response_xml(&exchange.response_fields)?)?;
+    let id = assertion_ids(&xml)?
+        .into_iter()
+        .next()
+        .ok_or("missing assertion ID")?;
+    let holder_of_key_first = move_last_assertion_first(&replace_in_last_assertion(
+        &duplicate_assertion(&xml, &format!(" {id}"))?,
+        "urn:oasis:names:tc:SAML:2.0:cm:bearer",
+        "urn:oasis:names:tc:SAML:2.0:cm:holder-of-key",
+    )?)?;
+
+    expect_error(
+        accept_simple_sign(&exchange, &holder_of_key_first),
+        |error| matches!(error, SamlError::PotentialWrappingAttack),
+    )
 }

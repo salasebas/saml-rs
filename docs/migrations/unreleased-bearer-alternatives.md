@@ -18,13 +18,18 @@ bearer confirmation, `AudienceRestriction`, `Conditions` children or window,
 or `SessionNotOnOrAfter` fails. Before, the response returned
 `SamlError::SubjectConfirmationInvalid`, `SamlError::AudienceMismatch`,
 `SamlError::UnrecognizedCondition`, or `SamlError::TimeWindowInvalid`. The
-session never contained data from that assertion, and it still does not.
+`SsoSession` accessors never read that assertion, and they still do not.
 
 Each assertion must still name the same issuer and principal, and each
-signature must still verify. With `ReplayPolicy::RequireCache`, the cache
-still stores the identifier of every other assertion, except one whose latest
-bearer `NotOnOrAfter` has passed or does not parse. No later response can
-confirm such an assertion.
+signature must still verify. Two assertions with the same `ID`, compared after
+XML whitespace collapse, now return `SamlError::PotentialWrappingAttack` in
+every case. Before, only a response with an embedded signature was checked, so
+a SimpleSign response signed only through its binding signature, or an
+`ID` repeated only after decryption, could give the session the
+`AuthnContext` of another assertion. With `ReplayPolicy::RequireCache`, the cache
+still stores the identifier of every other assertion. When its latest bearer
+`NotOnOrAfter` has passed or does not parse, it is stored until the replay
+deadline of the session's assertion.
 
 ## Match the new error for a bearer `InResponseTo` on an unsolicited response
 
@@ -32,10 +37,11 @@ On `accept_unsolicited_sso`, a bearer `SubjectConfirmationData` that carries
 `InResponseTo`, even an empty one, now leaves only its own confirmation
 unsatisfied. The response is accepted when another bearer confirmation of the
 assertion is satisfied. Otherwise, the result is
-`SamlError::SubjectConfirmationInvalid` with
-`SubjectConfirmationReason::InResponseToMismatch`, the error that `finish_sso`
-returns for a bearer `InResponseTo` that does not match. An `InResponseTo` on
-the `Response` still returns `SamlError::InResponseToMismatch`.
+`SamlError::SubjectConfirmationInvalid`, as `finish_sso` returns for a bearer
+`InResponseTo` that does not match. Its reason is the failure of the last
+confirmation checked: `SubjectConfirmationReason::InResponseToMismatch` when
+that confirmation failed only on `InResponseTo`. An `InResponseTo` on a
+successful `Response` still returns `SamlError::InResponseToMismatch`.
 
 Before:
 
@@ -49,6 +55,7 @@ After:
 Err(SamlError::InResponseToMismatch { expected: None, .. })
 | Err(SamlError::SubjectConfirmationInvalid {
     reason: SubjectConfirmationReason::InResponseToMismatch,
+    ..
 }) => reject_as_solicited(),
 ```
 

@@ -9,6 +9,7 @@ use crate::xml::dom::{self, reader_err, Node};
 use crate::xml::{extract_with_limits, fields, parse_saml_utc_instant, utf8_bom_len, XmlLimits};
 use quick_xml::events::Event;
 use quick_xml::reader::NsReader;
+use std::collections::HashSet;
 use time::{Duration, OffsetDateTime};
 
 const BEARER_SUBJECT_CONFIRMATION_METHOD: &str = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
@@ -50,6 +51,14 @@ pub(crate) fn accept_response_assertions(
         return Err(SamlError::UnrecognizedCondition { element });
     }
     if let [first, _, ..] = assertions.as_slice() {
+        let mut ids = HashSet::new();
+        if assertions
+            .iter()
+            .filter_map(|assertion| assertion.attr("ID"))
+            .any(|id| !ids.insert(collapse_whitespace(id)))
+        {
+            return Err(SamlError::PotentialWrappingAttack);
+        }
         let first_issuer = issuer_text(first);
         let mut shared_principal: Option<Principal> = None;
         for assertion in &assertions {
