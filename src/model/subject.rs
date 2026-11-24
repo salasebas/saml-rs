@@ -308,6 +308,8 @@ impl NameIdPolicy {
     ///
     /// It names the service provider or affiliation whose namespace the
     /// returned identifier belongs to.
+    /// Use trusted federation data to decide whether the requester may use
+    /// that namespace before selecting an identifier.
     pub fn sp_name_qualifier(&self) -> Option<&str> {
         self.sp_name_qualifier.as_deref()
     }
@@ -321,12 +323,10 @@ impl NameIdPolicy {
         &self,
         issued_format: Option<&str>,
         issued_sp_name_qualifier: Option<&str>,
+        recipient_entity_id: Option<&str>,
         identifier_encryption: IdentifierEncryptionPolicy,
     ) -> Result<(), SamlError> {
-        let Some(format) = &self.format else {
-            return Ok(());
-        };
-        let requested_uri = collapse_whitespace(format.as_uri());
+        let requested_uri = name_id_format_in_effect(self.format().map(NameIdFormat::as_uri));
         if requested_uri == ENCRYPTED_NAME_ID_POLICY_FORMAT {
             return match identifier_encryption {
                 IdentifierEncryptionPolicy::EncryptIdentifiers => Ok(()),
@@ -343,23 +343,39 @@ impl NameIdPolicy {
             | NameIdFormat::Entity
             | NameIdFormat::Kerberos
             | NameIdFormat::WindowsDomainQualifiedName
-            | NameIdFormat::X509SubjectName => {}
-            NameIdFormat::Unspecified | NameIdFormat::Custom(_) => return Ok(()),
-        }
-        if !is_name_id_format(issued_format, &requested_uri) {
-            return Err(SamlError::NameIdPolicyFormatMismatch {
-                requested,
-                issued: issued_format.map(|uri| NameIdFormat::from_uri(&collapse_whitespace(uri))),
-            });
-        }
-        match self.sp_name_qualifier.as_deref() {
-            Some(requested) if issued_sp_name_qualifier != Some(requested) => {
-                Err(SamlError::Invalid(format!(
-                    "the NameIDPolicy requests SPNameQualifier {requested}, which the issued NameID must carry"
-                )))
+            | NameIdFormat::X509SubjectName => {
+                if !is_name_id_format(issued_format, &requested_uri) {
+                    return Err(SamlError::NameIdPolicyFormatMismatch {
+                        requested,
+                        issued: issued_format
+                            .map(|uri| NameIdFormat::from_uri(&collapse_whitespace(uri))),
+                    });
+                }
             }
-            Some(_) | None => Ok(()),
+            NameIdFormat::Unspecified => {}
+            NameIdFormat::Custom(_) => return Ok(()),
         }
+        let Some(requested_namespace) = self.sp_name_qualifier() else {
+            return Ok(());
+        };
+        let issued_namespace = match issued_sp_name_qualifier {
+            // A persistent or pairwise transient identifier may omit the direct recipient's qualifier.
+            None if requested == NameIdFormat::Unspecified
+                && matches!(
+                    name_id_format_in_effect(issued_format).as_str(),
+                    name_id_format::PERSISTENT | name_id_format::TRANSIENT
+                ) =>
+            {
+                recipient_entity_id
+            }
+            qualifier => qualifier,
+        };
+        if issued_namespace != Some(requested_namespace) {
+            return Err(SamlError::Invalid(format!(
+                "the NameIDPolicy requests SPNameQualifier {requested_namespace}, which the issued NameID must carry"
+            )));
+        }
+        Ok(())
     }
 }
 
