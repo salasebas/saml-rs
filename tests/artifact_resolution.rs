@@ -1,6 +1,9 @@
 #[path = "artifact_resolution/budget.rs"]
 mod budget;
 
+#[path = "artifact_resolution/role_index.rs"]
+mod role_index;
+
 #[path = "artifact_resolution/schema_validation.rs"]
 mod schema_validation;
 

@@ -5,7 +5,10 @@ use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::xml::protocol_element::SamlElement;
-use crate::xml::{ExtractorField, XmlLimits};
+use crate::xml::{extract_with_limits, ExtractorField, XmlLimits};
+
+const IDP_ROLES: &str = "idpRoles";
+const ARTIFACT_RESOLUTION_SERVICE: &str = "artifactResolutionService";
 
 /// One `ArtifactResolutionService` endpoint read from IdP metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +44,7 @@ impl ArtifactResolutionServiceEndpoint {
 #[derive(Debug, Clone)]
 pub struct IdpMetadata {
     inner: Metadata,
+    artifact_resolution_roles: Vec<Value>,
 }
 
 impl IdpMetadata {
@@ -94,7 +98,7 @@ impl IdpMetadata {
             Self::fields(),
             policy,
         )?;
-        Self::from_extracted(inner)
+        Self::from_extracted(inner, policy.limits)
     }
 
     pub(crate) fn from_aggregate_entity(
@@ -109,7 +113,7 @@ impl IdpMetadata {
             Self::fields(),
             limits,
         )?;
-        Self::from_extracted(inner)
+        Self::from_extracted(inner, limits)
     }
 
     fn fields() -> Vec<ExtractorField> {
@@ -123,15 +127,8 @@ impl IdpMetadata {
                 ],
             )
             .capture_source(),
-            ExtractorField::new(
-                "artifactResolutionService",
-                &[
-                    "EntityDescriptor",
-                    "IDPSSODescriptor",
-                    "ArtifactResolutionService",
-                ],
-            )
-            .capture_source(),
+            ExtractorField::new(IDP_ROLES, &["EntityDescriptor", "IDPSSODescriptor"])
+                .capture_source(),
             ExtractorField::new(
                 "manageNameIDService",
                 &[
@@ -144,7 +141,11 @@ impl IdpMetadata {
         ]
     }
 
-    fn from_extracted(mut inner: Metadata) -> Result<Self, SamlError> {
+    fn from_extracted(mut inner: Metadata, limits: XmlLimits) -> Result<Self, SamlError> {
+        let artifact_resolution_roles = take_role_sources(&mut inner.meta)
+            .iter()
+            .map(|role| role_artifact_resolution_services(role, limits))
+            .collect::<Result<_, _>>()?;
         super::endpoints::read_endpoints(
             &mut inner.meta,
             "singleSignOnService",
@@ -152,15 +153,13 @@ impl IdpMetadata {
         )?;
         super::endpoints::read_endpoints(
             &mut inner.meta,
-            "artifactResolutionService",
-            &["Binding", "Location", "index"],
-        )?;
-        super::endpoints::read_endpoints(
-            &mut inner.meta,
             "manageNameIDService",
             &["Binding", "Location", "ResponseLocation"],
         )?;
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+            artifact_resolution_roles,
+        })
     }
 
     /// `WantAuthnRequestsSigned` flag.
@@ -193,37 +192,118 @@ impl IdpMetadata {
         )
     }
 
-    /// `ArtifactResolutionService` endpoints.
+    /// `ArtifactResolutionService` endpoints of every selected
+    /// `IDPSSODescriptor`, in document order.
+    ///
+    /// Each `index` is unique within its `IDPSSODescriptor`. An entity with
+    /// several SAML 2.0 IdP roles can publish the same `index` in more than
+    /// one of them.
     ///
     /// # Errors
     ///
     /// Returns [`SamlError::Invalid`] when an endpoint is missing `Binding`,
     /// `Location`, or `index`, when `index` is not a 16-bit integer, or when
-    /// two endpoints share one `index`.
+    /// two endpoints of one `IDPSSODescriptor` share an `index`.
     pub fn artifact_resolution_services(
         &self,
     ) -> Result<Vec<ArtifactResolutionServiceEndpoint>, SamlError> {
-        let Some(services) = self.inner.meta.get("artifactResolutionService") else {
-            return Ok(Vec::new());
-        };
-        let mut endpoints = Vec::new();
-        for value in as_object_list(services) {
-            let endpoint = artifact_resolution_service_from_value(value)?;
-            if endpoints
-                .iter()
-                .any(|existing: &ArtifactResolutionServiceEndpoint| {
-                    existing.index == endpoint.index
-                })
-            {
-                return Err(SamlError::Invalid(format!(
-                    "duplicate ArtifactResolutionService index {}",
-                    endpoint.index
-                )));
-            }
-            endpoints.push(endpoint);
-        }
-        Ok(endpoints)
+        Ok(self
+            .artifact_resolution_roles()?
+            .into_iter()
+            .flatten()
+            .collect())
     }
+
+    /// The `ArtifactResolutionService` at `index`, looked up in each selected
+    /// `IDPSSODescriptor`.
+    ///
+    /// Returns `None` when no selected role publishes `index`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the errors from [`Self::artifact_resolution_services`]. Also
+    /// returns [`SamlError::Invalid`] when more than one selected
+    /// `IDPSSODescriptor` publishes `index`.
+    pub fn artifact_resolution_service(
+        &self,
+        index: u16,
+    ) -> Result<Option<ArtifactResolutionServiceEndpoint>, SamlError> {
+        let mut published = self
+            .artifact_resolution_roles()?
+            .into_iter()
+            .filter_map(|role| role.into_iter().find(|service| service.index == index));
+        let service = published.next();
+        if published.next().is_some() {
+            return Err(SamlError::Invalid(format!(
+                "ArtifactResolutionService index {index} is published by more than one IDPSSODescriptor"
+            )));
+        }
+        Ok(service)
+    }
+
+    fn artifact_resolution_roles(
+        &self,
+    ) -> Result<Vec<Vec<ArtifactResolutionServiceEndpoint>>, SamlError> {
+        self.artifact_resolution_roles
+            .iter()
+            .map(role_artifact_resolution_endpoints)
+            .collect()
+    }
+}
+
+fn take_role_sources(meta: &mut Value) -> Vec<String> {
+    let Value::Object(entries) = meta else {
+        return Vec::new();
+    };
+    let Some(position) = entries.iter().position(|(key, _)| key == IDP_ROLES) else {
+        return Vec::new();
+    };
+    match entries.remove(position).1 {
+        Value::Str(role) => vec![role],
+        Value::Array(roles) => roles
+            .into_iter()
+            .filter_map(|role| match role {
+                Value::Str(role) => Some(role),
+                Value::Null | Value::Array(_) | Value::Object(_) => None,
+            })
+            .collect(),
+        Value::Null | Value::Object(_) => Vec::new(),
+    }
+}
+
+fn role_artifact_resolution_services(role: &str, limits: XmlLimits) -> Result<Value, SamlError> {
+    let field = ExtractorField::new(
+        ARTIFACT_RESOLUTION_SERVICE,
+        &["IDPSSODescriptor", "ArtifactResolutionService"],
+    )
+    .capture_source();
+    let extracted = extract_with_limits(role, &[field], limits)?;
+    super::endpoints::parse_endpoint_fragments(
+        extracted
+            .get(ARTIFACT_RESOLUTION_SERVICE)
+            .unwrap_or(&Value::Null),
+        &["Binding", "Location", "index"],
+    )
+}
+
+fn role_artifact_resolution_endpoints(
+    services: &Value,
+) -> Result<Vec<ArtifactResolutionServiceEndpoint>, SamlError> {
+    let mut endpoints = Vec::new();
+    for value in as_object_list(services) {
+        let endpoint = artifact_resolution_service_from_value(value)?;
+        if endpoints
+            .iter()
+            .any(|existing: &ArtifactResolutionServiceEndpoint| existing.index == endpoint.index)
+        {
+            return Err(SamlError::Invalid(format!(
+                "duplicate ArtifactResolutionService index {}",
+                endpoint.index
+            )));
+        }
+        endpoints.push(endpoint);
+    }
+    Ok(endpoints)
 }
 
 fn artifact_resolution_service_from_value(
