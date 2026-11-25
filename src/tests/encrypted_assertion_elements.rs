@@ -31,34 +31,35 @@ use saml_rs::{
     XmlPolicy,
 };
 
-const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
-const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
+pub(super) const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
+pub(super) const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const SP_ACS: &str = "https://sp.example.com/acs";
-const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
+pub(super) const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const PERSISTENT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent";
 
 const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+pub(super) const CERT: &str =
+    include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const NEXT_PRIVKEY: &str =
     include_str!("../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
 const NEXT_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
-const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
+pub(super) const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
 
-fn signing_credentials() -> Credentials {
+pub(super) fn signing_credentials() -> Credentials {
     Credentials::default().with_signing_credential(X509Credential::new(
         CertificatePem::new(CERT),
         PrivateKeyPem::new(PRIVKEY),
     ))
 }
 
-fn credentials() -> Credentials {
+pub(super) fn credentials() -> Credentials {
     signing_credentials().with_decryption_credential(X509Credential::new(
         CertificatePem::new(CERT),
         PrivateKeyPem::new(PRIVKEY),
     ))
 }
 
-fn xml(encryption: XmlEncryptionPolicy) -> XmlPolicy {
+pub(super) fn xml(encryption: XmlEncryptionPolicy) -> XmlPolicy {
     XmlPolicy {
         encryption,
         ..XmlPolicy::default()
@@ -69,7 +70,7 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache)
 }
 
-fn sp_validation() -> SpValidationPolicy {
+pub(super) fn sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
         assertion_signatures: AssertionSignaturePolicy::RequireSigned,
         audience: AudienceValidationPolicy::RequireRestriction,
@@ -84,7 +85,7 @@ fn sp_with(
     sp_with_credentials(encryption, validation, credentials())
 }
 
-fn sp_with_credentials(
+pub(super) fn sp_with_credentials(
     encryption: XmlEncryptionPolicy,
     validation: SpValidationPolicy,
     credentials: Credentials,
@@ -102,11 +103,11 @@ fn sp_with_credentials(
     ))
 }
 
-fn sp(encryption: XmlEncryptionPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
+pub(super) fn sp(encryption: XmlEncryptionPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
     sp_with(encryption, sp_validation())
 }
 
-fn idp(encryption: XmlEncryptionPolicy) -> Result<saml_rs::IdentityProvider, SamlError> {
+pub(super) fn idp(encryption: XmlEncryptionPolicy) -> Result<saml_rs::IdentityProvider, SamlError> {
     Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -119,7 +120,7 @@ fn idp(encryption: XmlEncryptionPolicy) -> Result<saml_rs::IdentityProvider, Sam
     ))
 }
 
-fn descriptors(
+pub(super) fn descriptors(
     sp: &saml_rs::ServiceProvider,
     idp: &saml_rs::IdentityProvider,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
@@ -137,11 +138,11 @@ fn descriptors(
     ))
 }
 
-fn alice() -> NameId {
+pub(super) fn alice() -> NameId {
     NameId::new("alice-persistent-id").with_format(NameIdFormat::Persistent)
 }
 
-fn attributes() -> Attributes {
+pub(super) fn attributes() -> Attributes {
     Attributes::new(vec![
         Attribute::new("mail", vec![AttributeValue::new("alice@example.com")])
             .with_name_format(AttributeNameFormat::Basic)
@@ -165,9 +166,9 @@ fn response_xml(outbound: &Outbound<SsoResponse>) -> Result<String, Box<dyn std:
     Ok(String::from_utf8(STANDARD.decode(encoded)?)?)
 }
 
-struct Exchange {
-    xml: String,
-    session: Result<SsoSession, SamlError>,
+pub(super) struct Exchange {
+    pub(super) xml: String,
+    pub(super) session: Result<SsoSession, SamlError>,
 }
 
 fn exchange(
@@ -180,7 +181,7 @@ fn exchange(
     exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)
 }
 
-fn exchange_between(
+pub(super) fn exchange_between(
     sp: &saml_rs::ServiceProvider,
     sp_descriptor: &SpDescriptor,
     idp: &saml_rs::IdentityProvider,
@@ -387,7 +388,7 @@ fn exchange_encrypted_for(
     exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)
 }
 
-fn each_encrypted_element() -> [XmlEncryptionPolicy; 3] {
+pub(super) fn each_encrypted_element() -> [XmlEncryptionPolicy; 3] {
     [
         XmlEncryptionPolicy {
             assertions: AssertionEncryptionPolicy::EncryptAssertions,

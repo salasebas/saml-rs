@@ -14,7 +14,7 @@ use crate::xml::dom;
 use crate::xml::fragment::standalone_element;
 use crate::xml::name::validate_namespace_prefix;
 use bergshamra::xml::{Document as XmlDocument, NodeId};
-use bergshamra::{encrypt, EncContext, KeysManager};
+use bergshamra::{encrypt, EncContext, Key, KeysManager};
 
 #[derive(Clone, Copy)]
 pub(crate) struct KeyTransport<'a> {
@@ -47,13 +47,71 @@ impl<'a> From<&'a str> for KeyTransport<'a> {
     }
 }
 
-pub(super) fn encrypted_data_xml(
+pub(crate) struct EncryptionRecipient<'a> {
+    certificates: Vec<&'a str>,
+    data_algorithm: &'a str,
+    key_transport: KeyTransport<'a>,
+}
+
+impl<'a> EncryptionRecipient<'a> {
+    pub(crate) fn new(
+        certificates: impl IntoIterator<Item = &'a str>,
+        data_algorithm: &'a str,
+        key_transport: KeyTransport<'a>,
+    ) -> Self {
+        Self {
+            certificates: certificates.into_iter().collect(),
+            data_algorithm,
+            key_transport,
+        }
+    }
+
+    pub(crate) fn from_setting(certificates: &'a [String], setting: &'a EntitySetting) -> Self {
+        Self::new(
+            certificates.iter().map(String::as_str),
+            &setting.data_encryption_algorithm,
+            KeyTransport::from_setting(setting),
+        )
+    }
+
+    pub(super) fn encrypt_first(
+        &self,
+        plaintext: &[u8],
+    ) -> Result<(EncryptionKey<'a>, String), SamlError> {
+        let mut first_error = None;
+        for certificate in &self.certificates {
+            let attempt = load_certificate(certificate).and_then(|key| {
+                let key = EncryptionKey {
+                    key,
+                    data_algorithm: self.data_algorithm,
+                    key_transport: self.key_transport,
+                };
+                encrypted_data_xml(plaintext, &key).map(|encrypted_data| (key, encrypted_data))
+            });
+            match attempt {
+                Ok(encrypted) => return Ok(encrypted),
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
+        Err(first_error
+            .unwrap_or_else(|| SamlError::MissingMetadata("encryption certificate".into())))
+    }
+}
+
+pub(super) struct EncryptionKey<'a> {
+    key: Key,
+    data_algorithm: &'a str,
+    key_transport: KeyTransport<'a>,
+}
+
+fn encrypted_data_xml(
     plaintext: &[u8],
-    encrypt_cert: &str,
-    data_alg: &str,
-    key_alg: KeyTransport<'_>,
+    recipient: &EncryptionKey<'_>,
 ) -> Result<String, SamlError> {
-    let data_alg = xml_escape(data_alg);
+    let key_alg = recipient.key_transport;
+    let data_alg = xml_escape(recipient.data_algorithm);
     let parameters = match key_alg.parameters {
         Some((digest, mgf)) => format!(
             "<ds:DigestMethod Algorithm=\"{}\"/><xenc11:MGF xmlns:xenc11=\"http://www.w3.org/2009/xmlenc11#\" Algorithm=\"{}\"/>",
@@ -69,7 +127,7 @@ pub(super) fn encrypted_data_xml(
     );
 
     let mut manager = KeysManager::new();
-    manager.add_key(load_certificate(encrypt_cert)?);
+    manager.add_key(recipient.key.clone());
     let ctx = EncContext::new(manager);
     encrypt(&ctx, &template, plaintext).map_err(crypto_err)
 }
@@ -82,14 +140,16 @@ pub(crate) fn encrypt_assertion(
     key_alg: &str,
     tag_prefix: &str,
 ) -> Result<String, SamlError> {
-    encrypt_assertion_with_key_transport(xml, encrypt_cert, data_alg, key_alg.into(), tag_prefix)
+    encrypt_assertion_with_key_transport(
+        xml,
+        &EncryptionRecipient::new([encrypt_cert], data_alg, key_alg.into()),
+        tag_prefix,
+    )
 }
 
 pub(crate) fn encrypt_assertion_with_key_transport(
     xml: &str,
-    encrypt_cert: &str,
-    data_alg: &str,
-    key_alg: KeyTransport<'_>,
+    recipient: &EncryptionRecipient<'_>,
     tag_prefix: &str,
 ) -> Result<String, SamlError> {
     crate::crypto::provider::ensure_crypto_provider_initialized()?;
@@ -100,8 +160,7 @@ pub(crate) fn encrypt_assertion_with_key_transport(
         .child_named("Assertion")
         .ok_or_else(|| SamlError::MissingMetadata("Assertion to encrypt".into()))?;
     let assertion_xml = standalone_element(xml, assertion.start, assertion.end)?;
-    let encrypted_data =
-        encrypted_data_xml(assertion_xml.as_bytes(), encrypt_cert, data_alg, key_alg)?;
+    let (_, encrypted_data) = recipient.encrypt_first(assertion_xml.as_bytes())?;
 
     let encrypted_assertion = format!(
         "<{prefix}:EncryptedAssertion xmlns:{prefix}=\"{assertion_ns}\">{encrypted_data}</{prefix}:EncryptedAssertion>",
@@ -128,12 +187,10 @@ fn qualified_name(document: &XmlDocument<'_>, node: NodeId, local_name: &str) ->
 
 pub(crate) fn encrypt_assertion_elements(
     xml: &str,
-    encrypt_cert: &str,
-    data_alg: &str,
-    key_alg: KeyTransport<'_>,
+    recipient: &EncryptionRecipient<'_>,
     selection: AssertionElementEncryption,
 ) -> Result<String, SamlError> {
-    encrypt_selected(xml, encrypt_cert, data_alg, key_alg, |document| {
+    encrypt_selected(xml, recipient, |document| {
         let mut selected = Vec::new();
         for kind in selected_kinds(selection) {
             for element in assertion_elements(document, kind.parent, kind.plaintext)? {
@@ -150,7 +207,8 @@ pub(crate) fn encrypt_logout_request_name_id(
     data_alg: &str,
     key_alg: KeyTransport<'_>,
 ) -> Result<String, SamlError> {
-    encrypt_selected(xml, encrypt_cert, data_alg, key_alg, |document| {
+    let recipient = EncryptionRecipient::new([encrypt_cert], data_alg, key_alg);
+    encrypt_selected(xml, &recipient, |document| {
         let [name_id] = root_children(document, namespace::ASSERTION, "NameID")?[..] else {
             return Err(SamlError::ProtocolProfile(
                 "LogoutRequest must carry one NameID to encrypt".into(),
@@ -162,19 +220,30 @@ pub(crate) fn encrypt_logout_request_name_id(
 
 fn encrypt_selected(
     xml: &str,
-    encrypt_cert: &str,
-    data_alg: &str,
-    key_alg: KeyTransport<'_>,
+    recipient: &EncryptionRecipient<'_>,
     select: impl FnOnce(&XmlDocument<'_>) -> Result<Vec<(NodeId, EncryptedElementKind)>, SamlError>,
 ) -> Result<String, SamlError> {
     crate::crypto::provider::ensure_crypto_provider_initialized()?;
     let document = parse_xml_document(xml)?;
-    let replacements = select(&document)?
-        .into_iter()
-        .map(|(element, kind)| {
-            encrypted_element(&document, element, kind, encrypt_cert, data_alg, key_alg)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut key = None;
+    let mut replacements = Vec::new();
+    for (element, kind) in select(&document)? {
+        let plaintext = namespace_complete(&document, element)?;
+        let encrypted_data = match &key {
+            Some(key) => encrypted_data_xml(&plaintext, key)?,
+            None => {
+                let (selected, encrypted_data) = recipient.encrypt_first(&plaintext)?;
+                key = Some(selected);
+                encrypted_data
+            }
+        };
+        replacements.push(encrypted_element(
+            &document,
+            element,
+            kind,
+            &encrypted_data,
+        )?);
+    }
     Ok(splice(xml, replacements))
 }
 
@@ -182,12 +251,8 @@ fn encrypted_element(
     document: &XmlDocument<'_>,
     element: NodeId,
     kind: EncryptedElementKind,
-    encrypt_cert: &str,
-    data_alg: &str,
-    key_alg: KeyTransport<'_>,
+    encrypted_data: &str,
 ) -> Result<(Range<usize>, String), SamlError> {
-    let plaintext = namespace_complete(document, element)?;
-    let encrypted_data = encrypted_data_xml(&plaintext, encrypt_cert, data_alg, key_alg)?;
     let wrapper = qualified_name(document, element, kind.encrypted);
     let declaration = match own_prefix_declaration(document, element) {
         Some("") => format!(" xmlns=\"{}\"", kind.namespace),
@@ -217,7 +282,8 @@ pub(crate) fn encrypt_root_children(
     data_alg: &str,
     key_alg: KeyTransport<'_>,
 ) -> Result<String, SamlError> {
-    encrypt_selected(xml, encrypt_cert, data_alg, key_alg, |document| {
+    let recipient = EncryptionRecipient::new([encrypt_cert], data_alg, key_alg);
+    encrypt_selected(xml, &recipient, |document| {
         let mut selected = Vec::new();
         for kind in kinds {
             for element in root_children(document, kind.namespace, kind.plaintext)? {

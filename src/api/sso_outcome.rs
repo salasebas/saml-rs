@@ -46,9 +46,13 @@ impl SsoAssertion {
     /// without `xsi:type`. An attribute without values is written without
     /// `AttributeValue`. An empty collection writes no `AttributeStatement`.
     ///
-    /// The response is rejected when a `NameFormat` is not an absolute URI
-    /// reference, or when an [`crate::AttributeNameFormat::Basic`] name is not an
-    /// XML name. It is also rejected when a `subject-id` or `pairwise-id`
+    /// The response is rejected when a `Name` or a `FriendlyName` has no
+    /// non-whitespace character, when a `NameFormat` is not an absolute URI
+    /// reference, when an [`crate::AttributeNameFormat::Basic`] name is not an
+    /// XML name, or when an [`crate::AttributeNameFormat::Uri`] name is not an
+    /// absolute URI reference. A value may be empty, and a value with only
+    /// whitespace is rejected. It is also rejected when
+    /// a `subject-id` or `pairwise-id`
     /// attribute lacks the `uri` `NameFormat`, appears twice, does not have
     /// exactly one `uniqueID@scope` value, has an upper case letter in its
     /// scope, or mixes upper and lower case letters in its unique ID.

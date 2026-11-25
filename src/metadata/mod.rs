@@ -49,6 +49,8 @@ pub(crate) fn as_object_list(value: &Value) -> Vec<&Value> {
 struct KeyCertificates {
     signing: Vec<String>,
     encryption: Vec<String>,
+    #[cfg(crypto)]
+    encryption_keys: Vec<String>,
 }
 
 impl KeyCertificates {
@@ -59,9 +61,12 @@ impl KeyCertificates {
             .flat_map(|descriptor| &descriptor.children)
             .filter(|child| child.local_name == "KeyDescriptor");
         for key_descriptor in key_descriptors {
-            let x509_certificates: Vec<String> = key_descriptor
+            let x509_data: Vec<&dom::Node> = key_descriptor
                 .children_named("KeyInfo")
                 .flat_map(|key_info| key_info.children_named("X509Data"))
+                .collect();
+            let x509_certificates: Vec<String> = x509_data
+                .iter()
                 .flat_map(|x509_data| x509_data.children_named("X509Certificate"))
                 .map(|certificate| certificate.text.clone())
                 .collect();
@@ -81,6 +86,14 @@ impl KeyCertificates {
                 Some(_) => {}
             }
         }
+        #[cfg(crypto)]
+        {
+            certificates.encryption_keys = descriptors
+                .iter()
+                .map(|role| role_encryption_keys(role))
+                .find(|keys| !keys.is_empty())
+                .unwrap_or_default();
+        }
         certificates
     }
 
@@ -89,6 +102,48 @@ impl KeyCertificates {
             CertUse::Signing => &self.signing,
             CertUse::Encryption => &self.encryption,
         }
+    }
+}
+
+#[cfg(crypto)]
+fn role_encryption_keys(role: &dom::Node) -> Vec<String> {
+    let mut keys = Vec::new();
+    let key_descriptors = role
+        .children_named("KeyDescriptor")
+        .filter(|key_descriptor| {
+            key_descriptor
+                .attr("use")
+                .is_none_or(|use_| use_ == CertUse::Encryption.as_str())
+        });
+    for key_descriptor in key_descriptors {
+        let key_infos: Vec<&dom::Node> = key_descriptor.children_named("KeyInfo").collect();
+        let Some(first) = key_infos
+            .iter()
+            .flat_map(|key_info| key_info.children_named("X509Data"))
+            .find_map(|x509_data| x509_data.child_named("X509Certificate"))
+        else {
+            continue;
+        };
+        if keys.is_empty() || matches!(key_infos[..], [key_info] if names_one_certificate(key_info))
+        {
+            keys.push(first.text.clone());
+        }
+    }
+    keys
+}
+
+#[cfg(crypto)]
+fn names_one_certificate(key_info: &dom::Node) -> bool {
+    let mut declarations = key_info
+        .children
+        .iter()
+        .filter(|child| child.local_name != "KeyName");
+    match (declarations.next(), declarations.next()) {
+        (Some(x509_data), None) => {
+            x509_data.local_name == "X509Data"
+                && matches!(&x509_data.children[..], [certificate] if certificate.local_name == "X509Certificate")
+        }
+        (Some(_), Some(_)) | (None, _) => false,
     }
 }
 
@@ -254,6 +309,11 @@ impl Metadata {
     /// for both signing and encryption.
     pub fn x509_certificates(&self, use_: CertUse) -> &[String] {
         self.key_certificates.for_use(use_)
+    }
+
+    #[cfg(crypto)]
+    pub(crate) fn encryption_key_certificates(&self) -> &[String] {
+        &self.key_certificates.encryption_keys
     }
 
     /// First non-empty `SingleLogoutService` `Location` for `binding`.

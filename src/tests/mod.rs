@@ -21,6 +21,7 @@ mod default_xml_limits;
 mod elliptic_curve_signatures;
 mod encrypted_assertion_elements;
 mod encrypted_requested_subject;
+mod encryption_key_selection;
 pub(crate) mod engine;
 mod error_taxonomy;
 mod external_slo_redirect;

@@ -336,7 +336,7 @@ fn response_without_typed_attributes_has_no_attribute_statement(
 #[test]
 fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xml_name(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for name in ["", "given name", "1stName", "a<b", "-mail"] {
+    for name in ["given name", "1stName", "a<b", "-mail"] {
         let attributes = Attributes::new(vec![
             Attribute::new(name, values(&["x"])).with_name_format(AttributeNameFormat::Basic)
         ]);
@@ -371,7 +371,6 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
     }
     for format in [
         AttributeNameFormat::Unspecified,
-        AttributeNameFormat::Uri,
         AttributeNameFormat::Custom(DEPLOYMENT_FORMAT.to_string()),
     ] {
         let attributes = Attributes::new(vec![
@@ -586,6 +585,65 @@ fn identity_provider_does_not_generate_a_name_format_that_is_not_an_absolute_uri
             Ok(_) => return Err(format!("NameFormat {name_format:?} was written").into()),
         }
     }
+    Ok(())
+}
+
+#[test]
+fn identity_provider_does_not_generate_a_blank_attribute_string_or_a_uri_name_that_is_not_an_absolute_uri(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rejected = [
+        ("blank Name", Attribute::new("", values(&["x"]))),
+        ("whitespace Name", Attribute::new(" \t\r\n", values(&["x"]))),
+        (
+            "blank FriendlyName",
+            Attribute::new(MAIL_OID, values(&["x"])).with_friendly_name(""),
+        ),
+        (
+            "whitespace FriendlyName",
+            Attribute::new(MAIL_OID, values(&["x"])).with_friendly_name("  "),
+        ),
+        (
+            "whitespace value",
+            Attribute::new(MAIL_OID, values(&["alice@example.com", " \t"])),
+        ),
+        (
+            "relative uri Name",
+            Attribute::new("mail", values(&["x"])).with_name_format(AttributeNameFormat::Uri),
+        ),
+        (
+            "uri Name with a space",
+            Attribute::new("urn:example:given name", values(&["x"]))
+                .with_name_format(AttributeNameFormat::Uri),
+        ),
+        (
+            "relative Name under a padded uri NameFormat",
+            Attribute::new("mail", values(&["x"]))
+                .with_name_format(AttributeNameFormat::Custom(format!(" {URI}\n"))),
+        ),
+        (
+            "uri Name with surrounding whitespace",
+            Attribute::new(format!(" {MAIL_OID}"), values(&["x"]))
+                .with_name_format(AttributeNameFormat::Uri),
+        ),
+    ];
+    for (case, attribute) in rejected {
+        match respond(
+            SsoAssertion::new(alice()).attributes(Attributes::new([attribute])),
+            RespondSso::post(),
+        ) {
+            Err(SamlError::Invalid(_)) => {}
+            other => return Err(format!("{case}: expected Invalid, got {other:?}").into()),
+        }
+    }
+
+    let empty_value = Attribute::new(MAIL_OID, values(&[""]))
+        .with_name_format(AttributeNameFormat::Uri)
+        .with_friendly_name("mail");
+    let exchange = exchange(
+        SsoAssertion::new(alice()).attributes(Attributes::new([empty_value.clone()])),
+        RespondSso::post(),
+    )?;
+    assert_eq!(attribute(&exchange.session, MAIL_OID)?, &empty_value);
     Ok(())
 }
 

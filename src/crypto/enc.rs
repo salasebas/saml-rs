@@ -26,7 +26,7 @@ pub(crate) use decrypt::{decrypt_assertion_with_limits, AssertionDecryptionOptio
 pub(crate) use encrypt::encrypt_assertion;
 pub(crate) use encrypt::{
     encrypt_assertion_elements, encrypt_assertion_with_key_transport,
-    encrypt_logout_request_name_id, encrypt_root_children, KeyTransport,
+    encrypt_logout_request_name_id, encrypt_root_children, EncryptionRecipient, KeyTransport,
 };
 pub(crate) use policy::response_uses_cbc_encrypted_assertion;
 
@@ -195,7 +195,6 @@ fn splice(xml: &str, mut replacements: Vec<(Range<usize>, impl AsRef<str>)>) -> 
 
 #[cfg(all(test, not(feature = "crypto-fips")))]
 mod tests {
-    use super::encrypt::encrypted_data_xml;
     use super::*;
     use crate::constants::data_encryption_algorithm::AES_256;
     use crate::constants::key_encryption_algorithm::RSA_OAEP_MGF1P;
@@ -300,9 +299,7 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let encrypted = encrypt_assertion_elements(
             RESPONSE,
-            SP_CERT,
-            AES_256,
-            RSA_OAEP_MGF1P.into(),
+            &EncryptionRecipient::new([SP_CERT], AES_256, RSA_OAEP_MGF1P.into()),
             encrypted_ids(),
         )?;
         assert!(encrypted.contains("<saml:Subject><saml:EncryptedID><xenc:EncryptedData"));
@@ -333,12 +330,9 @@ mod tests {
         plaintext: &str,
         beside: &str,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        let encrypted_data = encrypted_data_xml(
-            plaintext.as_bytes(),
-            SP_CERT,
-            AES_256,
-            RSA_OAEP_MGF1P.into(),
-        )?;
+        let (_, encrypted_data) =
+            EncryptionRecipient::new([SP_CERT], AES_256, RSA_OAEP_MGF1P.into())
+                .encrypt_first(plaintext.as_bytes())?;
         let start = RESPONSE.find("<saml:NameID").ok_or("missing NameID")?;
         let end_tag = "</saml:NameID>";
         let end = RESPONSE.find(end_tag).ok_or("missing NameID end")? + end_tag.len();
@@ -456,9 +450,7 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let encrypted = encrypt_assertion_elements(
             RESPONSE,
-            SP_CERT,
-            AES_256,
-            RSA_OAEP_MGF1P.into(),
+            &EncryptionRecipient::new([SP_CERT], AES_256, RSA_OAEP_MGF1P.into()),
             encrypted_ids(),
         )?;
         let encrypted_data = only_encrypted_data(&encrypted)?;
