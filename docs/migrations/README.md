@@ -36,5 +36,6 @@ additions.
 - [Handle SSO sessions without a NameID](unreleased-sso-without-name-id.md)
 - [Replace calls to `constants::digest_for_signature`](unreleased-remove-digest-for-signature.md)
 - [Use plural names for metadata generation collections](unreleased-metadata-generation-collections.md)
+- [Sign encrypted assertions for the response they arrive in](unreleased-decrypted-assertion-signatures.md)
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

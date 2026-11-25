@@ -180,17 +180,30 @@ fn namespace_complete(document: &XmlDocument<'_>, element: NodeId) -> Result<Vec
     .map_err(crypto_err)
 }
 
-fn splice(xml: &str, mut replacements: Vec<(Range<usize>, impl AsRef<str>)>) -> String {
-    replacements.sort_by_key(|(range, _)| range.start);
+struct Spliced {
+    xml: String,
+    replacement_ranges: Vec<Range<usize>>,
+}
+
+fn splice(xml: &str, replacements: &[(Range<usize>, impl AsRef<str>)]) -> Spliced {
+    let mut order: Vec<usize> = (0..replacements.len()).collect();
+    order.sort_by_key(|&index| replacements[index].0.start);
     let mut output = String::with_capacity(xml.len());
+    let mut replacement_ranges = vec![0..0; replacements.len()];
     let mut cursor = 0;
-    for (range, replacement) in replacements {
+    for index in order {
+        let (range, replacement) = &replacements[index];
         output.push_str(&xml[cursor..range.start]);
+        let start = output.len();
         output.push_str(replacement.as_ref());
+        replacement_ranges[index] = start..output.len();
         cursor = range.end;
     }
     output.push_str(&xml[cursor..]);
-    output
+    Spliced {
+        xml: output,
+        replacement_ranges,
+    }
 }
 
 #[cfg(all(test, not(feature = "crypto-fips")))]
