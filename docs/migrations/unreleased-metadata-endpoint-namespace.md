@@ -12,8 +12,9 @@ name in another namespace was read as an endpoint. For example,
 `ext:AssertionConsumerService` in an `md:SPSSODescriptor` could become the
 default assertion consumer service.
 
-The metadata schema declares these endpoints in the metadata namespace, so
-metadata that passes schema validation does not change. If a peer publishes an
-endpoint in another namespace, saml-rs no longer sends messages to it, and a
-lookup that found only that endpoint now finds none. Ask the peer to publish
-the endpoint in the metadata namespace.
+Lookups do not change for a peer that publishes its endpoints in the metadata
+namespace. If a peer publishes an endpoint in another namespace, saml-rs no
+longer sends messages to it, and a lookup that found only that endpoint now
+finds none. A role whose `xsi:type` extends a metadata role type can declare
+such an element and still pass schema validation. Ask the peer to publish the
+endpoint in the metadata namespace.
