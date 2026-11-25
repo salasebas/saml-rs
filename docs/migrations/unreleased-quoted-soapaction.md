@@ -24,6 +24,4 @@ After:
 let action = header.value();
 ```
 
-Update any gateway or firewall rule that matches the bare value. SAML
-responders must not depend on `SOAPAction` (SAML Bindings §3.2.3), so a SAML
-peer accepts either form.
+Update any gateway or firewall rule that matches the bare value.
