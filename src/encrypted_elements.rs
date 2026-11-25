@@ -133,7 +133,7 @@ pub(crate) fn decrypt_assertions(
     key_pem: &str,
     parser_type: ParserType,
     opts: &FlowOptions<'_>,
-) -> Result<(String, Vec<String>), SamlError> {
+) -> Result<(String, Vec<std::ops::Range<usize>>), SamlError> {
     use crate::crypto::{enc::decrypt_assertions_with_limits, keys::load_decryption_keys};
 
     let (content, assertions) = decrypt_assertions_with_limits(

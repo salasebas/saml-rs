@@ -250,7 +250,7 @@ fn encrypt_selected(
             &encrypted_data,
         )?);
     }
-    Ok(splice(xml, replacements))
+    Ok(splice(xml, &replacements).xml)
 }
 
 fn encrypted_element(

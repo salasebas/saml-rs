@@ -2,14 +2,17 @@ use super::{
     AssertionSignatureRequirement, FlowOptions, MessageAuthentication, PreparedMessage,
     ResponseSignatureRequirement, VerifiedXmlSignatureEvidence,
 };
-use crate::assertion_acceptance::first_login_assertion_xml;
+use std::ops::Range;
+
+use crate::assertion_acceptance::{consumed_assertion, first_login_assertion_xml};
 use crate::constants::ParserType;
 use crate::crypto::verify::{
     SignatureVerification, VerifiedEmbeddedSignature, VerifiedSignedContent,
 };
 use crate::encrypted_elements::{decrypt_assertions, encrypted_assertion_key};
 use crate::error::SamlError;
-use crate::xml::dom::Node;
+use crate::xml::dom::{self, Node};
+use crate::xml::fragment::standalone_element;
 use crate::xml::signature_placement::saml_signature_candidates;
 
 fn verify_embedded_signature(
@@ -61,30 +64,47 @@ pub(super) fn verify_present_signatures(
 }
 
 fn verify_decrypted_assertions(
-    assertions: &[String],
-    consumed_assertion: Option<&str>,
+    response: &str,
+    decrypted: &[Range<usize>],
     requirement: AssertionSignatureRequirement,
     opts: &FlowOptions<'_>,
     evidence: &mut Vec<VerifiedXmlSignatureEvidence>,
 ) -> Result<(), SamlError> {
-    let consumed = assertions
+    if decrypted.is_empty() {
+        return Ok(());
+    }
+    let document = dom::parse_document(response, opts.xml_limits)?;
+    let consumed_start = consumed_assertion(&document.root).map(|assertion| assertion.start);
+    let consumed = decrypted
         .iter()
-        .position(|assertion| Some(assertion.as_str()) == consumed_assertion);
+        .position(|range| Some(range.start) == consumed_start);
     if consumed.is_some() {
         evidence.retain_mut(|signature| {
             signature.assertion_directly_covered = false;
             signature.response_covered
         });
     }
-    for (index, assertion) in assertions.iter().enumerate() {
-        let signatures = match requirement {
-            AssertionSignatureRequirement::Direct => {
-                let verified = verify_embedded_signature(assertion, opts)?.require_verified()?;
+    for (index, range) in decrypted.iter().enumerate() {
+        let node = document
+            .root
+            .children_named("Assertion")
+            .find(|assertion| assertion.start == range.start)
+            .ok_or(SamlError::AssertionMissing)?;
+        let signed = !saml_signature_candidates(node).is_empty();
+        let signatures = match (requirement, signed) {
+            (AssertionSignatureRequirement::Direct, false) => {
+                return Err(SamlError::SignatureMissing);
+            }
+            (AssertionSignatureRequirement::Direct, true) => {
+                let assertion = standalone_element(response, range.start, range.end)?;
+                let verified = verify_embedded_signature(&assertion, opts)?.require_verified()?;
                 require_direct_assertion_coverage(&verified)?;
                 xml_signature_evidence(verified.signatures())
             }
-            AssertionSignatureRequirement::Compatible => {
-                verify_present_signatures(assertion, opts)?
+            (AssertionSignatureRequirement::Compatible, false) => Vec::new(),
+            (AssertionSignatureRequirement::Compatible, true) => {
+                let assertion = standalone_element(response, range.start, range.end)?;
+                verify_present_signatures(&assertion, opts)?
             }
         };
         if consumed == Some(index) {
@@ -156,8 +176,8 @@ pub(super) fn prepare_after_detached_signature(
     };
     let assertion = first_login_assertion_xml(&saml_content, opts.xml_limits)?;
     verify_decrypted_assertions(
+        &saml_content,
         &assertions,
-        assertion.as_deref(),
         assertion_signature,
         opts,
         &mut verified_xml_signatures,
@@ -251,8 +271,8 @@ fn prepare_verified_then_decrypted(
     }
     let mut verified_xml_signatures = xml_signature_evidence(verified.signatures());
     verify_decrypted_assertions(
+        &content,
         &assertions,
-        assertion.as_deref(),
         assertion_signature,
         opts,
         &mut verified_xml_signatures,

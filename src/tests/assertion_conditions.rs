@@ -1165,6 +1165,8 @@ mod encrypted_assertions {
     use saml_rs::crypto::encrypt_assertion;
     use saml_rs::{AssertionEncryptionPolicy, XmlPolicy};
 
+    mod decrypted_context;
+
     const OTHER_RECIPIENT_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
     const ENCRYPTED_ID: &str = concat!(
         "<saml:EncryptedID><xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\">",

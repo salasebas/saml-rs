@@ -114,6 +114,7 @@ pub(crate) fn decrypt_assertion_with_limits(
         .into_iter()
         .next()
         .ok_or(SamlError::AssertionMissing)?;
+    let assertion = response[assertion].to_string();
     Ok((response, assertion))
 }
 
@@ -122,7 +123,7 @@ pub(crate) fn decrypt_assertions_with_limits(
     enc_keys: &[Key],
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
-) -> Result<(String, Vec<String>), SamlError> {
+) -> Result<(String, Vec<Range<usize>>), SamlError> {
     let decrypted = decrypt_selected(xml, limits, enc_keys.len(), options, |document| {
         let encrypted = root_children(document, namespace::ASSERTION, "EncryptedAssertion")?;
         if encrypted.is_empty() {
@@ -150,7 +151,7 @@ pub(crate) fn decrypt_assertions_with_limits(
         Ok(Some(replacements))
     })?
     .ok_or(SamlError::AssertionMissing)?;
-    Ok((decrypted.xml, decrypted.plaintexts))
+    Ok((decrypted.xml, decrypted.plaintext_ranges))
 }
 
 pub(crate) fn decrypt_root_child(
@@ -312,7 +313,7 @@ struct DecryptedElement {
 
 struct DecryptedDocument {
     xml: String,
-    plaintexts: Vec<String>,
+    plaintext_ranges: Vec<Range<usize>>,
 }
 
 fn decrypt_selected(
@@ -337,20 +338,15 @@ fn decrypt_selected(
             options.max_decryption_work,
         )?;
     }
-    let decrypted = splice(
-        xml,
-        replacements
-            .iter()
-            .map(|replacement| (replacement.range.clone(), replacement.plaintext.as_str()))
-            .collect(),
-    );
-    limits.check_input_bytes(decrypted.len())?;
+    let replacements: Vec<_> = replacements
+        .into_iter()
+        .map(|replacement| (replacement.range, replacement.plaintext))
+        .collect();
+    let decrypted = splice(xml, &replacements);
+    limits.check_input_bytes(decrypted.xml.len())?;
     Ok(Some(DecryptedDocument {
-        xml: decrypted,
-        plaintexts: replacements
-            .into_iter()
-            .map(|replacement| replacement.plaintext)
-            .collect(),
+        xml: decrypted.xml,
+        plaintext_ranges: decrypted.replacement_ranges,
     }))
 }
 
