@@ -40,7 +40,10 @@ fn a_bearer_attribute_assertion_before_authentication_does_not_hide_authenticati
 
     assert_eq!(session.authn_statements().len(), 1);
     assert_eq!(session.assertion_id().as_str(), "_authentication");
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     assert_eq!(
         xml_signature_evidence(&session),
         [(RSA_SHA512, VerifiedXmlSignatureCoverage::ConsumedAssertion)]

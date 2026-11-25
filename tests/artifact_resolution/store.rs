@@ -1206,7 +1206,10 @@ fn web_browser_sso_artifact_flows_work_across_two_idp_nodes_with_a_shared_store(
         Inbound::artifact(delivered, resolved),
         without_replay_cache(),
     )?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
 
     let unsolicited = node_a.initiate_sso_artifact(
         &sp_descriptor,
@@ -1235,7 +1238,10 @@ fn web_browser_sso_artifact_flows_work_across_two_idp_nodes_with_a_shared_store(
         Inbound::artifact(delivered, resolved),
         without_replay_cache(),
     )?;
-    assert_eq!(session.name_id().value(), "bob@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "bob@example.com"
+    );
 
     struct UnavailableStore;
     impl ArtifactStore for UnavailableStore {

@@ -258,7 +258,11 @@ fn a_response_to_the_supplied_non_default_consumer_is_accepted(
         let validation = SamlValidationContext::new(SystemTime::now(), policy)
             .with_recipient_endpoint(EndpointUrl::try_new(ACS_B)?);
         let session = receive(flow, binding, ACS_B, validation)?;
-        assert_eq!(session.name_id().value(), USER, "{flow:?} {binding:?}");
+        assert_eq!(
+            session.name_id().ok_or("missing NameID")?.value(),
+            USER,
+            "{flow:?} {binding:?}"
+        );
     }
     Ok(())
 }

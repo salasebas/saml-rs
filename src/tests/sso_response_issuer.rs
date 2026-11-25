@@ -185,7 +185,10 @@ fn a_foreign_response_issuer_is_rejected_on_success() -> TestResult {
         let own = format!("<saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>");
         let control = assertion_signed_with_response_issuer(&exchange, &own)?;
         assert_eq!(
-            accept(&exchange, &control)?.name_id().value(),
+            accept(&exchange, &control)?
+                .name_id()
+                .ok_or("missing NameID")?
+                .value(),
             "alice@example.com"
         );
 
@@ -222,7 +225,10 @@ fn a_success_response_without_an_issuer_is_accepted() -> TestResult {
     let exchange = exchange(Delivery::Solicited)?;
     let xml = assertion_signed_with_response_issuer(&exchange, "")?;
     assert_eq!(
-        accept(&exchange, &xml)?.name_id().value(),
+        accept(&exchange, &xml)?
+            .name_id()
+            .ok_or("missing NameID")?
+            .value(),
         "alice@example.com"
     );
     Ok(())

@@ -2,9 +2,9 @@ use super::attributes::Attributes;
 use super::audience_restriction::AudienceRestriction;
 use super::authn_statement::AuthnStatement;
 use super::extract::{
-    attributes_from_extract, audience_restrictions_from_extract, authn_statements_from_extract,
-    conditions_instants, name_id_from_extract, optional_request_id, required_saml_utc_instant,
-    required_str, subject_confirmations_from_extract,
+    assertion_subject_name_id, attributes_from_extract, audience_restrictions_from_extract,
+    authn_statements_from_extract, conditions_instants, optional_request_id,
+    required_saml_utc_instant, required_str, subject_confirmations_from_extract,
 };
 use super::identifiers::{AssertionId, MessageId, SamlInstant};
 use super::subject::{NameId, SubjectConfirmation};
@@ -18,7 +18,7 @@ use crate::assertion_acceptance::{assertion_replays, latest_bearer_not_on_or_aft
 use crate::config::EntityId;
 use crate::error::{SamlError, TimeWindowField};
 use crate::flow::FlowResult;
-use crate::xml::fields::{login_response, name_id, response};
+use crate::xml::fields::{login_response, response};
 use crate::xml::{dom, parse_saml_utc_instant, XmlLimits};
 use time::{Duration, OffsetDateTime};
 
@@ -99,7 +99,7 @@ pub struct SsoSession {
     issuer: EntityId,
     in_response_to: Option<MessageId>,
     relay_state: Option<RelayState>,
-    name_id: NameId,
+    name_id: Option<NameId>,
     subject_confirmations: Vec<SubjectConfirmation>,
     attributes: Attributes,
     authn_statements: Vec<AuthnStatement>,
@@ -152,9 +152,13 @@ impl SsoSession {
         self.relay_state.as_ref()
     }
 
-    /// The `NameID` of the assertion `Subject`.
-    pub fn name_id(&self) -> &NameId {
-        &self.name_id
+    /// The `NameID` of the assertion `Subject`, or `None` when the `Subject`
+    /// has only `SubjectConfirmation` elements.
+    ///
+    /// Without a `NameID`, the application identifies the principal from
+    /// [`Self::attributes`], and the session has no [`Self::logout_subject`].
+    pub fn name_id(&self) -> Option<&NameId> {
+        self.name_id.as_ref()
     }
 
     /// The `SubjectConfirmation` elements of the assertion `Subject`, in
@@ -288,7 +292,9 @@ impl SsoSession {
     /// Subject data suitable for issuing Single Logout.
     ///
     /// Every present `SessionIndex` is included in `AuthnStatement` document
-    /// order.
+    /// order. Returns `None` when the assertion has no `NameID` or its value
+    /// is blank, because a `LogoutRequest` must name the principal with the
+    /// identifier of the assertion.
     ///
     /// # Examples
     ///
@@ -310,15 +316,15 @@ impl SsoSession {
     /// # Ok(()) }
     /// ```
     pub fn logout_subject(&self) -> Option<LogoutSubject> {
-        if self.name_id().value().trim().is_empty() {
-            return None;
-        }
+        let name_id = self
+            .name_id()
+            .filter(|name_id| !name_id.value().trim().is_empty())?;
         let session_indexes = self
             .authn_statements
             .iter()
             .filter_map(AuthnStatement::session_index)
             .cloned();
-        Some(LogoutSubject::new(self.name_id().clone()).with_session_indexes(session_indexes))
+        Some(LogoutSubject::new(name_id.clone()).with_session_indexes(session_indexes))
     }
 
     pub(crate) fn check_and_store_replay(
@@ -493,10 +499,7 @@ impl SsoSession {
             login_response::ASSERTION_ISSUER,
         )?)?;
         let in_response_to = optional_request_id(&raw_flow.extract, response::IN_RESPONSE_TO)?;
-        let name_id = name_id_from_extract(
-            &raw_flow.extract,
-            required_str(&raw_flow.extract, name_id::VALUE)?,
-        );
+        let name_id = assertion_subject_name_id(&raw_flow.extract)?;
         let subject_confirmations = subject_confirmations_from_extract(&raw_flow.extract);
         let attributes = attributes_from_extract(&raw_flow.extract)?;
         let authn_statements =

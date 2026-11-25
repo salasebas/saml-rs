@@ -243,7 +243,10 @@ fn typed_sso_response_carries_profile_authentication_statement(
         Inbound::post(response.post_form()?.fields().to_vec()),
         post_validation(&mut Default::default()),
     )?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     assert_eq!(
         session.in_response_to().map(saml_rs::MessageId::as_str),
         Some(received.message().id().as_str())
@@ -426,7 +429,10 @@ fn typed_unsolicited_sso_omits_in_response_to() -> Result<(), Box<dyn std::error
     )?;
     assert_eq!(session.in_response_to(), None);
     assert_eq!(session.session_not_on_or_after(), None);
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
@@ -456,7 +462,7 @@ fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
         Inbound::post(response.post_form()?.fields().to_vec()),
         post_validation(&mut Default::default()),
     )?;
-    assert_eq!(session.name_id().format(), None);
+    assert_eq!(session.name_id().ok_or("missing NameID")?.format(), None);
 
     Ok(())
 }
@@ -736,7 +742,10 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         Inbound::post(signed.post_form()?.fields().to_vec()),
         post_validation(&mut Default::default()),
     )?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
 
     let unsigned = idp.respond_sso(
         &sp_descriptor,
@@ -776,7 +785,10 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         Inbound::post(unsigned_fields),
         post_validation(&mut Default::default()),
     )?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
@@ -805,7 +817,10 @@ fn typed_plaintext_response_is_accepted() -> Result<(), Box<dyn std::error::Erro
         Inbound::post(response.post_form()?.fields().to_vec()),
         post_validation(&mut Default::default()),
     )?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 

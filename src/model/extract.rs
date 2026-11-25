@@ -107,6 +107,33 @@ pub(super) fn name_id_from_extract(extract: &Value, value: &str) -> NameId {
     )
 }
 
+pub(super) fn assertion_subject_name_id(extract: &Value) -> Result<Option<NameId>, SamlError> {
+    match extract.get(name_id::VALUE) {
+        Some(Value::Str(value)) => return Ok(Some(name_id_from_extract(extract, value))),
+        Some(Value::Array(_) | Value::Object(_)) => {
+            return Err(SamlError::Invalid(
+                "the assertion Subject must contain at most one NameID".into(),
+            ))
+        }
+        None | Some(Value::Null) => {}
+    }
+    let unreadable = [
+        (login_response::SUBJECT_BASE_ID, "a BaseID"),
+        (
+            login_response::SUBJECT_ENCRYPTED_ID,
+            "an EncryptedID that was not decrypted",
+        ),
+    ];
+    for (field, identifier) in unreadable {
+        if !matches!(extract.get(field), None | Some(Value::Null)) {
+            return Err(SamlError::Unsupported(format!(
+                "the assertion Subject identifies the principal with {identifier}"
+            )));
+        }
+    }
+    Ok(None)
+}
+
 pub(super) fn name_id_policy_from_extract(
     extract: &Value,
 ) -> Result<Option<NameIdPolicy>, SamlError> {

@@ -222,7 +222,10 @@ fn resolves_two_trusted_idps_and_records_replay_in_the_shared_cache() -> TestRes
         resolve,
     )?;
     assert_eq!(session.issuer().as_str(), FIRST_IDP);
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     let replay = sp.accept_unsolicited_sso(
         &trusted[0],
         Inbound::post(first_post),
@@ -248,7 +251,10 @@ fn resolves_two_trusted_idps_and_records_replay_in_the_shared_cache() -> TestRes
         resolve,
     )?;
     assert_eq!(session.issuer().as_str(), SECOND_IDP);
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 

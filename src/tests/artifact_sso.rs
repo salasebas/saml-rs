@@ -220,7 +220,7 @@ fn a_response_delivered_as_an_artifact_establishes_the_session(
     assert_eq!(names, ["SAMLart"]);
 
     let session = follow_redirect_and_finish(&parties, &pending, &response, &mut issued)?;
-    assert_eq!(session.name_id().value(), USER);
+    assert_eq!(session.name_id().ok_or("missing NameID")?.value(), USER);
     assert_eq!(session.issuer().as_str(), IDP_ENTITY_ID);
     Ok(())
 }
@@ -269,7 +269,7 @@ fn an_artifact_response_keeps_exclusive_canonicalization_inside_soap(
         Inbound::artifact(delivered, resolved),
         validation(),
     )?;
-    assert_eq!(session.name_id().value(), USER);
+    assert_eq!(session.name_id().ok_or("missing NameID")?.value(), USER);
     Ok(())
 }
 
@@ -293,7 +293,7 @@ fn relay_state_travels_with_the_artifact() -> Result<(), Box<dyn std::error::Err
     assert_eq!(delivered.relay_state(), Some(&relay_state));
 
     let session = follow_redirect_and_finish(&parties, &pending, &response, &mut issued)?;
-    assert_eq!(session.name_id().value(), USER);
+    assert_eq!(session.name_id().ok_or("missing NameID")?.value(), USER);
     Ok(())
 }
 
@@ -560,7 +560,7 @@ fn an_artifact_delivered_in_a_form_establishes_the_session(
 
     let delivered = DeliveredArtifact::from_form(form.fields())?;
     let session = resolve_and_finish(&parties, &pending, delivered, &mut issued)?;
-    assert_eq!(session.name_id().value(), USER);
+    assert_eq!(session.name_id().ok_or("missing NameID")?.value(), USER);
     Ok(())
 }
 
@@ -717,7 +717,7 @@ fn an_unsolicited_artifact_response_establishes_the_session(
         Inbound::artifact(delivered, resolved),
         validation(),
     )?;
-    assert_eq!(session.name_id().value(), USER);
+    assert_eq!(session.name_id().ok_or("missing NameID")?.value(), USER);
     Ok(())
 }
 
@@ -892,7 +892,7 @@ fn a_signed_artifact_response_may_omit_destination() -> Result<(), Box<dyn std::
         &sign_response(&without_destination)?,
         &mut issued,
     )?;
-    assert_eq!(session.name_id().value(), USER);
+    assert_eq!(session.name_id().ok_or("missing NameID")?.value(), USER);
     Ok(())
 }
 
@@ -1038,7 +1038,7 @@ fn a_pending_artifact_login_survives_a_snapshot() -> Result<(), Box<dyn std::err
         &mut issued,
     )?;
     let session = follow_redirect_and_finish(&parties, &restored, &response, &mut issued)?;
-    assert_eq!(session.name_id().value(), USER);
+    assert_eq!(session.name_id().ok_or("missing NameID")?.value(), USER);
     Ok(())
 }
 
@@ -1113,7 +1113,7 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
         Inbound::artifact(delivered, resolved),
         validation(),
     )?;
-    assert_eq!(session.name_id().value(), USER);
+    assert_eq!(session.name_id().ok_or("missing NameID")?.value(), USER);
     Ok(())
 }
 
@@ -1291,7 +1291,7 @@ fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
         Inbound::artifact(delivered, resolved),
         validation(),
     )?;
-    assert_eq!(session.name_id().value(), USER);
+    assert_eq!(session.name_id().ok_or("missing NameID")?.value(), USER);
     Ok(())
 }
 

@@ -15,7 +15,8 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 /// the record is unexpired, it applies to assertions from the same issuer
 /// whose full `NameID` matches, including its qualifiers. An omitted `Format`
 /// is equivalent to `unspecified`. An empty session list applies to every
-/// session with that issuer and `NameID`.
+/// session with that issuer and `NameID`. An assertion without a `NameID` does
+/// not match.
 ///
 /// [`ServiceProvider::finish_sso_with_outstanding_logout`]: crate::ServiceProvider::finish_sso_with_outstanding_logout
 /// [`ServiceProvider::accept_unsolicited_sso_with_outstanding_logout`]: crate::ServiceProvider::accept_unsolicited_sso_with_outstanding_logout
@@ -124,7 +125,9 @@ impl OutstandingLogout {
         validation: &SamlValidationContext<'_>,
     ) -> Result<bool, SamlError> {
         if self.issuer() != session.issuer()
-            || !self.name_id().strongly_matches(session.name_id())
+            || !session
+                .name_id()
+                .is_some_and(|name_id| self.name_id().strongly_matches(name_id))
             || !self.same_session(session)
         {
             return Ok(false);

@@ -33,5 +33,6 @@ additions.
 - [Select assertion consumer services within one SP role](unreleased-acs-index-per-role.md)
 - [Handle logout endpoint choice, status messages, and asynchronous markers](unreleased-slo-endpoint-status-async.md)
 - [Encrypt for a usable key and write its certificate](unreleased-outbound-encryption-keys.md)
+- [Handle SSO sessions without a NameID](unreleased-sso-without-name-id.md)
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

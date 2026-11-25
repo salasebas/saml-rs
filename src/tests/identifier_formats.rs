@@ -314,7 +314,7 @@ fn unsolicited_response_carries_attribute_name_formats_and_a_generated_identifie
         post_validation(&mut Default::default()),
     )?;
 
-    assert_eq!(session.name_id(), &name_id);
+    assert_eq!(session.name_id(), Some(&name_id));
     assert_eq!(session.attributes().as_slice(), [mail]);
     Ok(())
 }
@@ -702,7 +702,7 @@ fn generated_transient_and_persistent_identifiers_follow_the_producer_rules(
                 name_id.value()
             )
         );
-        assert_eq!(exchange.session.name_id(), &name_id);
+        assert_eq!(exchange.session.name_id(), Some(&name_id));
     }
     Ok(())
 }
@@ -721,9 +721,12 @@ fn stored_persistent_identifier_is_reissued_unchanged() -> Result<(), Box<dyn st
     )?;
 
     for exchange in [first, second] {
-        assert_eq!(exchange.session.name_id().value(), stored);
         assert_eq!(
-            exchange.session.name_id().format(),
+            exchange.session.name_id().ok_or("missing NameID")?.value(),
+            stored
+        );
+        assert_eq!(
+            exchange.session.name_id().ok_or("missing NameID")?.format(),
             Some(&NameIdFormat::Persistent)
         );
     }
@@ -749,7 +752,7 @@ fn identity_provider_writes_the_qualifiers_and_alternative_identifier_of_the_iss
             name_id.value()
         )
     );
-    assert_eq!(exchange.session.name_id(), &name_id);
+    assert_eq!(exchange.session.name_id(), Some(&name_id));
     Ok(())
 }
 
@@ -777,7 +780,7 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
     for format in [NameIdFormat::Persistent, NameIdFormat::Transient] {
         let longest = NameId::new("é".repeat(256)).with_format(format.clone());
         let exchange = exchange(SsoAssertion::new(longest.clone()), RespondSso::post())?;
-        assert_eq!(exchange.session.name_id(), &longest);
+        assert_eq!(exchange.session.name_id(), Some(&longest));
 
         let too_long = NameId::new("é".repeat(257)).with_format(format);
         expect_name_id_length_error(respond(SsoAssertion::new(too_long), RespondSso::post()))?;
@@ -811,7 +814,7 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
     let email = NameId::new(format!("{}@example.com", "x".repeat(300)))
         .with_format(NameIdFormat::EmailAddress);
     let exchange = exchange(SsoAssertion::new(email.clone()), RespondSso::post())?;
-    assert_eq!(exchange.session.name_id(), &email);
+    assert_eq!(exchange.session.name_id(), Some(&email));
     Ok(())
 }
 
@@ -876,7 +879,7 @@ fn service_provider_accepts_persistent_and_transient_identifiers_that_miss_the_p
     for format in [NameIdFormat::Persistent, NameIdFormat::Transient] {
         let name_id = NameId::new(value.clone()).with_format(format);
         let session = accept_peer_response(&name_id, "")?;
-        assert_eq!(session.name_id(), &name_id);
+        assert_eq!(session.name_id(), Some(&name_id));
     }
     Ok(())
 }
@@ -896,7 +899,7 @@ fn service_provider_reads_a_name_id_format_by_its_schema_value(
         let session = accept_peer_response(&sent, "")?;
         assert_eq!(
             session.name_id(),
-            &NameId::new("subject-1").with_format(read)
+            Some(&NameId::new("subject-1").with_format(read))
         );
     }
     Ok(())
@@ -1000,7 +1003,7 @@ fn existing_name_id_format_uris_resolve_as_before() -> Result<(), Box<dyn std::e
             name_id_element(&exchange.xml)?.contains(&format!("Format=\"{uri}\"")),
             "{uri}"
         );
-        assert_eq!(exchange.session.name_id(), &name_id);
+        assert_eq!(exchange.session.name_id(), Some(&name_id));
     }
     Ok(())
 }
@@ -1051,7 +1054,7 @@ fn identity_provider_writes_xml_markup_in_a_name_id_format_as_character_data(
     assert!(
         name_id_element(&exchange.xml)?.contains("Format=\"urn:example:a&lt;b&quot;c&gt;&amp;d\"")
     );
-    assert_eq!(exchange.session.name_id(), &name_id);
+    assert_eq!(exchange.session.name_id(), Some(&name_id));
     Ok(())
 }
 
@@ -1172,7 +1175,7 @@ fn service_provider_accepts_a_name_id_format_that_is_not_an_absolute_uri(
     for format in ["local-format", "urn:%zz"] {
         let name_id = NameId::new("subject-1").with_format(NameIdFormat::Custom(format.into()));
         let session = accept_peer_response(&name_id, "")?;
-        assert_eq!(session.name_id(), &name_id);
+        assert_eq!(session.name_id(), Some(&name_id));
     }
     Ok(())
 }

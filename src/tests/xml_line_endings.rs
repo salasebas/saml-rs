@@ -173,7 +173,11 @@ fn signed_text_line_endings_reach_the_model_as_line_feeds() -> TestResult {
     for line_ending in ["\n", "\r\n", "\r"] {
         let session = exchange.respelled(line_ending)?;
 
-        assert_eq!(session.name_id().value(), NAME_ID, "{line_ending:?}");
+        assert_eq!(
+            session.name_id().ok_or("missing NameID")?.value(),
+            NAME_ID,
+            "{line_ending:?}"
+        );
         assert_eq!(role_values(&session)?, [ROLE], "{line_ending:?}");
     }
     Ok(())
@@ -202,7 +206,7 @@ fn signed_carriage_return_reference_reaches_the_model_as_a_carriage_return() -> 
         let session = exchange.resigned(line_ending)?;
 
         assert_eq!(
-            session.name_id().value(),
+            session.name_id().ok_or("missing NameID")?.value(),
             NAME_ID.replace('\n', value),
             "{line_ending:?}"
         );

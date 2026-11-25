@@ -237,7 +237,7 @@ fn encrypted_id_carries_the_name_id_to_the_service_provider(
     assert!(exchange.xml.contains("<saml:Attribute Name=\"mail\""));
 
     let session = exchange.session?;
-    assert_eq!(session.name_id(), &alice());
+    assert_eq!(session.name_id(), Some(&alice()));
     assert_eq!(session.attributes(), &attributes());
     Ok(())
 }
@@ -321,7 +321,7 @@ fn requested_encrypted_name_id_is_encrypted_in_the_assertion_subject(
         Inbound::post(response.post_form()?.fields().to_vec()),
         post_validation(&mut Default::default()),
     )?;
-    assert_eq!(session.name_id(), &alice());
+    assert_eq!(session.name_id(), Some(&alice()));
     Ok(())
 }
 
@@ -344,7 +344,7 @@ fn encrypted_attribute_carries_each_attribute_to_the_service_provider(
     assert!(exchange.xml.contains("<saml:NameID"));
 
     let session = exchange.session?;
-    assert_eq!(session.name_id(), &alice());
+    assert_eq!(session.name_id(), Some(&alice()));
     assert_eq!(session.attributes(), &attributes());
     Ok(())
 }
@@ -526,7 +526,7 @@ fn service_provider_decrypts_elements_made_for_either_published_certificate(
                     || !exchange.xml.contains("alice@example.com")
             );
             let session = exchange.session?;
-            assert_eq!(session.name_id(), &alice());
+            assert_eq!(session.name_id(), Some(&alice()));
             assert_eq!(session.attributes(), &attributes());
         }
     }
@@ -588,7 +588,7 @@ fn identifier_and_attribute_encryption_do_not_select_assertion_encryption(
     assert!(exchange.xml.contains("<saml:EncryptedID>"));
     assert_eq!(exchange.xml.matches("<saml:EncryptedAttribute>").count(), 2);
     let session = exchange.session?;
-    assert_eq!(session.name_id(), &alice());
+    assert_eq!(session.name_id(), Some(&alice()));
     assert_eq!(session.attributes(), &attributes());
     Ok(())
 }
@@ -604,7 +604,7 @@ fn encrypted_elements_round_trip_inside_an_encrypted_assertion(
 
     assert!(exchange.xml.contains("EncryptedAssertion"));
     let session = exchange.session?;
-    assert_eq!(session.name_id(), &alice());
+    assert_eq!(session.name_id(), Some(&alice()));
     assert_eq!(session.attributes(), &attributes());
     Ok(())
 }
@@ -617,7 +617,7 @@ fn service_provider_decrypts_encrypted_elements_it_does_not_select(
     assert!(exchange.xml.contains("<saml:EncryptedID>"));
     assert_eq!(exchange.xml.matches("<saml:EncryptedAttribute>").count(), 2);
     let session = exchange.session?;
-    assert_eq!(session.name_id(), &alice());
+    assert_eq!(session.name_id(), Some(&alice()));
     assert_eq!(session.attributes(), &attributes());
     Ok(())
 }
@@ -636,7 +636,7 @@ fn service_provider_decrypts_an_encrypted_assertion_it_does_not_select(
     assert!(exchange.xml.contains("EncryptedAssertion"));
     assert!(!exchange.xml.contains("alice-persistent-id"));
     let session = exchange.session?;
-    assert_eq!(session.name_id(), &alice());
+    assert_eq!(session.name_id(), Some(&alice()));
     assert_eq!(session.attributes(), &attributes());
     Ok(())
 }
@@ -687,7 +687,7 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
             Inbound::simple_sign(response.post_form()?.fields().to_vec()),
             validation(),
         )?;
-        assert_eq!(session.name_id(), &alice(), "{sp_encryption:?}");
+        assert_eq!(session.name_id(), Some(&alice()), "{sp_encryption:?}");
         assert_eq!(session.attributes(), &attributes(), "{sp_encryption:?}");
     }
     Ok(())
@@ -905,7 +905,7 @@ fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
             Inbound::post(fields),
             post_validation(&mut Default::default()),
         )?;
-        assert_eq!(session.name_id(), &alice());
+        assert_eq!(session.name_id(), Some(&alice()));
         assert_eq!(session.attributes(), &attributes());
     }
     Ok(())

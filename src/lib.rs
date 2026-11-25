@@ -78,7 +78,7 @@
 //!     Inbound::post(form_fields),
 //!     validation,
 //! )?;
-//! let name_id = session.name_id().value();
+//! let name_id = session.name_id().map(saml_rs::NameId::value);
 //! # let _ = name_id;
 //! # Ok(()) }
 //! ```

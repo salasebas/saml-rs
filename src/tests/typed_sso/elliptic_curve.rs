@@ -84,7 +84,7 @@ fn elliptic_curve_signatures_round_trip_in_browser_sso() -> Result<(), Box<dyn s
                 input,
                 validation_with_cache(&mut replay),
             )?;
-            assert_eq!(session.name_id(), &principal());
+            assert_eq!(session.name_id(), Some(&principal()));
             let verified: Vec<_> = session
                 .verified_xml_signatures()
                 .iter()

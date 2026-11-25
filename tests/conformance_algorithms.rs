@@ -222,7 +222,10 @@ fn signed_redirect_request_then_post_response(
         Inbound::post(fields),
         post_validation(&mut Default::default()),
     )?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(Exchange {
         redirect_sig_alg,
         response_xml,

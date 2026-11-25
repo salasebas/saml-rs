@@ -1209,7 +1209,10 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
         session.assertion_issue_instant()
     );
     assert!(session.response_issue_instant().as_str().ends_with('Z'));
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     assert_eq!(
         exchange.received.message().id(),
         exchange.pending.request_id()
@@ -1367,7 +1370,10 @@ fn typed_sign_response_satisfies_required_response_signature(
         post_validation(&mut Default::default()),
     )?;
 
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
@@ -1429,7 +1435,10 @@ fn typed_sp_decrypts_an_assertion_whose_key_is_beside_encrypted_data(
         Inbound::post(response_fields_with_xml(fields, &peer)?),
         post_validation(&mut Default::default()),
     )?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
@@ -1496,7 +1505,10 @@ fn typed_facade_runs_simplesign_sso_response_binding() -> Result<(), Box<dyn std
         session.response_issue_instant(),
         session.assertion_issue_instant()
     );
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     assert_eq!(session.binding_signature_algorithm_uri(), Some(RSA_SHA256));
     let [signature] = session.verified_xml_signatures() else {
         return Err("expected one verified embedded XML signature".into());
@@ -2560,7 +2572,10 @@ fn typed_facade_accepts_unsolicited_sso_explicitly() -> Result<(), Box<dyn std::
         session.response_issue_instant(),
         session.assertion_issue_instant()
     );
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
@@ -2962,7 +2977,10 @@ fn recommended_sso_accept_accepts_response_signature_without_assertion_signature
         post_validation(&mut Default::default()),
     )?;
     assert_response_root_signature(&session)?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
 
     let unsolicited = exchange.idp.initiate_sso(
         &exchange.sp_descriptor,
@@ -3296,7 +3314,10 @@ fn recommended_sso_accept_does_not_require_an_audience_restriction(
         Inbound::post(fields.clone()),
         post_validation(&mut Default::default()),
     )?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     assert!(session.audience_restrictions().is_empty());
 
     let validate_omission = ServiceProvider::new(sp_with_validation(SpValidationPolicy {
