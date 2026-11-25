@@ -159,11 +159,13 @@ pub trait ReplayCache {
 /// Replay behavior for typed inbound flows.
 ///
 /// With [`Self::RequireCache`], a receive operation stores the `ID` of an
-/// authenticated request after every check that can refuse it and before it
-/// decrypts an identifier, and the `ID` of a `Success` response. An accepted
-/// SSO response also stores its assertion IDs. An unauthenticated request, a request refused before
-/// decryption, a response with another status, and a message that fails a
-/// check are not stored, so repeating one gives the same result again. An
+/// authenticated request after every check that refuses it before storage, and
+/// the `ID` of a `Success` response. An accepted SSO response also stores its
+/// assertion IDs. A message refused or failed before storage is not stored, so
+/// repeating it gives the same result again. A `LogoutRequest` or
+/// `ManageNameIDRequest` is stored before its identifier is decrypted, and an
+/// SSO response that matches an [`crate::OutstandingLogout`] is stored before
+/// it is refused, so their repeats return [`SamlError::ReplayDetected`]. An
 /// artifact is stored when its resolution starts, whatever the outcome. A
 /// repeated stored key returns [`SamlError::ReplayDetected`].
 ///
@@ -325,9 +327,11 @@ impl<'a> SamlValidationContext<'a> {
     /// These messages are an `AuthnRequest`, a `LogoutRequest` without
     /// `NotOnOrAfter`, a `LogoutResponse`, a `ManageNameIDRequest`, a
     /// `ManageNameIDResponse`, and an artifact. The library has no acceptance
-    /// deadline for them, so choose a retention at least as long as you would
-    /// accept the message, such as the request age you set with
-    /// [`Self::with_authn_request_age`] plus the clock skew.
+    /// deadline for them, so keep each key for as long as you would
+    /// accept the message. With [`Self::with_authn_request_age`], choose a
+    /// retention longer than the maximum age plus the clock skew in both
+    /// directions, because the window includes both ends and an entry expires
+    /// at its deadline.
     ///
     /// Set a positive duration that can be added to the validation instant
     /// ([`Self::now`]). When a receive operation uses this duration for the
