@@ -18,6 +18,7 @@
 | Include at least one `SessionIndex` | Mandatory | Profiles §4.4.4.1, E38 | Always |
 | Sign the request on HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign. CD-04 §2.4 makes the SimpleSign signature optional, but the profile requires the requester to authenticate by signing, so for logout it is mandatory | Mandatory | Profiles §4.4.3.1, §4.4.4.1, CD-04 §2.4 | Always |
 | Send the user agent to an `https` `SingleLogoutService`. A recipient does not reject an `http` `Destination` | Recommended | Profiles §4.4.3.1 | `StartSlo::allow_http` |
+| On a browser binding, send to the first peer `SingleLogoutService` for the binding with an `https` `Location`, or the first one under `allow_http` | Library policy: an earlier `http` entry would otherwise hide an advertised `https` one. | Metadata §2.2.2, Profiles §4.4.3.1 | `StartSlo::allow_http` |
 | Omit `NotOnOrAfter` in session participant requests | Optional | Core §3.7.1, §3.7.3.2 | Always |
 
 ### Asynchronous Single Logout
@@ -43,6 +44,10 @@ session lookup, session termination, and propagation to other participants.
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Recognize an empty `aslo:Asynchronous` element only as a direct child of `samlp:LogoutRequest/samlp:Extensions` in the authenticated request | Mandatory | Async SLO §2.1, `AsynchronousType`, `RequestAbstractType` | `receive_slo_with_async` |
+| Accept `xsi:schemaLocation` and `xsi:noNamespaceSchemaLocation` on the marker | Mandatory | Async SLO §2.1, `AsynchronousType`, XML Schema Part 1 §3.4.4 | `receive_slo_with_async` |
+| Accept an `xsi:type` of `AsynchronousType` written with the marker's own prefix, or unprefixed on an unprefixed marker | Mandatory | Async SLO §2.1, `AsynchronousType`, XML Schema Part 1 §3.3.4 | `receive_slo_with_async` |
+| Treat a marker whose `xsi:type` uses another prefix or names another type as absent, and keep the request on the response path | Library policy: the marker's name already relies on its own prefix, so the type resolves with the element, and the library knows no type derived from `AsynchronousType`. | XML Schema Part 1 §3.3.4 | Always |
+| Treat a marker with any other attribute, `xsi:nil` included, as absent, and keep the request on the response path | Library policy: `AsynchronousType` declares no attributes and the element is not nillable, so that element is not the empty marker §2.1 defines. | Async SLO §2.1, XML Schema Part 1 §3.3.4 | Always |
 | Finish at the IdP without a `LogoutResponse` to the initiator. The application presents the outcome on success or failure | Mandatory | Async SLO §2.2, Core §3.7.3.2 | `IdpLogoutAction::CompleteLocally` |
 
 ## LogoutRequest from a session authority
@@ -77,7 +82,8 @@ on both roles exposes the received attribute through `LogoutRequest::reason`.
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Read the peer `SingleLogoutService` from the role descriptor of the peer role, never from the other role of an entity that plays both | Optional | Metadata §2.4.2, Profiles §4.4.3.1, §4.4.5 | Always |
-| Send the response to `ResponseLocation` when present, otherwise `Location`, after `anyURI` whitespace collapse. The first matching endpoint supplies the URL, and a request uses `Location` | Recommended | Metadata §2.2.2, E41 | Always |
+| Send the response to `ResponseLocation` when present, otherwise `Location`, after `anyURI` whitespace collapse. A request uses `Location` | Recommended | Metadata §2.2.2, E41 | Always |
+| A session authority's browser messages and SOAP requests from either role use the first endpoint for the binding. A session participant's browser messages use the endpoint the participant rows describe | Library policy: metadata order is the only preference the peer publishes for endpoints of one binding, and OpenSAML 5.2.3 and crewjam/saml v0.4.14 also take the first. | Metadata §2.2.2 | Always |
 
 ## LogoutResponse
 
@@ -91,12 +97,14 @@ on both roles exposes the received attribute through `LogoutRequest::reason`.
 | Write `ID`, `Version` `2.0`, a UTC `IssueInstant` without a leap second, and `InResponseTo` equal to the request `ID` | Mandatory | `StatusResponseType`, Core §3.2.2, §1.3.3 | Always |
 | Sign the response on HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign. CD-04 §2.4 makes the SimpleSign signature optional, but the profile requires the responder to authenticate by signing, so for logout it is mandatory | Mandatory | Profiles §4.4.3.4, §4.4.4.2, CD-04 §2.4 | Always |
 | A session participant sends the response to an `https` `SingleLogoutService`. A session authority's response has no such check | Recommended | Profiles §4.4.3.4 | `RespondSlo::allow_http` |
+| A session participant on a browser binding answers at the first peer endpoint for the binding whose response URL is `https`, or the first one under `allow_http` | Library policy: an earlier `http` entry would otherwise hide an advertised `https` one. | Metadata §2.2.2, Profiles §4.4.3.4 | `RespondSlo::allow_http` |
 | Return the exact `RelayState` of the request, including a value over 80 bytes up to the receive limit, with no setter to replace or drop it | Mandatory | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
 | Return a SOAP reply on the request's exchange. Return a reply to a browser request through the user agent | Mandatory | Profiles §4.4.3.4, §4.4.3.5 | `respond_slo`, `respond_slo_refusal` |
 | Choose any supported browser response binding that the peer publishes | Optional | Profiles §4.4.3.4, §4.4.3.5 | `RespondSlo` |
 | Reject a `LogoutRequest` whose issuer is not the peer descriptor entity | Library policy: a response must not go to another party's `SingleLogoutService`. | — | Always |
 | Write a top-level `StatusCode` of `Success`, `Requester`, `Responder`, or `VersionMismatch`, with an optional subordinate code | Mandatory | Core §3.2.2.2 | `status` argument |
 | Write caller-supplied plain text as `StatusMessage` after `StatusCode` before signing. Omit the element by default | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType` | `RespondSlo::status_message` |
+| Write a `StatusMessage` only with a character other than XML whitespace. An empty string omits the element, and other text with only XML whitespace is refused | Mandatory | Core §1.3.1, §3.2.2.3 | Always |
 | Write a subordinate `StatusCode` `Value` that is an absolute URI reference | Mandatory | Core §1.3.2 | `SubordinateStatusCode::try_new` |
 | Reject whitespace, `"`, `<`, and `>` in a caller-supplied subordinate code, and whitespace in the outbound response `Issuer` | Library policy: reason not recorded. | Core §1.3.2 | Always |
 | Return the application's local logout status and any required `PartialLogout` in the reply to the initiator | Mandatory for the session authority. See [application duties](#session-authority-application-duties) | Core §3.7.3.2 | `IdentityProvider::respond_slo` `status` |

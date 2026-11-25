@@ -21,12 +21,16 @@ use std::time::SystemTime;
 
 use super::options::PeerEndpointTransport;
 use super::peer::{
-    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, Peer,
+    ensure_entity_id, ensure_relay_state, peer_endpoint_for_transport, relay_state_from_input, Peer,
 };
 use super::{IdentityProvider, RespondSlo, SamlError, ServiceProvider, StartSlo};
 
 impl ServiceProvider {
     /// Start SP-initiated Single Logout.
+    ///
+    /// A browser request goes to the identity provider's first
+    /// `SingleLogoutService` for the binding with an `https` `Location`. With
+    /// [`StartSlo::allow_http`], it goes to the first one.
     ///
     /// # Errors
     ///
@@ -36,8 +40,11 @@ impl ServiceProvider {
     /// absolute URI reference, or logout request creation fails.
     /// Returns [`SamlError::Invalid`] when [`StartSlo::reason`] holds a
     /// timeout reason reserved for the session authority.
-    /// The participant must supply a `SessionIndex`. A browser endpoint must
-    /// use HTTPS unless [`StartSlo::allow_http`] is selected.
+    /// The participant must supply a `SessionIndex`. When no browser endpoint
+    /// for the binding is `https` and [`StartSlo::allow_http`] is not
+    /// selected, the first endpoint decides the error:
+    /// [`SamlError::ProtocolProfile`] for a URL that is not `https`,
+    /// [`SamlError::Invalid`] for a value that is not a URL.
     /// [`StartSlo::identifier_encryption`] returns
     /// [`SamlError::MissingMetadata`] when the peer metadata has no encryption
     /// certificate.
@@ -183,6 +190,11 @@ impl ServiceProvider {
     /// such as [`Status::responder`].
     /// Use [`RespondSlo::status_message`] to include a diagnostic.
     ///
+    /// A browser response goes to the first of the identity provider's
+    /// `SingleLogoutService` endpoints for the binding whose
+    /// `ResponseLocation`, or `Location` when it has none, is `https`. With
+    /// [`RespondSlo::allow_http`], it goes to the first one.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the `LogoutRequest` issuer does not match the
@@ -191,10 +203,11 @@ impl ServiceProvider {
     /// binding is unsupported, or logout response creation fails.
     /// Returns [`SamlError::UnsupportedBinding`] when the selected response
     /// binding crosses between SOAP and browser delivery.
-    /// Browser bindings also reject an
-    /// `http` peer endpoint unless
-    /// [`RespondSlo::allow_http`] is
-    /// selected.
+    /// Returns [`SamlError::Invalid`] when the status message has only XML
+    /// whitespace. When no browser endpoint for the binding is `https` and
+    /// [`RespondSlo::allow_http`] is not selected, the first endpoint decides
+    /// the error: [`SamlError::ProtocolProfile`] for a URL that is not
+    /// `https`, [`SamlError::Invalid`] for a value that is not a URL.
     pub fn respond_slo(
         &self,
         idp: &IdpDescriptor,
@@ -516,6 +529,8 @@ impl IdentityProvider {
     /// binding is unsupported, or logout response creation fails.
     /// Returns [`SamlError::UnsupportedBinding`] when the selected response
     /// binding crosses between SOAP and browser delivery.
+    /// Returns [`SamlError::Invalid`] when the status message has only XML
+    /// whitespace.
     ///
     /// # Examples
     ///
@@ -692,14 +707,16 @@ fn issue_logout_request(
     if let Some(relay_state) = &options.relay_state {
         relay_state.ensure_sendable()?;
     }
-    if matches!(role, StartSloRole::SessionParticipant { .. }) {
-        enforce_participant_https(
-            peer.metadata,
-            options.binding,
-            options.transport(),
-            EndpointDirection::Request,
-        )?;
-    }
+    let transport = match role {
+        StartSloRole::SessionParticipant { .. } => options.transport(),
+        StartSloRole::SessionAuthority { .. } => PeerEndpointTransport::AllowHttp,
+    };
+    let destination = peer_logout_endpoint(
+        peer.metadata,
+        options.binding,
+        EndpointDirection::Request,
+        transport,
+    )?;
     let (issue_instant, not_on_or_after, request_validation) = match role {
         StartSloRole::SessionParticipant { .. } => (
             now_iso8601(),
@@ -737,6 +754,7 @@ fn issue_logout_request(
         init_meta: local_metadata,
         target_meta: peer.metadata,
         binding: Binding::from(options.binding),
+        destination: &destination,
         subject: &request_subject,
         relay_state: options.relay_state.as_ref().map(RelayState::as_str),
         name_id_format,
@@ -798,7 +816,10 @@ fn receive_slo_impl(
     );
     let parse_document = || parse_saml_with_limits(&flow.saml_content, local_setting.xml_limits);
     let async_document = recognizes_async.then(parse_document).transpose()?;
-    let asynchronous = async_document.as_ref().is_some_and(has_async_slo_marker);
+    let asynchronous = match &async_document {
+        Some(document) => has_async_slo_marker(&flow.saml_content, document)?,
+        None => false,
+    };
     if let Some(refusal) =
         RefusedLogoutRequest::for_version(&flow, peer.entity_id, relay_state.as_ref(), binding)?
     {
@@ -873,20 +894,27 @@ fn respond_slo_impl(
     };
     let binding = logout_response_binding(options.binding.into(), request_binding)?;
     ensure_entity_id(issuer, peer.entity_id)?;
-    if matches!(transport, LogoutResponseTransport::SessionParticipant) {
-        enforce_participant_https(
-            peer.metadata,
-            binding,
-            options.transport(),
-            EndpointDirection::Response,
-        )?;
-    }
+    let transport = match transport {
+        LogoutResponseTransport::SessionParticipant => options.transport(),
+        LogoutResponseTransport::SessionAuthority => PeerEndpointTransport::AllowHttp,
+    };
+    let destination = match binding {
+        LogoutBinding::Soap => None,
+        LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign => {
+            Some(peer_logout_endpoint(
+                peer.metadata,
+                binding,
+                EndpointDirection::Response,
+                transport,
+            )?)
+        }
+    };
     let status_message = options.status_message;
     let context = create_logout_response_inner(&LogoutResponseInput {
         init_setting: local_setting,
         init_meta: local_metadata,
-        target_meta: peer.metadata,
         binding: binding.into(),
+        destination: destination.as_deref(),
         in_response_to: Some(in_response_to.as_str()),
         relay_state: relay_state.map(RelayState::as_str),
         status,
@@ -955,34 +983,22 @@ enum LogoutResponseTransport {
     SessionAuthority,
 }
 
-fn enforce_participant_https(
-    peer_metadata: &Metadata,
-    binding: LogoutBinding,
-    transport: PeerEndpointTransport,
-    direction: EndpointDirection,
-) -> Result<(), SamlError> {
-    match binding {
-        LogoutBinding::Soap => return Ok(()),
-        LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign => {}
-    }
-    match transport {
-        PeerEndpointTransport::AllowHttp => Ok(()),
-        PeerEndpointTransport::RequireHttps => {
-            let destination =
-                peer_logout_endpoint(peer_metadata, Binding::from(binding), direction)?;
-            ensure_https_endpoint(&destination, "Single Logout", "SingleLogoutService")
-        }
-    }
-}
-
 fn peer_logout_endpoint(
     peer_metadata: &Metadata,
-    binding: Binding,
+    binding: LogoutBinding,
     direction: EndpointDirection,
+    transport: PeerEndpointTransport,
 ) -> Result<String, SamlError> {
-    peer_metadata
-        .single_logout_service_location(binding, direction)
-        .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))
+    let transport = match binding {
+        LogoutBinding::Soap => PeerEndpointTransport::AllowHttp,
+        LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign => transport,
+    };
+    peer_endpoint_for_transport(
+        peer_metadata.single_logout_service_locations(Binding::from(binding), direction),
+        transport,
+        "Single Logout",
+        "SingleLogoutService",
+    )
 }
 
 fn logout_response_binding(

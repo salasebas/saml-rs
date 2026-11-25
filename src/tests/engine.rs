@@ -282,11 +282,19 @@ pub(crate) fn create_logout_response(
     want_signed: bool,
 ) -> Result<BindingContext, SamlError> {
     let status = Status::success();
+    let destination = match binding {
+        Binding::Soap | Binding::Artifact => None,
+        Binding::Redirect | Binding::Post | Binding::SimpleSign => Some(
+            target_meta
+                .single_logout_response_location(binding)
+                .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))?,
+        ),
+    };
     let input = LogoutResponseInput {
         init_setting,
         init_meta,
-        target_meta,
         binding,
+        destination: destination.as_deref(),
         in_response_to,
         relay_state,
         status: &status,

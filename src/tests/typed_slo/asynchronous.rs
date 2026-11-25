@@ -150,6 +150,72 @@ fn an_inexact_or_misplaced_marker_keeps_the_response_path() -> Result<(), Box<dy
 }
 
 #[test]
+fn a_marker_with_schema_instance_hints_selects_local_completion(
+) -> Result<(), Box<dyn std::error::Error>> {
+    const XSI: &str = "http://www.w3.org/2001/XMLSchema-instance";
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let binding = LogoutBinding::Post;
+    let xml = logout_request_xml("_hinted", SP_ENTITY_ID, Some(IDP_SLO_POST));
+    let prefixed = |attributes: &str| {
+        format!(
+            r#"<aslo:Asynchronous xmlns:aslo="{ASYNC_NAMESPACE}" xmlns:xsi="{XSI}" {attributes}/>"#
+        )
+    };
+    let unprefixed = |attributes: &str| {
+        format!(r#"<Asynchronous xmlns="{ASYNC_NAMESPACE}" xmlns:xsi="{XSI}" {attributes}/>"#)
+    };
+    let receive = |marker: &str| -> Result<_, Box<dyn std::error::Error>> {
+        let extensions = format!(
+            r#"<samlp:Extensions xmlns:inherited="{ASYNC_NAMESPACE}">{marker}</samlp:Extensions>"#
+        );
+        let xml = xml.replacen("<saml:NameID>", &format!("{extensions}<saml:NameID>"), 1);
+        Ok(idp.receive_slo_with_async(
+            &sp_descriptor,
+            signed_logout_request_input(&xml, binding)?,
+            validation(),
+        )?)
+    };
+    for marker in [
+        prefixed(
+            r#"xsi:schemaLocation="urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo saml-async-slo-v1.0.xsd""#,
+        ),
+        prefixed(r#"xsi:noNamespaceSchemaLocation="extension.xsd""#),
+        prefixed(r#"xsi:type="aslo:AsynchronousType""#),
+        prefixed(r#"xsi:type=" aslo:AsynchronousType ""#),
+        unprefixed(r#"xsi:type="AsynchronousType""#),
+        format!(
+            r#"<flag:Asynchronous xmlns:flag="{ASYNC_NAMESPACE}" xmlns:xsi="{XSI}" xsi:type="flag:AsynchronousType"/>"#
+        ),
+    ] {
+        assert!(
+            matches!(receive(&marker)?, IdpLogoutAction::CompleteLocally(_)),
+            "{marker}"
+        );
+    }
+    for marker in [
+        prefixed(r#"xsi:type="aslo:OtherType""#),
+        prefixed(r#"xmlns:xs="http://www.w3.org/2001/XMLSchema" xsi:type="xs:string""#),
+        prefixed(r#"xsi:type="AsynchronousType""#),
+        prefixed(r#"xsi:type="inherited:AsynchronousType""#),
+        prefixed(&format!(
+            r#"xmlns:own="{ASYNC_NAMESPACE}" xsi:type="own:AsynchronousType""#
+        )),
+        unprefixed(r#"xsi:type="aslo:AsynchronousType""#),
+        prefixed(r#"xsi:nil="false""#),
+        prefixed(r#"xsi:other="value""#),
+        prefixed(r#"xsi:noNamespaceSchemaLocation="extension.xsd" value="true""#),
+        prefixed(r#"xmlns:other="urn:example:unrelated" other:schemaLocation="extension.xsd""#),
+    ] {
+        assert!(
+            matches!(receive(&marker)?, IdpLogoutAction::Respond(_)),
+            "{marker}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn async_slo_requires_authentication_and_refuses_newer_versions_locally(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;

@@ -6,6 +6,7 @@ use crate::error::SamlError;
 use crate::metadata::Metadata;
 use crate::model::{validate_name_id_format, Status};
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
+use crate::xml::dom::is_xml_whitespace_char;
 use crate::xml::{
     validate_logout_request_outbound, validate_logout_response_outbound, OutboundLogoutExpiration,
     OutboundLogoutRequestExpectation, OutboundLogoutRequestValidation, OutboundLogoutValidation,
@@ -38,6 +39,7 @@ pub(crate) struct LogoutRequestInput<'a> {
     pub(crate) init_meta: &'a Metadata,
     pub(crate) target_meta: &'a Metadata,
     pub(crate) binding: Binding,
+    pub(crate) destination: &'a str,
     pub(crate) subject: &'a LogoutRequestSubject<'a>,
     pub(crate) relay_state: Option<&'a str>,
     pub(crate) name_id_format: Option<&'a str>,
@@ -57,6 +59,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
         init_meta,
         target_meta,
         binding,
+        destination,
         subject,
         relay_state,
         name_id_format,
@@ -91,9 +94,6 @@ pub(crate) fn create_logout_request_for_subject_inner(
             "a session participant LogoutRequest must include at least one SessionIndex".into(),
         ));
     }
-    let destination = target_meta
-        .single_logout_location(binding)
-        .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))?;
     let id = generate_id();
     let issuer = issuer_of(init_setting, init_meta);
     let xml = render_logout_request(
@@ -101,7 +101,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
         &issuer,
         &LogoutRequestAttributes {
             id: &id,
-            destination: &destination,
+            destination,
             issue_instant,
             not_on_or_after,
             reason,
@@ -124,7 +124,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
     let expectation = OutboundLogoutRequestExpectation {
         id: &id,
         issue_instant,
-        destination: &destination,
+        destination,
         issuer: &issuer,
         expiration,
         reason,
@@ -143,7 +143,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
         init_setting,
         binding,
         &xml,
-        &destination,
+        destination,
         relay_state,
         ParserType::LogoutRequest,
     )?;
@@ -155,7 +155,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
         )?;
     }
     Ok(CreatedLogoutRequest {
-        context: signed.bind(id, destination, relay_state),
+        context: signed.bind(id, destination.to_owned(), relay_state),
         not_on_or_after: not_on_or_after.map(str::to_string),
     })
 }
@@ -163,8 +163,8 @@ pub(crate) fn create_logout_request_for_subject_inner(
 pub(crate) struct LogoutResponseInput<'a> {
     pub(crate) init_setting: &'a EntitySetting,
     pub(crate) init_meta: &'a Metadata,
-    pub(crate) target_meta: &'a Metadata,
     pub(crate) binding: Binding,
+    pub(crate) destination: Option<&'a str>,
     pub(crate) in_response_to: Option<&'a str>,
     pub(crate) relay_state: Option<&'a str>,
     pub(crate) status: &'a Status,
@@ -183,25 +183,22 @@ impl LogoutResponseInput<'_> {
         let Self {
             init_setting,
             init_meta,
-            target_meta,
             binding,
+            destination,
             in_response_to,
             relay_state,
             status,
             status_message,
         } = *self;
+        if binding == Binding::Artifact {
+            return Err(SamlError::UnsupportedBinding { binding });
+        }
         reject_soap_relay_state(binding, relay_state)?;
-        // A SOAP response returns on the requester's own HTTP exchange, so it has
-        // no Destination.
-        let destination = match binding {
-            Binding::Soap => None,
-            Binding::Artifact => return Err(SamlError::UnsupportedBinding { binding }),
-            Binding::Redirect | Binding::Post | Binding::SimpleSign => Some(
-                target_meta
-                    .single_logout_response_location(binding)
-                    .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))?,
-            ),
-        };
+        if status_message.is_some_and(|message| message.chars().all(is_xml_whitespace_char)) {
+            return Err(SamlError::Invalid(
+                "logout status message must contain a non-whitespace character".into(),
+            ));
+        }
         let id = generate_id();
         let issue_instant = now_iso8601();
         let issuer = issuer_of(init_setting, init_meta);
@@ -210,7 +207,7 @@ impl LogoutResponseInput<'_> {
             &LogoutResponseAttributes {
                 id: &id,
                 issue_instant: &issue_instant,
-                destination: destination.as_deref(),
+                destination,
                 in_response_to,
             },
             &issuer,
@@ -220,7 +217,7 @@ impl LogoutResponseInput<'_> {
         validate_logout_response_outbound(
             &xml,
             &id,
-            destination.as_deref(),
+            destination,
             &issuer,
             in_response_to,
             status.top_level().as_uri(),
@@ -229,7 +226,7 @@ impl LogoutResponseInput<'_> {
         Ok(RenderedLogoutResponse {
             id,
             xml,
-            destination,
+            destination: destination.map(str::to_owned),
             issuer,
         })
     }

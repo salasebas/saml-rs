@@ -11,26 +11,90 @@ use crate::flow::{
 };
 use crate::metadata::Metadata;
 use crate::model::{ClockSkew, Status, StatusMessage};
+use crate::xml::dom::{is_xml_whitespace_char, reader_err};
 use crate::xml::fields;
 use crate::xml::protocol_element::SamlElement;
 use crate::xml::status::read_status;
+use quick_xml::events::Event;
+use quick_xml::Reader;
 use std::time::SystemTime;
 
 use super::ASYNC_SLO_NAMESPACE;
 
-pub(crate) fn has_async_slo_marker(request: &SamlElement) -> bool {
-    request.is(namespace::PROTOCOL, "LogoutRequest")
-        && request
-            .children
-            .iter()
-            .filter(|child| child.is(namespace::PROTOCOL, "Extensions"))
-            .flat_map(|extensions| &extensions.children)
-            .any(|child| {
-                child.is(ASYNC_SLO_NAMESPACE, "Asynchronous")
-                    && child.attrs.is_empty()
-                    && child.children.is_empty()
-                    && child.text.is_empty()
-            })
+const XML_SCHEMA_INSTANCE_NAMESPACE: &str = "http://www.w3.org/2001/XMLSchema-instance";
+
+pub(crate) fn has_async_slo_marker(xml: &str, request: &SamlElement) -> Result<bool, SamlError> {
+    if !request.is(namespace::PROTOCOL, "LogoutRequest") {
+        return Ok(false);
+    }
+    let candidates = request
+        .children
+        .iter()
+        .filter(|child| child.is(namespace::PROTOCOL, "Extensions"))
+        .flat_map(|extensions| &extensions.children)
+        .filter(|child| {
+            child.is(ASYNC_SLO_NAMESPACE, "Asynchronous")
+                && child.children.is_empty()
+                && child.text.is_empty()
+        });
+    for marker in candidates {
+        if marker_attributes_allowed(xml, marker)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn marker_attributes_allowed(xml: &str, marker: &SamlElement) -> Result<bool, SamlError> {
+    for (attribute_namespace, local_name, value) in &marker.attrs {
+        if attribute_namespace.as_deref() != Some(XML_SCHEMA_INSTANCE_NAMESPACE) {
+            return Ok(false);
+        }
+        let allowed = match local_name.as_str() {
+            "schemaLocation" | "noNamespaceSchemaLocation" => true,
+            "type" => names_asynchronous_type(xml, marker, value)?,
+            _ => false,
+        };
+        if !allowed {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn names_asynchronous_type(
+    xml: &str,
+    marker: &SamlElement,
+    value: &str,
+) -> Result<bool, SamlError> {
+    let value = value.trim_matches(is_xml_whitespace_char);
+    let (type_prefix, type_name) = match value.split_once(':') {
+        Some((prefix, local_name)) => (Some(prefix), local_name),
+        None => (None, value),
+    };
+    if type_name != "AsynchronousType" {
+        return Ok(false);
+    }
+    let marker_xml = xml
+        .get(marker.start..marker.end)
+        .ok_or_else(|| SamlError::xml("asynchronous marker is outside the request"))?;
+    match Reader::from_str(marker_xml)
+        .read_event()
+        .map_err(reader_err)?
+    {
+        Event::Start(element) | Event::Empty(element) => {
+            Ok(element.name().prefix().map(|prefix| prefix.into_inner()) == type_prefix)
+        }
+        Event::End(_)
+        | Event::Text(_)
+        | Event::CData(_)
+        | Event::Comment(_)
+        | Event::Decl(_)
+        | Event::PI(_)
+        | Event::DocType(_)
+        | Event::GeneralRef(_)
+        | Event::Eof => Err(SamlError::xml("asynchronous marker is not an element")),
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
