@@ -116,6 +116,7 @@ The SP and IdP build metadata with `generate_sp_metadata` and
 | Write entity-level `Organization`, then `ContactPerson`, after the role descriptors | Mandatory | Metadata §2.3.2 | `organization`, `contact`, `contacts` on `SpConfigBuilder` and `IdpConfigBuilder` |
 | Write at least one name, display name, and URL, each with an `xml:lang` that matches the XML Schema 1.0 [language pattern](https://www.w3.org/TR/xmlschema-2/#language), in an `Organization`. Require an absolute `OrganizationURL` and `errorURL` | Mandatory | Metadata §2.2.4, §2.2.5, §2.3.2.1, Core §1.3.2 | Always |
 | Write a `ContactPerson` with one of the five `contactType` values and only `mailto:` email addresses | Mandatory | Metadata §2.3.2.2 | Always |
+| Write at least one child element in each `ContactPerson`: a company, given name, surname, email address, or telephone number. Import accepts a contact with none | Recommended | Metadata §2.3.2.2, E82 | Always |
 | Publish the [REFEDS security contact](https://wiki.refeds.org/spaces/STAN/pages/44957728/Security%2BContact%2BMetadata%2BExtension%2BSchema) with `ContactType::Security` | Optional | — | `ContactType::Security` |
 | Write `errorURL` on the SSO role descriptor | Optional | Metadata §2.4.1 | `error_url` on `SpConfigBuilder` and `IdpConfigBuilder` |
 | Write each `NameIDFormat` as an absolute URI reference | Mandatory | Metadata §2.4.2, Core §1.3.2 | Always |

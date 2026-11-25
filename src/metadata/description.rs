@@ -75,7 +75,9 @@ impl ContactType {
 
 /// Contact responsible for an entity.
 ///
-/// Start from [`Self::new`] and assign the details you set.
+/// Start from [`Self::new`] and assign the details you set. Generation
+/// requires at least one detail: a company, a given name, a surname, an email
+/// address, or a telephone number.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ContactPerson {
@@ -95,6 +97,8 @@ pub struct ContactPerson {
 
 impl ContactPerson {
     /// Create a contact with no optional details.
+    ///
+    /// Assign at least one detail before generating metadata with it.
     pub fn new(contact_type: ContactType) -> Self {
         Self {
             contact_type,
@@ -135,6 +139,16 @@ pub(crate) fn validate_description(
         }
     }
     for contact in contacts {
+        if contact.company.is_none()
+            && contact.given_name.is_none()
+            && contact.surname.is_none()
+            && contact.email_addresses.is_empty()
+            && contact.telephone_numbers.is_empty()
+        {
+            return Err(SamlError::Invalid(
+                "ContactPerson requires at least one child element".into(),
+            ));
+        }
         for text in contact
             .company
             .iter()
