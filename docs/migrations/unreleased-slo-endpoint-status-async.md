@@ -21,6 +21,8 @@ request's exchange.
 You do not need to change code. If your identity provider's metadata lists an
 `http` endpoint before an `https` one, the message now goes to the `https`
 one. If you selected `allow_http` only to reach such a peer, you can remove it.
+Before you remove it from `start_async_slo`, confirm that the `https` endpoint
+also supports asynchronous logout.
 
 ## A logout status message needs visible text
 
@@ -46,4 +48,6 @@ uses another prefix or names another type.
 
 You do not need to change code. Such a request now finishes at the identity
 provider, which presents the result to the user and sends no
-`LogoutResponse`.
+`LogoutResponse`. If such a request has a newer SAML version, the call now
+returns `SamlError::ProtocolProfile`, as for any asynchronous request, instead
+of `SamlError::LogoutRequestRefused`.

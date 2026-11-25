@@ -184,6 +184,9 @@ fn a_marker_with_schema_instance_hints_selects_local_completion(
         prefixed(r#"xsi:type="aslo:AsynchronousType""#),
         prefixed(r#"xsi:type=" aslo:AsynchronousType ""#),
         unprefixed(r#"xsi:type="AsynchronousType""#),
+        format!(
+            r#"<flag:Asynchronous xmlns:flag="{ASYNC_NAMESPACE}" xmlns:xsi="{XSI}" xsi:type="flag:AsynchronousType"/>"#
+        ),
     ] {
         assert!(
             matches!(receive(&marker)?, IdpLogoutAction::CompleteLocally(_)),
@@ -201,6 +204,7 @@ fn a_marker_with_schema_instance_hints_selects_local_completion(
         unprefixed(r#"xsi:type="aslo:AsynchronousType""#),
         prefixed(r#"xsi:nil="false""#),
         prefixed(r#"xsi:other="value""#),
+        prefixed(r#"xsi:noNamespaceSchemaLocation="extension.xsd" value="true""#),
         prefixed(r#"xmlns:other="urn:example:unrelated" other:schemaLocation="extension.xsd""#),
     ] {
         assert!(
