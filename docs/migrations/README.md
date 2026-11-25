@@ -34,5 +34,6 @@ additions.
 - [Handle logout endpoint choice, status messages, and asynchronous markers](unreleased-slo-endpoint-status-async.md)
 - [Encrypt for a usable key and write its certificate](unreleased-outbound-encryption-keys.md)
 - [Handle SSO sessions without a NameID](unreleased-sso-without-name-id.md)
+- [Replace calls to `constants::digest_for_signature`](unreleased-remove-digest-for-signature.md)
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

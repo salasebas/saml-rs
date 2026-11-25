@@ -6,7 +6,7 @@ use bergshamra::{sign, DsigContext, KeysManager};
 use saml_rs::constants::attribute_name::{PAIRWISE_ID, SUBJECT_ID};
 use saml_rs::constants::digest_algorithm::SHA256;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
-use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
+use saml_rs::constants::{namespace, transform_algorithm};
 use saml_rs::crypto::keys::read_private_key;
 use saml_rs::crypto::sign_saml_xml;
 use saml_rs::error::SignatureVerificationReason;
@@ -52,13 +52,13 @@ fn sign_metadata_root(
 }
 
 fn signed_child_metadata() -> Result<String, Box<dyn std::error::Error>> {
-    let digest = digest_for_signature(RSA_SHA256).ok_or("unknown digest")?;
     let signature = format!(
         "<ds:Signature xmlns:ds=\"{dsig}\"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"{exc_c14n}\"/><ds:SignatureMethod Algorithm=\"{sig_alg}\"/><ds:Reference URI=\"#_signed_child\"><ds:Transforms><ds:Transform Algorithm=\"{enveloped}\"/><ds:Transform Algorithm=\"{exc_c14n}\"/></ds:Transforms><ds:DigestMethod Algorithm=\"{digest}\"/><ds:DigestValue></ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue></ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>{cert}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature>",
         dsig = namespace::DSIG,
         exc_c14n = transform_algorithm::EXC_C14N,
         sig_alg = RSA_SHA256,
         enveloped = transform_algorithm::ENVELOPED_SIGNATURE,
+        digest = SHA256,
         cert = normalize_cert_string(CERT),
     );
     let template = format!(
