@@ -544,12 +544,15 @@ fn simplesign_octet_from_fields(
     let message_name = expected_message.param_name();
     let encoded = validate_form_message_kind(fields, expected_message)?;
     let Some(sig_alg) = field_value(fields, url_params::SIG_ALG)? else {
-        return match field_value(fields, url_params::SIGNATURE)? {
-            Some(_) => Err(SamlError::MissingBindingParameter {
+        if fields
+            .iter()
+            .any(|field| field.name() == url_params::SIGNATURE)
+        {
+            return Err(SamlError::MissingBindingParameter {
                 name: url_params::SIG_ALG,
-            }),
-            None => Ok(None),
-        };
+            });
+        }
+        return Ok(None);
     };
     let raw_xml = crate::xml::decode_utf8(decode_base64_with_limit(encoded, limits.max_bytes)?)?;
     let relay_state = field_value(fields, url_params::RELAY_STATE)?;
