@@ -23,7 +23,7 @@ Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browse
 | Associate a message intended for a specific service provider with that service provider | Mandatory | Core §3.5.3, Profiles §4.1.4.4 | Always |
 | Associate every stored message with the service provider passed to `issue_artifact`, including one that any party may consume | Library policy: the issuer cannot tell from the element whether any party may consume it, and one presenter per artifact never releases a recipient-specific message to another. | Core §3.5.3 | Always |
 | Store only one element in the SAML protocol namespace | Library policy: `ArtifactResolution::finish` rejects any other payload, so another element could never be resolved. | Bindings §3.6 | Always |
-| Refuse an element with processing instructions before issuing an artifact, so the SOAP response that releases it has none | Mandatory | SOAP 1.1 §3 | Always |
+| Refuse an element with processing instructions before issuing an artifact | Library policy: the SOAP response that releases the element [must carry no processing instructions](#soap-envelope-rules), and refusing at issuance keeps the artifact from becoming unresolvable. | SOAP 1.1 §3 | Always |
 | Budget the complete SOAP response before storing the message | Library policy: issue only artifacts whose responses fit the crate's XML limits. | Core §3.5.3, Bindings §3.2.2.1, E19 | Default `XmlLimits` |
 
 ### SOAP response size budget
