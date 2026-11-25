@@ -32,7 +32,7 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | For a persistent identifier, write each qualifier whose established value differs from `Issuer`. `NameQualifier` identifies the originating IdP and `SPNameQualifier` identifies the SP or affiliation | Mandatory | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Also write each qualifier whose established value equals `Issuer` | Recommended | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Write `NewID` with the new value only, or an empty `Terminate` | Mandatory | E12, E55, `TerminateType` | `NameIdChange` |
-| Reject a persistent `NameID` value or `NewID` value over 256 characters | Mandatory | Core §8.3.7 | Always |
+| Reject a persistent `NameID` or `NewID` value over 256 characters, and an `entity` `NameID` or `NewID` that [identifier formats](identifiers.md#name-identifier-formats) refuses | Mandatory | Core §8.3.6, §8.3.7 | Always |
 | Authenticate the sending party and protect message integrity. The crate uses a mutually authenticated, integrity-protected `SoapChannel` | Mandatory | Profiles §4.5.3.1, §4.5.4.1 | `SoapChannel` |
 | Reject a `RelayState` | Library policy: the SOAP binding has no place to carry `RelayState`, so it is rejected rather than dropped. | Bindings §3.2, §3.4.3 | `StartNameIdManagement::relay_state` |
 | Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Recommended | Bindings §3.2.3.2 | Always |
@@ -107,8 +107,8 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | For a persistent identifier, write each qualifier whose established value differs from `Issuer`. `NameQualifier` identifies the originating IdP and `SPNameQualifier` identifies the SP or affiliation | Mandatory | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Also write each qualifier whose established value equals `Issuer` | Recommended | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Write `NewID` with the new value only, or an empty `Terminate` | Mandatory | E12, E55, `TerminateType` | `NameIdChange` |
-| Reject an identity provider's persistent `NameID` value or `NewID` over 256 characters. A service provider's `NewID` sets `SPProvidedID` and has no 256-character limit | Mandatory | Core §8.3.7 | Always |
-| Reject a service provider's persistent `NameID` value over 256 characters | Library policy: reason not recorded. | Core §8.3.7 | Always |
+| Reject an identity provider's persistent `NameID` or `NewID` value over 256 characters, and its `entity` `NameID` or `NewID` that [identifier formats](identifiers.md#name-identifier-formats) refuses. A service provider's `NewID` sets `SPProvidedID` and has no 256-character limit | Mandatory | Core §8.3.6, §8.3.7 | Always |
+| Send a service provider's `NameID` without the length and `entity` checks of [identifier formats](identifiers.md#name-identifier-formats) | Library policy: the request names the identifier as both providers know it, and Core §8.3 binds the identity provider that issued it. | Core §3.6.1, Conformance §3.3 | Always |
 | Sign the request | Mandatory | Profiles §4.5.3.1 | Always |
 | Send to the peer's first HTTP-Redirect `ManageNameIDService` with an `https` `Location`, or its first under `allow_http` | Library policy: an earlier `http` entry would otherwise hide an advertised `https` one. | Metadata §2.2.2, Profiles §4.5.3.1 | `StartNameIdManagement::allow_http` |
 | Set `Destination` to that `Location` | Mandatory | Bindings §3.4.5.2 | Always |

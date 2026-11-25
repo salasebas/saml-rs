@@ -22,6 +22,7 @@ Find the rules by operation.
 | Copy `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` from the `LogoutSubject` `NameId` | Mandatory | Profiles §4.4.4.1, Core §3.7.1, §3.3.4 | Always |
 | Omit `Format` when the `NameId` has none | Optional | Core §2.2.2, E60 | Always |
 | Reject a `Format` that is not an absolute URI reference, also when the `NameId` came from an accepted assertion | Mandatory | Core §1.3.2 | Always |
+| Send the `NameId` value and qualifiers without the length and `entity` checks of [identifier formats](identifiers.md#name-identifier-formats) | Library policy: the request identifies the principal as the identity provider issued it, and Core §8.3 binds that producer. | Profiles §4.4.4.1, Conformance §3.3 | Always |
 | Include at least one `SessionIndex` | Mandatory | Profiles §4.4.4.1, E38 | Always |
 | Sign the request on HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign. CD-04 §2.4 makes the SimpleSign signature optional, but the profile requires the requester to authenticate by signing, so for logout it is mandatory | Mandatory | Profiles §4.4.3.1, §4.4.4.1, CD-04 §2.4 | Always |
 | Send the user agent to an `https` `SingleLogoutService`. A recipient does not reject an `http` `Destination` | Recommended | Profiles §4.4.3.1 | `StartSlo::allow_http` |
@@ -67,6 +68,7 @@ session lookup, session termination, and propagation to other participants.
 | Use the configured issuance lifetime, five minutes by default | Library policy: reason not recorded. | Core §3.7.3.2 | `IdpConfigBuilder::issuance_lifetime` |
 | Write `Issuer`, `ID`, `Version`, `IssueInstant`, and the principal identifier, and never a leap second, as the participant does | Mandatory | Profiles §4.4.4.1, Core §1.3.3 | Always |
 | Write a principal identifier that strongly matches the one in the issued assertion, with the `NameId` attributes copied as the participant does | Mandatory | Profiles §4.4.4.1, Core §3.3.4, §3.7.1 | Always |
+| After choosing the `Format`, reject a persistent or transient value over 256 characters and an `entity` `NameID` that [identifier formats](identifiers.md#name-identifier-formats) refuses, before encrypting and signing | Mandatory | Core §8.3.6, §8.3.7, §8.3.8 | Always |
 | When the subject has no `Format`, use the first configured NameID format, or omit `Format` if none is configured | Library policy: `respond_sso` uses the same format for that subject. | Core §2.2.2, E60 | Always |
 | Omit every `SessionIndex` to end all applicable sessions of the principal | Optional | Profiles §4.4.4.1, E38 | Always |
 | Sign the request on HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign. CD-04 §2.4 makes the SimpleSign signature optional, but §4.4.4.1 requires the requester to authenticate by signing | Mandatory | Profiles §4.4.4.1, CD-04 §2.4 | Always |

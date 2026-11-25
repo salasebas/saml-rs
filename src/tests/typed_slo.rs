@@ -3355,6 +3355,76 @@ fn typed_logout_request_does_not_write_a_name_id_format_that_is_not_an_absolute_
     }
 }
 
+const PARTNER: &str = "https://partner.example.org/metadata";
+
+fn subject_for(name_id: NameId) -> Result<LogoutSubject, SamlError> {
+    Ok(LogoutSubject::new(name_id).with_session_index(SessionIndex::try_new("_session123")?))
+}
+
+fn entity(value: &str) -> NameId {
+    NameId::new(value).with_format(NameIdFormat::Entity)
+}
+
+#[test]
+fn identity_provider_logout_request_writes_only_a_name_id_that_core_8_3_allows(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = ServiceProvider::new(sp_config()?);
+    let idp = IdentityProvider::new(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
+        .name_id_format(NameIdFormat::Persistent)
+        .credentials(signing_credentials())
+        .validation(IdpValidationPolicy::default())
+        .build()?,
+    );
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let at_limit = "a".repeat(256);
+    let over_limit = "a".repeat(257);
+
+    for allowed in [
+        NameId::new(at_limit.clone()).with_format(NameIdFormat::Persistent),
+        NameId::new(at_limit).with_format(NameIdFormat::Transient),
+        entity(PARTNER),
+    ] {
+        idp.start_slo(&sp_descriptor, subject_for(allowed)?, StartSlo::post())?;
+    }
+
+    let padded_entity = format!(" {} ", NameIdFormat::Entity.as_uri());
+    for refused in [
+        NameId::new(over_limit.clone()).with_format(NameIdFormat::Persistent),
+        NameId::new(over_limit.clone()).with_format(NameIdFormat::Transient),
+        NameId::new(over_limit.clone()),
+        entity("partner.example.org"),
+        entity(PARTNER).with_name_qualifier(IDP_ENTITY_ID),
+        entity(PARTNER).with_sp_name_qualifier(SP_ENTITY_ID),
+        entity(PARTNER).with_sp_provided_id("partner-7"),
+        NameId::new(PARTNER)
+            .with_format(NameIdFormat::Custom(padded_entity))
+            .with_name_qualifier(IDP_ENTITY_ID),
+    ] {
+        let started = idp.start_slo(
+            &sp_descriptor,
+            subject_for(refused.clone())?,
+            StartSlo::post(),
+        );
+        assert!(
+            matches!(started, Err(SamlError::Invalid(_))),
+            "{refused:?}: {started:?}"
+        );
+    }
+
+    for received in [
+        NameId::new(over_limit).with_format(NameIdFormat::Persistent),
+        entity(PARTNER).with_name_qualifier(IDP_ENTITY_ID),
+    ] {
+        sp.start_slo(&idp_descriptor, subject_for(received)?, StartSlo::post())?;
+    }
+    Ok(())
+}
+
 #[test]
 fn typed_logout_request_keeps_whitespace_in_a_name_id_format(
 ) -> Result<(), Box<dyn std::error::Error>> {

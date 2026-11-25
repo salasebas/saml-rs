@@ -28,6 +28,10 @@ use super::{IdentityProvider, RespondSlo, SamlError, ServiceProvider, StartSlo};
 impl ServiceProvider {
     /// Start SP-initiated Single Logout.
     ///
+    /// The subject `NameId` is sent as the identity provider issued it. Its
+    /// value and qualifiers are not checked against the length and `entity`
+    /// rules the identity provider applies.
+    ///
     /// A browser request goes to the identity provider's first
     /// `SingleLogoutService` for the binding with an `https` `Location`. With
     /// [`StartSlo::allow_http`], it goes to the first one.
@@ -353,6 +357,10 @@ impl IdentityProvider {
     /// is not an absolute URI reference, logout request creation fails, or the
     /// configured issuance lifetime cannot be added to the current issue
     /// instant.
+    /// Returns [`SamlError::Invalid`] when, with the format sent, a persistent
+    /// or transient value is longer than 256 characters, or an `entity` value
+    /// is not an absolute URI reference of at most 1024 characters with
+    /// collapsed whitespace or has a qualifier.
     /// [`StartSlo::identifier_encryption`] returns
     /// [`SamlError::MissingMetadata`] when the peer role that publishes the
     /// receiving `SingleLogoutService` has no encryption certificate.

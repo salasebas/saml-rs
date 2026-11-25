@@ -443,6 +443,55 @@ fn a_persistent_value_longer_than_256_characters_is_not_sent() -> TestResult {
 }
 
 #[test]
+fn an_entity_identifier_is_sent_only_as_core_8_3_6_allows() -> TestResult {
+    let idp = identity_provider(Some(IDP_NIM_URL))?;
+    let sp = soap_service_provider()?;
+    let partner = "https://partner.example.org/metadata";
+    let entity = |value: &str| NameId::new(value).with_format(NameIdFormat::Entity);
+    let start = |current: &NameId, change: &NameIdChange| {
+        idp.start_name_id_management(
+            &sp,
+            current,
+            change,
+            StartNameIdManagement::new(),
+            authenticated(),
+        )
+    };
+
+    start(&entity(partner), &NameIdChange::Terminate)?;
+    start(
+        &entity(partner),
+        &NameIdChange::NewId("https://partner.example.org/next".into()),
+    )?;
+    for (current, change) in [
+        (entity("partner.example.org"), NameIdChange::Terminate),
+        (
+            entity(partner).with_name_qualifier(IDP_ENTITY_ID),
+            NameIdChange::Terminate,
+        ),
+        (
+            entity(partner).with_sp_name_qualifier(SP_ENTITY_ID),
+            NameIdChange::Terminate,
+        ),
+        (
+            entity(partner).with_sp_provided_id("partner-7"),
+            NameIdChange::Terminate,
+        ),
+        (
+            entity(partner),
+            NameIdChange::NewId("partner.example.org".into()),
+        ),
+    ] {
+        let started = start(&current, &change);
+        assert!(
+            matches!(started, Err(SamlError::Invalid(_))),
+            "{current:?} {change:?}: {started:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn a_name_id_format_that_is_not_an_absolute_uri_is_not_sent() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;

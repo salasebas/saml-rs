@@ -713,6 +713,37 @@ fn identity_provider_does_not_send_a_new_persistent_value_longer_than_256_charac
 }
 
 #[test]
+fn only_the_identity_provider_applies_the_core_8_3_identifier_rules() -> TestResult {
+    let sp = sp()?;
+    let idp = idp()?;
+    let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
+    let qualified_entity = NameId::new("https://partner.example.org/metadata")
+        .with_format(NameIdFormat::Entity)
+        .with_sp_name_qualifier(SP_ENTITY_ID);
+
+    let started = idp.start_name_id_management_redirect(
+        &sp_peer,
+        &qualified_entity,
+        &NameIdChange::Terminate,
+        StartNameIdManagement::new(),
+    );
+    assert!(matches!(started, Err(SamlError::Invalid(_))), "{started:?}");
+
+    for established in [
+        NameId::new("a".repeat(257)).with_format(NameIdFormat::Persistent),
+        qualified_entity,
+    ] {
+        sp.start_name_id_management_redirect(
+            &idp_peer,
+            &established,
+            &NameIdChange::Terminate,
+            StartNameIdManagement::new(),
+        )?;
+    }
+    Ok(())
+}
+
+#[test]
 fn unsigned_request_is_rejected() -> TestResult {
     let sp = sp()?;
     let idp = idp()?;

@@ -3,9 +3,10 @@ use crate::constants::{name_id_format, namespace};
 use crate::entity::now_iso8601;
 use crate::error::SamlError;
 use crate::model::{
-    is_name_id_format, validate_issued_name_id_length, validate_name_id_format, NameId, Status,
+    is_name_id_format, validate_issued_name_id, validate_name_id_format, NameId, Status,
 };
 use crate::xml::write::{Prefixes, XmlWriter};
+use crate::xml::OutboundNameIdQualifiers;
 
 use super::NameIdChange;
 
@@ -53,11 +54,16 @@ pub(crate) fn render_request(
         ));
     }
     validate_name_id_format(format)?;
-    validate_issued_name_id_length(format, name_id.value())?;
-    if let (Requester::IdentityProvider, NameIdChange::NewId(value)) =
-        (request.requester, request.change)
-    {
-        validate_issued_name_id_length(format, value)?;
+    match request.requester {
+        Requester::IdentityProvider => {
+            let qualifiers = OutboundNameIdQualifiers::from(name_id);
+            validate_issued_name_id(format, name_id.value(), qualifiers)?;
+            match request.change {
+                NameIdChange::NewId(value) => validate_issued_name_id(format, value, qualifiers)?,
+                NameIdChange::Terminate => {}
+            }
+        }
+        Requester::ServiceProvider => {}
     }
     let persistent = is_name_id_format(format, name_id_format::PERSISTENT);
     let name_qualifier = name_id

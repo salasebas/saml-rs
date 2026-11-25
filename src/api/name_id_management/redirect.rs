@@ -45,6 +45,10 @@ impl ServiceProvider {
     /// identifier. To end the principal's sessions too, send `LogoutRequest`
     /// first: a `LogoutRequest` must not follow the termination.
     ///
+    /// `name_id` is sent as the identity provider issued it. Its value and
+    /// qualifiers are not checked against the length and `entity` rules the
+    /// identity provider applies.
+    ///
     /// The request goes to the identity provider's first HTTP-Redirect
     /// `ManageNameIDService` with an `https` `Location`. With
     /// [`StartNameIdManagement::allow_http`], it goes to the first one.
@@ -272,9 +276,11 @@ impl IdentityProvider {
     /// URL that is not `https`, [`SamlError::Invalid`] for a value that is not
     /// a URL.
     /// Returns [`SamlError::Invalid`] when a persistent value is longer than
-    /// 256 characters, the NameID format is not an absolute URI reference, or
-    /// `allow_http` is selected and the first endpoint is not an `http` or
-    /// `https` URL.
+    /// 256 characters, an `entity` value or new value is not an absolute URI
+    /// reference of at most 1024 characters with collapsed whitespace, an
+    /// `entity` `name_id` has a qualifier, the NameID format is not an
+    /// absolute URI reference, or `allow_http` is selected and the first
+    /// endpoint is not an `http` or `https` URL.
     /// With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers),
     /// returns [`SamlError::MissingMetadata`] when the service provider role
