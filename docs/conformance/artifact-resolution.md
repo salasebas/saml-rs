@@ -134,9 +134,18 @@ write and read envelopes for artifact resolution,
 [name identifier management](name-id-management.md). SOAP 1.1 governs
 `actor` and `mustUnderstand` in these flows.
 
+The extracted body keeps character references in the namespace declarations
+it inherits from the envelope. `ArtifactResolution::finish` and
+`StartedNameIdManagement::finish` read the status with raw namespace bindings.
+Both reject an otherwise valid response that inherits an explicit `xml` prefix
+declaration written with a character reference. This conformance gap has no
+caller option. Namespaces in XML 1.0 §2.3 requires comparing the
+normalized values.
+
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Accept only the SOAP 1.1 envelope namespace | Mandatory | Bindings §3.2.2 | Always |
+| Compare namespace names in a received envelope after normalizing the declaration value. Accept an explicit declaration of the `xml` prefix whose normalized value is the XML namespace | Mandatory | Namespaces in XML 1.0 §2.3, §3 | Always |
 | Carry one SAML request or response in the `Body`, with no other `Body` element, and reject a body with none, several, or extra elements | Mandatory | Bindings §3.2.2.1, E19, SOAP 1.1 §4.3 | Always |
 | Emit requests and responses without processing instructions | Mandatory | [SOAP 1.1 §3](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/#_Toc478383492) | Always |
 | Treat only attributes in the SOAP 1.1 envelope namespace as `actor` and `mustUnderstand` | Mandatory | SOAP 1.1 §4.2.2, §4.2.3 | Always |
