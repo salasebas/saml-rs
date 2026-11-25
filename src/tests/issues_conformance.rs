@@ -20,12 +20,12 @@ const SP_META_98: &str = include_str!("../../tests/fixtures/misc/sp_metadata_98.
 fn sp_config() -> SpMetadataInput {
     SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
-        name_id_format: vec!["urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress".into()],
-        assertion_consumer_service: vec![
+        name_id_formats: vec!["urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress".into()],
+        assertion_consumer_services: vec![
             Endpoint::new(Binding::Post, "https://sp.example.com/acs"),
             Endpoint::new(Binding::Redirect, "https://sp.example.com/acs"),
         ],
-        single_logout_service: vec![
+        single_logout_services: vec![
             Endpoint::new(Binding::Post, "https://sp.example.com/slo"),
             Endpoint::new(Binding::Redirect, "https://sp.example.com/slo"),
         ],
@@ -36,11 +36,11 @@ fn sp_config() -> SpMetadataInput {
 fn idp_config() -> IdpMetadataInput {
     IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
-        single_sign_on_service: vec![
+        single_sign_on_services: vec![
             Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
             Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
         ],
-        single_logout_service: vec![
+        single_logout_services: vec![
             Endpoint::new(Binding::Post, "https://idp.example.com/sso/slo"),
             Endpoint::new(Binding::Redirect, "https://idp.example.com/sso/slo"),
         ],
@@ -182,7 +182,7 @@ fn issue_98_undefined_acs_url_with_redirect() -> Result<(), Box<dyn std::error::
     let idp = idp::Engine::from_config(
         &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
-            single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
+            single_sign_on_services: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
             ..Default::default()
         },
         EntitySetting::default(),

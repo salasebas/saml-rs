@@ -15,8 +15,8 @@ use saml_rs::SamlError;
 fn idp() -> Result<idp::Engine, SamlError> {
     let config = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
-        single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
-        single_logout_service: vec![
+        single_sign_on_services: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+        single_logout_services: vec![
             Endpoint::new(Binding::Post, "https://idp/slo"),
             Endpoint::new(Binding::Redirect, "https://idp/slo"),
             Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
@@ -29,8 +29,8 @@ fn idp() -> Result<idp::Engine, SamlError> {
 fn sp() -> Result<sp::Engine, SamlError> {
     let config = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
-        single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
-        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+        single_logout_services: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
+        assertion_consumer_services: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
         ..SpMetadataInput::default()
     };
     sp::Engine::from_config(&config, EntitySetting::default())

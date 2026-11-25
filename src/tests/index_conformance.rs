@@ -52,8 +52,8 @@ fn get_acs_with_one_binding() -> Result<(), Box<dyn std::error::Error>> {
     let loc = "https:sp.example.org/sp/sso/post";
     let sp = SpMetadata::from_xml(&generate_sp_metadata(&SpMetadataInput {
         entity_id: "https://sp".into(),
-        assertion_consumer_service: vec![Endpoint::new(Binding::Post, loc)],
-        single_logout_service: vec![Endpoint::new(
+        assertion_consumer_services: vec![Endpoint::new(Binding::Post, loc)],
+        single_logout_services: vec![Endpoint::new(
             Binding::Redirect,
             "https:sp.example.org/sp/slo",
         )],
@@ -72,7 +72,7 @@ fn get_acs_with_two_bindings() -> Result<(), Box<dyn std::error::Error>> {
     let artifact = "https:sp.example.org/sp/sso/artifact";
     let sp = SpMetadata::from_xml(&generate_sp_metadata(&SpMetadataInput {
         entity_id: "https://sp".into(),
-        assertion_consumer_service: vec![
+        assertion_consumer_services: vec![
             Endpoint::new(Binding::Post, post),
             Endpoint::new(Binding::Artifact, artifact),
         ],
@@ -97,7 +97,7 @@ fn idp_with_multiple_signing_and_encryption_certificates() -> Result<(), Box<dyn
             entity_id: "https://idp".into(),
             signing_certs: vec![IDP_CERT.into(), IDP_CERT2.into()],
             encrypt_certs: vec![IDP_ENC_CERT.into(), IDP_ENC_CERT.into()],
-            single_sign_on_service: vec![Endpoint::new(
+            single_sign_on_services: vec![Endpoint::new(
                 Binding::Post,
                 "https://idp.example.com/sso",
             )],
@@ -167,7 +167,7 @@ fn metadata_with_multiple_entity_descriptors_is_invalid() {
 fn undefined_x509_key_in_metadata_returns_none() -> Result<(), Box<dyn std::error::Error>> {
     let sp = SpMetadata::from_xml(&generate_sp_metadata(&SpMetadataInput {
         entity_id: "https://sp".into(),
-        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "http://sp/acs")],
+        assertion_consumer_services: vec![Endpoint::new(Binding::Post, "http://sp/acs")],
         ..Default::default()
     })?)?;
     assert!(sp

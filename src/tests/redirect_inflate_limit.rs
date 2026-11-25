@@ -32,7 +32,7 @@ fn redirect_request(url: &str) -> Result<HttpRequest, SamlError> {
 fn unsigned_sp() -> Result<sp::Engine, SamlError> {
     let config = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
-        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+        assertion_consumer_services: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
         ..SpMetadataInput::default()
     };
     sp::Engine::from_config(&config, EntitySetting::default())
@@ -41,7 +41,7 @@ fn unsigned_sp() -> Result<sp::Engine, SamlError> {
 fn unsigned_idp(setting: EntitySetting) -> Result<idp::Engine, SamlError> {
     let config = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
-        single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
+        single_sign_on_services: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
         ..IdpMetadataInput::default()
     };
     idp::Engine::from_config(&config, setting)

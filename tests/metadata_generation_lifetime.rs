@@ -43,13 +43,13 @@ fn generated_root_carries_the_default_or_configured_lifetime(
     for (lifetime, expected) in lifetimes {
         let mut sp_input = SpMetadataInput::default();
         sp_input.entity_id = sp_entity_id.into();
-        sp_input.assertion_consumer_service = vec![Endpoint::new(Binding::Post, acs_url)];
+        sp_input.assertion_consumer_services = vec![Endpoint::new(Binding::Post, acs_url)];
         sp_input.lifetime = lifetime;
         let sp_xml = generate_sp_metadata(&sp_input)?;
 
         let mut idp_input = IdpMetadataInput::default();
         idp_input.entity_id = idp_entity_id.into();
-        idp_input.single_sign_on_service = vec![Endpoint::new(Binding::Post, sso_url)];
+        idp_input.single_sign_on_services = vec![Endpoint::new(Binding::Post, sso_url)];
         idp_input.lifetime = lifetime;
         let idp_xml = generate_idp_metadata(&idp_input)?;
 

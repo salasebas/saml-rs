@@ -1624,8 +1624,8 @@ fn typed_models_logout_response_rejects_malformed_issue_instant_with_profile_con
 fn sp(setting: EntitySetting) -> Result<sp::Engine, SamlError> {
     let config = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
-        single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")],
-        assertion_consumer_service: vec![
+        single_logout_services: vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")],
+        assertion_consumer_services: vec![
             Endpoint::new(Binding::Post, "https://sp.example.com/acs"),
             Endpoint::new(Binding::SimpleSign, "https://sp.example.com/acs-simple"),
         ],
@@ -1642,14 +1642,14 @@ fn idp(setting: EntitySetting) -> Result<idp::Engine, SamlError> {
             .clone()
             .map(|cert| vec![cert])
             .unwrap_or_default(),
-        single_sign_on_service: vec![
+        single_sign_on_services: vec![
             Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
             Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
             Endpoint::new(Binding::SimpleSign, "https://idp.example.com/sso"),
         ],
         ..IdpMetadataInput::default()
     };
-    config.single_logout_service =
+    config.single_logout_services =
         vec![Endpoint::new(Binding::Post, "https://idp.example.com/slo")];
     idp::Engine::from_config(&config, setting)
 }

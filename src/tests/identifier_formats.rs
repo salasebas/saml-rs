@@ -1084,10 +1084,10 @@ fn metadata_does_not_advertise_a_name_id_format_that_is_not_an_absolute_uri(
             format.to_string(),
         ];
         let mut sp_config = raw_sp_metadata_config(SP_ENTITY_ID);
-        sp_config.name_id_format = formats.clone();
+        sp_config.name_id_formats = formats.clone();
         expect_name_id_format_error(generate_sp_metadata(&sp_config))?;
         let mut idp_config = raw_idp_metadata_config(IDP_ENTITY_ID);
-        idp_config.name_id_format = formats;
+        idp_config.name_id_formats = formats;
         expect_name_id_format_error(generate_idp_metadata(&idp_config))?;
     }
     Ok(())
@@ -1116,7 +1116,7 @@ fn metadata_is_not_generated_for_an_entity_id_that_is_not_a_uri_of_at_most_1024_
 fn raw_sp_metadata_config(entity_id: &str) -> SpMetadataInput {
     SpMetadataInput {
         entity_id: entity_id.into(),
-        assertion_consumer_service: vec![Endpoint::new(Binding::Post, SP_ACS)],
+        assertion_consumer_services: vec![Endpoint::new(Binding::Post, SP_ACS)],
         ..SpMetadataInput::default()
     }
 }
@@ -1124,7 +1124,7 @@ fn raw_sp_metadata_config(entity_id: &str) -> SpMetadataInput {
 fn raw_idp_metadata_config(entity_id: &str) -> IdpMetadataInput {
     IdpMetadataInput {
         entity_id: entity_id.into(),
-        single_sign_on_service: vec![Endpoint::new(Binding::Post, IDP_SSO_POST)],
+        single_sign_on_services: vec![Endpoint::new(Binding::Post, IDP_SSO_POST)],
         ..IdpMetadataInput::default()
     }
 }

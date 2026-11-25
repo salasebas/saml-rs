@@ -29,11 +29,11 @@ fn idp_config(want_authn_requests_signed: bool) -> IdpMetadataInput {
     IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         want_authn_requests_signed,
-        single_sign_on_service: vec![
+        single_sign_on_services: vec![
             Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
             Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
         ],
-        single_logout_service: vec![Endpoint::new(Binding::Post, "https://idp.example.com/slo")],
+        single_logout_services: vec![Endpoint::new(Binding::Post, "https://idp.example.com/slo")],
         ..IdpMetadataInput::default()
     }
 }
@@ -42,11 +42,11 @@ fn sp_config(authn_requests_signed: bool) -> SpMetadataInput {
     SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         authn_requests_signed,
-        assertion_consumer_service: vec![Endpoint::new(
+        assertion_consumer_services: vec![Endpoint::new(
             Binding::Post,
             "https://sp.example.com/acs",
         )],
-        single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")],
+        single_logout_services: vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")],
         ..SpMetadataInput::default()
     }
 }

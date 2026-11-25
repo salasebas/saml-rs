@@ -19,8 +19,8 @@ fn sp(setting: EntitySetting) -> Result<sp::Engine, saml_rs::SamlError> {
             .clone()
             .map(|c| vec![c])
             .unwrap_or_default(),
-        single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
-        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+        single_logout_services: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
+        assertion_consumer_services: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
         ..SpMetadataInput::default()
     };
     sp::Engine::from_config(&config, setting)
@@ -36,8 +36,8 @@ fn idp(setting: EntitySetting) -> Result<idp::Engine, saml_rs::SamlError> {
             .map(|c| vec![c])
             .unwrap_or_default(),
         want_authn_requests_signed: setting.private_key.is_some(),
-        single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
-        single_logout_service: vec![Endpoint::new(Binding::Post, "https://idp/slo")],
+        single_sign_on_services: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+        single_logout_services: vec![Endpoint::new(Binding::Post, "https://idp/slo")],
         ..IdpMetadataInput::default()
     };
     idp::Engine::from_config(&config, setting)
@@ -48,7 +48,7 @@ fn unsigned_authn_request_redirect_round_trips() -> Result<(), Box<dyn std::erro
     let sp = sp(EntitySetting::default())?;
     let idp_config = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
-        single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
+        single_sign_on_services: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
         ..IdpMetadataInput::default()
     };
     let idp = idp::Engine::from_config(&idp_config, EntitySetting::default())?;

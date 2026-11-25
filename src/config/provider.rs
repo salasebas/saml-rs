@@ -36,18 +36,18 @@ fn sp_metadata_input(config: &SpConfigBuilder) -> SpMetadataInput {
         want_assertions_signed: assertion_signature_required(
             config.validation.assertion_signatures,
         ),
-        name_id_format: name_id_format_uris(metadata.name_id_formats()),
-        single_logout_service: metadata
+        name_id_formats: name_id_format_uris(metadata.name_id_formats()),
+        single_logout_services: metadata
             .slo_endpoints()
             .iter()
             .map(SloEndpoint::to_raw)
             .collect(),
-        assertion_consumer_service: metadata
+        assertion_consumer_services: metadata
             .acs_endpoints()
             .iter()
             .map(AcsEndpoint::to_raw)
             .collect(),
-        manage_name_id_service: metadata
+        manage_name_id_services: metadata
             .manage_name_id_services()
             .iter()
             .map(ManageNameIdService::to_raw)
@@ -69,19 +69,19 @@ fn idp_metadata_input(config: &IdpConfigBuilder) -> IdpMetadataInput {
         want_authn_requests_signed: authn_request_signature_required(
             config.validation.authn_request_signatures,
         ),
-        name_id_format: name_id_format_uris(metadata.name_id_formats()),
-        single_sign_on_service: metadata
+        name_id_formats: name_id_format_uris(metadata.name_id_formats()),
+        single_sign_on_services: metadata
             .sso_endpoints()
             .iter()
             .map(SsoEndpoint::to_raw)
             .collect(),
-        single_logout_service: metadata
+        single_logout_services: metadata
             .slo_endpoints()
             .iter()
             .map(SloEndpoint::to_raw)
             .collect(),
-        artifact_resolution_service: metadata.artifact_resolution_services().to_vec(),
-        manage_name_id_service: metadata
+        artifact_resolution_services: metadata.artifact_resolution_services().to_vec(),
+        manage_name_id_services: metadata
             .manage_name_id_services()
             .iter()
             .map(ManageNameIdService::to_raw)

@@ -21,12 +21,12 @@ fn sp() -> Result<sp::Engine, SamlError> {
     sp::Engine::from_config(
         &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
-            single_logout_service: vec![
+            single_logout_services: vec![
                 Endpoint::new(Binding::Redirect, "https://sp/slo"),
                 Endpoint::new(Binding::Post, "https://sp/slo"),
                 Endpoint::new(Binding::SimpleSign, "https://sp/slo"),
             ],
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+            assertion_consumer_services: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
             ..Default::default()
         },
         EntitySetting::default(),
@@ -37,8 +37,8 @@ fn idp() -> Result<idp::Engine, SamlError> {
     idp::Engine::from_config(
         &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
-            single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
-            single_logout_service: vec![
+            single_sign_on_services: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+            single_logout_services: vec![
                 Endpoint::new(Binding::Redirect, "https://idp/slo"),
                 Endpoint::new(Binding::Post, "https://idp/slo"),
                 Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
@@ -306,8 +306,8 @@ mod signed_tests {
             &SpMetadataInput {
                 entity_id: entity_id.into(),
                 signing_certs: vec![CERT.into()],
-                single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
-                assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+                single_logout_services: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
+                assertion_consumer_services: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
                 ..Default::default()
             },
             signing_setting(),
@@ -374,8 +374,8 @@ mod signed_tests {
             &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![CERT.into()],
-                single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
-                single_logout_service: vec![Endpoint::new(Binding::Post, "https://idp/slo")],
+                single_sign_on_services: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+                single_logout_services: vec![Endpoint::new(Binding::Post, "https://idp/slo")],
                 ..Default::default()
             },
             signing_setting(),
@@ -566,11 +566,11 @@ fn logout_response_preserves_braces_in_the_destination() -> Result<(), Box<dyn s
     let target = sp::Engine::from_config(
         &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
-            single_logout_service: vec![Endpoint::new(
+            single_logout_services: vec![Endpoint::new(
                 Binding::Post,
                 "https://sp/slo?next={InResponseTo}",
             )],
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+            assertion_consumer_services: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
             ..Default::default()
         },
         EntitySetting::default(),
@@ -600,8 +600,8 @@ fn logout_response_rejects_a_peer_slo_location_that_is_not_a_url(
         let target = sp::Engine::from_config(
             &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
-                single_logout_service: vec![Endpoint::new(Binding::Redirect, location)],
-                assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+                single_logout_services: vec![Endpoint::new(Binding::Redirect, location)],
+                assertion_consumer_services: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
                 ..Default::default()
             },
             EntitySetting::default(),

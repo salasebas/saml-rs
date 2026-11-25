@@ -16,7 +16,7 @@ fn idp_config(want_authn_requests_signed: bool) -> IdpMetadataInput {
     IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         want_authn_requests_signed,
-        single_sign_on_service: vec![
+        single_sign_on_services: vec![
             Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
             Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
             Endpoint::new(Binding::SimpleSign, "https://idp.example.com/sso"),
@@ -29,7 +29,7 @@ fn sp_config(authn_requests_signed: bool) -> SpMetadataInput {
     SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         authn_requests_signed,
-        assertion_consumer_service: vec![
+        assertion_consumer_services: vec![
             Endpoint::new(Binding::Post, "https://sp.example.com/acs"),
             Endpoint::new(Binding::Redirect, "https://sp.example.com/redirect-acs"),
             Endpoint::new(Binding::SimpleSign, "https://sp.example.com/simplesign-acs"),
@@ -101,7 +101,7 @@ const HOSTILE_NAME_ID_FORMAT: &str = concat!(
 fn hostile_unsigned_idp() -> Result<idp::Engine, SamlError> {
     let config = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
-        single_sign_on_service: vec![
+        single_sign_on_services: vec![
             Endpoint::new(Binding::Redirect, HOSTILE_IDP_SSO_DESTINATION),
             Endpoint::new(Binding::Post, HOSTILE_IDP_SSO_DESTINATION),
             Endpoint::new(Binding::SimpleSign, HOSTILE_IDP_SSO_DESTINATION),
@@ -114,8 +114,8 @@ fn hostile_unsigned_idp() -> Result<idp::Engine, SamlError> {
 fn hostile_unsigned_sp() -> Result<sp::Engine, SamlError> {
     let config = SpMetadataInput {
         entity_id: HOSTILE_SP_ENTITY_ID.into(),
-        assertion_consumer_service: vec![Endpoint::new(Binding::Post, HOSTILE_ACS_URL)],
-        name_id_format: vec![HOSTILE_NAME_ID_FORMAT.into()],
+        assertion_consumer_services: vec![Endpoint::new(Binding::Post, HOSTILE_ACS_URL)],
+        name_id_formats: vec![HOSTILE_NAME_ID_FORMAT.into()],
         ..SpMetadataInput::default()
     };
     sp::Engine::from_config(&config, EntitySetting::default())
@@ -414,7 +414,7 @@ fn requested_response_binding_without_acs_returns_missing_metadata(
         entity_id: "https://sp.example.com/metadata".into(),
         ..SpMetadataInput::default()
     };
-    config.assertion_consumer_service =
+    config.assertion_consumer_services =
         vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
     let sp = sp::Engine::from_config(&config, EntitySetting::default())?;
 

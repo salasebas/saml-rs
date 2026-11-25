@@ -46,8 +46,8 @@ fn idp(setting: EntitySetting) -> TestResult<idp::Engine> {
         &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec![CERT.into()],
-            single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
-            single_logout_service: vec![Endpoint::new(Binding::Post, "https://idp/slo")],
+            single_sign_on_services: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+            single_logout_services: vec![Endpoint::new(Binding::Post, "https://idp/slo")],
             ..Default::default()
         },
         setting,
@@ -59,8 +59,8 @@ fn sp() -> TestResult<sp::Engine> {
         &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             signing_certs: vec![CERT.into()],
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
-            single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
+            assertion_consumer_services: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+            single_logout_services: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
             ..Default::default()
         },
         signing(),
@@ -293,8 +293,8 @@ fn login_response_wrapper_fields_escape_xml_markup_before_signing() -> TestResul
         &IdpMetadataInput {
             entity_id: HOSTILE_IDP_ENTITY_ID.into(),
             signing_certs: vec![CERT.into()],
-            single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
-            single_logout_service: vec![Endpoint::new(Binding::Post, "https://idp/slo")],
+            single_sign_on_services: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+            single_logout_services: vec![Endpoint::new(Binding::Post, "https://idp/slo")],
             ..Default::default()
         },
         idp_setting,
@@ -303,8 +303,8 @@ fn login_response_wrapper_fields_escape_xml_markup_before_signing() -> TestResul
         &SpMetadataInput {
             entity_id: HOSTILE_SP_ENTITY_ID.into(),
             signing_certs: vec![CERT.into()],
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, HOSTILE_ACS)],
-            single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
+            assertion_consumer_services: vec![Endpoint::new(Binding::Post, HOSTILE_ACS)],
+            single_logout_services: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
             ..Default::default()
         },
         signing(),
