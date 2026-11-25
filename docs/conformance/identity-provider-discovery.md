@@ -45,3 +45,10 @@ preserve valid history. There is no option to republish invalid identifiers.
 
 - The service provider and SP Lite read the cookie. Optional in Conformance
   Table 2. Profiles §4.3.4 describes how a service provider obtains it.
+- The service provider side of the
+  [Identity Provider Discovery Service Protocol and Profile](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-idp-discovery-cs-01.pdf)
+  (SAMLDS, Committee Specification 01). That is the §2.4.1 request, the
+  §2.4.3 response, and `idpdisc:DiscoveryResponse` endpoints in SP metadata
+  (§2.5). The application chooses the identity provider and passes its
+  `IdpDescriptor` to `start_sso`.
+- A SAMLDS discovery service.
