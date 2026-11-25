@@ -15,8 +15,7 @@ pub(super) enum SsoDescriptorRole {
     IdentityProvider,
 }
 
-pub(super) struct SelectedDescriptors<'a> {
-    pub(super) nodes: Vec<&'a dom::Node>,
+pub(super) struct SelectedDescriptors {
     pub(super) namespaced: Vec<SamlElement>,
     pub(super) key_certificates: KeyCertificates,
     pub(super) entity_id: Option<String>,
@@ -33,12 +32,12 @@ pub(super) struct SigningFlags {
 }
 
 impl SsoDescriptorRole {
-    pub(super) fn descriptors<'a>(
+    pub(super) fn descriptors(
         self,
         xml: &str,
-        entity: Option<&'a dom::Node>,
+        entity: Option<&dom::Node>,
         limits: XmlLimits,
-    ) -> Result<SelectedDescriptors<'a>, SamlError> {
+    ) -> Result<SelectedDescriptors, SamlError> {
         let local_name = match (self, entity) {
             (Self::Any, None) => return Ok(Self::no_descriptors()),
             (Self::Any, Some(_)) => "EntityDescriptor",
@@ -56,12 +55,12 @@ impl SsoDescriptorRole {
         self.typed_descriptors(entity, namespaced, valid_until_bounds)
     }
 
-    pub(super) fn typed_descriptors<'a>(
+    pub(super) fn typed_descriptors(
         self,
-        entity: &'a dom::Node,
+        entity: &dom::Node,
         namespaced: &SamlElement,
         mut valid_until_bounds: ValidUntilBounds,
-    ) -> Result<SelectedDescriptors<'a>, SamlError> {
+    ) -> Result<SelectedDescriptors, SamlError> {
         let local_name = match self {
             Self::Any => return Ok(Self::untyped_descriptors(entity, namespaced)),
             Self::ServiceProvider => "SPSSODescriptor",
@@ -77,10 +76,9 @@ impl SsoDescriptorRole {
         if matches!(self, Self::IdentityProvider) && is_metadata_entity {
             scope_elements.extend(super::scope::scope_elements(namespaced).cloned());
         }
-        let mut nodes = Vec::new();
         let mut namespaced_descriptors = Vec::new();
         let mut signing_flags = SigningFlags::default();
-        for (child, descriptor) in entity.children.iter().zip(&namespaced.children) {
+        for descriptor in &namespaced.children {
             if descriptor.is(namespace::METADATA, local_name) && lists_saml2(descriptor) {
                 match self {
                     Self::ServiceProvider => {
@@ -99,16 +97,14 @@ impl SsoDescriptorRole {
                     }
                     Self::Any => {}
                 }
-                nodes.push(child);
                 namespaced_descriptors.push(descriptor);
                 valid_until_bounds.push_role(descriptor);
             }
         }
-        if nodes.is_empty() {
+        if namespaced_descriptors.is_empty() {
             return Err(SamlError::MissingMetadata(local_name.into()));
         }
         Ok(SelectedDescriptors {
-            nodes,
             key_certificates: KeyCertificates::from_descriptors(&namespaced_descriptors),
             namespaced: namespaced_descriptors.into_iter().cloned().collect(),
             entity_id,
@@ -118,18 +114,15 @@ impl SsoDescriptorRole {
         })
     }
 
-    fn untyped_descriptors<'a>(
-        entity: &'a dom::Node,
-        namespaced: &SamlElement,
-    ) -> SelectedDescriptors<'a> {
-        let (nodes, namespaced_descriptors): (Vec<&dom::Node>, Vec<&SamlElement>) = entity
+    fn untyped_descriptors(entity: &dom::Node, namespaced: &SamlElement) -> SelectedDescriptors {
+        let namespaced_descriptors: Vec<&SamlElement> = entity
             .children
             .iter()
             .zip(&namespaced.children)
             .filter(|(child, _)| is_sso_descriptor(child))
-            .unzip();
+            .map(|(_, descriptor)| descriptor)
+            .collect();
         SelectedDescriptors {
-            nodes,
             key_certificates: KeyCertificates::from_descriptors(&namespaced_descriptors),
             namespaced: namespaced_descriptors.into_iter().cloned().collect(),
             entity_id: entity.attr("entityID").map(str::to_owned),
@@ -139,9 +132,8 @@ impl SsoDescriptorRole {
         }
     }
 
-    fn no_descriptors<'a>() -> SelectedDescriptors<'a> {
+    fn no_descriptors() -> SelectedDescriptors {
         SelectedDescriptors {
-            nodes: Vec::new(),
             namespaced: Vec::new(),
             key_certificates: KeyCertificates::default(),
             entity_id: None,
@@ -172,7 +164,7 @@ fn signing_flag(descriptor: &SamlElement, name: &str) -> Result<Option<bool>, Sa
         .transpose()
 }
 
-pub(super) fn is_sso_descriptor(node: &dom::Node) -> bool {
+fn is_sso_descriptor(node: &dom::Node) -> bool {
     node.local_name.contains("SSODescriptor")
 }
 

@@ -1,12 +1,11 @@
 use std::collections::HashSet;
-use std::ops::Range;
 use std::sync::Arc;
 
 use crate::constants::namespace;
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::xml::protocol_element::SamlElement;
-use crate::xml::{dom, extract_with_limits, ExtractorField, XmlLimits};
+use crate::xml::{dom, XmlLimits};
 
 use super::description_read::EntityDescription;
 use super::role::{self, SelectedDescriptors, SsoDescriptorRole};
@@ -15,51 +14,25 @@ use super::{endpoints, entity_attributes, Metadata};
 
 const MULTIPLE_ENTITY_DESCRIPTORS: &str = "metadata has more than one EntityDescriptor";
 
-fn entity_descriptor_xml<'n>(
-    xml: &str,
+fn entity_descriptor<'n>(
     roots: &'n [dom::Node],
     descriptor_starts: &HashSet<usize>,
-) -> Result<(Range<usize>, Option<&'n dom::Node>), SamlError> {
-    let [root] = roots else {
-        return Ok((0..xml.len(), None));
+) -> Result<Option<&'n dom::Node>, SamlError> {
+    let root = match roots {
+        [root] => root,
+        [] => return Err(SamlError::xml("no document element")),
+        _ => return Err(SamlError::xml("multiple document elements")),
     };
     if root.local_name != "EntitiesDescriptor" {
-        return Ok((
-            0..xml.len(),
-            Some(root).filter(|root| root.local_name == "EntityDescriptor"),
-        ));
+        return Ok(Some(root).filter(|root| root.local_name == "EntityDescriptor"));
     }
     let mut entities = Vec::new();
     collect_entity_descriptors(root, descriptor_starts, &mut entities);
     match entities.as_slice() {
-        [entity] => Ok((entity.start..entity.end, Some(*entity))),
+        [entity] => Ok(Some(*entity)),
         [] => Err(SamlError::MissingMetadata("EntityDescriptor".into())),
         _ => Err(SamlError::xml(MULTIPLE_ENTITY_DESCRIPTORS)),
     }
-}
-
-fn role_xml(
-    xml: &str,
-    extraction: Range<usize>,
-    entity: Option<&dom::Node>,
-    descriptors: &[&dom::Node],
-) -> String {
-    let mut role_xml = String::with_capacity(extraction.len());
-    let mut copied = extraction.start;
-    let children = entity
-        .map(|entity| entity.children.as_slice())
-        .unwrap_or_default();
-    for unread in children.iter().filter(|child| {
-        role::is_sso_descriptor(child)
-            && !descriptors
-                .iter()
-                .any(|descriptor| std::ptr::eq(*descriptor, *child))
-    }) {
-        role_xml.push_str(&xml[copied..unread.start]);
-        copied = unread.end;
-    }
-    role_xml.push_str(&xml[copied..extraction.end]);
-    role_xml
 }
 
 fn collect_entity_descriptors<'a>(
@@ -104,13 +77,10 @@ impl Metadata {
             return Err(SamlError::xml(MULTIPLE_ENTITY_DESCRIPTORS));
         }
 
-        let (extraction, entity) = entity_descriptor_xml(xml, &roots, &descriptor_starts)?;
+        let entity = entity_descriptor(&roots, &descriptor_starts)?;
         let descriptors = role.descriptors(xml, entity, limits)?;
-        let source = role_xml(xml, extraction, entity, &descriptors.nodes);
-        let meta = extract_name_id_formats(&source, limits)?;
-        Ok(Self::from_extracted(
+        Ok(Self::from_descriptors(
             Arc::from(xml),
-            meta,
             descriptors,
             EntityDescription::read(xml, entity, limits)?,
             entity_attributes::read_bound_attributes(xml, &roots, entity, limits)?,
@@ -128,29 +98,33 @@ impl Metadata {
         let entity = dom::parse_fragment_with_limits(entity_xml, limits)?.root;
         let descriptors =
             role.typed_descriptors(&entity, member, ValidUntilBounds::from_path(path))?;
-        let source = role_xml(
-            entity_xml,
-            0..entity_xml.len(),
-            Some(&entity),
-            &descriptors.nodes,
-        );
-        let meta = extract_name_id_formats(&source, limits)?;
-        Ok(Self::from_extracted(
+        Ok(Self::from_descriptors(
             Arc::clone(xml),
-            meta,
             descriptors,
             EntityDescription::from_entity(member),
             entity_attributes::bound_attributes(path),
         ))
     }
 
-    fn from_extracted(
+    fn from_descriptors(
         xml: Arc<str>,
-        meta: Value,
-        descriptors: SelectedDescriptors<'_>,
+        descriptors: SelectedDescriptors,
         description: EntityDescription,
         entity_attributes: Vec<SamlElement>,
     ) -> (Self, Vec<SamlElement>) {
+        let mut meta = Value::Object(Vec::new());
+        meta.insert(
+            "nameIDFormat",
+            Value::Array(
+                descriptors
+                    .namespaced
+                    .iter()
+                    .flat_map(|descriptor| &descriptor.children)
+                    .filter(|child| child.is(namespace::METADATA, "NameIDFormat"))
+                    .map(|format| Value::Str(format.text.clone()))
+                    .collect(),
+            ),
+        );
         let role_services = |name| {
             descriptors
                 .namespaced
@@ -179,15 +153,4 @@ impl Metadata {
         };
         (metadata, descriptors.namespaced)
     }
-}
-
-fn extract_name_id_formats(source: &str, limits: XmlLimits) -> Result<Value, SamlError> {
-    extract_with_limits(
-        source,
-        &[ExtractorField::new(
-            "nameIDFormat",
-            &["EntityDescriptor", "~SSODescriptor", "NameIDFormat"],
-        )],
-        limits,
-    )
 }
