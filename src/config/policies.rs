@@ -408,21 +408,17 @@ pub enum Rsa15KeyTransportPolicy {
 /// transport, and allows [`DEFAULT_MAX_DECRYPTION_WORK`](crate::constants::DEFAULT_MAX_DECRYPTION_WORK)
 /// units of decryption work. Start from it and assign the fields you change.
 ///
-/// An identity provider encrypts a response for the first service provider
-/// encryption key that the configured data encryption and key transport
-/// algorithms can use. The keys come from the first service provider role
-/// that publishes an encryption certificate. Its first `KeyDescriptor` for
-/// encryption with a certificate gives the key of its first certificate.
-/// Each later one gives another key when its `KeyInfo` holds one
-/// `X509Data` with one `X509Certificate`, and otherwise only `KeyName`
-/// elements. A later `KeyDescriptor` with a chain or another key
-/// declaration, such as `KeyValue` or `X509SubjectName`, is skipped. The
-/// identity provider skips a
-/// key that does not load or that the crypto provider cannot encrypt for,
-/// such as an EC key or an RSA key too small for the key transport. It needs
-/// a key only when the response has an element to encrypt, so attribute
-/// encryption alone needs none for an assertion without attributes. Without
-/// a usable key it returns
+/// An identity provider encrypts a response for the service provider role
+/// that publishes the assertion consumer service receiving it, or the first
+/// such role when several publish it. Each `X509Data` in a `KeyDescriptor`
+/// of that role whose `use` is `encryption` or absent gives one key, in
+/// document order: the entity certificate of the `X509Data`. The identity
+/// provider encrypts for the first key that the configured data encryption
+/// and key transport algorithms can use. It skips a key that does not load
+/// or that the crypto provider cannot encrypt for, such as an EC key or an
+/// RSA key too small for the key transport. It needs a key only when the
+/// response has an element to encrypt, so attribute encryption alone needs
+/// none for an assertion without attributes. Without a usable key it returns
 /// [`SamlError::MissingMetadata`](crate::SamlError::MissingMetadata) when
 /// none is published, or the [`SamlError::Crypto`](crate::SamlError::Crypto)
 /// error of the first key.
