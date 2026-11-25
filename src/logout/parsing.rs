@@ -11,14 +11,11 @@ use crate::flow::{
 };
 use crate::metadata::Metadata;
 use crate::model::{ClockSkew, Status, StatusMessage};
-use crate::xml::dom::{is_xml_whitespace_char, push_normalized_namespaces, reader_err};
+use crate::xml::dom::{is_xml_whitespace_char, reader_err};
 use crate::xml::fields;
-use crate::xml::fragment::standalone_element;
-use crate::xml::name::is_ncname;
 use crate::xml::protocol_element::SamlElement;
 use crate::xml::status::read_status;
 use quick_xml::events::Event;
-use quick_xml::name::{Namespace, NamespaceResolver, QName, ResolveResult};
 use quick_xml::Reader;
 use std::time::SystemTime;
 
@@ -71,33 +68,32 @@ fn names_asynchronous_type(
     value: &str,
 ) -> Result<bool, SamlError> {
     let value = value.trim_matches(is_xml_whitespace_char);
-    if !value.splitn(2, ':').all(is_ncname) {
+    let (type_prefix, type_name) = match value.split_once(':') {
+        Some((prefix, local_name)) => (Some(prefix), local_name),
+        None => (None, value),
+    };
+    if type_name != "AsynchronousType" {
         return Ok(false);
     }
-    let marker_xml = standalone_element(xml, marker.start, marker.end)?;
-    let mut reader = Reader::from_str(&marker_xml);
-    let mut resolver = NamespaceResolver::default();
-    loop {
-        match reader.read_event().map_err(reader_err)? {
-            Event::Start(element) | Event::Empty(element) => {
-                push_normalized_namespaces(&mut resolver, &element)?;
-                let (type_namespace, type_name) = resolver.resolve_element(QName(value));
-                return Ok(type_name.into_inner() == "AsynchronousType"
-                    && matches!(
-                        type_namespace,
-                        ResolveResult::Bound(Namespace(uri)) if uri == ASYNC_SLO_NAMESPACE
-                    ));
-            }
-            Event::Eof => return Err(SamlError::xml("asynchronous marker is not an element")),
-            Event::End(_)
-            | Event::Text(_)
-            | Event::CData(_)
-            | Event::Comment(_)
-            | Event::Decl(_)
-            | Event::PI(_)
-            | Event::DocType(_)
-            | Event::GeneralRef(_) => {}
+    let marker_xml = xml
+        .get(marker.start..marker.end)
+        .ok_or_else(|| SamlError::xml("asynchronous marker is outside the request"))?;
+    match Reader::from_str(marker_xml)
+        .read_event()
+        .map_err(reader_err)?
+    {
+        Event::Start(element) | Event::Empty(element) => {
+            Ok(element.name().prefix().map(|prefix| prefix.into_inner()) == type_prefix)
         }
+        Event::End(_)
+        | Event::Text(_)
+        | Event::CData(_)
+        | Event::Comment(_)
+        | Event::Decl(_)
+        | Event::PI(_)
+        | Event::DocType(_)
+        | Event::GeneralRef(_)
+        | Event::Eof => Err(SamlError::xml("asynchronous marker is not an element")),
     }
 }
 

@@ -458,8 +458,8 @@ impl StartSlo {
     /// Allow a session participant to deliver this LogoutRequest to an `http`
     /// endpoint.
     ///
-    /// The request then goes to the peer's first `SingleLogoutService` for the
-    /// binding, even when a later one is `https`. This relaxes the Single
+    /// A browser request then goes to the peer's first `SingleLogoutService`
+    /// for the binding, even when a later one is `https`. This relaxes the Single
     /// Logout recommendation to protect the HTTP exchange with TLS. It does
     /// not remove `SessionIndex`, the request signature, or session-authority
     /// `NotOnOrAfter`.
@@ -536,8 +536,8 @@ impl RespondSlo {
     /// Allow a service provider to deliver this LogoutResponse to an `http`
     /// endpoint.
     ///
-    /// The response then goes to the peer's first `SingleLogoutService` for
-    /// the binding, even when a later one is `https`. This relaxes the Single
+    /// A browser response then goes to the peer's first `SingleLogoutService`
+    /// for the binding, even when a later one is `https`. This relaxes the Single
     /// Logout recommendation to protect that HTTP exchange with TLS. The
     /// response remains signed.
     pub fn allow_http(mut self) -> Self {

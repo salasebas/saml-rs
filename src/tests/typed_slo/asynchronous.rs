@@ -157,47 +157,55 @@ fn a_marker_with_schema_instance_hints_selects_local_completion(
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     let binding = LogoutBinding::Post;
     let xml = logout_request_xml("_hinted", SP_ENTITY_ID, Some(IDP_SLO_POST));
-    let marker = |attributes: &str| {
+    let prefixed = |attributes: &str| {
         format!(
-            r#"<samlp:Extensions xmlns:inherited="{ASYNC_NAMESPACE}"><aslo:Asynchronous xmlns:aslo="{ASYNC_NAMESPACE}" xmlns:xsi="{XSI}" {attributes}/></samlp:Extensions>"#
+            r#"<aslo:Asynchronous xmlns:aslo="{ASYNC_NAMESPACE}" xmlns:xsi="{XSI}" {attributes}/>"#
         )
     };
-    let receive = |attributes: &str| -> Result<_, Box<dyn std::error::Error>> {
-        let xml = xml.replacen(
-            "<saml:NameID>",
-            &format!("{}<saml:NameID>", marker(attributes)),
-            1,
+    let unprefixed = |attributes: &str| {
+        format!(r#"<Asynchronous xmlns="{ASYNC_NAMESPACE}" xmlns:xsi="{XSI}" {attributes}/>"#)
+    };
+    let receive = |marker: &str| -> Result<_, Box<dyn std::error::Error>> {
+        let extensions = format!(
+            r#"<samlp:Extensions xmlns:inherited="{ASYNC_NAMESPACE}">{marker}</samlp:Extensions>"#
         );
+        let xml = xml.replacen("<saml:NameID>", &format!("{extensions}<saml:NameID>"), 1);
         Ok(idp.receive_slo_with_async(
             &sp_descriptor,
             signed_logout_request_input(&xml, binding)?,
             validation(),
         )?)
     };
-    for attributes in [
-        r#"xsi:schemaLocation="urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo saml-async-slo-v1.0.xsd""#,
-        r#"xsi:noNamespaceSchemaLocation="extension.xsd""#,
-        r#"xsi:type="aslo:AsynchronousType""#,
-        r#"xsi:type=" inherited:AsynchronousType ""#,
-        r#"xmlns="urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo" xsi:type="AsynchronousType""#,
+    for marker in [
+        prefixed(
+            r#"xsi:schemaLocation="urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo saml-async-slo-v1.0.xsd""#,
+        ),
+        prefixed(r#"xsi:noNamespaceSchemaLocation="extension.xsd""#),
+        prefixed(r#"xsi:type="aslo:AsynchronousType""#),
+        prefixed(r#"xsi:type=" aslo:AsynchronousType ""#),
+        unprefixed(r#"xsi:type="AsynchronousType""#),
     ] {
         assert!(
-            matches!(receive(attributes)?, IdpLogoutAction::CompleteLocally(_)),
-            "{attributes}"
+            matches!(receive(&marker)?, IdpLogoutAction::CompleteLocally(_)),
+            "{marker}"
         );
     }
-    for attributes in [
-        r#"xsi:type="aslo:OtherType""#,
-        r#"xmlns:xs="http://www.w3.org/2001/XMLSchema" xsi:type="xs:string""#,
-        r#"xsi:type="AsynchronousType""#,
-        r#"xsi:type="unbound:AsynchronousType""#,
-        r#"xsi:nil="false""#,
-        r#"xsi:other="value""#,
-        r#"xmlns:other="urn:example:unrelated" other:schemaLocation="extension.xsd""#,
+    for marker in [
+        prefixed(r#"xsi:type="aslo:OtherType""#),
+        prefixed(r#"xmlns:xs="http://www.w3.org/2001/XMLSchema" xsi:type="xs:string""#),
+        prefixed(r#"xsi:type="AsynchronousType""#),
+        prefixed(r#"xsi:type="inherited:AsynchronousType""#),
+        prefixed(&format!(
+            r#"xmlns:own="{ASYNC_NAMESPACE}" xsi:type="own:AsynchronousType""#
+        )),
+        unprefixed(r#"xsi:type="aslo:AsynchronousType""#),
+        prefixed(r#"xsi:nil="false""#),
+        prefixed(r#"xsi:other="value""#),
+        prefixed(r#"xmlns:other="urn:example:unrelated" other:schemaLocation="extension.xsd""#),
     ] {
         assert!(
-            matches!(receive(attributes)?, IdpLogoutAction::Respond(_)),
-            "{attributes}"
+            matches!(receive(&marker)?, IdpLogoutAction::Respond(_)),
+            "{marker}"
         );
     }
     Ok(())
