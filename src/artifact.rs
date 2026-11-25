@@ -9,16 +9,20 @@ use crate::binding::sign_soap_message;
 use crate::config::{
     HmacSecret, IdpDescriptor, SignatureConfig, SpDescriptor, XmlSignatureProfile,
 };
-use crate::constants::{namespace, CertUse};
+use crate::constants::{namespace, status_code, CertUse};
 use crate::entity::{generate_id, now_iso8601, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::IdpMetadata;
-use crate::model::{EndpointUrl, ReplayKey, RequestVersionMismatch, SamlValidationContext, Status};
+use crate::model::{
+    EndpointUrl, ReplayKey, RequestVersionMismatch, SamlValidationContext, Status,
+    SubordinateStatusCode,
+};
 use crate::soap::{
     read_soap_body, read_soap_status_response, reject_processing_instructions,
     MessageConfidentiality, SoapChannel, SoapRequest, SoapResponse,
 };
 use crate::xml::fragment::standalone_element;
+use crate::xml::name::is_ncname;
 use crate::xml::protocol_element::{
     issuer, issuer_format_is_entity, parse_saml, parse_saml_with_limits, PartyName, SamlElement,
 };
@@ -105,10 +109,15 @@ pub enum ArtifactWithheld {
     InsufficientChannelProtection,
     /// The request's `Destination` differs from the URL that received it.
     DestinationMismatch,
+    /// The [`ArtifactStore`] failed, so the identity provider could not
+    /// confirm or consume an outstanding artifact. [`AnsweredArtifact::error`]
+    /// returns the store error.
+    StoreUnavailable,
 }
 
 /// What the identity provider put in `ArtifactResponse`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ArtifactRelease {
     /// The protocol message is in the response.
     Returned,
@@ -116,13 +125,18 @@ pub enum ArtifactRelease {
     Withheld(ArtifactWithheld),
     /// The request version is unsupported. The response status is `VersionMismatch`.
     VersionMismatch,
+    /// The request signature did not verify. The response status is
+    /// `Requester` with `RequestDenied`, and the message is absent.
+    /// [`AnsweredArtifact::error`] returns the verification error.
+    RequestDenied,
 }
 
 /// SOAP `ArtifactResponse` produced for one `ArtifactResolve`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct AnsweredArtifact {
     response: SoapResponse,
     release: ArtifactRelease,
+    error: Option<SamlError>,
 }
 
 impl AnsweredArtifact {
@@ -134,6 +148,21 @@ impl AnsweredArtifact {
     /// Whether the protocol message was included.
     pub fn release(&self) -> ArtifactRelease {
         self.release
+    }
+
+    /// Error that kept the identity provider from acting on the request.
+    ///
+    /// Present for [`ArtifactWithheld::StoreUnavailable`], with the error the
+    /// [`ArtifactStore`] returned, and for [`ArtifactRelease::RequestDenied`],
+    /// with the signature verification error. Send [`Self::response`] in both
+    /// cases.
+    pub fn error(&self) -> Option<&SamlError> {
+        self.error.as_ref()
+    }
+
+    fn caused_by(mut self, error: SamlError) -> Self {
+        self.error = Some(error);
+        self
     }
 }
 
@@ -498,7 +527,16 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
         ));
     }
     let request = parse_saml_with_limits(&body.xml, setting.xml_limits)?;
-    body.verify_signature_if_present(
+    let prefixes = Prefixes::of(setting)?;
+    #[cfg(crypto)]
+    if request
+        .children
+        .iter()
+        .any(|child| child.is(namespace::DSIG, "Signature"))
+    {
+        crate::crypto::initialize_crypto_provider()?;
+    }
+    if let Err(error) = body.verify_signature_if_present(
         request_envelope,
         &request,
         presenter
@@ -507,9 +545,25 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
             .x509_certificates(CertUse::Signing),
         presenter.provider().setting.hmac_secret.as_ref(),
         setting.xml_signatures,
-    )?;
+    ) {
+        let request_id = match (&error, request.required_attr("ID"), request.attr("Version")) {
+            (SamlError::Unsupported(_), _, _) => return Err(error),
+            (_, Ok(id), Some("2.0")) if is_ncname(&id) => id,
+            _ => return Err(error),
+        };
+        let denied = Status::requester()
+            .with_subordinate(SubordinateStatusCode::try_new(status_code::REQUEST_DENIED)?);
+        return Ok(answered(
+            &prefixes,
+            &entity_id,
+            &request_id,
+            &denied,
+            None,
+            ArtifactRelease::RequestDenied,
+        )?
+        .caused_by(error));
+    }
     let request = parse_resolve(&request)?;
-    let prefixes = Prefixes::of(setting)?;
     if let Some(mismatch) = RequestVersionMismatch::for_request(&request.version)? {
         return answered(
             &prefixes,
@@ -537,8 +591,13 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     if artifact.source_id != source_id {
         return success_without(ArtifactWithheld::NotOutstanding);
     }
-    let Some(entry) = issued.lookup(&artifact)? else {
-        return success_without(ArtifactWithheld::NotOutstanding);
+    let store_unavailable = |error: SamlError| {
+        Ok(success_without(ArtifactWithheld::StoreUnavailable)?.caused_by(error))
+    };
+    let entry = match issued.lookup(&artifact) {
+        Ok(Some(entry)) => entry,
+        Ok(None) => return success_without(ArtifactWithheld::NotOutstanding),
+        Err(error) => return store_unavailable(error),
     };
     let presenter_id = presenter.entity_id().as_str();
     let issuer_matches = request.issuer.as_ref().is_some_and(|issuer| {
@@ -547,8 +606,12 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     if !issuer_matches || presenter_id != entry.service_provider().as_str() {
         return success_without(ArtifactWithheld::DifferentPresenter);
     }
-    if entry.expires_at() <= issued.now()? {
-        return success_without(ArtifactWithheld::NotOutstanding);
+    match issued.now() {
+        Ok(now) if entry.expires_at() <= now => {
+            return success_without(ArtifactWithheld::NotOutstanding)
+        }
+        Ok(_) => {}
+        Err(error) => return store_unavailable(error),
     }
     if request
         .destination
@@ -568,13 +631,18 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
         Some(entry.message_xml()),
         ArtifactRelease::Returned,
     )?;
-    if entry.expires_at() <= issued.now()? {
-        return success_without(ArtifactWithheld::NotOutstanding);
+    match issued.now() {
+        Ok(now) if entry.expires_at() <= now => {
+            return success_without(ArtifactWithheld::NotOutstanding)
+        }
+        Ok(_) => {}
+        Err(error) => return store_unavailable(error),
     }
-    if !issued.consume(&artifact, &entry)? {
-        return success_without(ArtifactWithheld::NotOutstanding);
+    match issued.consume(&artifact, &entry) {
+        Ok(true) => Ok(response),
+        Ok(false) => success_without(ArtifactWithheld::NotOutstanding),
+        Err(error) => store_unavailable(error),
     }
-    Ok(response)
 }
 
 fn answered(
@@ -605,7 +673,11 @@ fn answered(
     writer.end(&prefixes.protocol("ArtifactResponse"));
     let response = SoapResponse::try_new(&writer.finish())?;
     dom::parse_document(response.envelope(), XmlLimits::default())?;
-    Ok(AnsweredArtifact { response, release })
+    Ok(AnsweredArtifact {
+        response,
+        release,
+        error: None,
+    })
 }
 
 fn channel_allows(channel: SoapChannel, required: ArtifactChannelRequirement) -> bool {

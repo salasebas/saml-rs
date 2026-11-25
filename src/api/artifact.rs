@@ -219,11 +219,18 @@ impl IdentityProvider {
     /// the response includes the message. An unknown or empty artifact, a
     /// `Destination` other than `received_at`, a different presenter, a
     /// channel without the confidentiality the message requires, or a race
-    /// lost to another responder gets `Success` without the message. An
-    /// unsupported newer version gets `VersionMismatch`, with
-    /// `RequestVersionTooHigh` for a newer major version. A present XML
-    /// signature must cover the `ArtifactResolve` and verify against
-    /// `presenter`'s signing keys before the request can be processed.
+    /// lost to another responder gets `Success` without the message. So does
+    /// a request that `issued` fails to look up, time, or consume:
+    /// [`AnsweredArtifact::error`] then returns the store error, and the
+    /// artifact is not released. An unsupported newer version gets
+    /// `VersionMismatch`, with `RequestVersionTooHigh` for a newer major
+    /// version.
+    ///
+    /// A present XML signature must cover the `ArtifactResolve` and verify
+    /// against `presenter`'s signing keys before the request can be
+    /// processed. When it does not verify, the answer has status `Requester`
+    /// with `RequestDenied`, [`AnsweredArtifact::error`] returns the
+    /// verification error, and the artifact stays outstanding.
     ///
     /// # Errors
     ///
@@ -239,12 +246,13 @@ impl IdentityProvider {
     /// not one `ArtifactResolve`, the request lacks exactly one `Artifact`
     /// element or has a second `Issuer`, or the required `ID`, `Version`, or UTC
     /// `IssueInstant` fails validation. A version below 2.0 also returns
-    /// [`SamlError::ProtocolProfile`].
-    /// Returns [`SamlError::ArtifactStoreUnavailable`] when `issued` fails
-    /// during lookup, clock read, or atomic consume, without releasing an
-    /// unconsumed message. An invalid signature returns a verification error
-    /// and leaves the artifact outstanding. A present signature without a
-    /// crypto provider returns [`SamlError::Unsupported`].
+    /// [`SamlError::ProtocolProfile`]. A signature that does not verify on a
+    /// request whose `ID` is not an `xs:NCName` or whose `Version` is not
+    /// `2.0` returns the verification error, because no SAML 2.0 answer can
+    /// correlate with it. A present signature without a crypto provider
+    /// returns [`SamlError::Unsupported`], and a crypto provider that fails
+    /// to initialize returns [`SamlError::Crypto`]. The artifact stays
+    /// outstanding.
     /// Returns [`SamlError::LimitExceeded`] when the response cannot fit
     /// within the default [`crate::XmlLimits`]. The artifact stays outstanding.
     ///

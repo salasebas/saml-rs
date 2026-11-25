@@ -177,7 +177,7 @@ fn signed_artifact_resolve_completes_the_protected_soap_exchange() -> TestResult
 }
 
 #[test]
-fn artifact_resolve_signature_failure_leaves_the_artifact_outstanding() -> TestResult {
+fn artifact_resolve_signature_failure_is_denied_and_stays_outstanding() -> TestResult {
     let parties = signature_parties(
         AcsEndpoint::artifact(SP_ACS_ARTIFACT)?.with_default(),
         XmlSignatureProfile::ExcludeWeakAlgorithms,
@@ -198,17 +198,71 @@ fn artifact_resolve_signature_failure_leaves_the_artifact_outstanding() -> TestR
         validation(),
     )?;
     let request = resolution.request().envelope();
-    let result = parties.idp.answer_artifact_resolve(
+    let denied = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         &sign_rsa(request, IDP_KEY)?,
         &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,
+    )?;
+    assert_eq!(denied.release(), ArtifactRelease::RequestDenied);
+    assert!(
+        matches!(
+            denied.error(),
+            Some(SamlError::SignatureVerification { .. })
+        ),
+        "{denied:?}"
+    );
+    assert!(!denied.response().envelope().contains(USER));
+    let refused = resolution.finish(denied.response().envelope());
+    let request_denied = saml_rs::Status::requester().with_subordinate(
+        saml_rs::SubordinateStatusCode::try_new(saml_rs::constants::status_code::REQUEST_DENIED)?,
     );
     assert!(
-        matches!(result, Err(SamlError::SignatureVerification { .. })),
-        "{result:?}"
+        matches!(&refused, Err(SamlError::StatusNotSuccess { status, .. }) if *status == request_denied),
+        "{refused:?}"
     );
+    let unknown_c14n = sign_rsa(request, PRIVKEY)?.replacen(
+        &format!(
+            r#"CanonicalizationMethod Algorithm="{}""#,
+            transform_algorithm::C14N
+        ),
+        r#"CanonicalizationMethod Algorithm="urn:example:c14n""#,
+        1,
+    );
+    assert!(unknown_c14n.contains("urn:example:c14n"));
+    let unsupported = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &unknown_c14n,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
+        &mut issued,
+        channel,
+    )?;
+    assert_eq!(unsupported.release(), ArtifactRelease::RequestDenied);
+    assert!(
+        matches!(
+            resolution.finish(unsupported.response().envelope()),
+            Err(SamlError::StatusNotSuccess { status, .. }) if status == request_denied
+        ),
+        "{unsupported:?}"
+    );
+    for (from, to) in [
+        ("Version=\"2.0\"", "Version=\"1.1\""),
+        ("Version=\"2.0\"", "Version=\"3.0\""),
+        ("ID=\"", "ID=\"a:"),
+    ] {
+        let unanswerable = parties.idp.answer_artifact_resolve(
+            &parties.sp_metadata,
+            &sign_rsa(&request.replacen(from, to, 1), IDP_KEY)?,
+            &EndpointUrl::try_new(RESOLUTION_URL)?,
+            &mut issued,
+            channel,
+        );
+        assert!(
+            matches!(unanswerable, Err(SamlError::SignatureVerification { .. })),
+            "{to}: {unanswerable:?}"
+        );
+    }
 
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -336,10 +390,11 @@ fn soap_artifact_hmac_signatures_use_the_receivers_profile() -> TestResult {
             &EndpointUrl::try_new(RESOLUTION_URL)?,
             &mut issued,
             channel,
-        );
+        )?;
         let answer = if profile == XmlSignatureProfile::StrictRsaSha2 {
+            assert_eq!(answer.release(), ArtifactRelease::RequestDenied);
             assert!(
-                matches!(answer, Err(SamlError::AlgorithmUnsupported)),
+                matches!(answer.error(), Some(SamlError::AlgorithmUnsupported)),
                 "{answer:?}"
             );
             parties.idp.answer_artifact_resolve(
@@ -350,7 +405,7 @@ fn soap_artifact_hmac_signatures_use_the_receivers_profile() -> TestResult {
                 channel,
             )?
         } else {
-            answer?
+            answer
         };
         assert_eq!(answer.release(), ArtifactRelease::Returned);
 
