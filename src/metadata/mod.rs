@@ -116,8 +116,9 @@ impl Metadata {
     /// must contain exactly one `<EntityDescriptor>` member in the SAML metadata
     /// namespace. Content inside `<Extensions>` does not count.
     /// `KeyDescriptor` certificates and `SingleLogoutService` endpoints are
-    /// read from every SSO role descriptor of the entity. A
-    /// `SingleLogoutService` is read only in the SAML metadata namespace.
+    /// read from every SSO role descriptor of the entity, whatever its
+    /// namespace or `protocolSupportEnumeration`. A `SingleLogoutService` is
+    /// read only in the SAML metadata namespace.
     /// [`SpMetadata`] and [`IdpMetadata`] read only their own role's SAML 2.0
     /// descriptors.
     ///
