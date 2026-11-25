@@ -550,9 +550,6 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     if entry.expires_at() <= issued.now()? {
         return success_without(ArtifactWithheld::NotOutstanding);
     }
-    if soap_service(metadata, artifact.endpoint_index()).is_err() {
-        return success_without(ArtifactWithheld::NotOutstanding);
-    }
     if request
         .destination
         .as_deref()
