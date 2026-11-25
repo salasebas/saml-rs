@@ -371,6 +371,11 @@ mod tests {
                 "{xml}"
             );
         }
+        assert!(Metadata::parse("<Other/>").is_ok());
+        assert!(matches!(
+            Metadata::parse("<Other/>tail"),
+            Err(SamlError::Xml { .. })
+        ));
     }
 
     #[test]

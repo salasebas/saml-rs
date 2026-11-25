@@ -38,13 +38,13 @@ impl SsoDescriptorRole {
         entity: Option<&dom::Node>,
         limits: XmlLimits,
     ) -> Result<SelectedDescriptors, SamlError> {
+        let document = protocol_element::parse_saml_with_limits(xml, limits)?;
         let local_name = match (self, entity) {
             (Self::Any, None) => return Ok(Self::no_descriptors()),
             (Self::Any, Some(_)) => "EntityDescriptor",
             (Self::ServiceProvider, _) => "SPSSODescriptor",
             (Self::IdentityProvider, _) => "IDPSSODescriptor",
         };
-        let document = protocol_element::parse_saml_with_limits(xml, limits)?;
         let entity = entity.ok_or_else(|| SamlError::MissingMetadata(local_name.into()))?;
         let path = namespaced_path(&document, entity)?;
         let valid_until_bounds = match self {
