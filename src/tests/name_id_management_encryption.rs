@@ -16,6 +16,7 @@ use std::time::{Duration, SystemTime};
 use saml_rs::binding::{append_signature, build_redirect_octet};
 use saml_rs::constants::{signature_algorithm::RSA_SHA256, status_code, ParserType};
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
+use saml_rs::util::normalize_cert_string;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EndpointUrl, EntityId, IdentifierEncryptionPolicy,
     IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound,
@@ -50,6 +51,7 @@ const IDP_NEXT_DECRYPTION_KEY: &str =
     include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const IDP_NEXT_ENCRYPTION_CERT: &str =
     include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const EC_CERT: &str = include_str!("../../tests/fixtures/key/prime256v1/cert.pem");
 
 fn credentials(encryption_cert: &str, decryption_key: &str) -> Credentials {
     Credentials::default()
@@ -352,6 +354,75 @@ fn identity_provider_decrypts_identifiers_made_for_either_published_certificate(
             &NameIdChange::NewId("sp-alias".into())
         );
     }
+    Ok(())
+}
+
+fn with_unusable_encryption_key_first(
+    metadata: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let first_encryption_key = metadata
+        .find("<KeyDescriptor use=\"encryption\"")
+        .ok_or("metadata publishes no encryption key")?;
+    let mut metadata = metadata.to_string();
+    metadata.insert_str(
+        first_encryption_key,
+        &format!(
+            "<KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><ds:X509Data><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>",
+            normalize_cert_string(EC_CERT)
+        ),
+    );
+    Ok(metadata)
+}
+
+#[test]
+fn identifiers_are_encrypted_for_a_later_peer_key_the_key_transport_can_use() -> TestResult {
+    let sp = sp()?;
+    let idp = idp()?;
+    let sp_peer = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &with_unusable_encryption_key_first(sp.metadata_xml())?,
+        MetadataTrustPolicy::Unverified,
+    )?;
+    let idp_peer = idp_descriptor_from(&with_unusable_encryption_key_first(idp.metadata_xml())?)?;
+
+    let started = sp.start_name_id_management_redirect(
+        &idp_peer,
+        &alice(),
+        &NameIdChange::NewId("sp-alias".into()),
+        encrypted(),
+    )?;
+    encrypted_identifier_and_new_value(&redirect_message_xml(&started.outbound)?)?;
+    let NameIdManagementReceipt::Request(request) = idp.receive_name_id_management_redirect(
+        &sp_descriptor(&sp)?,
+        request_input(&started.outbound)?,
+        ReceiveNameIdManagement::new(),
+        validation(),
+    )?
+    else {
+        return Err("the service provider request was refused".into());
+    };
+    assert_eq!(request.message().name_id(), &alice());
+
+    let started = idp.start_name_id_management_redirect(
+        &sp_peer,
+        &alice(),
+        &NameIdChange::NewId("alice-2".into()),
+        encrypted(),
+    )?;
+    encrypted_identifier_and_new_value(&redirect_message_xml(&started.outbound)?)?;
+    let NameIdManagementReceipt::Request(request) = sp.receive_name_id_management_redirect(
+        &idp_descriptor(&idp)?,
+        request_input(&started.outbound)?,
+        ReceiveNameIdManagement::new(),
+        validation(),
+    )?
+    else {
+        return Err("the identity provider request was refused".into());
+    };
+    assert_eq!(
+        request.message().change(),
+        &NameIdChange::NewId("alice-2".into())
+    );
     Ok(())
 }
 

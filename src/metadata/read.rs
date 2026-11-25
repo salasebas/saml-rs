@@ -10,7 +10,7 @@ use crate::xml::{dom, extract_with_limits, ExtractorField, XmlLimits};
 
 use super::description_read::EntityDescription;
 use super::role::{self, SelectedDescriptors, SsoDescriptorRole};
-use super::{endpoints, entity_attributes, KeyCertificates, Metadata};
+use super::{endpoints, entity_attributes, Metadata};
 
 const MULTIPLE_ENTITY_DESCRIPTORS: &str = "metadata has more than one EntityDescriptor";
 
@@ -156,7 +156,7 @@ impl Metadata {
             xml,
             meta,
             entity_id: descriptors.entity_id,
-            key_certificates: KeyCertificates::from_descriptors(&descriptors.nodes),
+            key_certificates: descriptors.key_certificates,
             valid_until_bounds: descriptors.valid_until_bounds,
             signing_flags: descriptors.signing_flags,
             scope_elements: descriptors.scope_elements,

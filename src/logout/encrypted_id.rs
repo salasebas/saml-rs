@@ -1,5 +1,5 @@
 use crate::config::IdentifierEncryptionPolicy;
-use crate::constants::{CertUse, ParserType};
+use crate::constants::ParserType;
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::flow::FlowResult;
@@ -15,28 +15,22 @@ pub(super) fn encrypt_name_id_for_peer(
 ) -> Result<String, SamlError> {
     match policy {
         IdentifierEncryptionPolicy::PlaintextIdentifiers => Ok(xml),
-        IdentifierEncryptionPolicy::EncryptIdentifiers => {
-            let certificate = target_meta
-                .x509_certificates(CertUse::Encryption)
-                .first()
-                .ok_or_else(|| SamlError::MissingMetadata("encryption certificate".into()))?;
-            encrypt(&xml, certificate, init_setting)
-        }
+        IdentifierEncryptionPolicy::EncryptIdentifiers => encrypt(&xml, init_setting, target_meta),
     }
 }
 
 #[cfg(crypto)]
-fn encrypt(xml: &str, certificate: &str, setting: &EntitySetting) -> Result<String, SamlError> {
-    crate::crypto::enc::encrypt_logout_request_name_id(
+fn encrypt(xml: &str, setting: &EntitySetting, peer: &Metadata) -> Result<String, SamlError> {
+    use crate::crypto::enc::{encrypt_logout_request_name_id, EncryptionRecipient};
+
+    encrypt_logout_request_name_id(
         xml,
-        certificate,
-        &setting.data_encryption_algorithm,
-        crate::crypto::enc::KeyTransport::from_setting(setting),
+        &EncryptionRecipient::from_setting(peer.encryption_key_certificates(), setting),
     )
 }
 
 #[cfg(not(crypto))]
-fn encrypt(_xml: &str, _certificate: &str, _setting: &EntitySetting) -> Result<String, SamlError> {
+fn encrypt(_xml: &str, _setting: &EntitySetting, _peer: &Metadata) -> Result<String, SamlError> {
     Err(SamlError::Unsupported(
         "XML encryption requires a crypto provider feature".into(),
     ))

@@ -30,7 +30,8 @@ impl IdentityProvider {
     /// [`StartNameIdManagement::identifier_encryption`] with
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers) sends the
     /// identifier as `EncryptedID`, and a new value as `NewEncryptedID`, for
-    /// the first encryption certificate in the service provider's metadata.
+    /// the first encryption key in the service provider's metadata that the
+    /// configured algorithms can use.
     /// The default, [`IdentifierEncryptionPolicy::PlaintextIdentifiers`](crate::IdentifierEncryptionPolicy::PlaintextIdentifiers),
     /// sends `NameID` and `NewID`. A SOAP request carries no RelayState, so
     /// [`StartNameIdManagement::relay_state`] must stay unset.

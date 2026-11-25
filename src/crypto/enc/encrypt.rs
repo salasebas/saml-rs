@@ -13,6 +13,7 @@ use crate::error::{crypto_err, SamlError};
 use crate::xml::dom;
 use crate::xml::fragment::standalone_element;
 use crate::xml::name::validate_namespace_prefix;
+use bergshamra::keys::build_x509_key_info_from_der;
 use bergshamra::xml::{Document as XmlDocument, NodeId};
 use bergshamra::{encrypt, EncContext, Key, KeysManager};
 
@@ -81,7 +82,13 @@ impl<'a> EncryptionRecipient<'a> {
         let mut first_error = None;
         for certificate in &self.certificates {
             let attempt = load_certificate(certificate).and_then(|key| {
+                let [certificate] = &key.x509_chain[..] else {
+                    return Err(SamlError::crypto(
+                        "encryption certificate did not load as one X.509 certificate",
+                    ));
+                };
                 let key = EncryptionKey {
+                    key_info: build_x509_key_info_from_der(&[certificate]),
                     key,
                     data_algorithm: self.data_algorithm,
                     key_transport: self.key_transport,
@@ -102,6 +109,7 @@ impl<'a> EncryptionRecipient<'a> {
 
 pub(super) struct EncryptionKey<'a> {
     key: Key,
+    key_info: String,
     data_algorithm: &'a str,
     key_transport: KeyTransport<'a>,
 }
@@ -120,8 +128,9 @@ fn encrypted_data_xml(
         None => String::new(),
     };
     let key_alg = xml_escape(key_alg.uri);
+    let key_info = &recipient.key_info;
     let template = format!(
-        "<xenc:EncryptedData xmlns:xenc=\"{enc}\" Type=\"{enc}Element\"><xenc:EncryptionMethod Algorithm=\"{data_alg}\"/><ds:KeyInfo xmlns:ds=\"{dsig}\"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm=\"{key_alg}\">{parameters}</xenc:EncryptionMethod><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedData>",
+        "<xenc:EncryptedData xmlns:xenc=\"{enc}\" Type=\"{enc}Element\"><xenc:EncryptionMethod Algorithm=\"{data_alg}\"/><ds:KeyInfo xmlns:ds=\"{dsig}\"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm=\"{key_alg}\">{parameters}</xenc:EncryptionMethod>{key_info}<xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedData>",
         enc = ENC,
         dsig = namespace::DSIG,
     );
@@ -203,12 +212,9 @@ pub(crate) fn encrypt_assertion_elements(
 
 pub(crate) fn encrypt_logout_request_name_id(
     xml: &str,
-    encrypt_cert: &str,
-    data_alg: &str,
-    key_alg: KeyTransport<'_>,
+    recipient: &EncryptionRecipient<'_>,
 ) -> Result<String, SamlError> {
-    let recipient = EncryptionRecipient::new([encrypt_cert], data_alg, key_alg);
-    encrypt_selected(xml, &recipient, |document| {
+    encrypt_selected(xml, recipient, |document| {
         let [name_id] = root_children(document, namespace::ASSERTION, "NameID")?[..] else {
             return Err(SamlError::ProtocolProfile(
                 "LogoutRequest must carry one NameID to encrypt".into(),
@@ -278,12 +284,9 @@ fn own_prefix_declaration<'d>(document: &'d XmlDocument<'_>, element: NodeId) ->
 pub(crate) fn encrypt_root_children(
     xml: &str,
     kinds: &[EncryptedElementKind],
-    encrypt_cert: &str,
-    data_alg: &str,
-    key_alg: KeyTransport<'_>,
+    recipient: &EncryptionRecipient<'_>,
 ) -> Result<String, SamlError> {
-    let recipient = EncryptionRecipient::new([encrypt_cert], data_alg, key_alg);
-    encrypt_selected(xml, &recipient, |document| {
+    encrypt_selected(xml, recipient, |document| {
         let mut selected = Vec::new();
         for kind in kinds {
             for element in root_children(document, kind.namespace, kind.plaintext)? {

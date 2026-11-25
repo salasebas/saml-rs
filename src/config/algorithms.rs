@@ -142,11 +142,17 @@ impl DataEncryptionAlgorithm {
 ///
 /// Custom URI values are forwarded to the configured crypto backend and can
 /// still fail at runtime when unsupported by that backend.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+///
+/// [`Default`](Default::default) is [`Self::RsaOaepMgf1p`]. With
+/// `crypto-fips` it is [`Self::RsaOaep`] with [`DigestAlgorithm::Sha256`]
+/// and [`MaskGenerationFunction::Mgf1Sha256`].
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum KeyEncryptionAlgorithm {
-    /// RSA-OAEP-MGF1P.
-    #[default]
+    /// RSA-OAEP-MGF1P, with SHA-1 as the OAEP digest and in MGF1.
+    ///
+    /// With `crypto-fips`, config builders reject it, and a
+    /// [`Self::Custom`] with its URI, with [`crate::SamlError::Unsupported`].
     RsaOaepMgf1p,
     /// XML Encryption 1.1 RSA-OAEP with explicit digest and mask generation.
     ///
@@ -159,11 +165,25 @@ pub enum KeyEncryptionAlgorithm {
         /// Mask generation function used by OAEP.
         mgf: MaskGenerationFunction,
     },
-    /// RSAES-PKCS1-v1_5 for outbound key transport on RustCrypto with `crypto-legacy-algorithms`.
+    /// RSAES-PKCS1-v1_5, available with `crypto-legacy-algorithms` on
+    /// RustCrypto or `crypto-aws-lc`.
     /// Inbound use requires [`crate::Rsa15KeyTransportPolicy::AllowDecryption`].
     Rsa15,
     /// Backend-specific key transport algorithm URI.
     Custom(String),
+}
+
+impl Default for KeyEncryptionAlgorithm {
+    fn default() -> Self {
+        if cfg!(feature = "crypto-fips") {
+            Self::RsaOaep {
+                digest: DigestAlgorithm::Sha256,
+                mgf: MaskGenerationFunction::Mgf1Sha256,
+            }
+        } else {
+            Self::RsaOaepMgf1p
+        }
+    }
 }
 
 impl KeyEncryptionAlgorithm {

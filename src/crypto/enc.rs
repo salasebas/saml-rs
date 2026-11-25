@@ -26,7 +26,7 @@ pub(crate) use decrypt::{decrypt_assertion_with_limits, AssertionDecryptionOptio
 pub(crate) use encrypt::encrypt_assertion;
 pub(crate) use encrypt::{
     encrypt_assertion_elements, encrypt_assertion_with_key_transport,
-    encrypt_logout_request_name_id, encrypt_root_children, EncryptionRecipient, KeyTransport,
+    encrypt_logout_request_name_id, encrypt_root_children, EncryptionRecipient,
 };
 pub(crate) use policy::response_uses_cbc_encrypted_assertion;
 
@@ -206,6 +206,21 @@ mod tests {
         include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
     const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
     const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
+
+    #[test]
+    fn encrypted_key_names_the_certificate_the_key_was_loaded_from(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let with_preamble = format!("Subject: CN=sp.example.com\n{SP_CERT}");
+        let encrypted =
+            encrypt_assertion(RESPONSE, &with_preamble, AES_256, RSA_OAEP_MGF1P, "saml")?;
+        let named = format!(
+            "<ds:X509Certificate>{}</ds:X509Certificate>",
+            crate::util::normalize_cert_string(SP_CERT)
+        );
+        assert_eq!(encrypted.matches(&named).count(), 1, "{encrypted}");
+        assert!(!encrypted.contains("Subject:"), "{encrypted}");
+        Ok(())
+    }
 
     #[test]
     fn encrypt_then_decrypt_round_trip() -> Result<(), Box<dyn std::error::Error>> {
@@ -509,8 +524,10 @@ mod tests {
             r#"<n:NameID xmlns:n="urn:oasis:names:tc:SAML:2.0:assertion">alice</n:NameID>"#,
             r#"</samlp:LogoutRequest>"#,
         );
-        let encrypted =
-            encrypt_logout_request_name_id(request, SP_CERT, AES_256, RSA_OAEP_MGF1P.into())?;
+        let encrypted = encrypt_logout_request_name_id(
+            request,
+            &EncryptionRecipient::new([SP_CERT], AES_256, RSA_OAEP_MGF1P.into()),
+        )?;
         let document = uppsala::parse(&encrypted)?;
         if root_children(&document, namespace::ASSERTION, "EncryptedID")?.len() != 1 {
             return Err(format!("no assertion-namespace EncryptedID: {encrypted}").into());

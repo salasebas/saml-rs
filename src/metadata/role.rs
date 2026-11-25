@@ -5,6 +5,8 @@ use crate::xml::dom::{self, XmlLimits};
 use crate::xml::protocol_element::{self, SamlElement};
 use crate::xml::{xs_boolean, ExtractorField};
 
+use super::KeyCertificates;
+
 #[derive(Clone, Copy)]
 pub(super) enum SsoDescriptorRole {
     Any,
@@ -14,6 +16,7 @@ pub(super) enum SsoDescriptorRole {
 
 pub(super) struct SelectedDescriptors<'a> {
     pub(super) nodes: Vec<&'a dom::Node>,
+    pub(super) key_certificates: KeyCertificates,
     pub(super) entity_id: Option<String>,
     pub(super) valid_until_bounds: Vec<String>,
     pub(super) signing_flags: SigningFlags,
@@ -47,17 +50,19 @@ impl SsoDescriptorRole {
         entity: Option<&'a dom::Node>,
         limits: XmlLimits,
     ) -> Result<SelectedDescriptors<'a>, SamlError> {
-        let local_name = match self {
-            Self::Any => {
-                return Ok(Self::untyped_descriptors(entity));
-            }
-            Self::ServiceProvider => "SPSSODescriptor",
-            Self::IdentityProvider => "IDPSSODescriptor",
+        let local_name = match (self, entity) {
+            (Self::Any, None) => return Ok(Self::no_descriptors()),
+            (Self::Any, Some(_)) => "EntityDescriptor",
+            (Self::ServiceProvider, _) => "SPSSODescriptor",
+            (Self::IdentityProvider, _) => "IDPSSODescriptor",
         };
         let document = protocol_element::parse_saml_with_limits(xml, limits)?;
         let entity = entity.ok_or_else(|| SamlError::MissingMetadata(local_name.into()))?;
         let path = namespaced_path(&document, entity)?;
-        let valid_until_bounds = valid_until_bounds(&path);
+        let valid_until_bounds = match self {
+            Self::Any => Vec::new(),
+            Self::ServiceProvider | Self::IdentityProvider => valid_until_bounds(&path),
+        };
         let namespaced = path.last().ok_or_else(missing_entity)?;
         self.typed_descriptors(entity, namespaced, valid_until_bounds)
     }
@@ -69,7 +74,7 @@ impl SsoDescriptorRole {
         mut valid_until_bounds: Vec<String>,
     ) -> Result<SelectedDescriptors<'a>, SamlError> {
         let local_name = match self {
-            Self::Any => return Ok(Self::untyped_descriptors(Some(entity))),
+            Self::Any => return Ok(Self::untyped_descriptors(entity, namespaced)),
             Self::ServiceProvider => "SPSSODescriptor",
             Self::IdentityProvider => "IDPSSODescriptor",
         };
@@ -84,6 +89,7 @@ impl SsoDescriptorRole {
             scope_elements.extend(super::scope::scope_elements(namespaced).cloned());
         }
         let mut nodes = Vec::new();
+        let mut namespaced_descriptors = Vec::new();
         let mut signing_flags = SigningFlags::default();
         for (child, descriptor) in entity.children.iter().zip(&namespaced.children) {
             if descriptor.is(namespace::METADATA, local_name) && lists_saml2(descriptor) {
@@ -105,6 +111,7 @@ impl SsoDescriptorRole {
                     Self::Any => {}
                 }
                 nodes.push(child);
+                namespaced_descriptors.push(descriptor);
                 valid_until_bounds.extend(descriptor.attr("validUntil").map(str::to_owned));
             }
         }
@@ -113,6 +120,7 @@ impl SsoDescriptorRole {
         }
         Ok(SelectedDescriptors {
             nodes,
+            key_certificates: KeyCertificates::from_descriptors(&namespaced_descriptors),
             entity_id,
             valid_until_bounds,
             signing_flags,
@@ -120,16 +128,31 @@ impl SsoDescriptorRole {
         })
     }
 
-    fn untyped_descriptors(entity: Option<&dom::Node>) -> SelectedDescriptors<'_> {
+    fn untyped_descriptors<'a>(
+        entity: &'a dom::Node,
+        namespaced: &SamlElement,
+    ) -> SelectedDescriptors<'a> {
+        let (nodes, namespaced_descriptors): (Vec<&dom::Node>, Vec<&SamlElement>) = entity
+            .children
+            .iter()
+            .zip(&namespaced.children)
+            .filter(|(child, _)| is_sso_descriptor(child))
+            .unzip();
         SelectedDescriptors {
-            nodes: entity
-                .into_iter()
-                .flat_map(|entity| &entity.children)
-                .filter(|child| is_sso_descriptor(child))
-                .collect(),
-            entity_id: entity
-                .and_then(|node| node.attr("entityID"))
-                .map(str::to_owned),
+            nodes,
+            key_certificates: KeyCertificates::from_descriptors(&namespaced_descriptors),
+            entity_id: entity.attr("entityID").map(str::to_owned),
+            valid_until_bounds: Vec::new(),
+            signing_flags: SigningFlags::default(),
+            scope_elements: Vec::new(),
+        }
+    }
+
+    fn no_descriptors<'a>() -> SelectedDescriptors<'a> {
+        SelectedDescriptors {
+            nodes: Vec::new(),
+            key_certificates: KeyCertificates::default(),
+            entity_id: None,
             valid_until_bounds: Vec::new(),
             signing_flags: SigningFlags::default(),
             scope_elements: Vec::new(),

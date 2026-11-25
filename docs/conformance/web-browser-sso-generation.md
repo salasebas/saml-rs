@@ -124,8 +124,9 @@ unsigned request from an SP whose metadata declares `AuthnRequestsSigned`.
 | Encrypt for the first service provider encryption key the configured algorithms can use. Skip a key that does not load or that the crypto provider refuses, such as an EC key or an RSA key too small for the key transport | Library policy: E68 lets the encrypting party use any published key, and OpenSAML 5.2.0 also skips a credential without a usable key transport. | Metadata §2.4.1.1, E62, E68 | Always |
 | Take the keys of the first SP role with an encryption certificate: its first certificate, then each later `KeyDescriptor` whose `KeyInfo` holds one certificate and only `KeyName` beside it | Library policy: E68 makes keys interchangeable within a role, and OpenSAML 5.2.0 also treats a sole certificate as the entity certificate, while other key declarations can name another key. | XML Signature §4.4, §4.4.4, Metadata §2.4.1.1, E68 | Always |
 | Look up that certificate only when the response has an element to encrypt | Library policy: a response without such an element uses no encryption key. | Core §2.7.3.2, E68 | Always |
+| Name the chosen certificate in each `EncryptedKey`, as a `ds:X509Certificate` in the `ds:X509Data` of its `ds:KeyInfo` | Recommended | Metadata §2.4.1.1, E68, XML Encryption §3.5.1 | Always |
 
-The identity provider does not yet identify in the `EncryptedKey` which service provider key it encrypted for. E68 recommends that the encrypting party do so when possible (Metadata §2.4.1.1).
+The identity provider encrypts with the configured `AlgorithmPolicy` algorithms. It does not read the optional `md:EncryptionMethod` elements of a `KeyDescriptor` (Metadata §2.4.1.1), so it neither chooses an algorithm from them nor prefers a key that lists the configured one. OpenSAML 5.2.0 `SAMLMetadataEncryptionParametersResolver` also keeps a credential whose listed methods it cannot use and encrypts with its configured algorithms.
 
 ## Endpoint selection
 

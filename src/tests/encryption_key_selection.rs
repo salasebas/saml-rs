@@ -85,6 +85,22 @@ fn assert_encrypted(encryption: XmlEncryptionPolicy, xml: &str) {
     }
 }
 
+fn assert_each_encrypted_key_names(xml: &str, certificate: &str) {
+    let named = format!(
+        "<ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><ds:X509Data><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data></ds:KeyInfo>",
+        normalize_cert_string(certificate)
+    );
+    let encrypted_keys: Vec<&str> = xml
+        .split("<xenc:EncryptedKey>")
+        .skip(1)
+        .filter_map(|rest| rest.split("</xenc:EncryptedKey>").next())
+        .collect();
+    assert!(!encrypted_keys.is_empty(), "no EncryptedKey: {xml}");
+    for encrypted_key in encrypted_keys {
+        assert!(encrypted_key.contains(&named), "{encrypted_key}");
+    }
+}
+
 fn exchange_with_encryption_keys_first(
     idp: &IdentityProvider,
     encryption: XmlEncryptionPolicy,
@@ -107,6 +123,7 @@ fn exchange_with_encryption_keys_first(
     );
     let exchange = exchange_between(&sp, &sp_descriptor(&metadata)?, idp, &idp_descriptor)?;
     assert_encrypted(encryption, &exchange.xml);
+    assert_each_encrypted_key_names(&exchange.xml, CERT);
     let session = exchange.session?;
     assert_eq!(session.name_id(), &alice());
     assert_eq!(session.attributes(), &attributes());

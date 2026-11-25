@@ -12,7 +12,10 @@ use saml_rs::constants::{signature_algorithm, transform_algorithm};
 use saml_rs::error::SignatureVerificationReason;
 #[cfg(feature = "crypto-rustcrypto")]
 use saml_rs::AuthnRequest;
-#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+#[cfg(all(
+    feature = "crypto-legacy-algorithms",
+    any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc")
+))]
 use saml_rs::Rsa15KeyTransportPolicy;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
@@ -81,7 +84,6 @@ fn signing(signature: SignatureAlgorithm) -> AlgorithmPolicy {
     algorithms
 }
 
-#[cfg(not(feature = "crypto-fips"))]
 fn encrypted_assertions() -> XmlPolicy {
     let mut xml = XmlPolicy::default();
     xml.encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
@@ -368,7 +370,6 @@ fn xmlenc11_algorithms_round_trip_each_encrypted_element() -> Result<(), Box<dyn
     Ok(())
 }
 
-#[cfg(not(feature = "crypto-fips"))]
 #[test]
 fn recommended_generation_uses_rsa_sha256_aes256_and_rsa_oaep(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -384,9 +385,14 @@ fn recommended_generation_uses_rsa_sha256_aes256_and_rsa_oaep(
         algorithm_attributes(&exchange.response_xml, "SignatureMethod"),
         [signature_algorithm::RSA_SHA256]
     );
+    let oaep_digest: &[&str] = if cfg!(feature = "crypto-fips") {
+        &[saml_rs::constants::digest_algorithm::SHA256]
+    } else {
+        &[]
+    };
     assert_eq!(
         algorithm_attributes(&exchange.response_xml, "DigestMethod"),
-        [saml_rs::constants::digest_algorithm::SHA256]
+        [&[saml_rs::constants::digest_algorithm::SHA256], oaep_digest].concat()
     );
     assert_eq!(
         algorithm_attributes(&exchange.response_xml, "Transform"),
@@ -395,11 +401,16 @@ fn recommended_generation_uses_rsa_sha256_aes256_and_rsa_oaep(
             transform_algorithm::EXC_C14N
         ]
     );
+    let key_transport = if cfg!(feature = "crypto-fips") {
+        saml_rs::constants::key_encryption_algorithm::RSA_OAEP
+    } else {
+        saml_rs::constants::key_encryption_algorithm::RSA_OAEP_MGF1P
+    };
     assert_eq!(
         algorithm_attributes(&exchange.response_xml, "EncryptionMethod"),
         [
             saml_rs::constants::data_encryption_algorithm::AES_256,
-            saml_rs::constants::key_encryption_algorithm::RSA_OAEP_MGF1P
+            key_transport
         ]
     );
     for legacy in [
@@ -774,7 +785,10 @@ fn selected_block_encryption_and_key_transport_round_trip() -> Result<(), Box<dy
     Ok(())
 }
 
-#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+#[cfg(all(
+    feature = "crypto-legacy-algorithms",
+    any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc")
+))]
 #[test]
 fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn std::error::Error>> {
     let mut rsa15 = AlgorithmPolicy::default();

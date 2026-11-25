@@ -32,6 +32,16 @@ fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::
         };
         algorithms.push(mismatched_mgf);
     }
+    if cfg!(feature = "crypto-fips") {
+        let mut sha1_oaep = AlgorithmPolicy::default();
+        sha1_oaep.key_encryption = KeyEncryptionAlgorithm::RsaOaepMgf1p;
+        algorithms.push(sha1_oaep);
+        let mut sha1_oaep_uri = AlgorithmPolicy::default();
+        sha1_oaep_uri.key_encryption = KeyEncryptionAlgorithm::Custom(
+            "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p".into(),
+        );
+        algorithms.push(sha1_oaep_uri);
+    }
     for algorithms in algorithms {
         let sp = SpConfig::builder(
             EntityId::try_new("https://sp.example.com/metadata")?,
@@ -255,7 +265,10 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
     let mut algorithms = AlgorithmPolicy::default();
     algorithms.signature = SignatureAlgorithm::RsaSha512;
     algorithms.data_encryption = DataEncryptionAlgorithm::Aes128Cbc;
-    algorithms.key_encryption = KeyEncryptionAlgorithm::RsaOaepMgf1p;
+    algorithms.key_encryption = KeyEncryptionAlgorithm::RsaOaep {
+        digest: DigestAlgorithm::Sha512,
+        mgf: MaskGenerationFunction::Mgf1Sha512,
+    };
     algorithms.signed_reference_transforms = vec![TransformAlgorithm::ExclusiveCanonicalization];
     let mut xml = XmlPolicy::default();
     xml.redirect_inflate_max_bytes = 64 * 1024;
@@ -287,7 +300,10 @@ fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
     let mut algorithms = AlgorithmPolicy::default();
     algorithms.signature = SignatureAlgorithm::RsaSha384;
     algorithms.data_encryption = DataEncryptionAlgorithm::Aes256Cbc;
-    algorithms.key_encryption = KeyEncryptionAlgorithm::RsaOaepMgf1p;
+    algorithms.key_encryption = KeyEncryptionAlgorithm::RsaOaep {
+        digest: DigestAlgorithm::Sha512,
+        mgf: MaskGenerationFunction::Mgf1Sha512,
+    };
     algorithms.signed_reference_transforms = vec![TransformAlgorithm::EnvelopedSignature];
     let mut xml = XmlPolicy::default();
     xml.redirect_inflate_max_bytes = 128 * 1024;
