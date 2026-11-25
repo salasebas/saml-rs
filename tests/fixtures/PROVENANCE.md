@@ -279,6 +279,11 @@ canonical path; tests and unit tests load it from that path.
   metadata namespace as the default namespace of their root
   `EntityDescriptor`. Upstream binds it to an `md` prefix that no element
   uses, which leaves their role descriptors outside the metadata namespace.
+  `misc/idpmeta.xml`, `misc/idpmeta_rollingcert.xml`,
+  `misc/idpmeta_share_cert.xml`, and `misc/spmeta.xml` bind the XML
+  Signature namespace as the default namespace of each `KeyInfo`. Upstream
+  leaves `KeyInfo` and its `X509Data` in the metadata namespace, where a
+  `KeyDescriptor` holds no key.
 - `tests/fixtures/key/idp/**` and `tests/fixtures/key/sp/**` - historical
   samlify IdP and SP test certificates and keys. `key/idp/README.md` maps each
   IdP private key to its certificate.

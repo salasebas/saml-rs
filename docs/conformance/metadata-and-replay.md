@@ -54,6 +54,7 @@ The peer descriptors read the role the peer acts in. `Metadata::parse` has no ro
 | Read the keys of a peer from the `KeyDescriptor` elements of the role it acts in. Verify its signatures and encrypt to it with that role's certificates | Mandatory | Metadata §2.4.1 | Always |
 | Reject a message signed with a key that only the peer's other role publishes | Library policy: no OASIS receiver rule names that case. | Metadata §2.4.1 | Always |
 | Verify with the certificates of a `KeyDescriptor` whose `use` is `signing` or absent, and encrypt with those whose `use` is `encryption` or absent | Mandatory | Metadata §2.4.1.1, E62 | Always |
+| Read a certificate only from a `ds:X509Certificate` in a `ds:X509Data` of the `ds:KeyInfo` of a `KeyDescriptor`, each in its own namespace. An element of the same local name in another namespace holds no key | Mandatory | Metadata §2.4.1.1, `KeyDescriptorType`, XML Signature §4.4, §4.4.4 | Always |
 | Ignore a `KeyDescriptor` whose `use` is neither value | Library policy: reason not recorded. | Metadata §2.4.1.1 | Always |
 | Try every certificate published for the same use when verifying | Recommended | E68 | Always |
 | Read `NameIDFormat` with XML Schema whitespace collapse | Mandatory | Metadata §2.4.2, XML Schema 1.0 Part 2 §4.3.6 | Always |

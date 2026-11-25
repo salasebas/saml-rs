@@ -10,6 +10,7 @@ use crate::constants::namespace;
 use crate::crypto::keys::load_certificate;
 use crate::entity::EntitySetting;
 use crate::error::{crypto_err, SamlError};
+use crate::util::normalize_cert_string;
 use crate::xml::dom;
 use crate::xml::fragment::standalone_element;
 use crate::xml::name::validate_namespace_prefix;
@@ -83,6 +84,7 @@ impl<'a> EncryptionRecipient<'a> {
             let attempt = load_certificate(certificate).and_then(|key| {
                 let key = EncryptionKey {
                     key,
+                    certificate: normalize_cert_string(certificate),
                     data_algorithm: self.data_algorithm,
                     key_transport: self.key_transport,
                 };
@@ -102,6 +104,7 @@ impl<'a> EncryptionRecipient<'a> {
 
 pub(super) struct EncryptionKey<'a> {
     key: Key,
+    certificate: String,
     data_algorithm: &'a str,
     key_transport: KeyTransport<'a>,
 }
@@ -120,8 +123,9 @@ fn encrypted_data_xml(
         None => String::new(),
     };
     let key_alg = xml_escape(key_alg.uri);
+    let certificate = xml_escape(&recipient.certificate);
     let template = format!(
-        "<xenc:EncryptedData xmlns:xenc=\"{enc}\" Type=\"{enc}Element\"><xenc:EncryptionMethod Algorithm=\"{data_alg}\"/><ds:KeyInfo xmlns:ds=\"{dsig}\"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm=\"{key_alg}\">{parameters}</xenc:EncryptionMethod><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedData>",
+        "<xenc:EncryptedData xmlns:xenc=\"{enc}\" Type=\"{enc}Element\"><xenc:EncryptionMethod Algorithm=\"{data_alg}\"/><ds:KeyInfo xmlns:ds=\"{dsig}\"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm=\"{key_alg}\">{parameters}</xenc:EncryptionMethod><ds:KeyInfo xmlns:ds=\"{dsig}\"><ds:X509Data><ds:X509Certificate>{certificate}</ds:X509Certificate></ds:X509Data></ds:KeyInfo><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedData>",
         enc = ENC,
         dsig = namespace::DSIG,
     );
