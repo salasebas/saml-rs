@@ -2,6 +2,14 @@ use super::{AlgorithmPolicy, KeyEncryptionAlgorithm};
 use crate::error::SamlError;
 
 pub(super) fn validate_algorithms(algorithms: &AlgorithmPolicy) -> Result<(), SamlError> {
+    if cfg!(feature = "crypto-fips")
+        && algorithms.key_encryption == KeyEncryptionAlgorithm::RsaOaepMgf1p
+    {
+        return Err(SamlError::Unsupported(
+            "crypto-fips does not encrypt with RSA-OAEP-MGF1P, which uses SHA-1; select KeyEncryptionAlgorithm::RsaOaep with SHA-256, SHA-384, or SHA-512"
+                .into(),
+        ));
+    }
     if let KeyEncryptionAlgorithm::RsaOaep { digest, mgf } = &algorithms.key_encryption {
         let params = bergshamra::crypto::keytransport::OaepParams {
             digest_uri: Some(digest.as_uri().to_string()),

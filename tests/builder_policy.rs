@@ -32,6 +32,11 @@ fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::
         };
         algorithms.push(mismatched_mgf);
     }
+    if cfg!(feature = "crypto-fips") {
+        let mut sha1_oaep = AlgorithmPolicy::default();
+        sha1_oaep.key_encryption = KeyEncryptionAlgorithm::RsaOaepMgf1p;
+        algorithms.push(sha1_oaep);
+    }
     for algorithms in algorithms {
         let sp = SpConfig::builder(
             EntityId::try_new("https://sp.example.com/metadata")?,

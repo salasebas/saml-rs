@@ -64,3 +64,43 @@ metadata, or bind the XML Signature namespace in your copy:
 <!-- After -->
 <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data><ds:X509Certificate>MIIC...</ds:X509Certificate></ds:X509Data></ds:KeyInfo>
 ```
+
+## crypto-fips encrypts with RSA-OAEP and SHA-256 by default
+
+With `crypto-fips`, `KeyEncryptionAlgorithm::default()`, and so
+`AlgorithmPolicy::default().key_encryption`, is now:
+
+```rust
+use saml_rs::{DigestAlgorithm, KeyEncryptionAlgorithm, MaskGenerationFunction};
+
+let fips_default = KeyEncryptionAlgorithm::RsaOaep {
+    digest: DigestAlgorithm::Sha256,
+    mgf: MaskGenerationFunction::Mgf1Sha256,
+};
+```
+
+It writes the key transport URI `http://www.w3.org/2009/xmlenc11#rsa-oaep`
+with a SHA-256 `ds:DigestMethod` and an `xenc11:MGF` for MGF1 with SHA-256.
+Before, the default was `KeyEncryptionAlgorithm::RsaOaepMgf1p`, which uses
+SHA-1 in OAEP. The FIPS provider refuses SHA-1 there, so every encrypted
+assertion, identifier, or attribute failed with `SamlError::Crypto` when the
+message was built. Other providers keep `RsaOaepMgf1p` as the default.
+
+`SpConfigBuilder::build` and `IdpConfigBuilder::build` with `crypto-fips` now
+return `SamlError::Unsupported` when `AlgorithmPolicy::key_encryption` is
+`KeyEncryptionAlgorithm::RsaOaepMgf1p`. Before, the builders accepted it and
+encryption failed later.
+
+The change affects a `crypto-fips` deployment that encrypts for a peer:
+
+- If your code sets `key_encryption` to `RsaOaepMgf1p`, remove that line or
+  select `KeyEncryptionAlgorithm::RsaOaep` with SHA-256, SHA-384, or SHA-512.
+- Check that each peer that receives encrypted content supports XML
+  Encryption 1.1 RSA-OAEP with SHA-256. OpenSAML and the Shibboleth service
+  provider do.
+
+## RSA-v1.5 key transport on AWS-LC
+
+The `KeyEncryptionAlgorithm::Rsa15` rustdoc and the conformance record said
+that RSA-v1.5 key transport works only on RustCrypto. It also works with
+`crypto-aws-lc` and `crypto-legacy-algorithms`. The behaviour did not change.
