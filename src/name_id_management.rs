@@ -356,8 +356,13 @@ pub(crate) fn receive(
     let issue_instant = request.required_issue_instant()?;
     let sp_entity_id = service_provider.entity_id();
     require_peer_issuer(&request, sp_entity_id.as_str())?;
-    let recipient = validation.resolve_recipient_endpoint(&locations)?;
+    let recipient = match validation.resolve_recipient_endpoint(&locations) {
+        Ok(recipient) => Some(recipient),
+        Err(SamlError::RecipientEndpointAmbiguous) => None,
+        Err(error) => return Err(error),
+    };
     if let Some(destination) = request.attr("Destination") {
+        let recipient = recipient.ok_or(SamlError::RecipientEndpointAmbiguous)?;
         if collapse_whitespace(destination) != recipient {
             return Err(SamlError::destination_mismatch(
                 &recipient,
