@@ -493,6 +493,7 @@ fn encrypted_id_is_encrypted_for_a_later_peer_key_the_key_transport_can_use(
 enum RolePlacement {
     BeforeEndpointRole,
     AfterEndpointRole,
+    AfterEndpointRolePublishingTheSameEndpoint,
 }
 
 fn role_element(initiator: Initiator) -> &'static str {
@@ -502,14 +503,26 @@ fn role_element(initiator: Initiator) -> &'static str {
     }
 }
 
-fn with_keyed_role_without_endpoints(
+fn with_keyed_role(
     metadata: &str,
     role: &str,
     certificate: &str,
     placement: RolePlacement,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    let endpoint = match placement {
+        RolePlacement::BeforeEndpointRole | RolePlacement::AfterEndpointRole => String::new(),
+        RolePlacement::AfterEndpointRolePublishingTheSameEndpoint => {
+            let host = match role {
+                "IDPSSODescriptor" => "idp.example.com",
+                _ => "sp.example.com",
+            };
+            format!(
+                "<SingleLogoutService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://{host}/slo/post\"/>"
+            )
+        }
+    };
     let keyed_role = format!(
-        "<{role} protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><ds:X509Data><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor></{role}>",
+        "<{role} protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><ds:X509Data><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>{endpoint}</{role}>",
         certificate
             .lines()
             .filter(|line| !line.starts_with("-----"))
@@ -517,7 +530,8 @@ fn with_keyed_role_without_endpoints(
     );
     let position = match placement {
         RolePlacement::BeforeEndpointRole => metadata.find(&format!("<{role}")),
-        RolePlacement::AfterEndpointRole => {
+        RolePlacement::AfterEndpointRole
+        | RolePlacement::AfterEndpointRolePublishingTheSameEndpoint => {
             let end_tag = format!("</{role}>");
             metadata.find(&end_tag).map(|start| start + end_tag.len())
         }
@@ -552,16 +566,17 @@ fn encrypted_id_is_encrypted_for_the_role_that_publishes_the_single_logout_servi
     for placement in [
         RolePlacement::BeforeEndpointRole,
         RolePlacement::AfterEndpointRole,
+        RolePlacement::AfterEndpointRolePublishingTheSameEndpoint,
     ] {
         let Parties { sp, idp, .. } = parties()?;
         let (sp_descriptor, idp_descriptor) = peer_descriptors(
-            &with_keyed_role_without_endpoints(
+            &with_keyed_role(
                 sp.metadata_xml(),
                 role_element(Initiator::Idp),
                 NEXT_CERT,
                 placement,
             )?,
-            &with_keyed_role_without_endpoints(
+            &with_keyed_role(
                 idp.metadata_xml(),
                 role_element(Initiator::Sp),
                 NEXT_CERT,
@@ -862,13 +877,13 @@ fn encrypted_id_requires_the_peer_encryption_key() -> Result<(), Box<dyn std::er
         MetadataTrustPolicy::Unverified,
     )?;
     let (sp_with_key_in_another_role, idp_with_key_in_another_role) = peer_descriptors(
-        &with_keyed_role_without_endpoints(
+        &with_keyed_role(
             &without_key_descriptors(parties.sp.metadata_xml())?,
             role_element(Initiator::Idp),
             CERT,
             RolePlacement::BeforeEndpointRole,
         )?,
-        &with_keyed_role_without_endpoints(
+        &with_keyed_role(
             &without_key_descriptors(parties.idp.metadata_xml())?,
             role_element(Initiator::Sp),
             CERT,
