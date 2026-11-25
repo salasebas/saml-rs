@@ -105,3 +105,22 @@ fn policy_constructors_reject_metadata_one_byte_over_a_lowered_byte_limit() -> T
     }
     Ok(())
 }
+
+#[test]
+fn metadata_constructors_reject_a_malformed_xml_declaration() -> TestResult {
+    let metadata = dual_role_metadata(0);
+    for (constructor, result) in default_constructors(&format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>{metadata}"#
+    )) {
+        result.map_err(|error| format!("{constructor}: {error}"))?;
+    }
+    for (constructor, result) in default_constructors(&format!(
+        r#"<?xml encoding="UTF-8" version="1.0"?>{metadata}"#
+    )) {
+        assert!(
+            matches!(result, Err(SamlError::Xml { .. })),
+            "{constructor}: {result:?}"
+        );
+    }
+    Ok(())
+}

@@ -420,9 +420,12 @@ fn parse_roots_inner<N, A>(
                     "an XML declaration is allowed only at the start of the input",
                 ));
             }
-            Event::Decl(declaration) if matches!(mode, ParseMode::StandaloneElement) => {
-                element::validate_declaration(&declaration)?;
-            }
+            Event::Decl(declaration) => match mode {
+                ParseMode::Document | ParseMode::StandaloneElement | ParseMode::Roots => {
+                    element::validate_declaration(&declaration)?;
+                }
+                ParseMode::Fragment => {}
+            },
             Event::PI(instruction) if instruction.target().eq_ignore_ascii_case("xml") => {
                 return Err(SamlError::xml(format!(
                     "processing instruction target `{}` is reserved",
@@ -446,7 +449,7 @@ fn parse_roots_inner<N, A>(
                 }
                 None => break,
             },
-            Event::Comment(_) | Event::Decl(_) | Event::PI(_) => {}
+            Event::Comment(_) | Event::PI(_) => {}
         }
     }
 

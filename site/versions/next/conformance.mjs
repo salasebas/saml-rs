@@ -57,7 +57,7 @@ export const pages = {
 	'xml-input.md': {
 		title: 'XML input limits and encoding',
 		description:
-			'The default `XmlLimits` for received XML, with the reason for each limit, and the character encoding the crate reads.',
+			'The default `XmlLimits` for received XML, with the reason for each limit, the XML declaration check, and the character encoding the crate reads.',
 	},
 	'xml-schema-validation.md': {
 		title: 'XML schema validation',
