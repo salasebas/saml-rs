@@ -224,7 +224,10 @@ fn encrypted_id_carries_the_name_id_to_the_service_provider(
         identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
         ..XmlEncryptionPolicy::default()
     };
-    let exchange = exchange(encryption, encryption)?;
+    let sp = sp(encryption)?;
+    let idp = idp(encryption)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let exchange = exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)?;
 
     assert!(
         exchange.xml.contains("<saml:EncryptedID>"),
@@ -241,7 +244,8 @@ fn encrypted_id_carries_the_name_id_to_the_service_provider(
     assert_eq!(session.attributes(), &attributes());
 
     let first = encrypted_id_data(&exchange.xml)?;
-    let second = encrypted_id_data(&self::exchange(encryption, encryption)?.xml)?;
+    let second =
+        encrypted_id_data(&exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)?.xml)?;
     for (data_type, _) in [&first, &second] {
         assert_eq!(
             data_type.as_deref(),

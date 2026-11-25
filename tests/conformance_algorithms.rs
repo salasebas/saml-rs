@@ -858,15 +858,22 @@ fn builds_without_triple_des_or_rsa15_do_not_encrypt_with_them(
             rsa(idp_algorithms.clone()),
             encrypted_assertions(),
         )?;
-        let refused = signed_redirect_request_then_post_response(&peers, alice())
-            .err()
-            .ok_or_else(|| format!("encrypted with {idp_algorithms:?}"))?;
+        let started = peers
+            .sp
+            .start_sso(&peers.idp_descriptor, StartSso::redirect())?;
+        let url = Url::parse(started.outbound.redirect_url()?)?;
+        let received = peers.idp.receive_sso(
+            &peers.sp_descriptor,
+            Inbound::redirect(url.query().unwrap_or_default()),
+            validation(),
+        )?;
+        let refused =
+            peers
+                .idp
+                .respond_sso(&peers.sp_descriptor, &received, alice(), RespondSso::post());
         assert!(
-            matches!(
-                refused.downcast_ref::<SamlError>(),
-                Some(SamlError::Crypto { .. })
-            ),
-            "{refused:?}"
+            matches!(refused, Err(SamlError::Crypto { .. })),
+            "{idp_algorithms:?}: {refused:?}"
         );
     }
     Ok(())

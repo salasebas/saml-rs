@@ -307,7 +307,7 @@ An entity finds the key of each encrypted element it receives as follows.
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Decrypt with an `EncryptedKey` embedded in the `ds:KeyInfo` of `EncryptedData` | Mandatory | XML Encryption 1.0 §3.5, §3.5.1 | Always |
-| With several embedded `EncryptedKey` elements, use the first one that a configured decryption key decrypts | Recommended | E43 | Always |
+| With several embedded `EncryptedKey` elements, try each configured decryption key in order, and with each one the embedded keys in document order. Use the first that decrypts | Recommended | E43 | Always |
 | Resolve a `ds:RetrievalMethod` of type `EncryptedKey` whose same-document reference names an `EncryptedKey` inside the encrypted element, such as a sibling of `EncryptedData` | Mandatory | XML Encryption 1.0 §3.5, §3.5.2, E43 | Always |
 
 ### Not implemented in the decrypter
@@ -326,9 +326,10 @@ An entity finds the key of each encrypted element it receives as follows.
   `ds:RetrievalMethod`. Optional, E43.
 - An error for an `EncryptionMethod` child that its algorithm does not
   permit, or for a `KeySize` inconsistent with the algorithm. Mandatory,
-  XML Encryption 1.0 §3.2. The decrypter ignores such a child, except that
-  an `xenc11:MGF` under `rsa-oaep-mgf1p` selects the mask generation
-  function.
+  XML Encryption 1.0 §3.2. The decrypter checks neither. For example, it
+  applies an `xenc11:MGF` under `rsa-oaep-mgf1p`.
+- A `CipherReference` to ciphertext outside the encrypted element, elsewhere
+  in the message. Mandatory, XML Encryption 1.0 §3.3.1.
 
 ### Encryption algorithms by provider
 
@@ -354,7 +355,8 @@ RSA-OAEP-MGF1P.
 | RSA-OAEP-MGF1P with its default SHA-1 digest | Yes | Yes | No |
 | RSA-OAEP-MGF1P with a SHA-256, SHA-384, or SHA-512 `ds:DigestMethod`, decrypted only | Yes | No | No |
 | XML Encryption 1.1 RSA-OAEP with SHA-256, SHA-384, or SHA-512 as both the digest and the MGF1 hash | Yes | Yes | Yes |
-| XML Encryption 1.1 RSA-OAEP with different digest and MGF1 hashes | Yes | No | No |
+| XML Encryption 1.1 RSA-OAEP with different digest and MGF1 hashes. Encryption takes MGF1 with SHA-256, SHA-384, or SHA-512 | Yes | No | No |
+| XML Encryption 1.1 RSA-OAEP with SHA-1 as both the digest and the MGF1 hash, decrypted only | Yes | Yes | No |
 | RSA-v1.5 | Legacy | Legacy | No |
 
 RSA-v1.5 decryption also needs `Rsa15KeyTransportPolicy::AllowDecryption`.
