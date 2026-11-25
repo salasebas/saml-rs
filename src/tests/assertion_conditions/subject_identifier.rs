@@ -83,6 +83,60 @@ fn an_outstanding_logout_does_not_apply_to_a_confirmation_only_subject(
 }
 
 #[test]
+fn a_name_id_of_only_xml_whitespace_signs_in_without_a_logout_subject(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
+    let original = response_xml(&exchange.response_fields)?;
+    let xml = resigned(&replace_name_id(
+        &original,
+        "<saml:NameID> \t</saml:NameID>",
+    )?)?;
+
+    let session = accept(&exchange, &xml)?;
+
+    assert_eq!(session.name_id().map(NameId::value), Some(" \t"));
+    assert!(session.logout_subject().is_none());
+    Ok(())
+}
+
+#[test]
+fn an_outstanding_logout_applies_to_an_empty_or_whitespace_name_id(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
+    let original = response_xml(&exchange.response_fields)?;
+    let pending = exchange.pending.as_ref().ok_or("missing pending request")?;
+    for value in [" \t", ""] {
+        let xml = resigned(&replace_name_id(
+            &original,
+            &format!("<saml:NameID>{value}</saml:NameID>"),
+        )?)?;
+        let logout = OutstandingLogout::try_new(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            NameId::new(value),
+            Vec::new(),
+            SamlInstant::try_new("2999-12-31T23:59:59Z")?,
+        )?;
+
+        match exchange.sp.finish_sso_with_outstanding_logout(
+            &exchange.idp_descriptor,
+            pending,
+            Inbound::post(fields_with_xml(exchange.response_fields.clone(), &xml)?),
+            post_validation(&mut Default::default()),
+            &logout,
+        ) {
+            Err(SamlError::AssertionMatchesOutstandingLogout) => {}
+            other => {
+                return Err(format!(
+                    "expected the logout for NameID {value:?} to reject the assertion, got {other:?}"
+                )
+                .into());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn a_subject_without_a_readable_name_id_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let original = response_xml(&exchange.response_fields)?;

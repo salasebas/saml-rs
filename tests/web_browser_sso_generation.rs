@@ -565,6 +565,30 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
 }
 
 #[test]
+fn typed_sso_session_has_a_logout_subject_for_a_name_id_of_non_breaking_space(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(signing_sp_validation())?;
+    let idp = idp_with(signed_authn_request_idp_validation(), true)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let response = idp.initiate_sso(
+        &sp_descriptor,
+        SsoAssertion::new(NameId::new("\u{a0}"), SystemTime::now()),
+        RespondSso::post(),
+    )?;
+    let session = sp.accept_unsolicited_sso(
+        &idp_descriptor,
+        Inbound::post(response.post_form()?.fields().to_vec()),
+        post_validation(&mut Default::default()),
+    )?;
+
+    let subject = session
+        .logout_subject()
+        .ok_or("a U+00A0 NameID has no logout subject")?;
+    assert_eq!(subject.name_id().value(), "\u{a0}");
+    Ok(())
+}
+
+#[test]
 fn typed_sso_optional_generation_capabilities_stay_off_until_selected(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(SpValidationPolicy::default())?;

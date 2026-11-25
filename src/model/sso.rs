@@ -308,7 +308,8 @@ impl SsoSession {
     ///
     /// Every present `SessionIndex` is included in `AuthnStatement` document
     /// order. Returns `None` when the assertion has no `NameID` or its value
-    /// is blank.
+    /// is empty or only XML whitespace (space, tab, carriage return, line
+    /// feed).
     ///
     /// # Examples
     ///
@@ -332,7 +333,7 @@ impl SsoSession {
     pub fn logout_subject(&self) -> Option<LogoutSubject> {
         let name_id = self
             .name_id()
-            .filter(|name_id| !name_id.value().trim().is_empty())?;
+            .filter(|name_id| !name_id.value().chars().all(dom::is_xml_whitespace_char))?;
         let session_indexes = self
             .authn_statements
             .iter()
