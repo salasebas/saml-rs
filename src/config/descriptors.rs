@@ -13,6 +13,7 @@ use crate::metadata::{IdpMetadata, Metadata, MetadataLifetime, MetadataValidity,
 use crate::model::EndpointUrl;
 use crate::sp;
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
+use crate::xml::dom::is_xml_whitespace_char;
 use crate::xml::XmlLimits;
 
 mod aggregate;
@@ -114,11 +115,11 @@ impl EntityId {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when the entity ID has no
-    /// non-whitespace character.
+    /// Returns [`SamlError::Invalid`] when the entity ID has no character
+    /// other than XML whitespace: space, tab, carriage return, or line feed.
     pub fn try_new(value: impl Into<String>) -> Result<Self, SamlError> {
         let value = value.into();
-        if value.trim().is_empty() {
+        if value.chars().all(is_xml_whitespace_char) {
             return Err(SamlError::Invalid("entity ID must not be empty".into()));
         }
         Ok(Self(value))

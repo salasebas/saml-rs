@@ -17,6 +17,7 @@ use crate::soap::{
     read_soap_body, read_soap_status_response, SoapChannel, SoapRequest, SoapResponse,
 };
 use crate::xml::any_uri::collapse_whitespace;
+use crate::xml::dom::is_xml_whitespace_char;
 use crate::xml::protocol_element::{
     issuer, issuer_format_is_entity, parse_saml_with_limits, SamlElement,
 };
@@ -491,7 +492,11 @@ pub(crate) fn identifier_and_change(
     let change = if change.is(namespace::PROTOCOL, "NewID") {
         Change::Plain(NameIdChange::NewId(simple_content(change)?.text.clone()))
     } else if change.is(namespace::PROTOCOL, "Terminate") {
-        if !simple_content(change)?.text.trim().is_empty() {
+        if !simple_content(change)?
+            .text
+            .chars()
+            .all(is_xml_whitespace_char)
+        {
             return Err(SamlError::ProtocolProfile(
                 "ManageNameIDRequest Terminate must be empty".into(),
             ));
