@@ -148,7 +148,13 @@ pub enum AuthnRequestSigningPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AuthnRequestValidationPolicy {
-    /// Reject unsigned AuthnRequests.
+    /// Refuse unsigned AuthnRequests.
+    ///
+    /// [`IdentityProvider::receive_sso`](crate::IdentityProvider::receive_sso)
+    /// returns [`SamlError::AuthnRequestRefused`](crate::SamlError::AuthnRequestRefused)
+    /// for an unsigned request, with the data for a correlated error
+    /// response. The identity provider metadata publishes
+    /// `WantAuthnRequestsSigned="true"`.
     RequireSigned,
     /// Verify a signature that is present, and accept an unsigned AuthnRequest
     /// from a service provider whose metadata does not set

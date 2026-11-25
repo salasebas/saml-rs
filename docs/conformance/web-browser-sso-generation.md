@@ -59,13 +59,13 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 ## Identity provider Response
 
 `respond_sso` answers an `AuthnRequest`, and `initiate_sso` sends an unsolicited response.
-`respond_sso_refusal` and `respond_sso_refusal_artifact` return an error for an
-unsigned request from an SP whose metadata declares `AuthnRequestsSigned`.
+`respond_sso_refusal` and `respond_sso_refusal_artifact` return an error for a
+request that `receive_sso` refuses.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Write an error `Response` with the status the caller passes and no assertion | Mandatory | Profiles §4.1.4.1, §4.1.4.2, Core §3.4.1.4 | `SsoOutcome::Failure` |
-| Write a correlated SAML error for a refused unsigned request when a trusted ACS supports the selected response binding | Mandatory | Metadata §2.4.4, E7, Core §3.2.2 | Always |
+| Write a correlated SAML error for a refused request when a trusted ACS supports the selected response binding | Mandatory | Profiles §4.1.4.1, Metadata §2.4.4, E7, Core §3.2.2 | Always |
 | Support delivery of an error when the user agent remains available and an acceptable response location exists | Recommended | Profiles §4.1.3.5, E85 | Always |
 | Use the current metadata default ACS for an absent index mapping only for an error and when its binding matches the chosen delivery | Library policy: the IdP honors the requested index for assertions and uses current metadata to authorize the error route. | Core §3.4.1, Profiles §4.1.4.1, E85 | Always |
 | Write caller-supplied plain text as `StatusMessage` after the complete `StatusCode` in a failed login `Response` before signing. Omit empty or unset text | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType` | `RespondSso::status_message` |

@@ -163,7 +163,7 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Require a signed `AuthnRequest` | Optional | Metadata §2.4.3, E7 | `AuthnRequestValidationPolicy::RequireSigned` |
+| Require a signed `AuthnRequest`. Return only refusal data for an otherwise valid unsigned request | Optional | Metadata §2.4.3, E7 | `AuthnRequestValidationPolicy::RequireSigned` |
 | Refuse an unsigned `AuthnRequest` when any SAML 2.0 `SPSSODescriptor` for the service provider sets `AuthnRequestsSigned` to true. Return only refusal data for an otherwise valid request | Mandatory | Metadata §2.4.4, E7 | Always |
 | Reject MD5, RIPEMD-160, and RSA keys shorter than 2048 bits | Library policy: see [weak algorithms and keys](xml-security-algorithms.md#weak-algorithms-and-keys). | XMLDSig 1.1 §6.2, Conformance §4.1 | `XmlSignatureProfile::AllowWeakAlgorithms` relaxes it |
 | Verify a signature on an `AuthnRequest` against the SP's signing credentials. The request has at most one direct `ds:Signature`. Redirect also verifies the query signature, and SimpleSign the detached signature when present, even when the request also carries an XML signature | Mandatory | Core §3.2.1, Bindings §3.4.4.1, CD-04 §2.4–2.6, §2.10 | Always |
@@ -172,6 +172,7 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 | Reject an `IssueInstant` that is not UTC. A leap second is accepted | Mandatory | Core §1.3.3 | Always |
 | Compare XML namespace names in an `AuthnRequest` after normalizing the declaration value | Mandatory | Namespaces in XML 1.0 §2.3, `AuthnRequestType` | Always |
 | Accept an `AuthnRequest` `IssueInstant` from now − `max_age` − past tolerance through now + future tolerance, inclusive. A positive `NotOnOrAfter` skew supplies the past tolerance, and a negative `NotBefore` skew supplies the future tolerance | Library policy: Core §1.3.3 defines no maximum age, and the limit can reject a conformant request. | Core §1.3.3 | `SamlValidationContext::with_authn_request_age`, `RequestAgePolicy::Bounded` |
+| Return refusal data for an otherwise valid request refused for its signature or its age, so the caller can send the error `Response` | Mandatory | Profiles §4.1.4.1, Core §3.4.1.4 | Always |
 | Compare a present `Destination` with the receiving `SingleSignOnService` `Location` after collapsing XML whitespace. Require it on a signed request. `ResponseLocation` is unused | Mandatory | Core §3.2.1, Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4, Metadata §2.2.2, E41 | `SamlValidationContext::with_recipient_endpoint` |
 | When checking `Destination` in `receive_sso`, reject a supplied receiving URL that is not published for the incoming binding, and several published URLs without an explicit one | Library policy: the URL is caller input, and the restriction keeps a value derived from the request from naming an endpoint this identity provider does not operate for that binding. | Core §3.2.1 | `SamlValidationContext::with_recipient_endpoint` |
 | Verify that a requested ACS URL or index used for delivery names the SP's assertion consumer. Collapse XML whitespace in a requested URL before comparing | Mandatory | Profiles §4.1.4.1, `AuthnRequestType`, XML Schema Part 2 §4.3.6 | Always |

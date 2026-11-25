@@ -184,7 +184,7 @@ fn assert_hostile_request_parses(
 
 #[cfg(crypto)]
 #[test]
-fn identity_provider_metadata_want_authn_requests_signed_1_rejects_an_unsigned_request(
+fn identity_provider_metadata_reads_want_authn_requests_signed_1_as_true(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let metadata = idp::Engine::from_config(&idp_config(true), EntitySetting::default())?
         .metadata
@@ -196,17 +196,8 @@ fn identity_provider_metadata_want_authn_requests_signed_1_rejects_an_unsigned_r
         );
     assert!(metadata.contains(r#"WantAuthnRequestsSigned="1""#));
     let idp = idp::Engine::from_metadata(&metadata, EntitySetting::default())?;
-    let sp = unsigned_sp()?;
-    let ctx = sp.create_login_request(
-        &unsigned_idp()?,
-        Binding::Post,
-        &LoginRequestOptions::default(),
-    )?;
-
-    match idp.parse_login_request(&sp, Binding::Post, &login_request_http_request(&ctx)?) {
-        Err(SamlError::SignatureMissing) => Ok(()),
-        other => Err(format!("expected SignatureMissing, got {other:?}").into()),
-    }
+    assert!(idp.metadata.want_authn_requests_signed());
+    Ok(())
 }
 
 #[test]

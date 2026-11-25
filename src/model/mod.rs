@@ -32,7 +32,9 @@ pub(crate) use subject_identifier::{check_issued_subject_identifiers, is_subject
 pub use attribute_scope::{AttributeScopePolicy, ScopedAttributeViolation};
 pub use attributes::{Attribute, AttributeNameFormat, AttributeValue, Attributes};
 pub use audience_restriction::AudienceRestriction;
-pub use authn::{AuthnRequest, ForceAuthn, IsPassive, RefusedAuthnRequest};
+pub use authn::{
+    AuthnRequest, AuthnRequestRefusalReason, ForceAuthn, IsPassive, RefusedAuthnRequest,
+};
 pub use authn_context::{
     AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind, RequestedAuthnContext,
 };
@@ -57,6 +59,7 @@ pub use subject::{
     SubjectConfirmation,
 };
 pub use subject_identifier::{PairwiseId, SubjectId};
+pub(crate) use validation::RequestAge;
 pub use validation::{
     ClockSkew, ReplayCache, ReplayKey, ReplayPolicy, RequestAgePolicy, SamlValidationContext,
 };

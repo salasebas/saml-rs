@@ -215,6 +215,13 @@ pub enum RequestAgePolicy {
     },
 }
 
+/// Where a request `IssueInstant` falls relative to the configured age window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RequestAge {
+    WithinWindow,
+    OutsideWindow,
+}
+
 /// Caller-owned validation context for typed inbound SAML messages.
 #[derive(Debug)]
 pub struct SamlValidationContext<'a> {
@@ -384,11 +391,11 @@ impl<'a> SamlValidationContext<'a> {
         &mut self.replay
     }
 
-    pub(crate) fn check_authn_request_issue_instant(
+    pub(crate) fn authn_request_issue_instant_age(
         &self,
         issue_instant: &SamlInstant,
-    ) -> Result<(), SamlError> {
-        self.check_issue_instant_age(
+    ) -> Result<RequestAge, SamlError> {
+        self.issue_instant_age(
             issue_instant,
             self.authn_request_age,
             TimeWindowField::AuthnRequestIssueInstant,
@@ -399,21 +406,21 @@ impl<'a> SamlValidationContext<'a> {
         &self,
         issue_instant: &SamlInstant,
     ) -> Result<(), SamlError> {
-        self.check_issue_instant_age(
-            issue_instant,
-            self.manage_name_id_request_age,
-            TimeWindowField::ManageNameIdRequestIssueInstant,
-        )
+        let field = TimeWindowField::ManageNameIdRequestIssueInstant;
+        match self.issue_instant_age(issue_instant, self.manage_name_id_request_age, field)? {
+            RequestAge::WithinWindow => Ok(()),
+            RequestAge::OutsideWindow => Err(SamlError::TimeWindowInvalid { field }),
+        }
     }
 
-    fn check_issue_instant_age(
+    fn issue_instant_age(
         &self,
         issue_instant: &SamlInstant,
         policy: RequestAgePolicy,
         field: TimeWindowField,
-    ) -> Result<(), SamlError> {
+    ) -> Result<RequestAge, SamlError> {
         let max_age = match policy {
-            RequestAgePolicy::Disabled => return Ok(()),
+            RequestAgePolicy::Disabled => return Ok(RequestAge::WithinWindow),
             RequestAgePolicy::Bounded { max_age } => max_age,
         };
         let outside_window = || SamlError::TimeWindowInvalid { field };
@@ -434,9 +441,9 @@ impl<'a> SamlValidationContext<'a> {
         let issued = OffsetDateTime::parse(issue_instant.as_str(), &Rfc3339)
             .map_err(|_| outside_window())?;
         if issued < earliest || issued > latest {
-            return Err(outside_window());
+            return Ok(RequestAge::OutsideWindow);
         }
-        Ok(())
+        Ok(RequestAge::WithinWindow)
     }
 
     pub(crate) fn check_and_store_message_replay(

@@ -42,14 +42,15 @@ use saml_rs::tests::engine::create_logout_request;
 use saml_rs::xml::dom::parse_document;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, ClockSkew,
-    EndpointUrl, EntityId, ForceAuthn, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, MessageAuthentication, MetadataTrustPolicy, NameId, NameIdFormat,
-    Outbound, OutboundDelivery, PendingAuthnRequest, PendingAuthnRequestSnapshot, Received,
-    RelayState, ReplayCache, ReplayPolicy, RequestAgePolicy, RespondSso, ResponseSignaturePolicy,
-    SamlError, SamlValidationContext, ServiceProvider, SloEndpoint, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponseBinding, StartSso,
-    Status, SubordinateStatusCode, VerifiedXmlSignatureCoverage, XmlSignatureProfile,
+    AuthnRequestRefusalReason, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
+    CertificatePem, ClockSkew, EndpointUrl, EntityId, ForceAuthn, FormField, IdentityProvider,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MessageAuthentication,
+    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery, PendingAuthnRequest,
+    PendingAuthnRequestSnapshot, Received, RelayState, ReplayCache, ReplayPolicy, RequestAgePolicy,
+    RespondSso, ResponseSignaturePolicy, SamlError, SamlValidationContext, ServiceProvider,
+    SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome,
+    SsoResponseBinding, StartSso, Status, SubordinateStatusCode, VerifiedXmlSignatureCoverage,
+    XmlSignatureProfile,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
@@ -837,11 +838,35 @@ fn assert_authn_request_age_rejected(
         .downcast::<SamlError>()
         .map_err(|error| format!("expected SamlError, got {error}"))?;
     match *error {
+        SamlError::AuthnRequestRefused { refusal, .. } => {
+            assert_eq!(
+                refusal.reason(),
+                AuthnRequestRefusalReason::OutsideAgeWindow
+            );
+            Ok(())
+        }
+        other => {
+            Err(format!("expected AuthnRequest IssueInstant age refusal, got {other:?}").into())
+        }
+    }
+}
+
+fn assert_authn_request_age_unevaluated(
+    result: Result<Received<AuthnRequest>, Box<dyn std::error::Error>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let error = match result {
+        Ok(_) => return Err("expected an AuthnRequest age window error".into()),
+        Err(error) => error,
+    };
+    let error = error
+        .downcast::<SamlError>()
+        .map_err(|error| format!("expected SamlError, got {error}"))?;
+    match *error {
         SamlError::TimeWindowInvalid { field } => {
             assert_eq!(field, TimeWindowField::AuthnRequestIssueInstant);
             Ok(())
         }
-        other => Err(format!("expected AuthnRequest IssueInstant age error, got {other:?}").into()),
+        other => Err(format!("expected an AuthnRequest age window error, got {other:?}").into()),
     }
 }
 
@@ -1020,12 +1045,12 @@ fn bounded_authn_request_age_handles_a_large_duration_and_overflow(
         "1700-01-01T00:00:00Z",
         bounded_authn_request_age(now, large_age, ClockSkew::strict()),
     ))?;
-    assert_authn_request_age_rejected(receive_issued(
+    assert_authn_request_age_unevaluated(receive_issued(
         &issued,
         AUTHN_REQUEST_AGE_NOW,
         bounded_authn_request_age(now, Duration::MAX, ClockSkew::strict()),
     ))?;
-    assert_authn_request_age_rejected(receive_issued(
+    assert_authn_request_age_unevaluated(receive_issued(
         &issued,
         "2024-06-15T12:00:60Z",
         bounded_authn_request_age(now, Duration::from_secs(60 * 60), ClockSkew::five_minutes()),
@@ -3489,9 +3514,12 @@ fn unsigned_authn_requests_still_require_the_correct_destination(
         Inbound::post(post_fields(&started.outbound)?),
         validation(),
     ) {
-        Err(SamlError::SignatureMissing) => Ok(()),
+        Err(SamlError::AuthnRequestRefused { refusal, .. }) => {
+            assert_eq!(refusal.reason(), AuthnRequestRefusalReason::Unsigned);
+            Ok(())
+        }
         other => Err(format!(
-            "expected a required AuthnRequest signature to reject an unsigned request, got {other:?}"
+            "expected a required AuthnRequest signature to refuse an unsigned request, got {other:?}"
         )
         .into()),
     }
