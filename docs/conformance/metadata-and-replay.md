@@ -59,7 +59,8 @@ The peer descriptors read the role the peer acts in. `Metadata::parse` has no ro
 | Read `NameIDFormat` with XML Schema whitespace collapse | Mandatory | Metadata §2.4.2, XML Schema 1.0 Part 2 §4.3.6 | Always |
 | Read unqualified `Binding` and `Location` with XML Schema whitespace collapse. Apply the same rule to `ResponseLocation` on logout and name identifier management services, `index` on artifact and assertion consumer services, and `isDefault` on assertion consumer services. A qualified attribute of the same local name is foreign and is not read | Mandatory | Metadata §2.2.2, §2.2.3, XML Schema 1.0 Part 2 §4.3.6 | Always |
 | Choose the default of an indexed set as the first endpoint with `isDefault` true, else the first without `isDefault` false, else the first | Mandatory | Metadata §2.2.3, E37 | Always |
-| For an `AssertionConsumerService` lookup without a binding, select the default within the first matching SAML 2.0 SP role | Library policy: reason not recorded. | Metadata §2.3.2 | Always |
+| Select a default `AssertionConsumerService` within one SAML 2.0 `SPSSODescriptor`: the first one for a lookup without a binding, else the first one that publishes the binding | Library policy: E37 defines the default within one role, and Metadata §2.3.2 leaves the choice among roles undefined. | Metadata §2.2.3, §2.3.2, E37 | Always |
+| Look up an `AssertionConsumerServiceIndex` in each selected `SPSSODescriptor`, counting endpoints of every binding. Refuse an index that one of them publishes twice or that more than one of them publishes | Library policy: the request names the index but not the role, so a guessed endpoint could receive an assertion the requester did not route there. | Core §3.4.1, Metadata §2.2.3, §2.3.2 | Always |
 | Require unqualified `Binding`, `Location`, and an `unsignedShort` `index` on each `ArtifactResolutionService` | Mandatory | Metadata §2.2.2, §2.2.3 | `IdpMetadata::artifact_resolution_services` |
 | Reject duplicate `ArtifactResolutionService` indexes within one `IDPSSODescriptor` | Mandatory | Metadata §2.2.3 | `IdpMetadata::artifact_resolution_services` |
 | Look up an artifact's `EndpointIndex` in each selected `IDPSSODescriptor`, and refuse an index that more than one of them publishes | Library policy: the artifact names its issuer and index but not the role, so a guessed role could receive an `ArtifactResolve` for an artifact it did not issue. | Metadata §2.2.3, §2.3.2, Bindings §3.6.4 | `IdpMetadata::artifact_resolution_service` |
@@ -71,6 +72,16 @@ currently valid and supports SAML 2.0. It takes that role from
 [OpenSAML-C 3.3.1](https://codeberg.org/Shibboleth/cpp-opensaml/src/tag/3.3.1/saml/saml2/metadata/Metadata.h#L594).
 saml-rs reads these roles together, so an index that only a later role
 publishes still resolves.
+
+[SimpleSAMLphp 2.3.5](https://github.com/simplesamlphp/simplesamlphp/blob/v2.3.5/src/SimpleSAML/Metadata/SAMLParser.php#L545-L546)
+reads only the first `SPSSODescriptor` that supports SAML 2.0, and its
+[identity provider](https://github.com/simplesamlphp/simplesamlphp/blob/v2.3.5/modules/saml/src/IdP/SAML2.php#L198-L253)
+looks up the `AssertionConsumerServiceIndex` and the default for a
+`ProtocolBinding` in that role.
+[OpenSAML 5.1.3](https://codeberg.org/Shibboleth/java-opensaml/src/tag/5.1.3/opensaml-saml-impl/src/main/java/org/opensaml/saml/common/binding/impl/SAMLMetadataLookupHandler.java#L181)
+also resolves a single role descriptor for the peer. saml-rs reads the SP
+roles together, so an index or a binding that only a later role publishes is
+still served.
 
 ## Metadata validity
 

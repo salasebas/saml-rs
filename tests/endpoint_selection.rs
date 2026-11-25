@@ -555,3 +555,140 @@ fn sso_destination_matches_the_actual_published_receiving_endpoint(
     ));
     Ok(())
 }
+
+const SECOND_ROLE_ACS: &str = "https://sp.example.com/acs/second-role";
+
+fn sp_with_roles(roles: &[String]) -> Result<SpDescriptor, SamlError> {
+    let roles: String = roles
+        .iter()
+        .map(|endpoints| {
+            format!(
+                r#"<SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">{endpoints}</SPSSODescriptor>"#
+            )
+        })
+        .collect();
+    SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &format!(
+            r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{SP_ENTITY_ID}">{roles}</EntityDescriptor>"#
+        ),
+        MetadataTrustPolicy::Unverified,
+    )
+}
+
+fn acs(binding: SsoResponseBinding, location: &str, index: u16, is_default: &str) -> String {
+    format!(
+        r#"<AssertionConsumerService Binding="{}" Location="{location}" index="{index}"{is_default}/>"#,
+        Binding::from(binding).urn()
+    )
+}
+
+fn respond_to_request(
+    sp: &SpDescriptor,
+    selector: &str,
+    options: RespondSso,
+) -> Result<Result<String, SamlError>, Box<dyn std::error::Error>> {
+    let idp = idp_with_sso(IDP_SSO_FIRST, &[])?;
+    let xml = authn_request(IDP_SSO_FIRST).replace(" Version=", &format!("{selector} Version="));
+    let request = idp.receive_sso(sp, post_authn_request(&xml), validation())?;
+    Ok(idp
+        .respond_sso(sp, &request, SsoAssertion::new(principal()), options)
+        .and_then(|response| Ok(response.post_form()?.action().as_str().to_owned())))
+}
+
+#[test]
+fn an_acs_index_is_unique_only_within_its_sp_role() -> Result<(), Box<dyn std::error::Error>> {
+    let first_role = acs(SsoResponseBinding::Post, FIRST_ACS, 0, "");
+    let second_role = format!(
+        "{}{}",
+        acs(SsoResponseBinding::Post, DEFAULT_ACS, 0, ""),
+        acs(SsoResponseBinding::Post, SECOND_ROLE_ACS, 1, "")
+    );
+    let sp = sp_with_roles(&[first_role.clone(), second_role.clone()])?;
+    let index = |index: u16| format!(" AssertionConsumerServiceIndex=\"{index}\"");
+
+    assert_eq!(
+        respond_to_request(&sp, &index(1), RespondSso::post())??,
+        SECOND_ROLE_ACS
+    );
+    match respond_to_request(&sp, &index(0), RespondSso::post())? {
+        Err(SamlError::Invalid(message)) => assert_eq!(
+            message,
+            "AssertionConsumerService index 0 is published by more than one SPSSODescriptor"
+        ),
+        other => return Err(format!("expected a refused shared index, got {other:?}").into()),
+    }
+
+    let shared_with_paos = sp_with_roles(&[
+        format!(
+            r#"{first_role}<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:PAOS" Location="https://sp.example.com/ecp" index="1"/>"#
+        ),
+        second_role.clone(),
+    ])?;
+    match respond_to_request(&shared_with_paos, &index(1), RespondSso::post())? {
+        Err(SamlError::Invalid(message)) => assert_eq!(
+            message,
+            "AssertionConsumerService index 1 is published by more than one SPSSODescriptor"
+        ),
+        other => return Err(format!("expected a refused shared index, got {other:?}").into()),
+    }
+
+    let repeated_in_one_role = sp_with_roles(&[
+        first_role,
+        format!(
+            "{second_role}{}",
+            acs(
+                SsoResponseBinding::Post,
+                "https://sp.example.com/acs/again",
+                1,
+                ""
+            )
+        ),
+    ])?;
+    match respond_to_request(&repeated_in_one_role, &index(1), RespondSso::post())? {
+        Err(SamlError::Invalid(message)) => {
+            assert_eq!(message, "duplicate AssertionConsumerService index 1");
+        }
+        other => return Err(format!("expected a duplicate index error, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
+fn a_protocol_binding_default_comes_from_the_first_sp_role_with_that_binding(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with_roles(&[
+        acs(SsoResponseBinding::Post, FIRST_ACS, 0, ""),
+        format!(
+            "{}{}",
+            acs(
+                SsoResponseBinding::Post,
+                DEFAULT_ACS,
+                0,
+                r#" isDefault="true""#
+            ),
+            acs(SsoResponseBinding::SimpleSign, SECOND_ROLE_ACS, 1, "")
+        ),
+    ])?;
+    let protocol_binding = |binding: SsoResponseBinding| {
+        format!(" ProtocolBinding=\"{}\"", Binding::from(binding).urn())
+    };
+
+    assert_eq!(
+        respond_to_request(
+            &sp,
+            &protocol_binding(SsoResponseBinding::Post),
+            RespondSso::post()
+        )??,
+        FIRST_ACS
+    );
+    assert_eq!(
+        respond_to_request(
+            &sp,
+            &protocol_binding(SsoResponseBinding::SimpleSign),
+            RespondSso::simple_sign()
+        )??,
+        SECOND_ROLE_ACS
+    );
+    Ok(())
+}
