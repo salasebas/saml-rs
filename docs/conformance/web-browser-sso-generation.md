@@ -73,8 +73,9 @@ request that `receive_sso` refuses.
 | Reject a `StatusMessage` with no non-whitespace character | Mandatory | Core §1.3.1, §3.2.2.3 | `RespondSso::status_message` |
 | Reject a subordinate `StatusCode` `Value` that is not an absolute URI reference, including one read from a received response | Mandatory | Core §1.3.2, §3.2.2.2 | `SsoOutcome::Failure` |
 | Write a `Success` response only with an assertion, and reject `SsoOutcome::Failure` with a top-level `Success` status | Mandatory | Profiles §4.1.4.2, E26 | Always |
-| Write an unsolicited error `Response` | Library policy: an identity provider can report the failure of a login it started, or answer a request it could not read. | Profiles §4.1.4.2, §4.1.5 | `initiate_sso`, `initiate_sso_artifact` |
-| Sign an error `Response` over HTTP-POST | Library policy: the profile's signing rule covers assertions, and a signed message carries `Destination`. | Profiles §4.1.3.5, §4.1.4.5, E26, E93, Bindings §3.5.5.2 | Always |
+| Write an unsolicited error `Response`, for a login the identity provider started or a request whose `ID` it cannot determine. A request with a known `ID` is answered with `respond_sso` | Optional | Profiles §4.1.4.2, §4.1.5, Core §3.2.2 | `initiate_sso`, `initiate_sso_artifact` |
+| Sign an error `Response` over HTTP-POST | Library policy: an error carries no assertion to sign, and the signature lets the service provider authenticate its status, `InResponseTo`, and `Destination`. | Profiles §4.1.3.5, §4.1.4.5, E26, E93, Bindings §3.5.5.2 | Always |
+| Over HTTP-POST, sign each assertion when the service provider metadata sets `WantAssertionsSigned`, and sign the `Response` otherwise | Library policy: a `Response` signature also authenticates the status, `InResponseTo`, and `Destination`, and a service provider that asks for assertion signatures gets them. | Profiles §4.1.3.5, §4.1.6, E93 | `RespondSso::sign_response` |
 | Write the issuing identity provider's identifier as `Response` `Issuer`, with `Format` omitted. The `Response` needs it when signed or when an assertion is encrypted, and the crate always writes it | Mandatory | Profiles §4.1.4.2, E17 | Always |
 | Write `Destination` as the assertion consumer service URL. A signed message needs it, and the crate writes it on every response | Mandatory | Bindings §3.5.5.2, CD-04 §2.4 | Always |
 | Write every time value in UTC, and never a leap second | Mandatory | Core §1.3.3 | Always |
@@ -86,6 +87,7 @@ request that `receive_sso` refuses.
 | Write `Issuer` on the assertion as the responding identity provider, with `Format` omitted (the profile also permits `entity`) | Mandatory | Profiles §4.1.4.2, E26 | Always |
 | Write an `AudienceRestriction` for the service provider | Mandatory | Profiles §4.1.4.2, E26 | Always |
 | Write `Recipient` and `NotOnOrAfter` on the bearer `SubjectConfirmationData`, and no `NotBefore` | Mandatory | Profiles §4.1.4.2, E26 | Always |
+| Write the assertion `IssueInstant` as `Conditions` `NotBefore`, and end `Conditions` and the bearer `SubjectConfirmationData` at `IssueInstant` plus the issuance lifetime, 300 seconds by default | Library policy: the window starts when the assertion exists and bounds how long a bearer assertion can be delivered and replayed, and five minutes leaves time for the browser to deliver it. | Core §2.5.1.2, Profiles §4.1.4.2, E26 | `IdpConfigBuilder::issuance_lifetime` |
 | Write `SessionIndex` on the `AuthnStatement` when the identity provider metadata advertises `SingleLogoutService` | Mandatory | Profiles §4.1.4.2, E26 | `IdpConfigBuilder::slo_endpoint` |
 | Write the assertion ID as the `SessionIndex` | Recommended | Core §2.7.2 | Always |
 | Write `AuthnInstant` and an `AuthnContext` on the `AuthnStatement` | Mandatory | Core §2.7.2, `AuthnStatementType` | Always |
@@ -136,7 +138,7 @@ request that `receive_sso` refuses.
 | Embed the `EncryptedKey` in the `ds:KeyInfo` of `EncryptedData`, as `EncryptedAssertion` does | Optional | Core §6.2, E43 | Always |
 | Encrypt the `NameID` or `Attribute` before the assertion or response is signed | Library policy: the signature then covers the ciphertext, and E43 and E93 replace the original Core §6.2 ordering rule. | Core §6.2, E43, E93 | Always |
 | Encrypt for the first service provider encryption key the configured algorithms can use. Skip a key that does not load or that the crypto provider refuses, such as an EC key or an RSA key too small for the key transport | Library policy: E68 lets the encrypting party use any published key, and OpenSAML 5.2.0 also skips a credential without a usable key transport. | Metadata §2.4.1.1, E62, E68 | Always |
-| Take the keys of the SP role that publishes the `AssertionConsumerService` receiving the response, or the first such role when several publish it | Library policy: E68 makes keys interchangeable within a role. | Metadata §2.4.1.1, E68 | Always |
+| Take the keys of the SP role that publishes the `AssertionConsumerService` receiving the response, or the first such role in document order when several publish its location and binding | Library policy: E68 scopes keys to one role, and roles that publish one location and binding name one recipient, so document order picks one role's keys without mixing roles. | Metadata §2.4.1.1, E62, E68 | Always |
 | Read one key from each `ds:X509Data` of a `KeyDescriptor` whose `use` is `encryption` or absent, in document order. Its sole certificate is the entity certificate, whatever else the `KeyInfo` declares. Among several certificates, the entity certificate is the first one that issued none of the others. If each issued another, it is the first certificate | Library policy: XML Signature allows the certificates of an `X509Data` in any order. OpenSAML 5.2.0 `InlineX509DataProvider` also reads one credential per `X509Data`, takes a sole certificate as the entity certificate, and falls back to the first certificate. When the crypto provider refuses a certificate signature, such as SHA-1, its signer does not count as having issued that certificate. | XML Signature §4.4, §4.4.4, Metadata §2.4.1.1 | Always |
 | Look up that certificate only when the response has an element to encrypt | Library policy: a response without such an element uses no encryption key. | Core §2.7.3.2, E68 | Always |
 | Name the chosen certificate in each `EncryptedKey`, as a `ds:X509Certificate` in the `ds:X509Data` of its `ds:KeyInfo` | Recommended | Metadata §2.4.1.1, E68, XML Encryption §3.5.1 | Always |
@@ -151,14 +153,15 @@ The identity provider encrypts with the configured `AlgorithmPolicy` algorithms.
 | Take that default from the endpoints of the SAML 2.0 service provider role, before filtering by binding | Mandatory | Metadata §2.2.3, §2.4.1, E37 | Always |
 | Choose the default endpoint as the first with `isDefault` true, else the first not false, else the first | Mandatory | Metadata §2.2.3 | Always |
 | Read `isDefault` as an unqualified `xs:boolean`: `true`, `1`, `false`, or `0` with surrounding XML whitespace | Mandatory | `IndexedEndpointType` | Always |
-| Answer a request that names only a `ProtocolBinding` at the default endpoint of that binding | Library policy: reason not recorded. | Core §3.4.1 | Always |
+| Answer a request that names only a `ProtocolBinding` at the default endpoint of that binding, chosen by the `isDefault` rule among that binding's endpoints | Library policy: the role default can use another binding, and the requested binding must be honored, so the default rule applies to that binding's endpoints. | Core §3.4.1, Profiles §4.1.3.5, Metadata §2.2.3 | Always |
+| Refuse a response binding that differs from the request's `ProtocolBinding` or from the binding of its indexed `AssertionConsumerService`. A requested binding the crate cannot send is refused when the request is received | Mandatory | Profiles §4.1.3.5, Core §3.4.1 | Always |
 | Deliver an unsolicited response to the default `AssertionConsumerService`. Fail if that default is unsupported or incompatible with the selected response binding | Recommended | Profiles §4.1.5 | Always |
 | Read `WantAuthnRequestsSigned`, `AuthnRequestsSigned`, and `WantAssertionsSigned` as unqualified `xs:boolean`, and read an omitted one as false | Mandatory | Metadata §2.4.3, §2.4.4, `IDPSSODescriptorType`, `SPSSODescriptorType` | Always |
 | On the selected SAML 2.0 role, reject a signing flag qualified with the metadata namespace or carrying an invalid `xs:boolean` value, and ignore same-named foreign attributes | Mandatory | `IDPSSODescriptorType`, `SPSSODescriptorType`, `RoleDescriptorType` | Always |
 
 ## Not implemented
 
-The caller handles these authentication and error decisions. The crate exposes the request through `Received<AuthnRequest>` and enforces none of them.
+The caller or the deployment handles these duties. The crate exposes the request through `Received<AuthnRequest>` and enforces none of them.
 
 - Authenticate the principal directly when `ForceAuthn` is true, and do not freshly authenticate when `ForceAuthn` and `IsPassive` are both true unless the `IsPassive` constraints can be met. Mandatory for the identity provider, Core §3.4.1.
 - Not visibly take control of the user interface when `IsPassive` is true. Mandatory for the identity provider and the user agent, Core §3.4.1.
@@ -168,8 +171,15 @@ The caller handles these authentication and error decisions. The crate exposes t
 - Return an error `Response` with no assertions when the `NameIDPolicy` cannot be met, optionally with `InvalidNameIDPolicy`. Mandatory, Core §3.4.1.1.
 - Return an error `Response` when `NameIDPolicy` requests both the `entity` format and an `SPNameQualifier`. No issued entity identifier can satisfy both. Mandatory, Core §8.3.6, E15.
 - Provide independent `RelayState` integrity protection for HTTP-POST and unsigned Redirect. Recommended, Bindings §3.4.3, §3.5.3, E1. A signed Redirect or SimpleSign message already protects `RelayState` with the binding signature (CD-04 §2.3).
+- Serve the HTTP response that carries the `Response` over TLS, and have the service provider publish `https` assertion consumer service locations. Recommended for the deployment, Profiles §4.1.3.5, E93. The text names SSL 3.0 and TLS 1.0, which are obsolete, so use a current TLS version. The crate delivers to the location that the request or the metadata selects, `http` included.
 
-The assertion builder emits one bearer `SubjectConfirmation`.
+The assertion builder writes one assertion with one bearer `SubjectConfirmation`, one `AudienceRestriction` for the service provider, one `AuthnStatement`, and an `AttributeStatement` when the caller sets attributes. It does not write these optional forms:
 
 - Additional `SubjectConfirmation` elements in a bearer assertion. Optional, Profiles §4.1.4.2, E26.
+- `Address` on the bearer `SubjectConfirmationData`. Optional, Profiles §4.1.4.2, E26.
+- More than one assertion, and statements other than the `AuthnStatement` and the `AttributeStatement`. Optional, Profiles §4.1.4.2, E26.
+- `Advice`, conditions other than the `AudienceRestriction`, and other `Audience` values. Optional, Core §2.3.3, §2.5.1, Profiles §4.1.4.2, E26.
+- `SubjectLocality`, `AuthenticatingAuthority`, an authentication context declaration by value, and a class reference together with a declaration. Optional, Core §2.7.2, §2.7.2.2.
+- `Extensions` on the `Response`, and `StatusDetail` on an error. Optional, Core §3.2.2, §3.2.2.4.
+- The requested `Conditions`. Profiles §4.1.4.2, E26, does not oblige the identity provider to honor them.
 - The holder-of-key Web Browser SSO profile. Unsupported.

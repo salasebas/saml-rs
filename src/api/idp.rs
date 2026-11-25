@@ -362,7 +362,10 @@ impl IdentityProvider {
     ///
     /// `outcome` says what the unsolicited response reports, as for
     /// [`Self::respond_sso`]. An [`SsoOutcome::Failure`] writes an error
-    /// response with no `InResponseTo` and no assertion.
+    /// response with no `InResponseTo` and no assertion. Use it for a login
+    /// this identity provider started, or for a request whose `ID` cannot be
+    /// read. Answer a request you have received with [`Self::respond_sso`],
+    /// which writes its `ID` as `InResponseTo`.
     ///
     /// # Errors
     ///
