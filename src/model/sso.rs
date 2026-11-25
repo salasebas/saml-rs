@@ -260,7 +260,7 @@ impl SsoSession {
     /// Returns `None` when its authentication statements specify no deadline.
     /// End the application session at this instant unless the principal signs
     /// in again. A fraction of a second finer than the platform's
-    /// [`SystemTime`] resolution is dropped. [`AuthnStatement::session_not_on_or_after`]
+    /// [`SystemTime`] resolution is dropped, which moves the deadline earlier. [`AuthnStatement::session_not_on_or_after`]
     /// keeps the text of each value.
     pub fn session_not_on_or_after(&self) -> Option<SystemTime> {
         self.session_not_on_or_after
@@ -542,8 +542,20 @@ fn earliest_session_not_on_or_after(
         FIELD,
     )?
     .map(|deadline| {
-        system_time_from_offset_datetime(deadline)
-            .map_err(|_| SamlError::TimeWindowInvalid { field: FIELD })
+        let seconds = deadline.unix_timestamp();
+        let whole_seconds = std::time::Duration::from_secs(seconds.unsigned_abs());
+        let second_start = if seconds < 0 {
+            SystemTime::UNIX_EPOCH.checked_sub(whole_seconds)
+        } else {
+            SystemTime::UNIX_EPOCH.checked_add(whole_seconds)
+        };
+        second_start
+            .and_then(|start| {
+                start.checked_add(std::time::Duration::from_nanos(u64::from(
+                    deadline.nanosecond(),
+                )))
+            })
+            .ok_or(SamlError::TimeWindowInvalid { field: FIELD })
     })
     .transpose()
 }
