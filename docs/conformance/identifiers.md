@@ -99,7 +99,7 @@ other `Format` URI.
 | Allow another `Format` URI or an omitted `Format` | Optional | Core §2.2.2 | `NameId::with_format` |
 | Reject a written `Format` that is not an absolute URI reference, in a `Response`, an `AuthnRequest` `NameIDPolicy`, a `LogoutRequest`, a `ManageNameIDRequest`, and metadata `NameIDFormat` | Mandatory | Core §1.3.2 | Always |
 | Accept a received `Format` that is not an absolute URI reference, and report it | Library policy: Core §1.3.2 binds the writer. | Core §1.3.2 | Always |
-| Read the `Format` of an assertion `Subject` or `LogoutRequest` `NameID` with XML Schema whitespace collapse | Mandatory | `NameIDType`, XML Schema Part 2 §3.2.17, §4.3.6 | `SsoSession::name_id`, `LogoutRequest::name_id` |
+| Read the `Format` of a received `NameID` or `NameIDPolicy` with XML Schema whitespace collapse: in an assertion `Subject`, a `LogoutRequest`, an `AuthnRequest` `Subject` or `NameIDPolicy`, and a `ManageNameIDRequest` | Mandatory | `NameIDType`, `NameIDPolicyType`, XML Schema Part 2 §3.2.17, §4.3.6 | `SsoSession::name_id`, `LogoutRequest::name_id`, `RequestedSubject::name_id`, `NameIdPolicy::format`, `ManageNameIdRequest::name_id` |
 | Generate a transient value under the generated-ID rules below | Mandatory | Core §8.3.8, §1.3.4 | `NameId::generate_transient` |
 | Reject a transient value of more than 256 characters in a `Response` | Mandatory | Core §8.3.8 | Always |
 | Generate a persistent value with no discernible correspondence to the subject | Mandatory | Core §8.3.7, E86 | `NameId::generate_persistent` |
