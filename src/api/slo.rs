@@ -372,7 +372,8 @@ impl IdentityProvider {
     /// is not an absolute URI reference, logout request creation fails, or the
     /// configured issuance lifetime cannot be added to the current issue
     /// instant.
-    /// Returns [`SamlError::Invalid`] when, with the format sent, a persistent
+    /// Returns [`SamlError::Invalid`] when the `NameId` value or a qualifier is
+    /// made only of XML whitespace, or when, with the format sent, a persistent
     /// or transient value is longer than 256 characters, or an `entity` value
     /// is not an absolute URI reference of at most 1024 characters with
     /// collapsed whitespace or has a qualifier.

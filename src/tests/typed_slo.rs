@@ -3392,6 +3392,7 @@ fn identity_provider_logout_request_writes_only_a_name_id_that_core_8_3_allows(
         NameId::new(at_limit.clone()).with_format(NameIdFormat::Persistent),
         NameId::new(at_limit).with_format(NameIdFormat::Transient),
         entity(PARTNER),
+        NameId::new("\u{a0}"),
     ] {
         idp.start_slo(&sp_descriptor, subject_for(allowed)?, StartSlo::post())?;
     }
@@ -3408,6 +3409,9 @@ fn identity_provider_logout_request_writes_only_a_name_id_that_core_8_3_allows(
         NameId::new(PARTNER)
             .with_format(NameIdFormat::Custom(padded_entity))
             .with_name_qualifier(IDP_ENTITY_ID),
+        NameId::new(""),
+        NameId::new(" \t"),
+        NameId::new("alice").with_sp_name_qualifier(" "),
     ] {
         let started = idp.start_slo(
             &sp_descriptor,

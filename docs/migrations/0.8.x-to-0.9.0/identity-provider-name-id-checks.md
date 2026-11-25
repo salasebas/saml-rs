@@ -1,9 +1,10 @@
-# Handle NameID value errors in identity provider logout and management
+# Handle NameID value errors from the identity provider
 
 An identity provider now checks the `NameId` it writes in a `LogoutRequest`
 or a `ManageNameIDRequest` with the rules it already applied to SSO
-responses. A service provider no longer checks the length of a persistent
-`NameId` it sends in a `ManageNameIDRequest`. No code fails to compile.
+responses, and refuses a blank NameID string in all three messages. A service
+provider no longer checks the length of a persistent `NameId` it sends in a
+`ManageNameIDRequest`. No code fails to compile.
 
 ## The identity provider refuses a NameID that Core §8.3 forbids
 
@@ -31,6 +32,24 @@ that `respond_sso` issued passes these checks.
 
 If you build the `NameId` yourself, take it from the identifier the identity
 provider issued. Remove any qualifier from an `entity` `NameId`.
+
+## The identity provider refuses a blank NameID string
+
+`IdentityProvider::respond_sso`, `initiate_sso`, `respond_sso_artifact`,
+`initiate_sso_artifact`, `start_slo`, `start_name_id_management`, and
+`start_name_id_management_redirect` now return `SamlError::Invalid` when the
+`NameId` value, its `NameQualifier`, `SPNameQualifier`, or `SPProvidedID`, or
+a `NameIdChange::NewId` value is empty or made only of XML whitespace: space,
+tab, carriage return, and line feed. Core §1.3.1 requires every such string to
+contain another character. A value such as a no-break space is still written.
+
+Before, these methods wrote the empty or whitespace-only string. A peer that
+follows Core §1.3.1 could not use it to identify the principal.
+
+If a user record can hold an empty identifier, check it before you call these
+methods, and issue a generated identifier instead, such as
+`NameId::generate_persistent`. Do not set a qualifier to an empty string. Omit
+it.
 
 ## The service provider sends the NameID it received
 

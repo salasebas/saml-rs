@@ -481,6 +481,43 @@ fn a_persistent_value_longer_than_256_characters_is_not_sent() -> TestResult {
 }
 
 #[test]
+fn a_value_or_qualifier_of_only_xml_whitespace_is_not_sent() -> TestResult {
+    let idp = identity_provider(Some(IDP_NIM_URL))?;
+    let sp = soap_service_provider()?;
+    let start = |current: &NameId, change: &NameIdChange| {
+        idp.start_name_id_management(
+            &sp,
+            current,
+            change,
+            StartNameIdManagement::new(),
+            authenticated(),
+        )
+    };
+    let persistent = |value: &str| NameId::new(value).with_format(NameIdFormat::Persistent);
+
+    start(
+        &persistent("\u{a0}"),
+        &NameIdChange::NewId("\u{2003}".into()),
+    )?;
+    for (current, change) in [
+        (persistent(""), NameIdChange::Terminate),
+        (persistent(" \n"), NameIdChange::Terminate),
+        (
+            persistent("alice").with_name_qualifier("\t"),
+            NameIdChange::Terminate,
+        ),
+        (persistent("alice"), NameIdChange::NewId(" ".into())),
+    ] {
+        let started = start(&current, &change);
+        assert!(
+            matches!(started, Err(SamlError::Invalid(_))),
+            "{current:?} {change:?}: {started:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn an_entity_identifier_is_sent_only_as_core_8_3_6_allows() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;

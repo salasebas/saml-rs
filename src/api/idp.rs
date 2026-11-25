@@ -251,6 +251,7 @@ impl IdentityProvider {
     /// For an assertion, it also returns [`SamlError`] when an attribute
     /// breaks the rules of
     /// [`SsoAssertion::attributes`](crate::SsoAssertion::attributes), the
+    /// `NameId` value or a qualifier is made only of XML whitespace, the
     /// persistent or transient `NameId` is longer than 256 characters, also
     /// when the format is the first configured NameID format, an `entity`
     /// `NameId` breaks the rules of [`NameId`](crate::NameId), the
@@ -397,7 +398,9 @@ impl IdentityProvider {
     /// not an absolute URI reference,
     /// the authentication instant passed to
     /// [`SsoAssertion::new`](crate::SsoAssertion::new) is later than the
-    /// moment the response is issued, or is before year 1, the persistent or transient `NameId` is longer
+    /// moment the response is issued, or is before year 1, the `NameId` value
+    /// or a qualifier is made only of XML whitespace, the persistent or
+    /// transient `NameId` is longer
     /// than 256 characters, or an `entity` `NameId` breaks the rules of
     /// [`NameId`](crate::NameId).
     ///

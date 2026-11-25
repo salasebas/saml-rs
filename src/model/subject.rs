@@ -7,6 +7,8 @@ use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
 use crate::xml::dom;
 use crate::xml::{OutboundNameIdQualifiers, XmlLimits};
 
+use super::attributes::is_blank;
+
 const MAX_OPAQUE_NAME_ID_CHARS: usize = 256;
 const ENCRYPTED_NAME_ID_POLICY_FORMAT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:encrypted";
 
@@ -45,8 +47,34 @@ pub(crate) fn validate_issued_name_id(
     value: &str,
     qualifiers: OutboundNameIdQualifiers<'_>,
 ) -> Result<(), SamlError> {
+    validate_issued_name_id_strings(value, qualifiers)?;
     validate_issued_name_id_length(format_uri, value)?;
     validate_issued_entity_name_id(format_uri, value, qualifiers)
+}
+
+fn validate_issued_name_id_strings(
+    value: &str,
+    qualifiers: OutboundNameIdQualifiers<'_>,
+) -> Result<(), SamlError> {
+    let OutboundNameIdQualifiers {
+        name_qualifier,
+        sp_name_qualifier,
+        sp_provided_id,
+    } = qualifiers;
+    let blank = [
+        ("NameID value", Some(value)),
+        ("NameQualifier", name_qualifier),
+        ("SPNameQualifier", sp_name_qualifier),
+        ("SPProvidedID", sp_provided_id),
+    ]
+    .into_iter()
+    .find(|(_, text)| text.is_some_and(is_blank));
+    match blank {
+        Some((name, _)) => Err(SamlError::Invalid(format!(
+            "a {name} must contain a character other than XML whitespace"
+        ))),
+        None => Ok(()),
+    }
 }
 
 fn validate_issued_entity_name_id(
@@ -85,10 +113,12 @@ fn validate_issued_entity_name_id(
 /// [`Self::generate_transient`], [`Self::generate_persistent`], and
 /// [`Self::persistent`] create the identifiers an identity provider issues in
 /// those two formats. [`Self::new`] takes any value, and
-/// [`Self::with_format`] any format. An identity provider rejects a
-/// persistent or transient value longer than 256 characters, whichever
-/// constructor created it, in a response, a `LogoutRequest`, and a
-/// `ManageNameIDRequest`. It also rejects there an `entity` value that is not
+/// [`Self::with_format`] any format. In a response, a `LogoutRequest`, and a
+/// `ManageNameIDRequest`, an identity provider rejects a value, qualifier, or
+/// `SPProvidedID` made only of XML whitespace (space, tab, carriage return,
+/// and line feed), an empty one included. It also rejects there a persistent
+/// or transient value longer than 256 characters, whichever constructor
+/// created it, an `entity` value that is not
 /// an absolute URI reference of at most 1024 characters with collapsed
 /// whitespace, and an `entity` `NameId` with any qualifier. A service
 /// provider sends the `NameId` it received without these checks. A message

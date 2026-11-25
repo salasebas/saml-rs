@@ -59,10 +59,12 @@ impl IdentityProvider {
     /// SOAP `ManageNameIDService`, or the service provider's metadata has
     /// none. Returns [`SamlError::SoapChannelProtection`] when `channel` does
     /// not authenticate both parties and protect integrity. Returns
-    /// [`SamlError::Invalid`] when the persistent `name_id` value or a new
-    /// value is longer than 256 characters, when an `entity` value or new
-    /// value is not an absolute URI reference of at most 1024 characters with
-    /// collapsed whitespace, when an `entity` `name_id` has a qualifier, or
+    /// [`SamlError::Invalid`] when the `name_id` value, a qualifier, or a new
+    /// value is made only of XML whitespace, when the persistent `name_id`
+    /// value or a new value is longer than 256 characters, when an `entity`
+    /// value or new value is not an absolute URI reference of at most 1024
+    /// characters with collapsed whitespace, when an `entity` `name_id` has a
+    /// qualifier, or
     /// when the NameID format is not an absolute URI reference. With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers), returns
     /// [`SamlError::MissingMetadata`] when the service provider role that

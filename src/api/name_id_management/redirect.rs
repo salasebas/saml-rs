@@ -309,11 +309,12 @@ impl IdentityProvider {
     /// endpoint decides the error: [`SamlError::ProtocolProfile`] for a
     /// URL that is not `https`, [`SamlError::Invalid`] for a value that is not
     /// a URL.
-    /// Returns [`SamlError::Invalid`] when a persistent value is longer than
-    /// 256 characters, an `entity` value or new value is not an absolute URI
-    /// reference of at most 1024 characters with collapsed whitespace, an
-    /// `entity` `name_id` has a qualifier, the NameID format is not an
-    /// absolute URI reference, or `allow_http` is selected and the first
+    /// Returns [`SamlError::Invalid`] when the `name_id` value, a qualifier, or
+    /// a new value is made only of XML whitespace, a persistent value is
+    /// longer than 256 characters, an `entity` value or new value is not an
+    /// absolute URI reference of at most 1024 characters with collapsed
+    /// whitespace, an `entity` `name_id` has a qualifier, the NameID format is
+    /// not an absolute URI reference, or `allow_http` is selected and the first
     /// endpoint is not an `http` or `https` URL.
     /// With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers),

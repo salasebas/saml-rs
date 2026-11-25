@@ -241,7 +241,7 @@ impl Attribute {
     }
 }
 
-fn is_blank(value: &str) -> bool {
+pub(super) fn is_blank(value: &str) -> bool {
     value.chars().all(is_xml_whitespace_char)
 }
 

@@ -107,6 +107,38 @@ fn a_status_message_needs_a_character_other_than_xml_whitespace(
 }
 
 #[test]
+fn a_name_id_and_its_qualifiers_need_a_character_other_than_xml_whitespace(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default(), false)?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let respond = |name_id: &NameId| {
+        idp.initiate_sso(
+            &sp_descriptor,
+            SsoAssertion::new(name_id.clone()),
+            RespondSso::post(),
+        )
+    };
+    let alice = NameId::new("alice");
+    for name_id in [
+        NameId::new(""),
+        NameId::new(" \r\n\t"),
+        alice.clone().with_name_qualifier(" "),
+        alice.clone().with_sp_name_qualifier(""),
+        alice.with_sp_provided_id("\t"),
+    ] {
+        let response = respond(&name_id);
+        assert!(
+            matches!(response, Err(SamlError::Invalid(_))),
+            "{name_id:?}: {response:?}"
+        );
+    }
+    let xml = response_xml(&respond(&NameId::new("\u{a0}"))?)?;
+    assert!(xml.contains("<saml:NameID>\u{a0}</saml:NameID>"), "{xml}");
+    Ok(())
+}
+
+#[test]
 fn an_entity_name_id_is_a_uri_of_at_most_1024_characters() -> Result<(), Box<dyn std::error::Error>>
 {
     let sp = sp_with(SpValidationPolicy::default())?;
