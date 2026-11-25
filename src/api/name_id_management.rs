@@ -132,10 +132,13 @@ impl IdentityProvider {
     /// with an `EncryptedID` or `NewEncryptedID` that cannot be decrypted, or
     /// whose identifier and change do not follow `ManageNameIDRequestType`.
     /// Only a request authenticated as `sp`'s and at this identity provider's
-    /// endpoint is refused this way: any other request returns an error. A
-    /// refusal comes before replay detection, so a repeated refused request is
-    /// refused again. A configured [`SchemaValidator`](crate::SchemaValidator)
-    /// that rejects the request returns its error first.
+    /// endpoint is refused this way: any other request returns an error.
+    /// Version, content, and age refusals come before replay detection, so a
+    /// repeated one is refused again. A decryption refusal comes after the
+    /// request `ID` is stored, so a repeated one returns
+    /// [`SamlError::ReplayDetected`]. A configured
+    /// [`SchemaValidator`](crate::SchemaValidator) that rejects the request
+    /// returns its error first.
     ///
     /// `sp` is the service provider the deployment authenticated on
     /// `channel`. A present XML signature must cover the request and verify

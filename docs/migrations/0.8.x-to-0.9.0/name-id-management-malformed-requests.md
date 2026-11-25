@@ -24,7 +24,7 @@ These requests still return an error:
   endpoint.
 - A request that a configured `SchemaValidator` rejects. The validator runs
   before these checks.
-- A repeated request `ID` that the replay cache holds. Over SOAP, the cache
-  holds only accepted requests, so a repeated malformed request is refused
+- A repeated request `ID` that the replay cache holds. Over SOAP, a malformed
+  request is refused before replay detection, so a repeated one is refused
   again. Over HTTP-Redirect, a request inside the age window is checked for
   replay before it is refused.
