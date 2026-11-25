@@ -70,10 +70,17 @@ impl SignatureAlgorithm {
     }
 }
 
-/// XML digest algorithm URI used by XML-DSig profiles.
+/// Digest algorithm for XML Encryption 1.1 RSA-OAEP key transport.
 ///
-/// Custom URI values are forwarded to the configured crypto backend and can
-/// still fail at runtime when unsupported by that backend.
+/// Pass a value in [`KeyEncryptionAlgorithm::RsaOaep`] to select the OAEP
+/// digest. XML Encryption carries the algorithm in a `ds:DigestMethod` child
+/// of `xenc:EncryptionMethod`.
+///
+/// `DigestAlgorithm` does not select the reference digest of an XML signature.
+/// [`SignatureAlgorithm`] decides that digest, and no option changes it.
+///
+/// With a crypto provider, config builders reject values the provider does not
+/// support, including an unsupported [`Self::Custom`] URI.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DigestAlgorithm {
