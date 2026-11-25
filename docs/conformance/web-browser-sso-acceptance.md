@@ -5,7 +5,7 @@ Inbound rules for typed Web Browser SSO cover `ServiceProvider::finish_sso`,
 `ServiceProvider::accept_unsolicited_sso_with_resolver`, and
 `IdentityProvider::receive_sso`.
 `SpValidationPolicy` and `IdpValidationPolicy` select the options. The
-[validation presets](https://samlrs.vercel.app/explanation/validation-presets/)
+[validation defaults](https://samlrs.vercel.app/explanation/validation-presets/)
 list their defaults.
 Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0 as corrected by Approved Errata 05, and the HTTP-POST-SimpleSign CD-04 binding.
 [Single Logout](single-logout.md), [metadata trust and replay](metadata-and-replay.md),

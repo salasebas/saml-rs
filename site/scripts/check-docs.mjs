@@ -73,6 +73,10 @@ test('the version dropdown is in the guide sidebar or home header and marks the 
 });
 
 test('public conformance URLs and Next redirects resolve', async () => {
+	const index = await page('next/reference/conformance/');
+	const logout = 'next/reference/conformance/single-logout/';
+	assert.ok(index.includes(`href="/${logout}#soap-binding"`));
+	assert.ok((await page(logout)).includes('id="soap-binding"'));
 	const old = 'reference/conformance/xml-signature-processing/';
 	const replacement = 'next/reference/conformance/xml-security-algorithms/';
 	assert.ok((await page(old)).includes('XML signature processing'));

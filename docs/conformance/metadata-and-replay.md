@@ -1,6 +1,6 @@
 # Metadata trust and replay
 
-Callers pass `MetadataTrustPolicy` to `IdpDescriptor::from_metadata_xml`, `SpDescriptor::from_metadata_xml`, and `MetadataAggregate::from_xml`. Callers pass `ReplayPolicy` to `SamlValidationContext::new`. Neither is a field of `SpValidationPolicy` or `IdpValidationPolicy`. Their defaults are in [validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
+Callers pass `MetadataTrustPolicy` to `IdpDescriptor::from_metadata_xml`, `SpDescriptor::from_metadata_xml`, and `MetadataAggregate::from_xml`. Callers pass `ReplayPolicy` to `SamlValidationContext::new`. These are explicit choices alongside the [role validation defaults](https://samlrs.vercel.app/explanation/validation-presets/).
 Normative text is [SAML Metadata 2.0](https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf) and its [schema](https://docs.oasis-open.org/security/saml/v2.0/saml-schema-metadata-2.0.xsd), Profiles 2.0, and Core 2.0, as corrected by Approved Errata 05.
 Neighbouring records are [Web Browser SSO generation](web-browser-sso-generation.md), [Web Browser SSO acceptance](web-browser-sso-acceptance.md), and [XML security algorithms](xml-security-algorithms.md).
 

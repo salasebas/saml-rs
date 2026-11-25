@@ -5,33 +5,45 @@ generation, parsing, validation, bindings, profiles, or metadata.
 
 ## Find the rule
 
-The source for a behaviour is the approved specification, schema, and errata
-that govern it. The SAML V2.0 set is listed in
-[Conformance Requirements](https://docs.oasis-open.org/security/saml/v2.0/saml-conformance-2.0-os.pdf)
-and the [OASIS document and schema index](https://docs.oasis-open.org/security/saml/v2.0/).
-The documents most changes need are
-[Core](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf),
-[Bindings](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf),
-[Profiles](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf),
-[Metadata](https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf),
-and [approved Errata 05](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/).
-A schema takes precedence over a schema listing in prose. A binding or
-profile can narrow or add to Core. A draft is a target only for a feature that
-is explicitly experimental. The approved HTTP-POST-SimpleSign publication is
+Use the sources in this order for the flow under review.
+
+1. **SAML.** Start with the [SAML 2.0 index](https://docs.oasis-open.org/security/saml/v2.0/)
+   for Core, profiles, bindings, metadata, schemas, and conformance
+   requirements. Apply [Approved Errata 05](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/).
+   A schema takes precedence over its listing in prose. A binding or profile
+   can narrow or add to Core. For an extension, use the applicable approved
+   publication in the [OASIS post-2.0 index](https://docs.oasis-open.org/security/saml/Post2.0/).
+   Target a draft only for an explicitly experimental feature.
+2. **Underlying standards.** Where the applicable SAML binding or profile
+   leaves a point open, use the referenced version of the underlying
+   specification. Start with the indexes for
+   [SOAP 1.1](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/),
+   [XML](https://www.w3.org/TR/xml/),
+   [XML Namespaces](https://www.w3.org/TR/xml-names/),
+   [XML Schema](https://www.w3.org/XML/Schema),
+   [XML Signature](https://www.w3.org/TR/xmldsig-core1/),
+   [XML Encryption](https://www.w3.org/TR/xmlenc-core1/), and
+   [HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110).
+3. **Interoperability and deployment profiles.** Apply
+   [WS-I Basic Profile 1.1](https://ws-i.org/Profiles/BasicProfile-1.1.html)
+   as library policy where SOAP 1.1 leaves a choice and the record gives a
+   reason. For a deployment profile such as
+   [saml2int](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html),
+   cite the specific requirement and identify the setting or deployment that
+   adopts it.
+
+The approved HTTP-POST-SimpleSign publication is
 [Committee Specification 01](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cs-01.html).
-The crate's records cite
+The records cite
 [Committee Draft 04 §2.5](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cd-04.html)
 for its clarification of the signature input when RelayState is absent.
 
-SAML builds on general specifications such as SOAP 1.1, XML Signature, XML
-Schema, and HTTP. Where a SAML document states a rule for the same point, the
-SAML rule governs. Where SAML says nothing, the general specification governs.
-WS-I Basic Profile 1.1 is not part of SAML. Follow it only as library policy,
-for interoperability, when SOAP 1.1 allows both forms. For example:
+### SOAP examples
 
-- Bindings §3.2.2 allows only SOAP 1.1. Under §3.2.2.1, as changed by E19,
-  the requester puts one SAML request in the `Body`, and the responder returns
-  one SAML response or a SOAP fault. Both narrow SOAP 1.1, so SAML governs.
+- Bindings §3.2.2 uses SOAP 1.1. Under §3.2.2.1, the requester must send one
+  SAML request as the only element in the `Body`. As amended by E19, the
+  responder should send a SAML response or a SOAP fault. A SAML response must
+  be the only element in the `Body`.
 - SOAP 1.1 §§4.2.2 and 4.2.3 govern which headers a receiver processes in
   the [supported SOAP flows](conformance/artifact-resolution.md#soap-envelope-rules).
 - SOAP 1.1 §4 allows namespace-qualified elements after the `Body`. WS-I R1011
@@ -67,8 +79,9 @@ specification. The first three levels map those keywords to crate behaviour.
 The fourth covers what no keyword decides.
 
 - **Mandatory** (`MUST`, `REQUIRED`, `SHALL`, and their negations): every API
-  that claims the behaviour enforces it, no policy disables it, and a required
-  rejection fails closed with an explicit `SamlError`.
+  that claims the behaviour enforces the rule whenever its condition holds.
+  No policy disables it. A required rejection fails closed with an explicit
+  `SamlError`.
 - **Recommended** (`SHOULD`, `RECOMMENDED`, and their negations): on by
   default. A deviation is an explicit, narrowly named option that says what it
   allows, and its rustdoc states the interoperability or security
@@ -85,10 +98,9 @@ element or one step of a flow does not claim the whole profile.
 
 ## Record it
 
-Each claimed flow has a record in `docs/conformance/`. The
-[conformance index](../site/src/content/docs/reference/conformance.md) lists
-the records and the APIs each one covers, so open only the record you need.
-The site publishes them.
+The [conformance index](conformance/README.md) lists the records and their
+public entry points. Read the sections that cover the affected flow. The
+site publishes the index and records.
 
 A record has one table row per rule, with four columns:
 
@@ -99,6 +111,11 @@ A record has one table row per rule, with four columns:
 A row stays near 300 characters. Section headings name the actor and the
 APIs, so the rows do not repeat them. `SamlError` variants and the order of
 checks belong in the rustdoc of the API that returns them, not in a record.
+
+Link a shared rule from each affected flow and keep its text in one record.
+Add section links when readers usually need one part of a long record. Split a
+record when its parts cover independently used flows or bindings. Preserve
+published URLs and section links when moving those parts.
 
 A library-policy row states its reason in one sentence: why the looser rule
 cannot be applied. A row without a reason is an open question, not a decision.

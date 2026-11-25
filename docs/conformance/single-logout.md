@@ -2,6 +2,12 @@
 
 `ServiceProvider` and `IdentityProvider` run Single Logout through `start_slo`, `receive_slo`, `respond_slo`, and `finish_slo`. Normative text is Core §3.7, Profiles §4.4, and Bindings §3.2, §3.4, and §3.5, as corrected by Approved Errata 05, plus the HTTP-POST-SimpleSign Committee Draft 04 (CD-04). Both roles sign outgoing messages, and the role sets the `SessionIndex` and `NotOnOrAfter` duties. Principal identifiers are in [identifiers](identifiers.md#name-identifier-formats), and SOAP logout uses the shared [SOAP envelope rules](artifact-resolution.md#soap-envelope-rules) for header order, `mustUnderstand`, and body contents.
 
+Find the rules by operation.
+
+- Start a logout as a [session participant](#logoutrequest-from-a-session-participant) or [session authority](#logoutrequest-from-a-session-authority).
+- Receive or reply to a logout. See [acceptance](#logout-acceptance), [session selection](#sp-session-selection), and [response generation](#logoutresponse).
+- Check [browser bindings](#browser-bindings), [asynchronous logout](#asynchronous-single-logout), or [SOAP](#soap-binding).
+
 ## LogoutRequest from a session participant
 
 `ServiceProvider::start_slo` is this actor.

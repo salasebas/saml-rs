@@ -49,11 +49,16 @@ work in the repo, not restate the README.
 
 ## Standards Conformance
 
-- Read `docs/standards-conformance.md` before adding or changing SAML
-  generation, parsing, validation, bindings, profiles, or metadata behavior.
-  It also says how to record a rule in `docs/conformance/`.
-- Cite and verify the applicable OASIS standard, schema, profile/binding, and
-  approved errata. Identify the obligated actor, condition, and scope.
+- Before reviewing or changing SAML behavior or a conformance record, read
+  [Standards conformance](docs/standards-conformance.md). Use the
+  [conformance index](docs/conformance/README.md) to find the affected
+  sections by flow and public API.
+- Verify and cite the clause, schema, and errata that govern the actor,
+  condition, and binding. Use the source order in the guide for SOAP 1.1,
+  other underlying standards, and interoperability profiles.
+- Record one behavior per short row. Put the actor and API in its section,
+  state the reason for a library policy in one sentence, and link shared rules
+  at their owning record.
 - When a design or interoperability decision needs an implementation example,
   consult a maintained project that implements the same flow, role, direction,
   and binding, such as OpenSAML, Shibboleth, PySAML2, `simplesamlphp/saml2`,

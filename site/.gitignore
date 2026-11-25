@@ -22,5 +22,7 @@ pnpm-debug.log*
 .vercel
 
 # Generated from docs/conformance/ by src/plugins/conformance-pages.js
+src/content/docs/reference/conformance.md
 src/content/docs/reference/conformance/
+versions/stable/docs/reference/conformance.md
 versions/stable/docs/reference/conformance/

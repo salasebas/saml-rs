@@ -95,7 +95,7 @@ export const sidebar = [
 	{
 		label: 'Explanation',
 		items: [
-			{ label: 'Validation presets', slug: 'explanation/validation-presets' },
+			{ label: 'Validation defaults', slug: 'explanation/validation-presets' },
 			{ label: 'Logout expiration', slug: 'explanation/logout-expiration' },
 			{ label: 'XML signatures', slug: 'explanation/xml-signature-recommendations' },
 			{ label: 'Typed API', slug: 'explanation/typed-api' },

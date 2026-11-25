@@ -2,7 +2,7 @@
 
 `ServiceProvider::start_sso` writes the `AuthnRequest`. `IdentityProvider::respond_sso`, `initiate_sso`, `respond_sso_artifact`, and `initiate_sso_artifact` write the `Response`.
 
-Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Errata 05, and the HTTP-POST-SimpleSign CD-04 binding. [HTTP-Artifact response](web-browser-sso-artifact.md) covers delivery of a stored response, and [acceptance rules](web-browser-sso-acceptance.md) cover the receiving side. [Validation presets](https://samlrs.vercel.app/explanation/validation-presets/) list the defaults of the options below.
+Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Errata 05, and the HTTP-POST-SimpleSign CD-04 binding. [HTTP-Artifact response](web-browser-sso-artifact.md) covers delivery of a stored response, and [acceptance rules](web-browser-sso-acceptance.md) cover the receiving side. See [validation defaults](https://samlrs.vercel.app/explanation/validation-presets/) for the initial role policies.
 
 [SimpleSign CD-04 §2.4](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cd-04.html) makes the detached signature optional. For Web SSO messages that need no detached signature, use HTTP-POST if the peer supports it. The [Single Logout profile](single-logout.md) has its own authentication requirements.
 
