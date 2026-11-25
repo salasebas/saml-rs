@@ -18,7 +18,7 @@ use crate::soap::{
 };
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::protocol_element::{
-    issuer, issuer_format_is_entity, parse_saml_with_limits, SamlElement,
+    issuer, issuer_format_is_entity, parse_saml_with_limits, PartyName, SamlElement,
 };
 use crate::xml::status::read_status;
 use crate::xml::write::Prefixes;
@@ -562,13 +562,20 @@ fn require_peer_issuer(element: &SamlElement, expected: &str) -> Result<(), Saml
     if issuer.value != expected {
         return Err(SamlError::issuer_mismatch(expected, Some(&issuer.value)));
     }
-    if !issuer_format_is_entity(issuer.format.as_deref()) {
-        return Err(SamlError::ProtocolProfile(format!(
-            "{} Issuer Format must be omitted or entity",
-            element.local_name
-        )));
+    require_entity_format(element, &issuer)
+}
+
+pub(crate) fn require_entity_format(
+    element: &SamlElement,
+    issuer: &PartyName,
+) -> Result<(), SamlError> {
+    if issuer_format_is_entity(issuer.format.as_deref()) {
+        return Ok(());
     }
-    Ok(())
+    Err(SamlError::ProtocolProfile(format!(
+        "{} Issuer Format must be omitted or entity",
+        element.local_name
+    )))
 }
 
 fn local_services(metadata: &Metadata) -> Result<Vec<String>, SamlError> {

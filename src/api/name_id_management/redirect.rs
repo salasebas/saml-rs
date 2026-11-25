@@ -11,7 +11,7 @@ use crate::model::{
 };
 use crate::name_id_management::redirect::{
     create_request, create_response, parse_request, parse_response, request_from_flow,
-    response_id_from_flow, InboundValidation, ParsedRequest,
+    response_id_with_entity_issuer, InboundValidation, ParsedRequest,
 };
 use crate::name_id_management::xml::{RequestXml, Requester, ResponseXml};
 use crate::name_id_management::{
@@ -123,7 +123,8 @@ impl ServiceProvider {
     /// # Errors
     ///
     /// Returns [`SamlError`] when relay state is invalid, the signature is missing or does not verify, the issuer is
-    /// not the identity provider, `Destination` is missing or is not the
+    /// not the identity provider or has a `Format` other than `entity`,
+    /// `Destination` is missing or is not the
     /// receiving `ManageNameIDService`, this service provider publishes no
     /// HTTP-Redirect `ManageNameIDService` or several without
     /// [`SamlValidationContext::with_recipient_endpoint`], the message is
@@ -211,7 +212,8 @@ impl ServiceProvider {
     /// only after the signature, issuer, `InResponseTo`, and `Destination`
     /// checks pass. Returns another [`SamlError`] when the response does not
     /// answer `pending`, its RelayState differs from one the request carried,
-    /// or any of those checks or replay validation fails. Returns
+    /// any of those checks or replay validation fails, or a successful
+    /// response's `Issuer` has a `Format` other than `entity`. Returns
     /// [`SamlError::TimeWindowInvalid`] when
     /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
     /// selected and `validation` has no
@@ -662,7 +664,7 @@ fn finish(
         },
     )?;
     validation.check_and_store_message_replay(ReplayKey::ManageNameIdResponse(
-        response_id_from_flow(&flow, local.setting.xml_limits)?,
+        response_id_with_entity_issuer(&flow, local.setting.xml_limits)?,
     ))?;
     Ok(relay_state)
 }
