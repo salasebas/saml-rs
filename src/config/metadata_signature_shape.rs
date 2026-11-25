@@ -1,6 +1,7 @@
-use crate::constants::transform_algorithm;
+use crate::constants::{namespace, transform_algorithm};
 use crate::error::SamlError;
 use crate::xml::dom::Node;
+use crate::xml::protocol_element::SamlElement;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MetadataSignatureTransforms {
@@ -10,25 +11,26 @@ pub(super) enum MetadataSignatureTransforms {
 
 pub(super) fn ensure_import_signature_shape(
     root: &Node,
+    namespaced_root: &SamlElement,
     transforms: MetadataSignatureTransforms,
 ) -> Result<(), SamlError> {
     if !is_metadata_root(root) {
         return Ok(());
     }
     let mut signatures = Vec::new();
-    collect_signatures(root, &mut signatures);
-    if signatures.is_empty() {
-        return Ok(());
-    }
-    if signatures.len() != 1 {
-        return Err(SamlError::SignedReferenceMismatch);
-    }
-    let signature = signatures[0];
-    let direct_signatures: Vec<_> = root.children_named("Signature").collect();
-    if direct_signatures.len() != 1 || direct_signatures[0].start != signature.start {
-        return Err(SamlError::SignedReferenceMismatch);
-    }
-    if contains_local_name(signature, "Object") {
+    collect_signatures(root, namespaced_root, &mut signatures);
+    let [(signature, namespaced_signature)] = signatures.as_slice() else {
+        return if signatures.is_empty() {
+            Ok(())
+        } else {
+            Err(SamlError::SignedReferenceMismatch)
+        };
+    };
+    let is_root_child = root
+        .children
+        .iter()
+        .any(|child| child.start == signature.start);
+    if !is_root_child || contains_signature_object(namespaced_signature) {
         return Err(SamlError::SignedReferenceMismatch);
     }
     let Some(identifier) = root.attr("ID").filter(|identifier| !identifier.is_empty()) else {
@@ -91,12 +93,16 @@ const INCLUSIVE_C14N_10_WITH_COMMENTS: &str =
 const INCLUSIVE_C14N_11: &str = "http://www.w3.org/2006/12/xml-c14n11";
 const INCLUSIVE_C14N_11_WITH_COMMENTS: &str = "http://www.w3.org/2006/12/xml-c14n11#WithComments";
 
-fn collect_signatures<'a>(node: &'a Node, found: &mut Vec<&'a Node>) {
-    for child in &node.children {
-        if child.local_name == "Signature" {
-            found.push(child);
+fn collect_signatures<'a, 'n>(
+    node: &'a Node,
+    namespaced: &'n SamlElement,
+    found: &mut Vec<(&'a Node, &'n SamlElement)>,
+) {
+    for (child, namespaced_child) in node.children.iter().zip(&namespaced.children) {
+        if namespaced_child.is(namespace::DSIG, "Signature") {
+            found.push((child, namespaced_child));
         }
-        collect_signatures(child, found);
+        collect_signatures(child, namespaced_child, found);
     }
 }
 
@@ -120,8 +126,9 @@ fn transform_algorithms(reference: &Node) -> Result<Vec<&str>, SamlError> {
     Ok(algorithms)
 }
 
-fn contains_local_name(node: &Node, name: &str) -> bool {
-    node.children
+fn contains_signature_object(element: &SamlElement) -> bool {
+    element
+        .children
         .iter()
-        .any(|child| child.local_name == name || contains_local_name(child, name))
+        .any(|child| child.is(namespace::DSIG, "Object") || contains_signature_object(child))
 }

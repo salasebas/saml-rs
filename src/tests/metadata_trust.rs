@@ -207,6 +207,34 @@ fn metadata_trust_accepts_signed_idp_descriptor_with_pinned_certificate(
 }
 
 #[test]
+fn require_signature_counts_only_xml_signature_elements() -> Result<(), Box<dyn std::error::Error>>
+{
+    const FOREIGN_SIGNATURE: &str = r#"<Extensions><ext:Signature xmlns:ext="urn:example:ext">publisher seal</ext:Signature></Extensions>"#;
+    let unsigned = idp_metadata_xml().replacen(
+        "<IDPSSODescriptor",
+        &format!("{FOREIGN_SIGNATURE}<IDPSSODescriptor"),
+        1,
+    );
+    let signed = sign_root_metadata(&unsigned)?;
+    let key_info = "<ds:KeyInfo>";
+    let with_foreign_object = signed.replacen(
+        key_info,
+        &format!(r#"{key_info}<ext:Object xmlns:ext="urn:example:ext"/>"#),
+        1,
+    );
+    assert_ne!(with_foreign_object, signed);
+    let cert = CertificatePem::new(CERT);
+
+    for xml in [&signed, &with_foreign_object] {
+        let descriptor = import_idp(xml, trust(std::slice::from_ref(&cert)))?;
+        assert!(descriptor
+            .signed_metadata_xml()
+            .is_some_and(|signed_xml| signed_xml.contains(FOREIGN_SIGNATURE)));
+    }
+    Ok(())
+}
+
+#[test]
 fn metadata_scopes_require_a_current_registration_authority_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let xml = idp_metadata_xml()
