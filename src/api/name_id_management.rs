@@ -30,8 +30,9 @@ impl IdentityProvider {
     /// [`StartNameIdManagement::identifier_encryption`] with
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers) sends the
     /// identifier as `EncryptedID`, and a new value as `NewEncryptedID`, for
-    /// the first encryption key in the service provider's metadata that the
-    /// configured algorithms can use.
+    /// the first encryption key that the configured algorithms can use, in the
+    /// service provider role that publishes the receiving SOAP
+    /// `ManageNameIDService`.
     /// The default, [`IdentifierEncryptionPolicy::PlaintextIdentifiers`](crate::IdentifierEncryptionPolicy::PlaintextIdentifiers),
     /// sends `NameID` and `NewID`. A SOAP request carries no RelayState, so
     /// [`StartNameIdManagement::relay_state`] must stay unset.
@@ -60,8 +61,9 @@ impl IdentityProvider {
     /// value is longer than 256 characters, or when the NameID format is not
     /// an absolute URI reference. With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers), returns
-    /// [`SamlError::MissingMetadata`] when the service provider publishes no
-    /// encryption certificate.
+    /// [`SamlError::MissingMetadata`] when the service provider role that
+    /// publishes the receiving `ManageNameIDService` has no encryption
+    /// certificate.
     ///
     /// # Examples
     ///

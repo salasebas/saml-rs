@@ -287,10 +287,10 @@ pub(crate) fn start(
     local_services(idp.metadata)?;
     require_channel(channel)?;
     let sp_entity_id = service_provider.entity_id().as_str();
-    let destination = service_provider
+    let receiver = service_provider
         .metadata()
         .as_metadata()
-        .manage_name_id_service_locations(Binding::Soap, EndpointDirection::Request)
+        .manage_name_id_services(Binding::Soap, EndpointDirection::Request)
         .into_iter()
         .next()
         .ok_or_else(|| SamlError::MissingMetadata("ManageNameIDService".into()))?;
@@ -300,7 +300,7 @@ pub(crate) fn start(
         &RequestXml {
             id: &request_id,
             issuer: idp.entity_id,
-            destination: &destination,
+            destination: &receiver.location,
             name_id,
             change,
             requester: Requester::IdentityProvider,
@@ -314,8 +314,9 @@ pub(crate) fn start(
         identifier_encryption,
         idp.setting,
         service_provider.metadata().as_metadata(),
+        receiver.role,
     )?;
-    let request = SoapRequest::try_new(EndpointUrl::try_new(destination)?, &xml)?;
+    let request = SoapRequest::try_new(EndpointUrl::try_new(receiver.location)?, &xml)?;
     Ok(StartedNameIdManagement {
         request,
         request_id,

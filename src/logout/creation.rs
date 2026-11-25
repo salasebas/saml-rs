@@ -38,6 +38,7 @@ pub(crate) struct LogoutRequestInput<'a> {
     pub(crate) init_setting: &'a EntitySetting,
     pub(crate) init_meta: &'a Metadata,
     pub(crate) target_meta: &'a Metadata,
+    pub(crate) target_role: usize,
     pub(crate) binding: Binding,
     pub(crate) destination: &'a str,
     pub(crate) subject: &'a LogoutRequestSubject<'a>,
@@ -58,6 +59,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
         init_setting,
         init_meta,
         target_meta,
+        target_role,
         binding,
         destination,
         subject,
@@ -138,7 +140,13 @@ pub(crate) fn create_logout_request_for_subject_inner(
         &expectation,
         OutboundLogoutRequestValidation::BeforeSigning,
     )?;
-    let xml = encrypt_name_id_for_peer(xml, name_id_encryption, init_setting, target_meta)?;
+    let xml = encrypt_name_id_for_peer(
+        xml,
+        name_id_encryption,
+        init_setting,
+        target_meta,
+        target_role,
+    )?;
     let signed = sign_message(
         init_setting,
         binding,

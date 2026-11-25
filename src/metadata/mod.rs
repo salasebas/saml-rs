@@ -94,6 +94,33 @@ fn non_empty_location(value: Option<&str>) -> Option<&str> {
     value.filter(|location| !location.is_empty())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RoleLocation {
+    pub(crate) location: String,
+    pub(crate) role: usize,
+}
+
+fn role_locations(
+    roles: &[Value],
+    binding: Binding,
+    direction: EndpointDirection,
+) -> Vec<RoleLocation> {
+    let mut seen = HashSet::new();
+    roles
+        .iter()
+        .enumerate()
+        .flat_map(|(role, endpoints)| {
+            published_locations(Some(endpoints), binding, direction)
+                .map(move |location| (role, location))
+        })
+        .filter(|(_, location)| seen.insert(*location))
+        .map(|(role, location)| RoleLocation {
+            location: location.to_string(),
+            role,
+        })
+        .collect()
+}
+
 /// Parsed entity metadata (the base shared by SP and IdP).
 #[derive(Debug, Clone)]
 pub struct Metadata {
@@ -101,6 +128,8 @@ pub struct Metadata {
     pub(crate) meta: Value,
     entity_id: Option<String>,
     key_certificates: KeyCertificates,
+    single_logout_service_roles: Vec<Value>,
+    manage_name_id_service_roles: Vec<Value>,
     valid_until_bounds: validity::ValidUntilBounds,
     signing_flags: SigningFlags,
     scope_elements: Vec<SamlElement>,
@@ -215,11 +244,6 @@ impl Metadata {
     }
 
     #[cfg(crypto)]
-    pub(crate) fn encryption_key_certificates(&self) -> &[Vec<String>] {
-        self.key_certificates.encryption_keys()
-    }
-
-    #[cfg(crypto)]
     pub(crate) fn role_encryption_key_certificates(&self, role: usize) -> &[Vec<String>] {
         self.key_certificates.role_encryption_keys(role)
     }
@@ -247,7 +271,10 @@ impl Metadata {
         binding: Binding,
         direction: EndpointDirection,
     ) -> Option<String> {
-        first_published_location(self.meta.get("singleLogoutService"), binding, direction)
+        self.single_logout_services(binding, direction)
+            .into_iter()
+            .next()
+            .map(|endpoint| endpoint.location)
     }
 
     pub(crate) fn single_logout_service_locations(
@@ -255,7 +282,18 @@ impl Metadata {
         binding: Binding,
         direction: EndpointDirection,
     ) -> Vec<String> {
-        published_locations_for_binding(self.meta.get("singleLogoutService"), binding, direction)
+        self.single_logout_services(binding, direction)
+            .into_iter()
+            .map(|endpoint| endpoint.location)
+            .collect()
+    }
+
+    pub(crate) fn single_logout_services(
+        &self,
+        binding: Binding,
+        direction: EndpointDirection,
+    ) -> Vec<RoleLocation> {
+        role_locations(&self.single_logout_service_roles, binding, direction)
     }
 
     pub(crate) fn manage_name_id_service_locations(
@@ -263,7 +301,18 @@ impl Metadata {
         binding: Binding,
         direction: EndpointDirection,
     ) -> Vec<String> {
-        published_locations_for_binding(self.meta.get("manageNameIDService"), binding, direction)
+        self.manage_name_id_services(binding, direction)
+            .into_iter()
+            .map(|endpoint| endpoint.location)
+            .collect()
+    }
+
+    pub(crate) fn manage_name_id_services(
+        &self,
+        binding: Binding,
+        direction: EndpointDirection,
+    ) -> Vec<RoleLocation> {
+        role_locations(&self.manage_name_id_service_roles, binding, direction)
     }
 
     /// Bindings for which a `SingleLogoutService` endpoint declares a

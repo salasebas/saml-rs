@@ -12,25 +12,38 @@ pub(super) fn encrypt_name_id_for_peer(
     policy: IdentifierEncryptionPolicy,
     init_setting: &EntitySetting,
     target_meta: &Metadata,
+    target_role: usize,
 ) -> Result<String, SamlError> {
     match policy {
         IdentifierEncryptionPolicy::PlaintextIdentifiers => Ok(xml),
-        IdentifierEncryptionPolicy::EncryptIdentifiers => encrypt(&xml, init_setting, target_meta),
+        IdentifierEncryptionPolicy::EncryptIdentifiers => {
+            encrypt(&xml, init_setting, target_meta, target_role)
+        }
     }
 }
 
 #[cfg(crypto)]
-fn encrypt(xml: &str, setting: &EntitySetting, peer: &Metadata) -> Result<String, SamlError> {
+fn encrypt(
+    xml: &str,
+    setting: &EntitySetting,
+    peer: &Metadata,
+    role: usize,
+) -> Result<String, SamlError> {
     use crate::crypto::enc::{encrypt_logout_request_name_id, EncryptionRecipient};
 
     encrypt_logout_request_name_id(
         xml,
-        &EncryptionRecipient::from_setting(peer.encryption_key_certificates(), setting),
+        &EncryptionRecipient::from_setting(peer.role_encryption_key_certificates(role), setting),
     )
 }
 
 #[cfg(not(crypto))]
-fn encrypt(_xml: &str, _setting: &EntitySetting, _peer: &Metadata) -> Result<String, SamlError> {
+fn encrypt(
+    _xml: &str,
+    _setting: &EntitySetting,
+    _peer: &Metadata,
+    _role: usize,
+) -> Result<String, SamlError> {
     Err(SamlError::Unsupported(
         "XML encryption requires a crypto provider feature".into(),
     ))

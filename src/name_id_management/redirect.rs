@@ -38,6 +38,7 @@ pub(crate) struct InboundValidation<'a> {
 pub(crate) fn create_request(
     setting: &EntitySetting,
     peer_meta: &Metadata,
+    peer_role: usize,
     request: &RequestXml<'_>,
     identifier_encryption: IdentifierEncryptionPolicy,
     relay_state: Option<&str>,
@@ -47,6 +48,7 @@ pub(crate) fn create_request(
         identifier_encryption,
         setting,
         peer_meta,
+        peer_role,
     )?;
     bind_signed(
         setting,

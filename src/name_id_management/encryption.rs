@@ -18,10 +18,11 @@ pub(crate) fn protect_request(
     policy: IdentifierEncryptionPolicy,
     setting: &EntitySetting,
     peer: &Metadata,
+    peer_role: usize,
 ) -> Result<String, SamlError> {
     match policy {
         IdentifierEncryptionPolicy::PlaintextIdentifiers => Ok(xml),
-        IdentifierEncryptionPolicy::EncryptIdentifiers => encrypt(&xml, setting, peer),
+        IdentifierEncryptionPolicy::EncryptIdentifiers => encrypt(&xml, setting, peer, peer_role),
     }
 }
 
@@ -54,13 +55,18 @@ fn decrypted(
 }
 
 #[cfg(crypto)]
-fn encrypt(xml: &str, setting: &EntitySetting, peer: &Metadata) -> Result<String, SamlError> {
+fn encrypt(
+    xml: &str,
+    setting: &EntitySetting,
+    peer: &Metadata,
+    role: usize,
+) -> Result<String, SamlError> {
     use crate::crypto::enc::{encrypt_root_children, EncryptionRecipient, MANAGED_NAME_ID, NEW_ID};
 
     encrypt_root_children(
         xml,
         &[MANAGED_NAME_ID, NEW_ID],
-        &EncryptionRecipient::from_setting(peer.encryption_key_certificates(), setting),
+        &EncryptionRecipient::from_setting(peer.role_encryption_key_certificates(role), setting),
     )
 }
 
@@ -86,7 +92,12 @@ fn decrypt(xml: &str, child: EncryptedChild, setting: &EntitySetting) -> Result<
 }
 
 #[cfg(not(crypto))]
-fn encrypt(_xml: &str, _setting: &EntitySetting, _peer: &Metadata) -> Result<String, SamlError> {
+fn encrypt(
+    _xml: &str,
+    _setting: &EntitySetting,
+    _peer: &Metadata,
+    _role: usize,
+) -> Result<String, SamlError> {
     Err(SamlError::Unsupported(
         "XML encryption requires a crypto provider feature".into(),
     ))

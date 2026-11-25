@@ -9,7 +9,7 @@ use crate::logout::{
     LogoutFlowValidation, LogoutReceipt, LogoutRequestInput, LogoutRequestSubject,
     LogoutRequestValidation, LogoutResponseInput,
 };
-use crate::metadata::{EndpointDirection, Metadata};
+use crate::metadata::{EndpointDirection, Metadata, RoleLocation};
 use crate::model::{
     IdpLogoutAction, LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, Received,
     RefusedLogoutRequest, RelayState, ReplayKey, SamlInstant, SamlValidationContext, SessionIndex,
@@ -46,8 +46,8 @@ impl ServiceProvider {
     /// [`SamlError::ProtocolProfile`] for a URL that is not `https`,
     /// [`SamlError::Invalid`] for a value that is not a URL.
     /// [`StartSlo::identifier_encryption`] returns
-    /// [`SamlError::MissingMetadata`] when the peer metadata has no encryption
-    /// certificate.
+    /// [`SamlError::MissingMetadata`] when the peer role that publishes the
+    /// receiving `SingleLogoutService` has no encryption certificate.
     ///
     /// # Examples
     ///
@@ -354,8 +354,8 @@ impl IdentityProvider {
     /// configured issuance lifetime cannot be added to the current issue
     /// instant.
     /// [`StartSlo::identifier_encryption`] returns
-    /// [`SamlError::MissingMetadata`] when the peer metadata has no encryption
-    /// certificate.
+    /// [`SamlError::MissingMetadata`] when the peer role that publishes the
+    /// receiving `SingleLogoutService` has no encryption certificate.
     ///
     /// # Examples
     ///
@@ -711,7 +711,7 @@ fn issue_logout_request(
         StartSloRole::SessionParticipant { .. } => options.transport(),
         StartSloRole::SessionAuthority { .. } => PeerEndpointTransport::AllowHttp,
     };
-    let destination = peer_logout_endpoint(
+    let receiver = peer_logout_endpoint(
         peer.metadata,
         options.binding,
         EndpointDirection::Request,
@@ -753,8 +753,9 @@ fn issue_logout_request(
         init_setting: local_setting,
         init_meta: local_metadata,
         target_meta: peer.metadata,
+        target_role: receiver.role,
         binding: Binding::from(options.binding),
-        destination: &destination,
+        destination: &receiver.location,
         subject: &request_subject,
         relay_state: options.relay_state.as_ref().map(RelayState::as_str),
         name_id_format,
@@ -900,14 +901,15 @@ fn respond_slo_impl(
     };
     let destination = match binding {
         LogoutBinding::Soap => None,
-        LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign => {
-            Some(peer_logout_endpoint(
+        LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign => Some(
+            peer_logout_endpoint(
                 peer.metadata,
                 binding,
                 EndpointDirection::Response,
                 transport,
-            )?)
-        }
+            )?
+            .location,
+        ),
     };
     let status_message = options.status_message;
     let context = create_logout_response_inner(&LogoutResponseInput {
@@ -988,13 +990,13 @@ fn peer_logout_endpoint(
     binding: LogoutBinding,
     direction: EndpointDirection,
     transport: PeerEndpointTransport,
-) -> Result<String, SamlError> {
+) -> Result<RoleLocation, SamlError> {
     let transport = match binding {
         LogoutBinding::Soap => PeerEndpointTransport::AllowHttp,
         LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign => transport,
     };
     peer_endpoint_for_transport(
-        peer_metadata.single_logout_service_locations(Binding::from(binding), direction),
+        peer_metadata.single_logout_services(Binding::from(binding), direction),
         transport,
         "Single Logout",
         "SingleLogoutService",

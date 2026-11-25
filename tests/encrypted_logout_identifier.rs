@@ -489,6 +489,112 @@ fn encrypted_id_is_encrypted_for_a_later_peer_key_the_key_transport_can_use(
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy)]
+enum RolePlacement {
+    BeforeEndpointRole,
+    AfterEndpointRole,
+}
+
+fn role_element(initiator: Initiator) -> &'static str {
+    match initiator {
+        Initiator::Sp => "IDPSSODescriptor",
+        Initiator::Idp => "SPSSODescriptor",
+    }
+}
+
+fn with_keyed_role_without_endpoints(
+    metadata: &str,
+    role: &str,
+    certificate: &str,
+    placement: RolePlacement,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let keyed_role = format!(
+        "<{role} protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><ds:X509Data><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor></{role}>",
+        certificate
+            .lines()
+            .filter(|line| !line.starts_with("-----"))
+            .collect::<String>()
+    );
+    let position = match placement {
+        RolePlacement::BeforeEndpointRole => metadata.find(&format!("<{role}")),
+        RolePlacement::AfterEndpointRole => {
+            let end_tag = format!("</{role}>");
+            metadata.find(&end_tag).map(|start| start + end_tag.len())
+        }
+    }
+    .ok_or_else(|| format!("metadata has no {role}"))?;
+    let mut metadata = metadata.to_string();
+    metadata.insert_str(position, &keyed_role);
+    Ok(metadata)
+}
+
+fn peer_descriptors(
+    sp_metadata: &str,
+    idp_metadata: &str,
+) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
+    Ok((
+        SpDescriptor::from_metadata_xml(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            sp_metadata,
+            MetadataTrustPolicy::Unverified,
+        )?,
+        IdpDescriptor::from_metadata_xml(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            idp_metadata,
+            MetadataTrustPolicy::Unverified,
+        )?,
+    ))
+}
+
+#[test]
+fn encrypted_id_is_encrypted_for_the_role_that_publishes_the_single_logout_service(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for placement in [
+        RolePlacement::BeforeEndpointRole,
+        RolePlacement::AfterEndpointRole,
+    ] {
+        let Parties { sp, idp, .. } = parties()?;
+        let (sp_descriptor, idp_descriptor) = peer_descriptors(
+            &with_keyed_role_without_endpoints(
+                sp.metadata_xml(),
+                role_element(Initiator::Idp),
+                NEXT_CERT,
+                placement,
+            )?,
+            &with_keyed_role_without_endpoints(
+                idp.metadata_xml(),
+                role_element(Initiator::Sp),
+                NEXT_CERT,
+                placement,
+            )?,
+        )?;
+        let parties = Parties {
+            sp,
+            idp,
+            sp_descriptor,
+            idp_descriptor,
+        };
+        for initiator in INITIATORS {
+            let options = StartSlo::post()
+                .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
+            let sent = start(&parties, initiator, options)?;
+            assert!(request_xml(&sent.outbound)?.contains("<saml:EncryptedID>"));
+
+            let received = receive(
+                &parties,
+                initiator,
+                request_input(&sent.outbound, LogoutBinding::Post)?,
+            )?;
+            assert_eq!(
+                received.message().name_id(),
+                Some(&principal()),
+                "{initiator:?} {placement:?}"
+            );
+        }
+    }
+    Ok(())
+}
+
 #[test]
 fn identity_provider_answers_an_encrypted_id_that_no_decryption_key_decrypts(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -755,6 +861,20 @@ fn encrypted_id_requires_the_peer_encryption_key() -> Result<(), Box<dyn std::er
         &without_key_descriptors(parties.sp.metadata_xml())?,
         MetadataTrustPolicy::Unverified,
     )?;
+    let (sp_with_key_in_another_role, idp_with_key_in_another_role) = peer_descriptors(
+        &with_keyed_role_without_endpoints(
+            &without_key_descriptors(parties.sp.metadata_xml())?,
+            role_element(Initiator::Idp),
+            CERT,
+            RolePlacement::BeforeEndpointRole,
+        )?,
+        &with_keyed_role_without_endpoints(
+            &without_key_descriptors(parties.idp.metadata_xml())?,
+            role_element(Initiator::Sp),
+            CERT,
+            RolePlacement::BeforeEndpointRole,
+        )?,
+    )?;
     for started in [
         parties
             .sp
@@ -762,6 +882,12 @@ fn encrypted_id_requires_the_peer_encryption_key() -> Result<(), Box<dyn std::er
         parties
             .idp
             .start_slo(&sp_without_keys, subject()?, options()),
+        parties
+            .sp
+            .start_slo(&idp_with_key_in_another_role, subject()?, options()),
+        parties
+            .idp
+            .start_slo(&sp_with_key_in_another_role, subject()?, options()),
     ] {
         match started {
             Err(SamlError::MissingMetadata(what)) => assert_eq!(what, "encryption certificate"),

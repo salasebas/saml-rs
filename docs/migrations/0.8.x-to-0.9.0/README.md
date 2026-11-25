@@ -77,5 +77,6 @@ Check the topics that affect your integration.
 - [Sign encrypted assertions for the response they arrive in](decrypted-assertion-signatures.md)
 - [Read metadata endpoints only in the metadata namespace](metadata-endpoint-namespace.md)
 - [Require a `validUntil` on the metadata root](root-valid-until.md)
+- [Encrypt logout and name identifier management for the receiving role](logout-and-nim-encryption-role.md)
 
 [All migration guides](../README.md)
