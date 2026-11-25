@@ -258,20 +258,6 @@ pub mod digest_algorithm {
     pub const SHA512: &str = "http://www.w3.org/2001/04/xmlenc#sha512";
 }
 
-/// Map a signature algorithm URI to its digest algorithm URI.
-pub fn digest_for_signature(sig_alg: &str) -> Option<&'static str> {
-    match sig_alg {
-        signature_algorithm::RSA_SHA1
-        | signature_algorithm::DSA_SHA1
-        | signature_algorithm::HMAC_SHA1 => Some(digest_algorithm::SHA1),
-        signature_algorithm::RSA_SHA256 => Some(digest_algorithm::SHA256),
-        signature_algorithm::RSA_SHA256_MGF1 => Some(digest_algorithm::SHA256),
-        signature_algorithm::RSA_SHA384 => Some(digest_algorithm::SHA384),
-        signature_algorithm::RSA_SHA512 => Some(digest_algorithm::SHA512),
-        _ => None,
-    }
-}
-
 /// XML data encryption algorithm URIs.
 ///
 /// Algorithm support depends on the configured crypto provider and features.
@@ -455,31 +441,6 @@ mod tests {
         assert_eq!(ParserType::LogoutRequest.query_param(), "SAMLRequest");
         assert_eq!(ParserType::SamlResponse.query_param(), "SAMLResponse");
         assert_eq!(ParserType::LogoutResponse.query_param(), "SAMLResponse");
-    }
-
-    #[test]
-    fn digest_mapping_matches_xmlsig_values() {
-        assert_eq!(
-            digest_for_signature(signature_algorithm::RSA_SHA256),
-            Some(digest_algorithm::SHA256)
-        );
-        assert_eq!(
-            digest_for_signature(signature_algorithm::RSA_SHA256_MGF1),
-            Some(digest_algorithm::SHA256)
-        );
-        assert_eq!(
-            digest_for_signature(signature_algorithm::RSA_SHA1),
-            Some("http://www.w3.org/2000/09/xmldsig#sha1")
-        );
-        assert_eq!(
-            digest_for_signature(signature_algorithm::DSA_SHA1),
-            Some(digest_algorithm::SHA1)
-        );
-        assert_eq!(
-            digest_for_signature(signature_algorithm::HMAC_SHA1),
-            Some(digest_algorithm::SHA1)
-        );
-        assert_eq!(digest_for_signature("unknown"), None);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use super::*;
 use crate::constants::signature_algorithm::{RSA_SHA256, RSA_SHA384, RSA_SHA512};
-use crate::constants::{digest_for_signature, namespace, transform_algorithm};
+use crate::constants::{digest_algorithm, namespace, transform_algorithm};
 use crate::crypto::keys::read_private_key;
 use crate::crypto::sign_saml_xml;
 use crate::util::normalize_cert_string;
@@ -246,12 +246,12 @@ fn signed_response_with_foreign_extension_certificate() -> Result<String, Box<dy
 
 fn response_with_first_invalid_signature() -> Result<String, Box<dyn std::error::Error>> {
     let cert = normalize_cert_string(IDP_CERT);
-    let digest = digest_for_signature(RSA_SHA256).ok_or("unknown digest")?;
     let invalid_signature = format!(
         "<ds:Signature xmlns:ds=\"{dsig}\"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"{exc_c14n}\"/><ds:SignatureMethod Algorithm=\"{sig_alg}\"/><ds:Reference URI=\"#_d71a3a8e9fcc45c9e9d248ef7049393fc8f04e5f75\"><ds:Transforms><ds:Transform Algorithm=\"{exc_c14n}\"/></ds:Transforms><ds:DigestMethod Algorithm=\"{digest}\"/><ds:DigestValue>AAAA</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>invalid</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>{cert}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature>",
         dsig = namespace::DSIG,
         exc_c14n = transform_algorithm::EXC_C14N,
         sig_alg = RSA_SHA256,
+        digest = digest_algorithm::SHA256,
     );
     Ok(RESPONSE_SIGNED.replacen(
         "<samlp:Status>",
@@ -264,6 +264,7 @@ fn signature_over_top_level_issuer(
     key_pem: &str,
     certificate: &str,
     algorithm: &str,
+    digest: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let issuer_id = "_signed_response_issuer";
     let response = RESPONSE.replacen(
@@ -271,7 +272,6 @@ fn signature_over_top_level_issuer(
         &format!("<saml:Issuer ID=\"{issuer_id}\">"),
         1,
     );
-    let digest = digest_for_signature(algorithm).ok_or("unknown digest")?;
     let signature = format!(
         "<ds:Signature xmlns:ds=\"{dsig}\"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"{exc_c14n}\"/><ds:SignatureMethod Algorithm=\"{algorithm}\"/><ds:Reference URI=\"#{issuer_id}\"><ds:Transforms><ds:Transform Algorithm=\"{enveloped}\"/><ds:Transform Algorithm=\"{exc_c14n}\"/></ds:Transforms><ds:DigestMethod Algorithm=\"{digest}\"/><ds:DigestValue></ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue></ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>{cert}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature>",
         dsig = namespace::DSIG,
@@ -299,12 +299,12 @@ fn signature_over_response_and_assertion() -> Result<String, Box<dyn std::error:
         .child_named("Assertion")
         .ok_or("missing Assertion")?;
     let assertion_id = node_saml_id(assertion).ok_or("missing Assertion ID")?;
-    let digest = digest_for_signature(RSA_SHA512).ok_or("unknown digest")?;
     let reference = |id: &str| {
         format!(
             "<ds:Reference URI=\"#{id}\"><ds:Transforms><ds:Transform Algorithm=\"{enveloped}\"/><ds:Transform Algorithm=\"{exc_c14n}\"/></ds:Transforms><ds:DigestMethod Algorithm=\"{digest}\"/><ds:DigestValue></ds:DigestValue></ds:Reference>",
             enveloped = transform_algorithm::ENVELOPED_SIGNATURE,
             exc_c14n = transform_algorithm::EXC_C14N,
+            digest = digest_algorithm::SHA512,
         )
     };
     let signature = format!(
@@ -392,7 +392,6 @@ fn response_signed_over_assertion_with_foreign_xpath() -> Result<String, Box<dyn
         .child_named("Assertion")
         .ok_or("missing Assertion")?;
     let assertion_id = node_saml_id(assertion).ok_or("missing Assertion ID")?;
-    let digest = digest_for_signature(RSA_SHA256).ok_or("unknown digest")?;
     let signature = format!(
         "<ds:Signature xmlns:ds=\"{dsig}\"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"{exc}\"/><ds:SignatureMethod Algorithm=\"{algorithm}\"/><ds:Reference URI=\"#{assertion_id}\"><ds:Transforms><ds:Transform Algorithm=\"{enveloped}\"/><Transform xmlns=\"urn:example:other\" Algorithm=\"{xpath}\"><XPath>0</XPath></Transform><ds:Transform Algorithm=\"{exc}\"/></ds:Transforms><ds:DigestMethod Algorithm=\"{digest}\"/><ds:DigestValue></ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue></ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>{cert}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature>",
         dsig = namespace::DSIG,
@@ -400,7 +399,7 @@ fn response_signed_over_assertion_with_foreign_xpath() -> Result<String, Box<dyn
         algorithm = RSA_SHA256,
         enveloped = transform_algorithm::ENVELOPED_SIGNATURE,
         xpath = XPATH_TRANSFORM,
-        digest = digest,
+        digest = digest_algorithm::SHA256,
         cert = normalize_cert_string(SP_SIGNING_CERT),
     );
     let template = RESPONSE.replacen(
@@ -445,14 +444,13 @@ fn response_with_issuer_only_signature(
         "<saml:Issuer ID=\"_signed_response_issuer\">",
         1,
     );
-    let digest = digest_for_signature(RSA_SHA256).ok_or("unknown digest")?;
     let signature = format!(
         "<ds:Signature xmlns:ds=\"{dsig}\"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"{canonicalization}\"/><ds:SignatureMethod Algorithm=\"{algorithm}\"/><ds:Reference URI=\"#_signed_response_issuer\"><ds:Transforms><ds:Transform Algorithm=\"{enveloped}\"/><ds:Transform Algorithm=\"{exc}\"/></ds:Transforms><ds:DigestMethod Algorithm=\"{digest}\"/><ds:DigestValue></ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue></ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>{cert}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature>",
         dsig = namespace::DSIG,
         algorithm = RSA_SHA256,
         enveloped = transform_algorithm::ENVELOPED_SIGNATURE,
         exc = transform_algorithm::EXC_C14N,
-        digest = digest,
+        digest = digest_algorithm::SHA256,
         cert = normalize_cert_string(SP_SIGNING_CERT),
     );
     let template = response.replacen("</saml:Issuer>", &format!("</saml:Issuer>{signature}"), 1);
@@ -466,7 +464,7 @@ fn cid_reference_response() -> Result<String, Box<dyn std::error::Error>> {
         dsig = namespace::DSIG,
         exc_c14n = transform_algorithm::EXC_C14N,
         sig_alg = RSA_SHA256,
-        digest = digest_for_signature(RSA_SHA256).ok_or("unknown digest")?,
+        digest = digest_algorithm::SHA256,
     );
     let template = RESPONSE.replacen("<samlp:Status>", &format!("{signature}<samlp:Status>"), 1);
     let key = read_private_key(SP_PRIVKEY, None)?;
@@ -593,6 +591,7 @@ fn detailed_verification_rejects_an_untrusted_response_signature(
         UNTRUSTED_PRIVKEY,
         UNTRUSTED_CERT,
         RSA_SHA512,
+        digest_algorithm::SHA512,
     )?)?;
     let untrusted = remove_signature_key_info(&untrusted)?;
     let signed = assertion_signed_response_with_extra_signature(&untrusted)?;
@@ -614,6 +613,7 @@ fn detailed_verification_excludes_valid_unrelated_signature_evidence(
         SP_PRIVKEY,
         SP_SIGNING_CERT,
         RSA_SHA512,
+        digest_algorithm::SHA512,
     )?)?;
     let signed = assertion_signed_response_with_extra_signature(&unrelated)?;
     let result = verify_signatures_detailed_with_profile(

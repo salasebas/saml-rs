@@ -2,7 +2,7 @@ use super::keys::{load_certificate, load_hmac_secret, read_private_key};
 use super::signature_profile::check_verification_key;
 use crate::binding::{encode_base64, xml_escape};
 use crate::config::{HmacSecret, XmlSignatureProfile};
-use crate::constants::{digest_algorithm, digest_for_signature, namespace, transform_algorithm};
+use crate::constants::{digest_algorithm, namespace, signature_algorithm, transform_algorithm};
 use crate::entity::{EntitySetting, SignatureAction, SignatureConfig};
 use crate::error::{crypto_err, xml_err, SamlError};
 use crate::util::normalize_cert_string;
@@ -13,6 +13,17 @@ use bergshamra::keys::Key;
 use bergshamra::{sign, DsigContext, KeysManager};
 use quick_xml::events::Event;
 use quick_xml::Reader;
+
+fn reference_digest_for_signature(sig_alg: &str) -> &'static str {
+    match sig_alg {
+        signature_algorithm::RSA_SHA1
+        | signature_algorithm::DSA_SHA1
+        | signature_algorithm::HMAC_SHA1 => digest_algorithm::SHA1,
+        signature_algorithm::RSA_SHA384 => digest_algorithm::SHA384,
+        signature_algorithm::RSA_SHA512 => digest_algorithm::SHA512,
+        _ => digest_algorithm::SHA256,
+    }
+}
 
 fn require_operation_key<T>(
     key: Result<Option<T>, impl std::error::Error + Send + Sync + 'static>,
@@ -125,7 +136,7 @@ fn embed_signature(
         .attr("ID")
         .or_else(|| target.attr("AssertionID"))
         .ok_or_else(|| SamlError::Invalid("signing target has no ID".into()))?;
-    let digest = digest_for_signature(sig_alg).unwrap_or(digest_algorithm::SHA256);
+    let digest = reference_digest_for_signature(sig_alg);
 
     let prefix = config.map(|c| c.prefix.as_str()).unwrap_or("ds");
     validate_namespace_prefix("SignatureConfig.prefix XML prefix", prefix)?;
@@ -343,6 +354,51 @@ mod tests {
     const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
 
     const AUTHN_REQUEST: &str = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_req1\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\"><saml:Issuer>https://sp.example.com/metadata</saml:Issuer></samlp:AuthnRequest>";
+
+    #[test]
+    fn digest_mapping_matches_xmlsig_values() {
+        assert_eq!(
+            reference_digest_for_signature(signature_algorithm::RSA_SHA1),
+            "http://www.w3.org/2000/09/xmldsig#sha1"
+        );
+        assert_eq!(
+            reference_digest_for_signature(signature_algorithm::DSA_SHA1),
+            digest_algorithm::SHA1
+        );
+        assert_eq!(
+            reference_digest_for_signature(signature_algorithm::HMAC_SHA1),
+            digest_algorithm::SHA1
+        );
+        assert_eq!(
+            reference_digest_for_signature(signature_algorithm::RSA_SHA256),
+            digest_algorithm::SHA256
+        );
+        assert_eq!(
+            reference_digest_for_signature(signature_algorithm::RSA_SHA256_MGF1),
+            digest_algorithm::SHA256
+        );
+        assert_eq!(
+            reference_digest_for_signature(signature_algorithm::RSA_SHA384),
+            digest_algorithm::SHA384
+        );
+        assert_eq!(
+            reference_digest_for_signature(signature_algorithm::RSA_SHA512),
+            digest_algorithm::SHA512
+        );
+        for alg in [
+            signature_algorithm::ECDSA_SHA256,
+            signature_algorithm::ECDSA_SHA384,
+            signature_algorithm::ECDSA_SHA512,
+            signature_algorithm::EDDSA_ED25519,
+            "unknown",
+        ] {
+            assert_eq!(
+                reference_digest_for_signature(alg),
+                digest_algorithm::SHA256,
+                "{alg}"
+            );
+        }
+    }
 
     #[test]
     fn operation_key_maps_provider_failure_to_crypto() {

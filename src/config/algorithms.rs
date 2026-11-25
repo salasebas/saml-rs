@@ -6,12 +6,14 @@ use crate::constants::{
 /// XML signature algorithm used for outgoing signed messages.
 ///
 /// [`Self::RsaSha256`] is the default. [`Self::RsaSha1`], [`Self::DsaSha1`],
-/// and [`Self::HmacSha1`] use a SHA-1 digest and are used only when selected.
+/// and [`Self::HmacSha1`] are used only when selected.
 ///
 /// The crypto backend must support the [`Self::Custom`] URI to sign a
-/// message. For embedded XML signatures, known URIs use the reference digest
-/// from [`crate::constants::digest_for_signature`]. Other URIs use SHA-256
-/// for the reference digest.
+/// message. For embedded XML signatures, `saml-rs` selects the reference
+/// digest by algorithm URI. RSA-SHA1, DSA-SHA1, and HMAC-SHA1 use SHA-1.
+/// RSA-SHA384 uses SHA-384, and RSA-SHA512 uses SHA-512. Every other URI,
+/// including the ECDSA variants and [`Self::Ed25519`], uses SHA-256. A
+/// [`Self::Custom`] URI follows the same table.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SignatureAlgorithm {

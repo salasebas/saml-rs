@@ -3,8 +3,9 @@
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use bergshamra::{sign, DsigContext, KeysManager};
+use saml_rs::constants::digest_algorithm::SHA256;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
-use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
+use saml_rs::constants::{namespace, transform_algorithm};
 use saml_rs::crypto::keys::read_private_key;
 use saml_rs::crypto::{sign_saml_xml, verify_signature};
 use saml_rs::flow::{FlowOptions, HttpRequest, SignatureCheck};
@@ -32,13 +33,13 @@ fn response_signed_over_top_level_issuer() -> Result<String, Box<dyn std::error:
         &format!("<saml:Issuer ID=\"{issuer_id}\">"),
         1,
     );
-    let digest = digest_for_signature(RSA_SHA256).ok_or("unknown digest")?;
     let signature = format!(
         "<ds:Signature xmlns:ds=\"{dsig}\"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"{exc_c14n}\"/><ds:SignatureMethod Algorithm=\"{sig_alg}\"/><ds:Reference URI=\"#{issuer_id}\"><ds:Transforms><ds:Transform Algorithm=\"{enveloped}\"/><ds:Transform Algorithm=\"{exc_c14n}\"/></ds:Transforms><ds:DigestMethod Algorithm=\"{digest}\"/><ds:DigestValue></ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue></ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>{cert}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature>",
         dsig = namespace::DSIG,
         exc_c14n = transform_algorithm::EXC_C14N,
         sig_alg = RSA_SHA256,
         enveloped = transform_algorithm::ENVELOPED_SIGNATURE,
+        digest = SHA256,
         cert = normalize_cert_string(CERT),
     );
     let template = with_issuer_id.replacen(
@@ -58,13 +59,13 @@ fn authn_request_signed_over_issuer() -> Result<String, Box<dyn std::error::Erro
     let xml = format!(
         "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_unsigned_authn_root\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\" Destination=\"https://idp.example.com/sso\" AssertionConsumerServiceURL=\"https://evil.example.com/acs\"><saml:Issuer ID=\"{issuer_id}\">https://sp.example.com/metadata</saml:Issuer><samlp:NameIDPolicy Format=\"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress\" AllowCreate=\"true\"/></samlp:AuthnRequest>"
     );
-    let digest = digest_for_signature(RSA_SHA256).ok_or("unknown digest")?;
     let signature = format!(
         "<ds:Signature xmlns:ds=\"{dsig}\"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"{exc_c14n}\"/><ds:SignatureMethod Algorithm=\"{sig_alg}\"/><ds:Reference URI=\"#{issuer_id}\"><ds:Transforms><ds:Transform Algorithm=\"{enveloped}\"/><ds:Transform Algorithm=\"{exc_c14n}\"/></ds:Transforms><ds:DigestMethod Algorithm=\"{digest}\"/><ds:DigestValue></ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue></ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>{cert}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature>",
         dsig = namespace::DSIG,
         exc_c14n = transform_algorithm::EXC_C14N,
         sig_alg = RSA_SHA256,
         enveloped = transform_algorithm::ENVELOPED_SIGNATURE,
+        digest = SHA256,
         cert = normalize_cert_string(CERT),
     );
     let template = xml.replacen(
