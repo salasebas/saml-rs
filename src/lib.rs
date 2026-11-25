@@ -462,7 +462,7 @@ pub use crypto::{
 };
 pub use discovery::{CommonDomainCookie, CommonDomainCookieLifetime, RememberIdentityProvider};
 pub use error::{
-    IdpResolutionReason, ReferenceResolutionReason, ResourceLimit, SamlError,
+    IdpResolutionReason, ReferenceResolutionReason, ResourceLimit, RootValidUntilReason, SamlError,
     SignatureVerificationReason, SubjectConfirmationReason, TimeWindowField,
 };
 pub use flow::MessageAuthentication;

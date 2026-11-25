@@ -1,5 +1,5 @@
 use core::str::FromStr;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use crate::browser::{
     AcsEndpoint, LogoutBinding, NameIdManagementBinding, SloEndpoint, SsoEndpoint,
@@ -589,6 +589,37 @@ impl IdpDescriptor {
         self.imported.signed_metadata_xml()
     }
 
+    /// Refuse this descriptor unless the root element of its metadata
+    /// carries a `validUntil` at most `max_validity` after `now`.
+    ///
+    /// The root is the element at the top of the imported document: the
+    /// `EntityDescriptor`, or the outermost `EntitiesDescriptor`, including
+    /// the aggregate root for a descriptor looked up in a
+    /// [`MetadataAggregate`]. A `validUntil` on an inner group, the entity, or
+    /// a role does not satisfy the requirement. Call this right after import,
+    /// with the time that the import is accepted at.
+    ///
+    /// The check does not refuse a root `validUntil` that has already been
+    /// reached; typed flows refuse the descriptor from that instant.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::MetadataRootValidUntilRefused`] when the root has no
+    /// `validUntil` or it lies more than `max_validity` after `now`.
+    /// Returns [`SamlError::Invalid`] when `now` is outside the supported
+    /// SAML time range.
+    pub fn require_root_valid_until(
+        self,
+        now: SystemTime,
+        max_validity: Duration,
+    ) -> Result<Self, SamlError> {
+        self.imported
+            .validity
+            .root()
+            .ensure_within(now, max_validity)?;
+        Ok(self)
+    }
+
     pub(crate) fn metadata(&self) -> &IdpMetadata {
         &self.provider.metadata
     }
@@ -786,6 +817,37 @@ impl SpDescriptor {
     /// does not check metadata expiration.
     pub fn signed_metadata_xml(&self) -> Option<&str> {
         self.imported.signed_metadata_xml()
+    }
+
+    /// Refuse this descriptor unless the root element of its metadata
+    /// carries a `validUntil` at most `max_validity` after `now`.
+    ///
+    /// The root is the element at the top of the imported document: the
+    /// `EntityDescriptor`, or the outermost `EntitiesDescriptor`, including
+    /// the aggregate root for a descriptor looked up in a
+    /// [`MetadataAggregate`]. A `validUntil` on an inner group, the entity, or
+    /// a role does not satisfy the requirement. Call this right after import,
+    /// with the time that the import is accepted at.
+    ///
+    /// The check does not refuse a root `validUntil` that has already been
+    /// reached; typed flows refuse the descriptor from that instant.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::MetadataRootValidUntilRefused`] when the root has no
+    /// `validUntil` or it lies more than `max_validity` after `now`.
+    /// Returns [`SamlError::Invalid`] when `now` is outside the supported
+    /// SAML time range.
+    pub fn require_root_valid_until(
+        self,
+        now: SystemTime,
+        max_validity: Duration,
+    ) -> Result<Self, SamlError> {
+        self.imported
+            .validity
+            .root()
+            .ensure_within(now, max_validity)?;
+        Ok(self)
     }
 
     pub(crate) fn metadata(&self) -> &SpMetadata {

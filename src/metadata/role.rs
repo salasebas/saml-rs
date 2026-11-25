@@ -5,6 +5,7 @@ use crate::xml::dom::{self, XmlLimits};
 use crate::xml::protocol_element::{self, SamlElement};
 use crate::xml::xs_boolean;
 
+use super::validity::ValidUntilBounds;
 use super::KeyCertificates;
 
 #[derive(Clone, Copy)]
@@ -19,7 +20,7 @@ pub(super) struct SelectedDescriptors<'a> {
     pub(super) namespaced: Vec<SamlElement>,
     pub(super) key_certificates: KeyCertificates,
     pub(super) entity_id: Option<String>,
-    pub(super) valid_until_bounds: Vec<String>,
+    pub(super) valid_until_bounds: ValidUntilBounds,
     pub(super) signing_flags: SigningFlags,
     pub(super) scope_elements: Vec<SamlElement>,
 }
@@ -48,8 +49,8 @@ impl SsoDescriptorRole {
         let entity = entity.ok_or_else(|| SamlError::MissingMetadata(local_name.into()))?;
         let path = namespaced_path(&document, entity)?;
         let valid_until_bounds = match self {
-            Self::Any => Vec::new(),
-            Self::ServiceProvider | Self::IdentityProvider => valid_until_bounds(&path),
+            Self::Any => ValidUntilBounds::default(),
+            Self::ServiceProvider | Self::IdentityProvider => ValidUntilBounds::from_path(&path),
         };
         let namespaced = path.last().ok_or_else(missing_entity)?;
         self.typed_descriptors(entity, namespaced, valid_until_bounds)
@@ -59,7 +60,7 @@ impl SsoDescriptorRole {
         self,
         entity: &'a dom::Node,
         namespaced: &SamlElement,
-        mut valid_until_bounds: Vec<String>,
+        mut valid_until_bounds: ValidUntilBounds,
     ) -> Result<SelectedDescriptors<'a>, SamlError> {
         let local_name = match self {
             Self::Any => return Ok(Self::untyped_descriptors(entity, namespaced)),
@@ -100,7 +101,7 @@ impl SsoDescriptorRole {
                 }
                 nodes.push(child);
                 namespaced_descriptors.push(descriptor);
-                valid_until_bounds.extend(descriptor.attr("validUntil").map(str::to_owned));
+                valid_until_bounds.push_role(descriptor);
             }
         }
         if nodes.is_empty() {
@@ -132,7 +133,7 @@ impl SsoDescriptorRole {
             key_certificates: KeyCertificates::from_descriptors(&namespaced_descriptors),
             namespaced: namespaced_descriptors.into_iter().cloned().collect(),
             entity_id: entity.attr("entityID").map(str::to_owned),
-            valid_until_bounds: Vec::new(),
+            valid_until_bounds: ValidUntilBounds::default(),
             signing_flags: SigningFlags::default(),
             scope_elements: Vec::new(),
         }
@@ -144,7 +145,7 @@ impl SsoDescriptorRole {
             namespaced: Vec::new(),
             key_certificates: KeyCertificates::default(),
             entity_id: None,
-            valid_until_bounds: Vec::new(),
+            valid_until_bounds: ValidUntilBounds::default(),
             signing_flags: SigningFlags::default(),
             scope_elements: Vec::new(),
         }
@@ -205,17 +206,4 @@ pub(super) fn namespaced_path<'a>(
 
 pub(super) fn missing_entity() -> SamlError {
     SamlError::xml("EntityDescriptor is not in the document")
-}
-
-pub(super) fn valid_until_bounds(path: &[&SamlElement]) -> Vec<String> {
-    path.iter()
-        .filter(|element| {
-            matches!(
-                element.local_name.as_str(),
-                "EntitiesDescriptor" | "EntityDescriptor"
-            )
-        })
-        .filter_map(|element| element.attr("validUntil"))
-        .map(str::to_owned)
-        .collect()
 }

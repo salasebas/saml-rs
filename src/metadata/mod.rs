@@ -25,7 +25,7 @@ pub use lifetime::MetadataLifetime;
 pub use scope::MetadataScope;
 pub(crate) use sp::DefaultMarking;
 pub use sp::SpMetadata;
-pub(crate) use validity::MetadataValidity;
+pub(crate) use validity::{MetadataValidity, RootValidUntil};
 
 use key_certificates::KeyCertificates;
 use role::{SigningFlags, SsoDescriptorRole};
@@ -101,7 +101,7 @@ pub struct Metadata {
     pub(crate) meta: Value,
     entity_id: Option<String>,
     key_certificates: KeyCertificates,
-    valid_until_bounds: Vec<String>,
+    valid_until_bounds: validity::ValidUntilBounds,
     signing_flags: SigningFlags,
     scope_elements: Vec<SamlElement>,
     description: description_read::EntityDescription,

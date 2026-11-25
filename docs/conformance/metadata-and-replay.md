@@ -98,6 +98,7 @@ still served.
 | Read `24:00:00` as midnight of the next day in the supplied timezone | Mandatory | XML Schema 1.0 §3.2.7.1 | Always |
 | Of schema-valid years, accept only local years 0001 to 9999, including after midnight rollover. Reject a leap second outside the last minute of a UTC month | Library policy: the RFC 3339 parser the library uses reads four-digit years and accepts a leap second only in that minute. | XML Schema 1.0 Part 2 §3.2.7.1 | Always |
 | Keep using a descriptor whose `cacheDuration` has elapsed | Optional | E94 | Always |
+| Refuse metadata whose root element has no `validUntil`, or one more than a caller-chosen interval after the caller's time. A `validUntil` below the root does not count | Library policy: implements saml2int SDP-MD03, which bounds how long a captured document stays usable after a key revocation. | Metadata §2.3.1, §2.3.2, saml2int SDP-MD03 | `require_root_valid_until` on `MetadataAggregate`, `IdpDescriptor`, `SpDescriptor` |
 
 ## Generating metadata
 
