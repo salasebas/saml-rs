@@ -1,4 +1,4 @@
-use crate::config::validate_entity_id_syntax;
+use crate::config::EntityId;
 use crate::constants::namespace;
 use crate::error::{IdpResolutionReason, SamlError};
 use crate::util::Value;
@@ -77,7 +77,7 @@ fn direct_entity_issuer(element: &SamlElement) -> Result<Option<&str>, IdpResolu
         || ["NameQualifier", "SPNameQualifier", "SPProvidedID"]
             .iter()
             .any(|name| issuer.attr(name).is_some())
-        || validate_entity_id_syntax(&issuer.text).is_err()
+        || EntityId::try_new(issuer.text.as_str()).is_err()
     {
         return Err(IdpResolutionReason::InvalidIssuer);
     }
