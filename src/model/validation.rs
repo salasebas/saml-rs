@@ -162,12 +162,12 @@ pub trait ReplayCache {
 /// authenticated request after every check that refuses it before storage, and
 /// the `ID` of a `Success` response. An accepted SSO response also stores its
 /// assertion IDs. A message refused or failed before storage is not stored, so
-/// repeating it gives the same result again. A `LogoutRequest` or
+/// a repeat is validated again from the start. A `LogoutRequest` or
 /// `ManageNameIDRequest` is stored before its identifier is decrypted, and an
 /// SSO response that matches an [`crate::OutstandingLogout`] is stored before
-/// it is refused, so their repeats return [`SamlError::ReplayDetected`]. An
-/// artifact is stored when its resolution starts, whatever the outcome. A
-/// repeated stored key returns [`SamlError::ReplayDetected`].
+/// it is refused. An artifact is stored when its resolution starts, whatever
+/// the outcome. A repeat that reaches the cache while its stored key is
+/// retained returns [`SamlError::ReplayDetected`].
 ///
 /// `Debug` identifies the selected policy without exposing cache contents.
 ///
