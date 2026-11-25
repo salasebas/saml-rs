@@ -115,7 +115,8 @@ profile. Web SSO applies its own checks to the dereferenced response.
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Reject a SOAP body that is not an `ArtifactResponse` | Mandatory | Core §3.5.2 | Always |
-| Require `ID`, `Version` `2.0`, and a UTC `IssueInstant` | Mandatory | `StatusResponseType`, Core §3.2.2, §1.3.3 | Always |
+| Accept only response version `2.0` | Library policy: the reader implements only SAML 2.0, and Core §4.1.3.2 bars a higher response version for a 2.0 request. | Core §4.1.3.2 | Always |
+| Require `ID` and a UTC `IssueInstant` | Library policy: [baseline receipt](xml-schema-validation.md#baseline-receipt) gives the reason. | `StatusResponseType`, Core §1.3.3 | Always |
 | Require exactly one `Status` | Mandatory | `StatusResponseType` | Always |
 | Require the unqualified response `InResponseTo`, after XML whitespace collapse, to equal the pending request ID | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2, `StatusResponseType`, XML Schema Part 2 §4.3.6 | Always |
 | Verify a present `ArtifactResponse` signature over the SOAP body message using the expected IdP's signing keys before reporting its status or returning its message | Mandatory | Core §3.2.2, §5.4.1–§5.4.2 | Always |

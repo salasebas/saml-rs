@@ -98,7 +98,13 @@ mod tests {
 
     #[test]
     fn name_allows_a_colon_and_ncname_does_not() {
-        for value in ["mail", "_mail", "given-name.1", "\u{e9}t\u{e9}"] {
+        for value in [
+            "mail",
+            "_mail",
+            "given-name.1",
+            "\u{e9}t\u{e9}",
+            "\u{37f}id",
+        ] {
             assert!(is_name(value), "{value}");
             assert!(is_ncname(value), "{value}");
         }
@@ -106,7 +112,15 @@ mod tests {
             assert!(is_name(value), "{value}");
             assert!(!is_ncname(value), "{value}");
         }
-        for value in ["", "1mail", "-mail", ".mail", "given name", "a<b"] {
+        for value in [
+            "",
+            "1mail",
+            "-mail",
+            ".mail",
+            "given name",
+            "a<b",
+            "\u{37e}id",
+        ] {
             assert!(!is_name(value), "{value:?}");
             assert!(!is_ncname(value), "{value:?}");
         }

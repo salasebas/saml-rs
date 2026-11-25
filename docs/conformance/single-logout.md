@@ -145,7 +145,7 @@ shared [status code rule](web-browser-sso-acceptance.md#status-codes).
 | --- | --- | --- | --- |
 | Require a verified signature on a `LogoutRequest` received over HTTP-Redirect, HTTP-POST, or HTTP-POST-SimpleSign. CD-04 §2.4 makes the SimpleSign signature optional, but the profile requires authentication by signing | Mandatory | Core §3.7.3.1, §3.7.3.2, Profiles §4.4.3.1, §4.4.4.1, CD-04 §2.4 | `receive_slo` |
 | Require a verified signature on a `LogoutResponse` received over HTTP-Redirect, HTTP-POST, or HTTP-POST-SimpleSign. CD-04 §2.4 makes the SimpleSign signature optional, but the profile requires authentication by signing | Mandatory | Profiles §4.4.3.4, §4.4.4.2, CD-04 §2.4 | `finish_slo` |
-| Reject an `IssueInstant` that is not a UTC `xs:dateTime` | Mandatory | Core §1.3.3 | Always |
+| Reject an `IssueInstant` that is not a UTC `xs:dateTime` | Library policy: [baseline receipt](xml-schema-validation.md#baseline-receipt) gives the reason. | Core §1.3.3 | Always |
 | Accept an `IssueInstant` with a leap second | Library policy: Core §1.3.3 binds the producer only. | Core §1.3.3 | Always |
 | Reject a `LogoutRequest` `NotOnOrAfter` the runtime clock cannot represent, a leap second included | Library policy: the expiration check fails closed on a value it cannot compare. | Core §1.3.3, §3.7.1 | Always |
 | For browser messages and SOAP requests, compare a present `Destination` after collapsing XML whitespace. Use the supplied receiving URL or infer the unique published endpoint for the binding and direction | Mandatory | Core §3.2.1, §3.2.2, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
