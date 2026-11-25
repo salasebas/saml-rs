@@ -247,7 +247,7 @@ TLS, and HTTP authentication. The IdP application handles
 
 ## Outside this flow
 
-- Setting `Consent` or caller-defined extensions on outbound logout messages, or `StatusDetail` on outbound responses. Optional, `RequestAbstractType`, `StatusResponseType`, `StatusType`.
+- Setting `Consent` or caller-defined extensions on outbound logout messages, or `StatusDetail` on outbound responses. See [common message fields](common-message-fields.md).
 - Propagating logout to other participants. See [session authority application duties](#session-authority-application-duties).
 - Session invalidation and session tracking. The caller owns them. Mandatory for the participant, Core §3.7.3.1.
 - Setting `NotOnOrAfter` at or after the latest assertion `NotOnOrAfter`. Recommended, Core §3.7.3.2. Typed `start_slo` receives no assertion, and [ADR 0001](https://samlrs.vercel.app/explanation/logout-expiration/) records the choice.

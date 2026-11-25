@@ -81,6 +81,14 @@ export const sidebar = [
 						slug: 'reference/conformance/xml-schema-validation',
 					},
 					{
+						label: 'XML input limits and encoding',
+						slug: 'reference/conformance/xml-input',
+					},
+					{
+						label: 'Common message fields',
+						slug: 'reference/conformance/common-message-fields',
+					},
+					{
 						label: 'Algorithms',
 						slug: 'reference/conformance/xml-security-algorithms',
 					},

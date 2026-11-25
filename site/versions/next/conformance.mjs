@@ -49,6 +49,16 @@ export const pages = {
 		description:
 			'Producer rules for typed Web Browser SSO generation: service-provider `start_sso`, and identity-provider `respond_sso` and `initiate_sso`.',
 	},
+	'common-message-fields.md': {
+		title: 'Common message fields',
+		description:
+			'Which optional fields shared by every SAML request and response the typed messages write and read: `Consent`, `StatusDetail`, status code depth, and `Extensions`.',
+	},
+	'xml-input.md': {
+		title: 'XML input limits and encoding',
+		description:
+			'The default `XmlLimits` for received XML, with the reason for each limit, and the character encoding the crate reads.',
+	},
 	'xml-schema-validation.md': {
 		title: 'XML schema validation',
 		description:
