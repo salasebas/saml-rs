@@ -55,7 +55,7 @@ application.
 | Require an `Issuer` equal to the service provider, with `Format` omitted or `entity` | Library policy: Profiles §4.5.4.2 binds the responder, and the requester attributes the response to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.2 | Always |
 | Authenticate the sending party and protect message integrity. The crate uses a mutually authenticated, integrity-protected `SoapChannel`, attested at start | Mandatory | Profiles §4.5.3.2, §4.5.4.2 | `SoapChannel` |
 | Verify the message signature when present, including on a protected channel | Library policy: the receiver rejects a signature it cannot verify before trusting the response status. | Core §3.2.2, Profiles §4.5.4.2 | Always |
-| Require the verified signature to reference the response's `ID` | Mandatory | Core §5.4.2 | Always |
+| Require the verified signature to reference the response's `ID`. See [SOAP body signatures](xml-security-algorithms.md#soap-body-signatures) | Library policy: Core §5.4.2 binds the signer, and the receiver accepts only a signature over the response it reads. | Core §5.4.2 | Always |
 | Allow enveloped signature and canonicalization transforms | Library policy: a signature must cover the entire response. | Core §5.4.4 | Always |
 | Use the SP's configured signing keys and require channel protection for signed responses as well | Library policy: the caller binds the response to the authenticated peer and its pending SOAP exchange. | Profiles §4.5.3.2, §4.5.4.2 | `SoapChannel`, SP metadata or HMAC secret |
 
@@ -73,7 +73,7 @@ application.
 | Return an error for an older request version that forbids a SAML 2.0 response | Mandatory | Core §4.1.3.2 | Always |
 | Authenticate the sending party and protect message integrity. The crate uses a mutually authenticated, integrity-protected `SoapChannel` | Mandatory | Profiles §4.5.4.1 | `SoapChannel` |
 | Verify the message signature when present, including on a protected channel | Library policy: the receiver rejects a signature it cannot verify before passing a change to the caller. | Core §3.2.1, Profiles §4.5.4.1 | Always |
-| Require the verified signature to reference the request's `ID` | Mandatory | Core §5.4.2 | Always |
+| Require the verified signature to reference the request's `ID`. See [SOAP body signatures](xml-security-algorithms.md#soap-body-signatures) | Library policy: Core §5.4.2 binds the signer, and the receiver accepts only a signature over the request it reads. | Core §5.4.2 | Always |
 | Allow enveloped signature and canonicalization transforms | Library policy: a signature must cover the entire request. | Core §5.4.4 | Always |
 | Use the SP's configured signing keys and require channel protection for signed requests as well | Library policy: the caller binds the receipt to the SP it authenticated on the SOAP channel. | Profiles §4.5.3.1, §4.5.4.1 | `SoapChannel`, SP metadata or HMAC secret |
 | Require an `Issuer` equal to the service provider, with `Format` omitted or `entity` | Library policy: Profiles §4.5.4.1 binds the requester, and the responder ties the change to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.1 | Always |
