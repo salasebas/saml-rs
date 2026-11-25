@@ -187,7 +187,9 @@ impl IdentityProvider {
     ///
     /// Returns [`SamlError::IssuerMismatch`] when the request was not received
     /// from `sp`. Returns [`SamlError::UnsupportedBinding`] when the request
-    /// arrived over HTTP-Redirect.
+    /// arrived over HTTP-Redirect. Returns [`SamlError::Invalid`] when
+    /// `status` has a subordinate code that is not an absolute URI, such as a
+    /// relative code read from a peer's response.
     ///
     /// # Examples
     ///

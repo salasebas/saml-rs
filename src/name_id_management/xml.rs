@@ -114,7 +114,11 @@ pub(crate) fn render_request(
     Ok(writer.finish())
 }
 
-pub(crate) fn render_response(prefixes: &Prefixes<'_>, response: &ResponseXml<'_>) -> String {
+pub(crate) fn render_response(
+    prefixes: &Prefixes<'_>,
+    response: &ResponseXml<'_>,
+) -> Result<String, SamlError> {
+    response.status.check_writable()?;
     let root = prefixes.protocol("ManageNameIDResponse");
     let xmlns_protocol = prefixes.xmlns_protocol();
     let xmlns_assertion = prefixes.xmlns_assertion();
@@ -135,5 +139,5 @@ pub(crate) fn render_response(prefixes: &Prefixes<'_>, response: &ResponseXml<'_
     writer.text_element(&prefixes.assertion("Issuer"), &[], response.issuer);
     writer.status(prefixes, response.status, None);
     writer.end(&root);
-    writer.finish()
+    Ok(writer.finish())
 }

@@ -342,6 +342,44 @@ fn a_service_provider_error_status_is_returned_to_the_caller() -> TestResult {
 }
 
 #[test]
+fn a_received_relative_subordinate_status_is_not_written_into_a_response() -> TestResult {
+    let idp = identity_provider(Some(IDP_NIM_URL))?;
+    let sp = soap_service_provider()?;
+    let started = idp.start_name_id_management(
+        &sp,
+        &NameId::persistent("current-value")?,
+        &NameIdChange::Terminate,
+        StartNameIdManagement::new(),
+        authenticated(),
+    )?;
+    let request_id = attribute(&body(started.request().envelope())?, "ID")
+        .ok_or("request ID is missing")?
+        .to_string();
+    let relative = format!(
+        r#"<samlp:StatusCode Value="{REQUESTER}"><samlp:StatusCode Value="relative"/></samlp:StatusCode>"#
+    );
+    let Err(SamlError::StatusNotSuccess { status, .. }) =
+        started.finish(&sp_response(&request_id, SP_ENTITY_ID, &relative)?)
+    else {
+        return Err("the relative subordinate status was not reported".into());
+    };
+    let request = received_request(idp.receive_name_id_management(
+        &sp,
+        &sp_request(&format!("{}<samlp:Terminate/>", current_name_id_xml()))?,
+        authenticated(),
+        validation(),
+    )?)?;
+
+    let answered = idp.respond_name_id_management(&sp, &request, &status);
+
+    assert!(
+        matches!(answered, Err(SamlError::Invalid(_))),
+        "{answered:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_response_for_another_request_or_from_another_issuer_is_rejected() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;

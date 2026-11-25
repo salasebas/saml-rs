@@ -448,7 +448,7 @@ fn response(
             in_response_to: in_response_to.as_str(),
             status,
         },
-    ))
+    )?)
 }
 
 pub(crate) enum Identifier {

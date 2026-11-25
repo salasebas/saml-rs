@@ -184,7 +184,9 @@ impl ServiceProvider {
     /// URL that is not `https`, [`SamlError::Invalid`] for a value that is not
     /// a URL. With
     /// `allow_http`, returns [`SamlError::Invalid`] when the first endpoint is
-    /// not an `http` or `https` URL.
+    /// not an `http` or `https` URL. Returns [`SamlError::Invalid`] when
+    /// `status` has a subordinate code that is not an absolute URI, such as a
+    /// relative code read from a peer's response.
     pub fn respond_name_id_management_redirect(
         &self,
         idp: &IdpDescriptor,
