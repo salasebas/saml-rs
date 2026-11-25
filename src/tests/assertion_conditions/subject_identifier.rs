@@ -88,6 +88,7 @@ fn a_subject_without_a_readable_name_id_is_rejected() -> Result<(), Box<dyn std:
     let original = response_xml(&exchange.response_fields)?;
     let unsupported: ErrorMatches = |error| matches!(error, SamlError::Unsupported(_));
     let protocol_profile: ErrorMatches = |error| matches!(error, SamlError::ProtocolProfile(_));
+    let invalid: ErrorMatches = |error| matches!(error, SamlError::Invalid(_));
     let cases = [
         (
             concat!(
@@ -110,6 +111,13 @@ fn a_subject_without_a_readable_name_id_is_rejected() -> Result<(), Box<dyn std:
                 "<saml:NameID>alice@example.com</saml:NameID></ext:Wrapper>",
             ),
             protocol_profile,
+        ),
+        (
+            concat!(
+                r#"</saml:Subject><saml:Subject><saml:SubjectConfirmation "#,
+                r#"Method="urn:oasis:names:tc:SAML:2.0:cm:sender-vouches"/>"#,
+            ),
+            invalid,
         ),
     ];
     for (identifier, expected) in cases {
