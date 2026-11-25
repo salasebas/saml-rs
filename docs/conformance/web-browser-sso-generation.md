@@ -139,12 +139,13 @@ The identity provider encrypts with the configured `AlgorithmPolicy` algorithms.
 | Read `isDefault` as an unqualified `xs:boolean`: `true`, `1`, `false`, or `0` with surrounding XML whitespace | Mandatory | `IndexedEndpointType` | Always |
 | Answer a request that names only a `ProtocolBinding` at the default endpoint of that binding | Library policy: reason not recorded. | Core §3.4.1 | Always |
 | Deliver an unsolicited response to the default `AssertionConsumerService`. Fail if that default is unsupported or incompatible with the selected response binding | Recommended | Profiles §4.1.5 | Always |
+| Refuse to send the user agent to a selected `AssertionConsumerService` whose `Location` is not `https`, for a response, an error, or an artifact | Recommended | Profiles §4.1.3.5, E93 | `RespondSso::allow_http` |
 | Read `WantAuthnRequestsSigned`, `AuthnRequestsSigned`, and `WantAssertionsSigned` as unqualified `xs:boolean`, and read an omitted one as false | Mandatory | Metadata §2.4.3, §2.4.4, `IDPSSODescriptorType`, `SPSSODescriptorType` | Always |
 | On the selected SAML 2.0 role, reject a signing flag qualified with the metadata namespace or carrying an invalid `xs:boolean` value, and ignore same-named foreign attributes | Mandatory | `IDPSSODescriptorType`, `SPSSODescriptorType`, `RoleDescriptorType` | Always |
 
 ## Not implemented
 
-The caller handles these authentication and error decisions. The crate exposes the request through `Received<AuthnRequest>` and enforces none of them.
+The caller or the deployment handles these duties. The crate exposes the request through `Received<AuthnRequest>` and enforces none of them.
 
 - Authenticate the principal directly when `ForceAuthn` is true, and do not freshly authenticate when `ForceAuthn` and `IsPassive` are both true unless the `IsPassive` constraints can be met. Mandatory for the identity provider, Core §3.4.1.
 - Not visibly take control of the user interface when `IsPassive` is true. Mandatory for the identity provider and the user agent, Core §3.4.1.
@@ -154,6 +155,7 @@ The caller handles these authentication and error decisions. The crate exposes t
 - Return an error `Response` with no assertions when the `NameIDPolicy` cannot be met, optionally with `InvalidNameIDPolicy`. Mandatory, Core §3.4.1.1.
 - Return an error `Response` when `NameIDPolicy` requests both the `entity` format and an `SPNameQualifier`. No issued entity identifier can satisfy both. Mandatory, Core §8.3.6, E15.
 - Provide independent `RelayState` integrity protection for HTTP-POST and unsigned Redirect. Recommended, Bindings §3.4.3, §3.5.3, E1. A signed Redirect or SimpleSign message already protects `RelayState` with the binding signature (CD-04 §2.3).
+- Serve the identity provider's HTTP response that carries the `Response` or artifact over TLS. Recommended, Profiles §4.1.3.5, E93. The text names SSL 3.0 and TLS 1.0, which are obsolete, so use a current TLS version.
 
 The assertion builder emits one bearer `SubjectConfirmation`.
 

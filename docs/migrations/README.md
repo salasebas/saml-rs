@@ -39,5 +39,6 @@ additions.
 - [Sign encrypted assertions for the response they arrive in](unreleased-decrypted-assertion-signatures.md)
 - [Read metadata endpoints only in the metadata namespace](unreleased-metadata-endpoint-namespace.md)
 - [Require a `validUntil` on the metadata root](unreleased-root-valid-until.md)
+- [Send SSO responses to an `http` ACS only under `allow_http`](unreleased-sso-response-https.md)
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

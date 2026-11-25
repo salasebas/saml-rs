@@ -11,7 +11,8 @@ use crate::model::{
 };
 use std::time::SystemTime;
 
-use super::peer::{ensure_entity_id, relay_state_from_input, sp_engine_at};
+use super::options::PeerEndpointTransport;
+use super::peer::{ensure_entity_id, ensure_https_endpoint, relay_state_from_input, sp_engine_at};
 use super::requested_subject::decrypt_requested_subject;
 use super::response_acs::resolve_response_acs;
 use super::sso_outcome::OutcomeParts;
@@ -214,6 +215,8 @@ impl IdentityProvider {
     /// unsupported metadata default or a default incompatible with the chosen
     /// response binding, the configured issuance expiration overflows the
     /// supported timestamp range, or response creation fails.
+    /// Returns [`SamlError::ProtocolProfile`] when the selected ACS `Location`
+    /// is not `https` and [`RespondSso::allow_http`] is not selected.
     /// Returns [`SamlError::Invalid`] when one SAML 2.0 `SPSSODescriptor`
     /// publishes the request's ACS index twice, or more than one publishes it.
     /// Returns [`SamlError::NameIdPolicyFormatMismatch`] if the effective
@@ -320,6 +323,8 @@ impl IdentityProvider {
     /// be used, the selected binding conflicts with the ACS, the caller sets
     /// RelayState, the request `ID` is not an `xs:NCName`, or the response
     /// cannot be created or signed.
+    /// Returns [`SamlError::ProtocolProfile`] when the selected ACS `Location`
+    /// is not `https` and [`RespondSso::allow_http`] is not selected.
     pub fn respond_sso_refusal(
         &self,
         sp: &SpDescriptor,
@@ -351,6 +356,8 @@ impl IdentityProvider {
     /// the selected response binding, a signing key is missing, the
     /// selected binding is unsupported, the configured issuance expiration
     /// overflows the supported timestamp range, or response creation fails.
+    /// Returns [`SamlError::ProtocolProfile`] when the selected ACS `Location`
+    /// is not `https` and [`RespondSso::allow_http`] is not selected.
     ///
     /// For an assertion, it also returns [`SamlError`] when an attribute
     /// breaks the rules of
@@ -475,6 +482,12 @@ impl IdentityProvider {
         let peer_sp = sp_engine_at(sp, SystemTime::now())?;
         let binding = options.binding;
         let acs = resolve_response_acs(&peer_sp.metadata, request, binding, outcome)?;
+        match options.transport {
+            PeerEndpointTransport::RequireHttps => {
+                ensure_https_endpoint(&acs.location, "Web Browser SSO", "AssertionConsumerService")?
+            }
+            PeerEndpointTransport::AllowHttp => {}
+        }
         let in_response_to = request.map(|request| request.id().as_str());
         let overrides = LoginResponseOverrides {
             acs: Some(&acs),

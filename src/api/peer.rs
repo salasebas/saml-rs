@@ -171,7 +171,11 @@ pub(super) fn peer_endpoint_for_transport(
     Err(first_error.unwrap_or_else(|| SamlError::MissingMetadata(service.into())))
 }
 
-fn ensure_https_endpoint(endpoint: &str, profile: &str, service: &str) -> Result<(), SamlError> {
+pub(super) fn ensure_https_endpoint(
+    endpoint: &str,
+    profile: &str,
+    service: &str,
+) -> Result<(), SamlError> {
     let url = url::Url::parse(endpoint)
         .map_err(|error| SamlError::Invalid(format!("{service} location is not a URL: {error}")))?;
     if url.scheme() == "https" {

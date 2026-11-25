@@ -692,3 +692,33 @@ fn a_protocol_binding_default_comes_from_the_first_sp_role_with_that_binding(
     );
     Ok(())
 }
+
+#[test]
+fn response_goes_to_an_http_assertion_consumer_service_only_under_allow_http(
+) -> Result<(), Box<dyn std::error::Error>> {
+    const HTTP_ACS: &str = "http://sp.example.com/acs";
+    let sp = ServiceProvider::new(
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(HTTP_ACS)?,
+        )
+        .credentials(signing_credentials())
+        .build()?,
+    );
+    let idp = idp_with_sso(IDP_SSO_FIRST, &[])?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+
+    for outcome in [
+        SsoOutcome::from(SsoAssertion::new(principal())),
+        SsoOutcome::Failure(Status::responder()),
+    ] {
+        let refused = idp.initiate_sso(&sp_descriptor, outcome.clone(), RespondSso::post());
+        assert!(
+            matches!(&refused, Err(SamlError::ProtocolProfile(message)) if message.contains("allow_http")),
+            "{refused:?}"
+        );
+        let allowed = idp.initiate_sso(&sp_descriptor, outcome, RespondSso::post().allow_http())?;
+        assert_eq!(allowed.post_form()?.action().as_str(), HTTP_ACS);
+    }
+    Ok(())
+}

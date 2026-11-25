@@ -198,6 +198,7 @@ pub struct RespondSso<Delivery = MessageDelivery> {
     pub(super) delivery: Delivery,
     pub(super) relay_state: Option<RelayState>,
     pub(super) status_message: Option<String>,
+    pub(super) transport: PeerEndpointTransport,
     response_signing: ResponseSigning,
 }
 
@@ -225,6 +226,7 @@ impl RespondSso {
             delivery: MessageDelivery,
             relay_state: None,
             status_message: None,
+            transport: PeerEndpointTransport::default(),
             response_signing: ResponseSigning::FollowEncryptedCbcRecommendation,
         }
     }
@@ -293,8 +295,22 @@ impl<Delivery> RespondSso<Delivery> {
             delivery,
             relay_state: self.relay_state,
             status_message: self.status_message,
+            transport: self.transport,
             response_signing: self.response_signing,
         }
+    }
+
+    /// Allow delivery to an `http` assertion consumer service.
+    ///
+    /// By default, the response is refused when the selected
+    /// `AssertionConsumerService` `Location` is not `https`, because the
+    /// browser would carry the response or artifact to it without TLS. This
+    /// relaxes the Web Browser SSO recommendation to protect that HTTP
+    /// request with TLS. Use it for a service provider that publishes only an
+    /// `http` location, such as one on a development host.
+    pub fn allow_http(mut self) -> Self {
+        self.transport = PeerEndpointTransport::AllowHttp;
+        self
     }
 
     /// Always authenticate the top-level SAML Response.
