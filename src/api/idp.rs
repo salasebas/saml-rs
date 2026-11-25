@@ -214,6 +214,8 @@ impl IdentityProvider {
     /// unsupported metadata default or a default incompatible with the chosen
     /// response binding, the configured issuance expiration overflows the
     /// supported timestamp range, or response creation fails.
+    /// Returns [`SamlError::Invalid`] when one SAML 2.0 `SPSSODescriptor`
+    /// publishes the request's ACS index twice, or more than one publishes it.
     /// Returns [`SamlError::NameIdPolicyFormatMismatch`] if the effective
     /// identifier format differs from a specific standard format in the
     /// request's `NameIDPolicy`. Returns

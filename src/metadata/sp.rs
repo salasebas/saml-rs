@@ -36,7 +36,7 @@ impl DefaultMarking {
 #[derive(Debug, Clone)]
 pub struct SpMetadata {
     inner: Metadata,
-    saml2_assertion_consumer_services: Value,
+    assertion_consumer_service_roles: Vec<Value>,
 }
 
 impl SpMetadata {
@@ -104,15 +104,6 @@ impl SpMetadata {
                 &["EntityDescriptor", "SPSSODescriptor", "ManageNameIDService"],
             )
             .capture_source(),
-            ExtractorField::new(
-                "assertionConsumerService",
-                &[
-                    "EntityDescriptor",
-                    "SPSSODescriptor",
-                    "AssertionConsumerService",
-                ],
-            )
-            .capture_source(),
         ]
     }
 
@@ -125,26 +116,25 @@ impl SpMetadata {
                 .unwrap_or_default(),
             Value::Null | Value::Str(_) | Value::Array(_) => Value::Null,
         };
-        let first_saml2_role = match &role_context {
-            Value::Array(roles) => roles.first(),
-            Value::Null | Value::Str(_) | Value::Object(_) => Some(&role_context),
+        let roles: Vec<&str> = match &role_context {
+            Value::Array(roles) => roles.iter().map(Value::as_str).collect(),
+            Value::Str(role) => Some(vec![role.as_str()]),
+            Value::Null | Value::Object(_) => None,
         }
-        .and_then(Value::as_str)
+        .filter(|roles: &Vec<&str>| !roles.is_empty())
         .ok_or_else(|| SamlError::MissingMetadata("SPSSODescriptor".into()))?;
-        let saml2_assertion_consumer_services = saml2_role_acs(first_saml2_role, limits)?;
+        let assertion_consumer_service_roles = roles
+            .into_iter()
+            .map(|role| role_assertion_consumer_services(role, limits))
+            .collect::<Result<_, _>>()?;
         super::endpoints::read_endpoints(
             &mut inner.meta,
             "manageNameIDService",
             &["Binding", "Location", "ResponseLocation"],
         )?;
-        super::endpoints::read_endpoints(
-            &mut inner.meta,
-            "assertionConsumerService",
-            &["Binding", "Location", "isDefault", "index"],
-        )?;
         Ok(Self {
             inner,
-            saml2_assertion_consumer_services,
+            assertion_consumer_service_roles,
         })
     }
 
@@ -166,9 +156,11 @@ impl SpMetadata {
 
     /// Default `AssertionConsumerService` location for `binding`.
     ///
-    /// The default is the first endpoint for `binding` with `isDefault` true,
-    /// otherwise the first whose `isDefault` is not false, otherwise the first.
-    /// `true` and `1` are true. `false` and `0` are false.
+    /// The location comes from the first SAML 2.0 `SPSSODescriptor` that
+    /// publishes an endpoint for `binding`. Within that role, the default is
+    /// the first endpoint for `binding` with `isDefault` true, otherwise the
+    /// first whose `isDefault` is not false, otherwise the first. `true` and
+    /// `1` are true. `false` and `0` are false.
     pub fn assertion_consumer_location(&self, binding: Binding) -> Option<String> {
         self.assertion_consumer_service_endpoint(binding)
             .map(|endpoint| endpoint.location)
@@ -178,21 +170,25 @@ impl SpMetadata {
         &self,
         binding: Binding,
     ) -> Option<AcsMetadataEndpoint> {
-        let endpoints = self
-            .assertion_consumer_service_endpoints()
-            .into_iter()
-            .filter(|endpoint| endpoint.binding == binding)
-            .collect();
-        select_indexed_default(endpoints, |endpoint| endpoint.is_default)
+        self.assertion_consumer_service_roles
+            .iter()
+            .find_map(|role| {
+                let endpoints = role_endpoints(role)
+                    .filter(|endpoint| endpoint.binding == binding)
+                    .collect();
+                select_indexed_default(endpoints, |endpoint| endpoint.is_default)
+            })
     }
 
     pub(crate) fn default_assertion_consumer_service_endpoint(
         &self,
     ) -> Result<Option<AcsMetadataEndpoint>, SamlError> {
-        select_indexed_default(
-            as_object_list(&self.saml2_assertion_consumer_services),
-            |value| DefaultMarking::from_attribute(value.get_str("isDefault")),
-        )
+        let Some(first_role) = self.assertion_consumer_service_roles.first() else {
+            return Ok(None);
+        };
+        select_indexed_default(as_object_list(first_role), |value| {
+            DefaultMarking::from_attribute(value.get_str("isDefault"))
+        })
         .map(|value| {
             acs_metadata_endpoint_from_value(value).ok_or_else(|| {
                 SamlError::Invalid(
@@ -207,22 +203,23 @@ impl SpMetadata {
         &self,
         index: u16,
     ) -> Result<Option<AcsMetadataEndpoint>, SamlError> {
-        let mut matches = self
-            .assertion_consumer_service_endpoints()
-            .into_iter()
-            .filter(|endpoint| endpoint.index == Some(index));
-        let first = matches.next();
-        if matches.next().is_some() {
-            return Err(SamlError::Invalid(format!(
-                "duplicate AssertionConsumerService index {index}"
-            )));
+        let mut found = None;
+        for role in &self.assertion_consumer_service_roles {
+            let Some(endpoint) = role_endpoint_at_index(role, index)? else {
+                continue;
+            };
+            if found.is_some() {
+                return Err(SamlError::Invalid(format!(
+                    "AssertionConsumerService index {index} is published by more than one SPSSODescriptor"
+                )));
+            }
+            found = Some(endpoint);
         }
-        Ok(first)
+        Ok(found)
     }
 
     pub(crate) fn assertion_consumer_service_locations(&self, binding: Binding) -> Vec<String> {
         self.assertion_consumer_service_endpoints()
-            .into_iter()
             .filter(|endpoint| endpoint.binding == binding)
             .map(|endpoint| endpoint.location)
             .collect()
@@ -230,22 +227,39 @@ impl SpMetadata {
 
     pub(crate) fn has_assertion_consumer_service(&self, binding: Binding, location: &str) -> bool {
         self.assertion_consumer_service_endpoints()
-            .iter()
             .any(|endpoint| endpoint.binding == binding && endpoint.location == location)
     }
 
-    fn assertion_consumer_service_endpoints(&self) -> Vec<AcsMetadataEndpoint> {
-        let Some(acs) = self.inner.meta.get("assertionConsumerService") else {
-            return Vec::new();
-        };
-        as_object_list(acs)
-            .into_iter()
-            .filter_map(acs_metadata_endpoint_from_value)
-            .collect()
+    fn assertion_consumer_service_endpoints(
+        &self,
+    ) -> impl Iterator<Item = AcsMetadataEndpoint> + '_ {
+        self.assertion_consumer_service_roles
+            .iter()
+            .flat_map(role_endpoints)
     }
 }
 
-fn saml2_role_acs(role: &str, limits: XmlLimits) -> Result<Value, SamlError> {
+fn role_endpoints(services: &Value) -> impl Iterator<Item = AcsMetadataEndpoint> + '_ {
+    as_object_list(services)
+        .into_iter()
+        .filter_map(acs_metadata_endpoint_from_value)
+}
+
+fn role_endpoint_at_index(
+    services: &Value,
+    index: u16,
+) -> Result<Option<AcsMetadataEndpoint>, SamlError> {
+    let mut matches = role_endpoints(services).filter(|endpoint| endpoint.index == Some(index));
+    let first = matches.next();
+    if matches.next().is_some() {
+        return Err(SamlError::Invalid(format!(
+            "duplicate AssertionConsumerService index {index}"
+        )));
+    }
+    Ok(first)
+}
+
+fn role_assertion_consumer_services(role: &str, limits: XmlLimits) -> Result<Value, SamlError> {
     let field = ExtractorField::new(
         "assertionConsumerService",
         &["SPSSODescriptor", "AssertionConsumerService"],

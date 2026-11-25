@@ -30,5 +30,6 @@ additions.
 - [Handle attribute name errors and encryption key choice](unreleased-attribute-output.md)
 - [Handle SSO responses with alternative assertions and confirmations](unreleased-bearer-alternatives.md)
 - [Read requested formats without surrounding whitespace](unreleased-requested-format-whitespace.md)
+- [Select assertion consumer services within one SP role](unreleased-acs-index-per-role.md)
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

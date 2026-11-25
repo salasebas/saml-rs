@@ -749,9 +749,10 @@ impl SpDescriptor {
         single_logout_response_location(self.raw_metadata(), binding)
     }
 
-    /// Default assertion consumer location for this peer's SAML 2.0 SP role and binding.
+    /// Default assertion consumer location for `binding`, from the first SAML 2.0
+    /// SP role of this peer that publishes `binding`.
     ///
-    /// Uses the metadata's indexed endpoint default selection.
+    /// Within that role, uses the metadata's indexed endpoint default selection.
     ///
     /// # Errors
     ///
