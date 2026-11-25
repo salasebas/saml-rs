@@ -676,9 +676,8 @@ fn parse_resolve(element: &SamlElement) -> Result<ResolveRequest, SamlError> {
         .iter()
         .find(|child| child.local_name == "Artifact" && child.namespace == namespace::PROTOCOL)
         .map(|child| child.text.trim().to_string())
-        .filter(|value| !value.is_empty())
         .ok_or_else(|| {
-            SamlError::ProtocolProfile("ArtifactResolve requires one Artifact value".into())
+            SamlError::ProtocolProfile("ArtifactResolve requires one Artifact element".into())
         })?;
     if element
         .children
@@ -688,7 +687,7 @@ fn parse_resolve(element: &SamlElement) -> Result<ResolveRequest, SamlError> {
         != 1
     {
         return Err(SamlError::ProtocolProfile(
-            "ArtifactResolve requires one Artifact value".into(),
+            "ArtifactResolve requires one Artifact element".into(),
         ));
     }
     Ok(ResolveRequest {

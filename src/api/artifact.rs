@@ -216,7 +216,7 @@ impl IdentityProvider {
     /// provider the artifact was issued to, `channel` is also confidential
     /// when that message requires it, and `issued` atomically consumes the
     /// matching outstanding entry. [`AnsweredArtifact::release`] says whether
-    /// the response includes the message. An unknown artifact, a
+    /// the response includes the message. An unknown or empty artifact, a
     /// `Destination` other than `received_at`, a different presenter, a
     /// channel without the confidentiality the message requires, or a race
     /// lost to another responder gets `Success` without the message. An
@@ -237,7 +237,7 @@ impl IdentityProvider {
     /// SOAP 1.1 envelope. Answer each error as
     /// [`SoapFault`](crate::SoapFault) describes. Returns [`SamlError::ProtocolProfile`] when the body is
     /// not one `ArtifactResolve`, the request lacks exactly one `Artifact`
-    /// value or has a second `Issuer`, or the required `ID`, `Version`, or UTC
+    /// element or has a second `Issuer`, or the required `ID`, `Version`, or UTC
     /// `IssueInstant` fails validation. A version below 2.0 also returns
     /// [`SamlError::ProtocolProfile`].
     /// Returns [`SamlError::ArtifactStoreUnavailable`] when `issued` fails

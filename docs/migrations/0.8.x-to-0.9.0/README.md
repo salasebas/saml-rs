@@ -94,5 +94,6 @@ Check the topics that affect your integration.
 - [Accept SSO responses whose assertions name the principal differently](sso-assertion-subjects.md)
 - [Send an `AuthnStatement` in every successful SSO response](sso-authn-statement.md)
 - [Read the SSO session deadline as a `SystemTime`](session-deadline-system-time.md)
+- [Expect an answer for an empty artifact](empty-artifact.md)
 
 [All migration guides](../README.md)
