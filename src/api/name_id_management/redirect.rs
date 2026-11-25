@@ -121,10 +121,14 @@ impl ServiceProvider {
     /// action that answers the request. It reports a decryption failure, a
     /// request outside the configured age window, an unsupported newer
     /// version, or an identifier and change that do not follow
-    /// `ManageNameIDRequestType`. Only a request whose signature verifies, from
-    /// the identity provider, at this service provider's endpoint, and not
-    /// replayed is refused this way: any other request returns an error. A newer major version adds `RequestVersionTooHigh` to
-    /// `VersionMismatch`. The action goes to the identity provider's
+    /// `ManageNameIDRequestType`. A newer major version adds
+    /// `RequestVersionTooHigh` to `VersionMismatch`. Only a request whose
+    /// signature verifies, from the identity provider, and at this service
+    /// provider's endpoint is refused this way: any other request returns an
+    /// error. A request inside the age window is checked for replay before it
+    /// is refused, and a configured
+    /// [`SchemaValidator`](crate::SchemaValidator) that rejects the request
+    /// returns its error first. The action goes to the identity provider's
     /// `ManageNameIDService` that
     /// [`Self::respond_name_id_management_redirect`] would choose.
     ///

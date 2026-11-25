@@ -16,6 +16,15 @@ returns the error that the methods returned before.
 
 To upgrade, send `refused.response()` as you do for the other refusals. If
 you match `refused.reason()` exhaustively, add the `MalformedRequest` arm; the
-enum is `#[non_exhaustive]`, so a wildcard arm already covers it. A request
-that is not authenticated, not from the peer, sent to another endpoint, or
-replayed still returns an error.
+enum is `#[non_exhaustive]`, so a wildcard arm already covers it.
+
+These requests still return an error:
+
+- A request that is not authenticated, not from the peer, or sent to another
+  endpoint.
+- A request that a configured `SchemaValidator` rejects. The validator runs
+  before these checks.
+- A repeated request `ID` that the replay cache holds. Over SOAP, the cache
+  holds only accepted requests, so a repeated malformed request is refused
+  again. Over HTTP-Redirect, a request inside the age window is checked for
+  replay before it is refused.
