@@ -1,6 +1,6 @@
-# Handle logout endpoint choice, status messages, and asynchronous markers
+# Handle logout endpoint choice and status messages
 
-This upgrade changes three Single Logout behaviors. No signature changes.
+This upgrade changes two Single Logout behaviors. No signature changes.
 
 ## Logout goes to a later `https` endpoint
 
@@ -33,21 +33,3 @@ string now leaves `StatusMessage` out. Before, the response carried an empty
 `StatusMessage`.
 
 To upgrade, leave the status message unset when you have no text.
-
-## Asynchronous markers with schema hints
-
-If you run an identity provider, `IdentityProvider::receive_slo_with_async`
-on HTTP-Redirect and HTTP-POST now returns `IdpLogoutAction::CompleteLocally`
-when the `aslo:Asynchronous` marker carries `xsi:schemaLocation`,
-`xsi:noNamespaceSchemaLocation`, or an `xsi:type` of `AsynchronousType` with
-the marker's own prefix, such as `xsi:type="aslo:AsynchronousType"` on
-`aslo:Asynchronous`. Before, it returned `IdpLogoutAction::Respond` for such a
-request. A marker with any other attribute still returns
-`IdpLogoutAction::Respond`. That includes `xsi:nil`, and an `xsi:type` that
-uses another prefix or names another type.
-
-You do not need to change code. Such a request now finishes at the identity
-provider, which presents the result to the user and sends no
-`LogoutResponse`. If such a request has a newer SAML version, the call now
-returns `SamlError::ProtocolProfile`, as for any asynchronous request, instead
-of `SamlError::LogoutRequestRefused`.

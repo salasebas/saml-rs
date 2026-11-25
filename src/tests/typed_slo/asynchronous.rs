@@ -187,6 +187,18 @@ fn a_marker_with_schema_instance_hints_selects_local_completion(
         format!(
             r#"<flag:Asynchronous xmlns:flag="{ASYNC_NAMESPACE}" xmlns:xsi="{XSI}" xsi:type="flag:AsynchronousType"/>"#
         ),
+        prefixed(r#"xsi:type="inherited:AsynchronousType""#),
+        prefixed(&format!(
+            r#"xmlns:own="{ASYNC_NAMESPACE}" xsi:type="own:AsynchronousType""#
+        )),
+        prefixed(&format!(
+            r#"xmlns="{ASYNC_NAMESPACE}" xsi:type="AsynchronousType""#
+        )),
+        prefixed(r#"xsi:type="aslo:OtherType""#),
+        prefixed(r#"xmlns:xs="http://www.w3.org/2001/XMLSchema" xsi:type="xs:string""#),
+        prefixed(r#"xsi:type="AsynchronousType""#),
+        prefixed(r#"xmlns:other="urn:example:unrelated" xsi:type="other:AsynchronousType""#),
+        unprefixed(r#"xsi:type="aslo:AsynchronousType""#),
     ] {
         assert!(
             matches!(receive(&marker)?, IdpLogoutAction::CompleteLocally(_)),
@@ -194,14 +206,6 @@ fn a_marker_with_schema_instance_hints_selects_local_completion(
         );
     }
     for marker in [
-        prefixed(r#"xsi:type="aslo:OtherType""#),
-        prefixed(r#"xmlns:xs="http://www.w3.org/2001/XMLSchema" xsi:type="xs:string""#),
-        prefixed(r#"xsi:type="AsynchronousType""#),
-        prefixed(r#"xsi:type="inherited:AsynchronousType""#),
-        prefixed(&format!(
-            r#"xmlns:own="{ASYNC_NAMESPACE}" xsi:type="own:AsynchronousType""#
-        )),
-        unprefixed(r#"xsi:type="aslo:AsynchronousType""#),
         prefixed(r#"xsi:nil="false""#),
         prefixed(r#"xsi:other="value""#),
         prefixed(r#"xsi:noNamespaceSchemaLocation="extension.xsd" value="true""#),
