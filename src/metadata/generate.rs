@@ -65,13 +65,13 @@ pub struct SpMetadataInput {
     /// `WantAssertionsSigned`.
     pub want_assertions_signed: bool,
     /// `<NameIDFormat>` values (defaults to email address when empty).
-    pub name_id_format: Vec<String>,
+    pub name_id_formats: Vec<String>,
     /// `SingleLogoutService` endpoints.
-    pub single_logout_service: Vec<Endpoint>,
+    pub single_logout_services: Vec<Endpoint>,
     /// `AssertionConsumerService` endpoints (required by SAML).
-    pub assertion_consumer_service: Vec<Endpoint>,
+    pub assertion_consumer_services: Vec<Endpoint>,
     /// `ManageNameIDService` endpoints.
-    pub manage_name_id_service: Vec<Endpoint>,
+    pub manage_name_id_services: Vec<Endpoint>,
     /// Lifetime on the root `EntityDescriptor`. `None` writes `cacheDuration="PT86400S"`.
     pub lifetime: Option<MetadataLifetime>,
     /// Entity-level organization. `None` writes no `Organization`.
@@ -100,15 +100,15 @@ pub struct IdpMetadataInput {
     /// `WantAuthnRequestsSigned`.
     pub want_authn_requests_signed: bool,
     /// `<NameIDFormat>` values.
-    pub name_id_format: Vec<String>,
+    pub name_id_formats: Vec<String>,
     /// `SingleSignOnService` endpoints (required by SAML).
-    pub single_sign_on_service: Vec<Endpoint>,
+    pub single_sign_on_services: Vec<Endpoint>,
     /// `SingleLogoutService` endpoints.
-    pub single_logout_service: Vec<Endpoint>,
+    pub single_logout_services: Vec<Endpoint>,
     /// `ArtifactResolutionService` endpoints. Each binding is SOAP.
-    pub artifact_resolution_service: Vec<crate::ArtifactResolutionService>,
+    pub artifact_resolution_services: Vec<crate::ArtifactResolutionService>,
     /// `ManageNameIDService` endpoints.
-    pub manage_name_id_service: Vec<Endpoint>,
+    pub manage_name_id_services: Vec<Endpoint>,
     /// Lifetime on the root `EntityDescriptor`. `None` writes `cacheDuration="PT86400S"`.
     pub lifetime: Option<MetadataLifetime>,
     /// Entity-level organization. `None` writes no `Organization`.
@@ -338,7 +338,7 @@ fn bool_str(value: bool) -> &'static str {
 /// Returns [`SamlError::Invalid`] for an empty certificate and
 /// [`SamlError::Base64`] for malformed base64 in a certificate.
 pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> {
-    if cfg.assertion_consumer_service.is_empty() {
+    if cfg.assertion_consumer_services.is_empty() {
         return Err(SamlError::MissingMetadata(
             "AssertionConsumerService".to_string(),
         ));
@@ -365,14 +365,14 @@ fn write_sp_role(w: &mut MetadataWriter, cfg: &SpMetadataInput) -> Result<(), Sa
     }
     w.start("SPSSODescriptor", &role_attributes);
     write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs)?;
-    write_endpoints(w, "SingleLogoutService", &cfg.single_logout_service)?;
-    write_endpoints(w, "ManageNameIDService", &cfg.manage_name_id_service)?;
-    if cfg.name_id_format.is_empty() {
+    write_endpoints(w, "SingleLogoutService", &cfg.single_logout_services)?;
+    write_endpoints(w, "ManageNameIDService", &cfg.manage_name_id_services)?;
+    if cfg.name_id_formats.is_empty() {
         w.text_element("NameIDFormat", name_id_format::EMAIL_ADDRESS);
     } else {
-        write_name_id_formats(w, &cfg.name_id_format)?;
+        write_name_id_formats(w, &cfg.name_id_formats)?;
     }
-    write_assertion_consumer_service(w, &cfg.assertion_consumer_service)?;
+    write_assertion_consumer_service(w, &cfg.assertion_consumer_services)?;
     w.end("SPSSODescriptor");
     Ok(())
 }
@@ -403,7 +403,7 @@ fn write_sp_role(w: &mut MetadataWriter, cfg: &SpMetadataInput) -> Result<(), Sa
 /// scope with uppercase ASCII letters, or an empty certificate.
 /// Returns [`SamlError::Base64`] for malformed base64 in a certificate.
 pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError> {
-    if cfg.single_sign_on_service.is_empty() {
+    if cfg.single_sign_on_services.is_empty() {
         return Err(SamlError::MissingMetadata(
             "SingleSignOnService".to_string(),
         ));
@@ -433,11 +433,11 @@ fn write_idp_role(w: &mut MetadataWriter, cfg: &IdpMetadataInput) -> Result<(), 
     w.start("IDPSSODescriptor", &role_attributes);
     super::scope::write_scopes(w, &cfg.scopes)?;
     write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs)?;
-    write_artifact_resolution_service(w, &cfg.artifact_resolution_service)?;
-    write_endpoints(w, "SingleLogoutService", &cfg.single_logout_service)?;
-    write_endpoints(w, "ManageNameIDService", &cfg.manage_name_id_service)?;
-    write_name_id_formats(w, &cfg.name_id_format)?;
-    write_endpoints(w, "SingleSignOnService", &cfg.single_sign_on_service)?;
+    write_artifact_resolution_service(w, &cfg.artifact_resolution_services)?;
+    write_endpoints(w, "SingleLogoutService", &cfg.single_logout_services)?;
+    write_endpoints(w, "ManageNameIDService", &cfg.manage_name_id_services)?;
+    write_name_id_formats(w, &cfg.name_id_formats)?;
+    write_endpoints(w, "SingleSignOnService", &cfg.single_sign_on_services)?;
     w.end("IDPSSODescriptor");
     Ok(())
 }

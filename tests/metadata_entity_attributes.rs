@@ -299,7 +299,7 @@ fn generated_metadata_publishes_entity_attributes_first() -> TestResult {
     ];
     let mut input = SpMetadataInput::default();
     input.entity_id = SP.into();
-    input.assertion_consumer_service =
+    input.assertion_consumer_services =
         vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
     input.entity_attributes = published.clone();
 

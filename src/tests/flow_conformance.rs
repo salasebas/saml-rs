@@ -42,12 +42,12 @@ fn idp_config(want_authn_signed: bool) -> IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: vec![CERT.into()],
         want_authn_requests_signed: want_authn_signed,
-        single_sign_on_service: vec![
+        single_sign_on_services: vec![
             Endpoint::new(Binding::Post, "https://idp/sso"),
             Endpoint::new(Binding::Redirect, "https://idp/sso"),
             Endpoint::new(Binding::SimpleSign, "https://idp/sso"),
         ],
-        single_logout_service: vec![
+        single_logout_services: vec![
             Endpoint::new(Binding::Post, "https://idp/slo"),
             Endpoint::new(Binding::Redirect, "https://idp/slo"),
             Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
@@ -63,12 +63,12 @@ fn sp_config(authn_signed: bool, want_assertions_signed: bool, enc: bool) -> SpM
         want_assertions_signed,
         signing_certs: vec![CERT.into()],
         encrypt_certs: if enc { vec![CERT.into()] } else { Vec::new() },
-        single_logout_service: vec![
+        single_logout_services: vec![
             Endpoint::new(Binding::Post, "https://sp/slo"),
             Endpoint::new(Binding::Redirect, "https://sp/slo"),
             Endpoint::new(Binding::SimpleSign, "https://sp/slo"),
         ],
-        assertion_consumer_service: vec![
+        assertion_consumer_services: vec![
             Endpoint::new(Binding::Post, "https://sp/acs"),
             Endpoint::new(Binding::Redirect, "https://sp/acs"),
             Endpoint::new(Binding::SimpleSign, "https://sp/acs"),
@@ -553,8 +553,8 @@ fn flow_conformance_logout_request_one_binding() -> Result<(), Box<dyn std::erro
     let idp = idp(false)?;
     let sp_config = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
-        single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
-        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+        single_logout_services: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
+        assertion_consumer_services: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
         ..SpMetadataInput::default()
     };
     let sp = sp::Engine::from_config(&sp_config, EntitySetting::default())?;

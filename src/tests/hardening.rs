@@ -32,7 +32,7 @@ fn idp() -> Result<idp::Engine, SamlError> {
         &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec![CERT.into()],
-            single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+            single_sign_on_services: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
             ..Default::default()
         },
         signing(),
@@ -45,7 +45,7 @@ fn sp_with(entity_id: &str, setting: EntitySetting) -> Result<sp::Engine, SamlEr
             entity_id: entity_id.into(),
             want_assertions_signed: true,
             signing_certs: vec![CERT.into()],
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+            assertion_consumer_services: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
             ..Default::default()
         },
         setting,
@@ -633,7 +633,7 @@ fn hardening_encrypted_message_signed_response_verifies() -> Result<(), Box<dyn 
         &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec![CERT.into()],
-            single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+            single_sign_on_services: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
             ..Default::default()
         },
         idp_setting,
@@ -647,7 +647,7 @@ fn hardening_encrypted_message_signed_response_verifies() -> Result<(), Box<dyn 
             want_assertions_signed: false,
             signing_certs: vec![CERT.into()],
             encrypt_certs: vec![CERT.into()],
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+            assertion_consumer_services: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
             ..Default::default()
         },
         sp_setting,

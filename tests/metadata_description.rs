@@ -65,7 +65,7 @@ fn contacts() -> Vec<ContactPerson> {
 fn raw_sp() -> SpMetadataInput {
     let mut config = SpMetadataInput::default();
     config.entity_id = "https://sp.example.com/metadata".into();
-    config.assertion_consumer_service =
+    config.assertion_consumer_services =
         vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
     config.organization = Some(organization());
     config.contacts = contacts();
@@ -77,9 +77,9 @@ fn raw_sp() -> SpMetadataInput {
 fn raw_idp() -> IdpMetadataInput {
     let mut config = IdpMetadataInput::default();
     config.entity_id = "https://idp.example.com/metadata".into();
-    config.single_sign_on_service =
+    config.single_sign_on_services =
         vec![Endpoint::new(Binding::Post, "https://idp.example.com/sso")];
-    config.name_id_format = vec![name_id_format::EMAIL_ADDRESS.into()];
+    config.name_id_formats = vec![name_id_format::EMAIL_ADDRESS.into()];
     config.organization = Some(organization());
     config.contacts = contacts();
     config.error_url = Some(ERROR_URL.into());

@@ -66,7 +66,7 @@ fn idp() -> Result<idp::Engine, SamlError> {
     let config = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: vec![CERT.into()],
-        single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+        single_sign_on_services: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
         ..IdpMetadataInput::default()
     };
     idp::Engine::from_config(&config, signing())
@@ -79,7 +79,7 @@ fn sp() -> Result<sp::Engine, SamlError> {
         signing_certs: vec![CERT.into()],
         ..SpMetadataInput::default()
     };
-    config.assertion_consumer_service =
+    config.assertion_consumer_services =
         vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
     sp::Engine::from_config(&config, signing())
 }

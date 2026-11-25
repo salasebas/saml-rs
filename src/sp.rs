@@ -385,7 +385,7 @@ mod tests {
         idp::Engine::from_config(
             &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
-                single_sign_on_service: vec![
+                single_sign_on_services: vec![
                     Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
                     Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
                 ],
@@ -399,7 +399,7 @@ mod tests {
         Engine::from_config(
             &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
-                assertion_consumer_service: vec![Endpoint::new(
+                assertion_consumer_services: vec![Endpoint::new(
                     Binding::Post,
                     "https://sp.example.com/acs",
                 )],
@@ -466,7 +466,7 @@ mod crypto_tests {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![IDP_CERT.into()],
                 want_authn_requests_signed: true,
-                single_sign_on_service: vec![
+                single_sign_on_services: vec![
                     Endpoint::new(Binding::Redirect, "https://idp/sso"),
                     Endpoint::new(Binding::Post, "https://idp/sso"),
                 ],
@@ -482,7 +482,7 @@ mod crypto_tests {
             &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![SP_SIGNING_CERT.into()],
-                single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+                single_sign_on_services: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
                 ..Default::default()
             },
             EntitySetting {
@@ -495,7 +495,7 @@ mod crypto_tests {
         let sp = Engine::from_config(
             &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
-                assertion_consumer_service: vec![Endpoint::new(
+                assertion_consumer_services: vec![Endpoint::new(
                     Binding::Post,
                     "http://sp.example.com/demo1/index.php?acs",
                 )],
@@ -527,7 +527,7 @@ mod crypto_tests {
             &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
                 authn_requests_signed: true,
-                assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+                assertion_consumer_services: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
                 ..Default::default()
             },
             EntitySetting {
@@ -557,7 +557,7 @@ mod crypto_tests {
             &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
                 authn_requests_signed: true,
-                assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+                assertion_consumer_services: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
                 ..Default::default()
             },
             EntitySetting {

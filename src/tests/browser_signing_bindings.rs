@@ -22,7 +22,7 @@ fn signed_login_request_rejects_soap_and_artifact_after_credentials(
             entity_id: "https://idp.example.com/metadata".into(),
             ..IdpMetadataInput::default()
         };
-        idp_config.single_sign_on_service =
+        idp_config.single_sign_on_services =
             vec![Endpoint::new(binding, "https://idp.example.com/sso")];
         let idp = idp::Engine::from_config(&idp_config, EntitySetting::default())?;
         let mut sp_config = SpMetadataInput {
@@ -30,7 +30,7 @@ fn signed_login_request_rejects_soap_and_artifact_after_credentials(
             authn_requests_signed: true,
             ..SpMetadataInput::default()
         };
-        sp_config.assertion_consumer_service =
+        sp_config.assertion_consumer_services =
             vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
         let mut sp = sp::Engine::from_config(&sp_config, EntitySetting::default())?;
 
@@ -59,9 +59,9 @@ fn signed_logout_artifact_rejects_binding_before_credentials(
         entity_id: "https://idp.example.com/metadata".into(),
         ..IdpMetadataInput::default()
     };
-    idp_config.single_sign_on_service =
+    idp_config.single_sign_on_services =
         vec![Endpoint::new(Binding::Post, "https://idp.example.com/sso")];
-    idp_config.single_logout_service = vec![Endpoint::new(
+    idp_config.single_logout_services = vec![Endpoint::new(
         Binding::Artifact,
         "https://idp.example.com/slo",
     )];
@@ -70,7 +70,7 @@ fn signed_logout_artifact_rejects_binding_before_credentials(
         entity_id: "https://sp.example.com/metadata".into(),
         ..SpMetadataInput::default()
     };
-    sp_config.assertion_consumer_service =
+    sp_config.assertion_consumer_services =
         vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
     let sp = sp::Engine::from_config(&sp_config, EntitySetting::default())?;
     for private_key in [None, Some("invalid private key".into())] {
