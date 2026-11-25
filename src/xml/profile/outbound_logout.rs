@@ -221,9 +221,9 @@ fn validate_outbound_status_code(
     let value = attribute_value(&attributes, b"Value").ok_or_else(|| {
         profile_error("StatusCode is missing required unqualified attribute Value")
     })?;
-    if !is_absolute_saml_uri(value) {
+    if !is_absolute_uri_reference(value) {
         return Err(profile_error(
-            "StatusCode Value must be a non-empty absolute URI without whitespace",
+            "StatusCode Value must be an absolute URI reference",
         ));
     }
     match level {

@@ -3054,6 +3054,9 @@ fn typed_logout_response_carries_caller_defined_subordinate_status(
         "urn:example:logout:local-failure",
         "https://idp.example:70000/logout/local-failure",
         "https://idp.example/status?a=1&reason=can't-logout",
+        "urn:example:has space",
+        r#"urn:example:"quoted"<angled>"#,
+        "urn:example:no\u{a0}break",
     ] {
         let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
         let received = sp.receive_slo(
@@ -3087,6 +3090,10 @@ fn typed_logout_response_carries_caller_defined_subordinate_status(
             other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
         }
     }
+    assert_eq!(
+        SubordinateStatusCode::try_new(" urn:example:a \t\n b ")?.as_uri(),
+        "urn:example:a b"
+    );
     Ok(())
 }
 
@@ -3096,10 +3103,7 @@ fn typed_logout_response_rejects_invalid_subordinate_status_uris(
     for uri in [
         "",
         "relative",
-        "urn:example:has space",
-        "urn:example:a\"b",
-        "urn:example:a<b",
-        "urn:example:a>b",
+        " ",
         "urn:",
         "urn:example:%zz",
         "urn:example:a#b#c",
