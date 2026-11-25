@@ -611,9 +611,17 @@ pub struct AlgorithmPolicy {
     /// XML-DSig reference transforms.
     ///
     /// The default is the enveloped-signature transform followed by
-    /// exclusive canonicalization. A peer may reject a signature with any
-    /// other transform, and Canonical XML puts the namespace declarations of
-    /// the signed element's ancestors into the digest.
+    /// exclusive canonicalization, and an empty list selects it. A peer may
+    /// reject a signature with any other transform, and Canonical XML puts
+    /// the namespace declarations of the signed element's ancestors into the
+    /// digest.
+    ///
+    /// A list that is not empty must start with the enveloped-signature
+    /// transform, as [`TransformAlgorithm::EnvelopedSignature`] or a
+    /// [`TransformAlgorithm::Custom`] with its URI, and the config builders
+    /// reject another list. The signer writes no transform parameters, so
+    /// without that transform the signature digests its own value and no
+    /// peer can verify it.
     ///
     /// They apply to responses from `respond_sso` and `initiate_sso`, to an
     /// `AuthnRequest` with an XML signature, and to logout messages signed on

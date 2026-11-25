@@ -51,7 +51,10 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
         signature: SignatureAlgorithm::RsaSha512,
         data_encryption: DataEncryptionAlgorithm::Aes128Cbc,
         key_encryption: KeyEncryptionAlgorithm::Rsa15,
-        signed_reference_transforms: vec![TransformAlgorithm::ExclusiveCanonicalization],
+        signed_reference_transforms: vec![
+            TransformAlgorithm::EnvelopedSignature,
+            TransformAlgorithm::CanonicalXml,
+        ],
     })
     .build()?
     .engine
@@ -84,7 +87,10 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
     );
     assert_eq!(
         setting.transformation_algorithms,
-        vec![transform_algorithm::EXC_C14N.to_string()]
+        vec![
+            transform_algorithm::ENVELOPED_SIGNATURE.to_string(),
+            transform_algorithm::C14N.to_string(),
+        ]
     );
     Ok(())
 }

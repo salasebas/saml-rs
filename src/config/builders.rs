@@ -10,7 +10,7 @@ use crate::sp;
 use crate::xml::name::validate_namespace_prefix;
 use crate::xml::write::validate_tag_prefixes;
 
-use super::algorithms::NameIdFormat;
+use super::algorithms::{NameIdFormat, TransformAlgorithm};
 use super::credentials::Credentials;
 use super::descriptors::{
     ArtifactResolutionService, EntityId, IdpMetadataConfig, ManageNameIdService, SpMetadataConfig,
@@ -24,6 +24,7 @@ use super::policies::{
     authn_request_signing_enabled, AlgorithmPolicy, IdpValidationPolicy, SpValidationPolicy,
     TemplatePolicy, XmlPolicy,
 };
+use crate::constants::transform_algorithm;
 use crate::model::EndpointUrl;
 
 /// Typed Service Provider configuration.
@@ -303,6 +304,9 @@ impl SpConfigBuilder {
     ///   Ed25519 signing ([`SamlError::Unsupported`]);
     /// - without a crypto provider, a certificate is empty or has malformed
     ///   base64 ([`SamlError::Invalid`] or [`SamlError::Base64`]);
+    /// - `AlgorithmPolicy::signed_reference_transforms` is not empty and does
+    ///   not start with the enveloped-signature transform
+    ///   ([`SamlError::Invalid`]);
     /// - the crypto provider does not support the selected combination of
     ///   RSA-OAEP digest and mask generation function;
     /// - a tag prefix or the signature prefix is not an XML NCName or begins
@@ -650,6 +654,9 @@ impl IdpConfigBuilder {
     ///   Ed25519 signing ([`SamlError::Unsupported`]);
     /// - without a crypto provider, a certificate is empty or has malformed
     ///   base64 ([`SamlError::Invalid`] or [`SamlError::Base64`]);
+    /// - `AlgorithmPolicy::signed_reference_transforms` is not empty and does
+    ///   not start with the enveloped-signature transform
+    ///   ([`SamlError::Invalid`]);
     /// - the crypto provider does not support the selected combination of
     ///   RSA-OAEP digest and mask generation function;
     /// - a tag prefix or the signature prefix is not an XML NCName or begins
@@ -683,17 +690,32 @@ impl IdpConfigBuilder {
 }
 
 fn validate_shared_policy(
-    _algorithms: &AlgorithmPolicy,
+    algorithms: &AlgorithmPolicy,
     templates: &TemplatePolicy,
 ) -> Result<(), SamlError> {
     #[cfg(crypto)]
-    super::encryption::validate_algorithms(_algorithms)?;
+    super::encryption::validate_algorithms(algorithms)?;
+    validate_signed_reference_transforms(&algorithms.signed_reference_transforms)?;
     validate_tag_prefixes(
         &templates.tag_prefix_protocol,
         &templates.tag_prefix_assertion,
     )?;
     validate_namespace_prefix("signature prefix", &templates.signature_prefix)?;
     Ok(())
+}
+
+fn validate_signed_reference_transforms(
+    transforms: &[TransformAlgorithm],
+) -> Result<(), SamlError> {
+    match transforms.first() {
+        Some(first) if first.as_uri() != transform_algorithm::ENVELOPED_SIGNATURE => {
+            Err(SamlError::Invalid(
+                "signed_reference_transforms must start with the enveloped-signature transform"
+                    .into(),
+            ))
+        }
+        Some(_) | None => Ok(()),
+    }
 }
 
 fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {

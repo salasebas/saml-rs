@@ -269,7 +269,10 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
         digest: DigestAlgorithm::Sha512,
         mgf: MaskGenerationFunction::Mgf1Sha512,
     };
-    algorithms.signed_reference_transforms = vec![TransformAlgorithm::ExclusiveCanonicalization];
+    algorithms.signed_reference_transforms = vec![
+        TransformAlgorithm::EnvelopedSignature,
+        TransformAlgorithm::CanonicalXml,
+    ];
     let mut xml = XmlPolicy::default();
     xml.redirect_inflate_max_bytes = 64 * 1024;
     let mut templates = TemplatePolicy::default();
@@ -414,6 +417,53 @@ fn sp_builder_rejects_two_acs_endpoints_with_the_same_index(
         result,
         Err(SamlError::Invalid(message)) if message == "duplicate AssertionConsumerService index 1"
     ));
+    Ok(())
+}
+
+#[test]
+fn config_builders_require_a_leading_enveloped_signature_transform(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let enveloped = TransformAlgorithm::EnvelopedSignature;
+    let exclusive = TransformAlgorithm::ExclusiveCanonicalization;
+    let custom_enveloped = TransformAlgorithm::Custom(enveloped.as_uri().into());
+    let cases = [
+        (vec![], true),
+        (vec![enveloped.clone()], true),
+        (vec![custom_enveloped, exclusive.clone()], true),
+        (vec![exclusive.clone()], false),
+        (vec![exclusive, enveloped], false),
+    ];
+    for (transforms, accepted) in cases {
+        let mut algorithms = AlgorithmPolicy::default();
+        algorithms.signed_reference_transforms = transforms.clone();
+        let sp = SpConfig::builder(
+            EntityId::try_new("https://sp.example.com/metadata")?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .validation(sp_validation_without_crypto())
+        .algorithms(algorithms.clone())
+        .build();
+        let idp = IdpConfig::builder(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .algorithms(algorithms)
+        .build();
+        for (role, result) in [("SP", sp.map(drop)), ("IdP", idp.map(drop))] {
+            if accepted {
+                assert!(result.is_ok(), "{role} rejected {transforms:?}: {result:?}");
+            } else {
+                assert!(
+                    matches!(
+                        &result,
+                        Err(SamlError::Invalid(message)) if message
+                            == "signed_reference_transforms must start with the enveloped-signature transform"
+                    ),
+                    "{role} accepted {transforms:?}: {result:?}"
+                );
+            }
+        }
+    }
     Ok(())
 }
 
