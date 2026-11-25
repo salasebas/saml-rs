@@ -50,7 +50,7 @@ The peer descriptors read the role the peer acts in. `Metadata::parse` has no ro
 | Read several such roles of one kind together | Library policy: Metadata §2.3.2 leaves the choice among role descriptors that share a protocol undefined. | Metadata §2.3.2 | Always |
 | Read `AuthnRequestsSigned` as true when any SAML 2.0 `SPSSODescriptor` sets it | Library policy: reason not recorded. | Metadata §2.4.4 | Always |
 | Read `WantAssertionsSigned` as true when any selected `SPSSODescriptor` sets it | Library policy: an IdP serving these roles together honors each role's request for signed assertions. | Metadata §2.3.2, §2.4.4 | Always |
-| Read `WantAuthnRequestsSigned` from the first SAML 2.0 `IDPSSODescriptor` that specifies it | Library policy: reason not recorded. | Metadata §2.4.3 | Always |
+| Read `WantAuthnRequestsSigned` as true when any SAML 2.0 `IDPSSODescriptor` sets it | Library policy: the descriptor reads these roles together and an `AuthnRequest` does not name one, so a service provider honors each role's request for signed requests. | Metadata §2.3.2, §2.4.3, E7 | Always |
 | Read the keys of a peer from the `KeyDescriptor` elements of the role it acts in. Verify its signatures and encrypt to it with that role's certificates | Mandatory | Metadata §2.4.1 | Always |
 | Reject a message signed with a key that only the peer's other role publishes | Library policy: no OASIS receiver rule names that case. | Metadata §2.4.1 | Always |
 | Verify with the certificates of a `KeyDescriptor` whose `use` is `signing` or absent, and encrypt with those whose `use` is `encryption` or absent | Mandatory | Metadata §2.4.1.1, E62 | Always |

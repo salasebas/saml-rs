@@ -149,13 +149,10 @@ impl IdpMetadata {
 
     /// `WantAuthnRequestsSigned` flag.
     ///
-    /// True when the first SAML 2.0 `IDPSSODescriptor` that specifies the
-    /// attribute sets it to `true` or `1`. An absent attribute is false.
+    /// True when any SAML 2.0 `IDPSSODescriptor` sets the attribute to `true`
+    /// or `1`. An absent attribute is false.
     pub fn want_authn_requests_signed(&self) -> bool {
-        self.inner
-            .signing_flags
-            .want_authn_requests_signed
-            .unwrap_or_default()
+        self.inner.signing_flags.want_authn_requests_signed
     }
 
     /// First non-empty `SingleSignOnService` `Location` for `binding`.

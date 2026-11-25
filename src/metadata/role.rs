@@ -29,7 +29,7 @@ pub(super) struct SelectedDescriptors<'a> {
 pub(super) struct SigningFlags {
     pub(super) authn_requests_signed: bool,
     pub(super) want_assertions_signed: bool,
-    pub(super) want_authn_requests_signed: Option<bool>,
+    pub(super) want_authn_requests_signed: bool,
 }
 
 impl SsoDescriptorRole {
@@ -90,11 +90,9 @@ impl SsoDescriptorRole {
                             signing_flag(descriptor, "WantAssertionsSigned")?.unwrap_or_default();
                     }
                     Self::IdentityProvider => {
-                        let want_authn_requests_signed =
-                            signing_flag(descriptor, "WantAuthnRequestsSigned")?;
-                        signing_flags.want_authn_requests_signed = signing_flags
-                            .want_authn_requests_signed
-                            .or(want_authn_requests_signed);
+                        signing_flags.want_authn_requests_signed |=
+                            signing_flag(descriptor, "WantAuthnRequestsSigned")?
+                                .unwrap_or_default();
                         scope_elements.extend(super::scope::scope_elements(descriptor).cloned());
                     }
                     Self::Any => {}

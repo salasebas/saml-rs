@@ -89,20 +89,51 @@ fn reads_only_unqualified_signing_flags() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn reads_the_first_idp_role_that_specifies_the_signing_flag(
+fn reads_want_authn_requests_signed_as_true_when_any_idp_role_sets_it(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let xml = r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com">
-  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
-    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/first/sso"/>
-  </IDPSSODescriptor>
-  <IDPSSODescriptor WantAuthnRequestsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
-    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/second/sso"/>
-  </IDPSSODescriptor>
-  <IDPSSODescriptor WantAuthnRequestsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
-    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/third/sso"/>
-  </IDPSSODescriptor>
-</EntityDescriptor>"#;
-
-    assert!(IdpMetadata::from_xml(xml)?.want_authn_requests_signed());
+    for (flags, expected) in [
+        (
+            [
+                "",
+                r#"WantAuthnRequestsSigned="true""#,
+                r#"WantAuthnRequestsSigned="false""#,
+            ],
+            true,
+        ),
+        (
+            [
+                r#"WantAuthnRequestsSigned="false""#,
+                r#"WantAuthnRequestsSigned="1""#,
+                "",
+            ],
+            true,
+        ),
+        (
+            [
+                r#"WantAuthnRequestsSigned="false""#,
+                "",
+                r#"WantAuthnRequestsSigned="0""#,
+            ],
+            false,
+        ),
+    ] {
+        let roles: String = flags
+            .iter()
+            .enumerate()
+            .map(|(role, flag)| {
+                format!(
+                    r#"<IDPSSODescriptor {flag} protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/{role}/sso"/></IDPSSODescriptor>"#
+                )
+            })
+            .collect();
+        let xml = format!(
+            r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com">{roles}</EntityDescriptor>"#
+        );
+        assert_eq!(
+            IdpMetadata::from_xml(&xml)?.want_authn_requests_signed(),
+            expected,
+            "{flags:?}"
+        );
+    }
     Ok(())
 }
