@@ -4,6 +4,7 @@ use crate::error::SamlError;
 use crate::model::{
     is_name_id_format, AuthnContextReferenceKind, ExtensionElement, RequestedAuthnContext,
 };
+use crate::xml::dom::is_xml_whitespace_char;
 use crate::xml::write::{Prefixes, XmlWriter};
 
 #[derive(Default)]
@@ -38,12 +39,17 @@ impl AuthnRequestPreferences<'_> {
 }
 
 fn validate_provider_name(provider_name: &str) -> Result<(), SamlError> {
-    if provider_name.chars().all(crate::xml::is_xml_char) {
-        return Ok(());
+    if !provider_name.chars().all(crate::xml::is_xml_char) {
+        return Err(SamlError::Invalid(
+            "ProviderName must contain only XML characters".into(),
+        ));
     }
-    Err(SamlError::Invalid(
-        "ProviderName must contain only XML characters".into(),
-    ))
+    if provider_name.chars().all(is_xml_whitespace_char) {
+        return Err(SamlError::Invalid(
+            "ProviderName must contain a non-whitespace character".into(),
+        ));
+    }
+    Ok(())
 }
 
 pub(super) struct AuthnRequestXml<'a> {

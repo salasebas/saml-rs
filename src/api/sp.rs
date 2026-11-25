@@ -172,7 +172,8 @@ impl ServiceProvider {
     /// with the selected binding, a requested authentication reference is not an absolute URI,
     /// [`StartSso::require_exact_authn_context`] is set without an exact
     /// [`RequestedAuthnContext`](crate::RequestedAuthnContext),
-    /// `ProviderName` contains invalid XML characters, the requested
+    /// `ProviderName` contains invalid XML characters or no non-whitespace
+    /// character, the requested
     /// [`StartSso::sp_name_qualifier`] is invalid or cannot be combined with
     /// the configured NameID format, or request creation fails
     /// because required metadata, signing keys, or supported bindings are unavailable.

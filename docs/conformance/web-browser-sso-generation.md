@@ -31,6 +31,7 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Require each extension's root to use a namespace. Reject the target namespace of every SAML V2.0 schema and the SAML V1.x assertion and protocol namespaces. Accept the namespaces of approved SAML extensions | Mandatory | Core §3.2.1, `ExtensionsType` | `ExtensionElement::from_xml` |
 | Write `ProviderName` | Optional | Core §3.4.1, `AuthnRequestType` | `StartSso::provider_name` |
 | Reject a `ProviderName` with a character XML 1.0 forbids | Library policy: the XML writer cannot represent the character. | `AuthnRequestType` | Always |
+| Reject a `ProviderName` that is empty or has only XML whitespace | Mandatory | Core §1.3.1, `AuthnRequestType` | Always |
 | Write `RequestedAuthnContext` with an explicit `Comparison`, after `NameIDPolicy`, with the references in the order given | Optional | Core §3.3.2.2.1, §3.4.1, E45 | `StartSso::requested_authn_context` |
 | Reject a `RequestedAuthnContext` with no reference, or with both class and declaration references | Mandatory | `RequestedAuthnContextType` | Always |
 | Reject a requested authentication context reference that is not an absolute URI reference | Mandatory | Core §1.3.2 | Always |

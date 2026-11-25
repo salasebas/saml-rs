@@ -655,22 +655,28 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
 }
 
 #[test]
-fn provider_name_must_be_xml_text_and_may_be_empty() -> Result<(), Box<dyn std::error::Error>> {
+fn provider_name_must_be_xml_text_with_a_non_whitespace_character(
+) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
-    assert!(matches!(
-        sp.start_sso(
-            &idp_descriptor,
-            StartSso::post().provider_name("invalid\0name")
-        ),
-        Err(SamlError::Invalid(_))
-    ));
-    let started = sp.start_sso(&idp_descriptor, StartSso::post().provider_name(""))?;
+    for provider_name in ["invalid\0name", "", " \t\r\n"] {
+        assert!(
+            matches!(
+                sp.start_sso(
+                    &idp_descriptor,
+                    StartSso::post().provider_name(provider_name)
+                ),
+                Err(SamlError::Invalid(_))
+            ),
+            "{provider_name:?}"
+        );
+    }
+    let started = sp.start_sso(&idp_descriptor, StartSso::post().provider_name("\u{a0}"))?;
     let received = idp.receive_sso(
         &sp_descriptor,
         request_input(&started.outbound)?,
         validation(),
     )?;
-    assert_eq!(received.message().provider_name(), Some(""));
+    assert_eq!(received.message().provider_name(), Some("\u{a0}"));
     Ok(())
 }
 
