@@ -91,12 +91,11 @@ request that `receive_sso` refuses.
 | Write `SessionIndex` on the `AuthnStatement` when the identity provider metadata advertises `SingleLogoutService` | Mandatory | Profiles §4.1.4.2, E26 | `IdpConfigBuilder::slo_endpoint` |
 | Write the assertion ID as the `SessionIndex` | Recommended | Core §2.7.2 | Always |
 | Write `AuthnInstant` and an `AuthnContext` on the `AuthnStatement` | Mandatory | Core §2.7.2, `AuthnStatementType` | Always |
-| Write the caller's authentication time in UTC as `AuthnInstant` | Mandatory | Core §2.7.2, §1.3.3 | `SsoAssertion::authn_instant` |
+| Write the authentication time the caller passes in UTC as `AuthnInstant`. The caller must pass it, because only the caller knows when the subject authenticated | Mandatory | Core §2.7.2, §1.3.3 | `SsoAssertion::new` |
 | Write the caller's session deadline in UTC as `SessionNotOnOrAfter`. Omit it when unset | Optional | Core §1.3.3, §2.7.2, `AuthnStatementType`, E79 | `SsoAssertion::session_not_on_or_after` |
 | Reject a supplied session deadline outside years 1 through 9999 | Library policy: this is the date range supported by the session time parser. | Core §1.3.3 | `SsoAssertion::session_not_on_or_after` |
-| Write the assertion `IssueInstant` as `AuthnInstant` when the caller sets none | Library policy: reason not recorded. | Core §2.7.2 | `SsoAssertion::authn_instant` |
-| Reject an `AuthnInstant` later than the response `IssueInstant` | Library policy: an assertion cannot report an authentication after it was issued. | Core §2.7.2 | `SsoAssertion::authn_instant` |
-| Reject an `AuthnInstant` before year 1 | Library policy: the formatter writes a four-digit non-negative year. | Core §1.3.3 | `SsoAssertion::authn_instant` |
+| Reject an authentication time later than the moment the response is issued, compared before rounding to the second | Library policy: an assertion cannot report an authentication after it was issued. | Core §2.7.2 | `SsoAssertion::new` |
+| Reject an `AuthnInstant` before year 1 | Library policy: the formatter writes a four-digit non-negative year. | Core §1.3.3 | `SsoAssertion::new` |
 | Write the unspecified class as the authentication context when the caller sets none | Library policy: the schema requires a context, and that class is the Authentication Context class for unspecified means. | Core §2.7.2.2 | `SsoAssertion::authn_context` |
 | Reject a success response whose context is not one of the requested references of the same kind, when `Comparison` is `exact` or omitted | Mandatory | Core §3.3.2.2.1 | `SsoAssertion::authn_context` |
 | Reject an authentication context reference that is not an absolute URI reference, including one read from a received request | Mandatory | Core §1.3.2, §2.7.2.2 | `SsoAssertion::authn_context` |

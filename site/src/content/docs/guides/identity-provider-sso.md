@@ -40,12 +40,14 @@ let name_id = NameId::new("alice@example.com").with_format(NameIdFormat::EmailAd
 let response = idp.respond_sso(
     &sp,
     &request,
-    SsoAssertion::new(name_id),
+    SsoAssertion::new(name_id, authenticated_at),
     RespondSso::post(),
 )?;
 ```
 
 Send `response` back through the browser to the service provider's assertion consumer service. The identity provider writes the assertion `Subject` itself: the `NameId` of the `SsoAssertion` and one bearer `SubjectConfirmation`.
+
+`authenticated_at` is the `SystemTime` at which the user authenticated. For a fresh login, that is the time of the login. When you reuse an existing identity provider session, pass the time that session authenticated the user. It becomes the `AuthnInstant`, which a service provider can compare with its own limit on authentication age.
 
 The third argument says what the response reports. `RespondSso` says how it is delivered and signed. When the user cannot be authenticated, answer with an error status and no assertion:
 
@@ -72,7 +74,7 @@ A typed identity provider signs the Response when it generates an `EncryptedAsse
 let response = idp.respond_sso(
     &sp,
     &request,
-    SsoAssertion::new(name_id),
+    SsoAssertion::new(name_id, authenticated_at),
     RespondSso::post().allow_unsigned_encrypted_cbc(),
 )?;
 ```
@@ -111,7 +113,7 @@ let attributes = Attributes::new([
 let response = idp.respond_sso(
     &sp,
     &request,
-    SsoAssertion::new(name_id).attributes(attributes),
+    SsoAssertion::new(name_id, authenticated_at).attributes(attributes),
     RespondSso::post(),
 )?;
 ```

@@ -1,6 +1,7 @@
 use super::*;
 use saml_rs::tests::elliptic_curve_signatures::SIGNING_FIXTURES;
 use saml_rs::{AssertionSignaturePolicy, SpValidationPolicy, VerifiedXmlSignatureCoverage};
+use std::time::SystemTime;
 
 #[test]
 fn elliptic_curve_signatures_round_trip_in_artifact_sso() -> Result<(), Box<dyn std::error::Error>>
@@ -25,7 +26,7 @@ fn elliptic_curve_signatures_round_trip_in_artifact_sso() -> Result<(), Box<dyn 
         let response = parties.idp.respond_sso_artifact(
             &parties.sp_metadata,
             &request,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::artifact(ArtifactDelivery::redirect(0)).sign_response(),
             &mut issued,
         )?;

@@ -88,7 +88,7 @@ fn exchange(delivery: Delivery) -> TestResult<Exchange> {
             None,
             idp.initiate_sso(
                 &sp_descriptor,
-                SsoAssertion::new(principal()),
+                SsoAssertion::new(principal(), SystemTime::now()),
                 RespondSso::post(),
             )?,
         ),
@@ -102,7 +102,7 @@ fn exchange(delivery: Delivery) -> TestResult<Exchange> {
             let response = idp.respond_sso(
                 &sp_descriptor,
                 &received,
-                SsoAssertion::new(principal()),
+                SsoAssertion::new(principal(), SystemTime::now()),
                 RespondSso::post(),
             )?;
             (Some(started.pending), response)

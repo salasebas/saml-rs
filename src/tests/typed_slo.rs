@@ -1939,7 +1939,7 @@ fn one_typed_idp_issuance_lifetime_drives_sso_and_slo_expiration(
 
     let sso = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(NameId::new("alice@example.com")),
+        SsoAssertion::new(NameId::new("alice@example.com"), SystemTime::now()),
         RespondSso::post(),
     )?;
     let sso_xml = outbound_xml(&sso, "SAMLResponse")?;
@@ -3501,7 +3501,7 @@ fn typed_session_authority_logout_request_without_any_format_omits_format_like_t
 
     let sso = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(NameId::new("alice@example.com")),
+        SsoAssertion::new(NameId::new("alice@example.com"), SystemTime::now()),
         RespondSso::post(),
     )?;
     assert_eq!(

@@ -208,7 +208,7 @@ fn typed_sso_response_carries_profile_authentication_statement(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
@@ -218,12 +218,6 @@ fn typed_sso_response_carries_profile_authentication_statement(
     assert!(xml.contains(&format!(
         "<saml:AuthnContextClassRef>{UNSPECIFIED_AUTHN_CONTEXT}</saml:AuthnContextClassRef>"
     )));
-    let issue_instant = xml
-        .split("IssueInstant=\"")
-        .nth(1)
-        .and_then(|value| value.split('"').next())
-        .ok_or("missing IssueInstant")?;
-    assert!(xml.contains(&format!("AuthnInstant=\"{issue_instant}\"")));
     assert!(xml.contains(&format!("<saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>")));
     assert!(xml.contains(&format!("<saml:Audience>{SP_ENTITY_ID}</saml:Audience>")));
     assert!(xml.contains("ds:Signature"));
@@ -274,7 +268,7 @@ fn typed_redirect_and_post_messages_carry_the_no_cache_headers(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     assert_eq!(header_pairs(&response), NO_CACHE_HEADERS);
@@ -307,7 +301,7 @@ fn typed_sso_response_writes_the_caller_authentication_instant(
         idp.respond_sso(
             &sp_descriptor,
             &received,
-            SsoAssertion::new(principal()).authn_instant(authn_instant),
+            SsoAssertion::new(principal(), authn_instant),
             RespondSso::post(),
         )
     };
@@ -354,7 +348,7 @@ fn typed_sso_response_round_trips_the_session_deadline() -> Result<(), Box<dyn s
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()).session_not_on_or_after(deadline),
+        SsoAssertion::new(principal(), SystemTime::now()).session_not_on_or_after(deadline),
         RespondSso::post(),
     )?;
     assert_eq!(
@@ -394,7 +388,7 @@ fn typed_sso_rejects_a_session_deadline_in_year_zero() -> Result<(), Box<dyn std
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()).session_not_on_or_after(deadline),
+        SsoAssertion::new(principal(), SystemTime::now()).session_not_on_or_after(deadline),
         RespondSso::post(),
     );
     assert!(matches!(
@@ -411,7 +405,7 @@ fn typed_unsolicited_sso_omits_in_response_to() -> Result<(), Box<dyn std::error
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
@@ -451,7 +445,7 @@ fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
 
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(NameId::new("alice@example.com")),
+        SsoAssertion::new(NameId::new("alice@example.com"), SystemTime::now()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
@@ -492,7 +486,7 @@ fn typed_sso_assertion_name_id_keeps_the_configured_format(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(NameId::new("alice@example.com")),
+        SsoAssertion::new(NameId::new("alice@example.com"), SystemTime::now()),
         RespondSso::post(),
     )?;
     assert_eq!(
@@ -510,7 +504,7 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
@@ -545,7 +539,7 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
     let (sp_descriptor, _) = descriptors(&sp, &idp_without_logout)?;
     let response = idp_without_logout.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
@@ -566,7 +560,7 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
     let (sp_descriptor, _) = descriptors(&sp, &soap_only_idp)?;
     let response = soap_only_idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
@@ -730,7 +724,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
     let signed = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let signed_xml = response_xml(&signed)?;
@@ -750,7 +744,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
     let unsigned = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post().allow_unsigned_encrypted_cbc(),
     )?;
     let unsigned_xml = response_xml(&unsigned)?;
@@ -806,7 +800,7 @@ fn typed_plaintext_response_is_accepted() -> Result<(), Box<dyn std::error::Erro
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
@@ -949,7 +943,7 @@ fn typed_sso_without_error_status_keeps_success_and_assertions(
     let solicited = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post().status_message("Passkey authentication is unavailable."),
     )?;
     let solicited_xml = response_xml(&solicited)?;
@@ -966,7 +960,7 @@ fn typed_sso_without_error_status_keeps_success_and_assertions(
 
     let unsolicited = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let unsolicited_xml = response_xml(&unsolicited)?;

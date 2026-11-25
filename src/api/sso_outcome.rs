@@ -11,29 +11,38 @@ use super::SamlError;
 
 /// Inputs for the assertion a successful login response carries.
 ///
-/// The caller chooses the subject `NameId` and, optionally, the attributes,
-/// the authentication context, the authentication instant, and the session
-/// deadline. The library writes the rest of the assertion.
+/// The caller chooses the subject `NameId`, the time the subject
+/// authenticated, and, optionally, the attributes, the authentication
+/// context, and the session deadline. The library writes the rest of the
+/// assertion.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SsoAssertion {
     name_id: NameId,
     attributes: Attributes,
     authn_context: Option<AuthnContextReference>,
-    authn_instant: Option<SystemTime>,
+    authn_instant: SystemTime,
     session_not_on_or_after: Option<SystemTime>,
 }
 
 impl SsoAssertion {
-    /// An assertion whose `Subject` is `name_id`.
+    /// An assertion whose `Subject` is `name_id`, for a subject that
+    /// authenticated at `authn_instant`.
+    ///
+    /// Pass the time at which the subject actually authenticated: the time
+    /// of this login, or the start of the identity provider session the login
+    /// reuses. It is written as the `AuthnInstant` of the assertion's
+    /// `AuthnStatement`, in UTC, rounded down to the second. Issuance returns
+    /// [`SamlError::Invalid`] when `authn_instant` is later than the moment
+    /// the response is issued, even within the same second, or before year 1.
     ///
     /// The assertion has no `AttributeStatement` until [`Self::attributes`]
     /// sets one.
-    pub fn new(name_id: NameId) -> Self {
+    pub fn new(name_id: NameId, authn_instant: SystemTime) -> Self {
         Self {
             name_id,
             attributes: Attributes::default(),
             authn_context: None,
-            authn_instant: None,
+            authn_instant,
             session_not_on_or_after: None,
         }
     }
@@ -80,20 +89,6 @@ impl SsoAssertion {
     /// [`crate::SubordinateStatusCode::no_authn_context`].
     pub fn authn_context(mut self, authn_context: AuthnContextReference) -> Self {
         self.authn_context = Some(authn_context);
-        self
-    }
-
-    /// Set the `AuthnInstant` of the assertion's `AuthnStatement`.
-    ///
-    /// Pass the time at which the subject actually authenticated, such as the
-    /// start of a reused identity provider session. It is written in UTC,
-    /// rounded down to the second. Omitting the instant writes the assertion
-    /// `IssueInstant`.
-    ///
-    /// The response is rejected when the written instant is later than the
-    /// response `IssueInstant` or before year 1.
-    pub fn authn_instant(mut self, authn_instant: SystemTime) -> Self {
-        self.authn_instant = Some(authn_instant);
         self
     }
 
@@ -149,7 +144,7 @@ impl SsoOutcome {
                 status: None,
                 typed_attributes: assertion.attributes.as_slice(),
                 authn_context: assertion.authn_context.as_ref(),
-                authn_instant: assertion.authn_instant,
+                authn_instant: Some(assertion.authn_instant),
                 session_not_on_or_after: assertion.session_not_on_or_after,
             }),
             Self::Failure(status) if status.top_level() == TopLevelStatusCode::Success => Err(

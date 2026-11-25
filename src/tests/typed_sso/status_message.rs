@@ -1,5 +1,6 @@
 use super::*;
 use saml_rs::StatusMessage;
+use std::time::SystemTime;
 
 const DIAGNOSTIC: &str = "MFA provider unavailable";
 const MESSAGE_XML: &str = "<samlp:StatusMessage>MFA provider unavailable</samlp:StatusMessage>";
@@ -160,7 +161,7 @@ fn assertion_signature_does_not_authenticate_error_diagnostic(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = start_receive_respond_with(
         StartSso::post(),
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let base = response_xml_from_fields(&exchange.response_fields)?;

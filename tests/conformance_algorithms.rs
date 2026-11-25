@@ -178,7 +178,10 @@ struct Exchange {
 }
 
 fn alice() -> SsoAssertion {
-    SsoAssertion::new(NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress))
+    SsoAssertion::new(
+        NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
+        SystemTime::now(),
+    )
 }
 
 fn signed_redirect_request_then_post_response(

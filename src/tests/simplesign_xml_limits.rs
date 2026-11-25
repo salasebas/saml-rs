@@ -175,7 +175,10 @@ fn finish_padded_sso_response(padding: usize) -> TestResult<Result<(), SamlError
     let response = parties.idp.respond_sso(
         &parties.sp_descriptor,
         &received,
-        SsoAssertion::new(NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)),
+        SsoAssertion::new(
+            NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
+            SystemTime::now(),
+        ),
         RespondSso::simple_sign(),
     )?;
     let fields = padded(response.post_form()?.fields(), "SAMLResponse", padding)?;

@@ -69,7 +69,10 @@ fn sso_response_from(
     let response = responder.respond_sso(
         sp_descriptor,
         &received,
-        SsoAssertion::new(NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)),
+        SsoAssertion::new(
+            NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
+            SystemTime::now(),
+        ),
         RespondSso::post(),
     )?;
     Ok(sp.finish_sso(

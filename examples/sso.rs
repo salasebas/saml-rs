@@ -67,7 +67,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let response = idp.respond_sso(
         &sp_descriptor,
         &request,
-        SsoAssertion::new(NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)),
+        SsoAssertion::new(
+            NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
+            SystemTime::now(),
+        ),
         RespondSso::post(),
     )?;
 

@@ -1,5 +1,6 @@
 #![cfg(crypto)]
 
+use std::time::SystemTime;
 use std::time::{Duration, UNIX_EPOCH};
 
 use bergshamra::{sign, DsigContext, KeysManager};
@@ -288,7 +289,7 @@ fn metadata_scopes_require_a_current_registration_authority_signature(
     ));
 
     let session = exchange(
-        SsoAssertion::new(alice()).attributes(Attributes::new([
+        SsoAssertion::new(alice(), SystemTime::now()).attributes(Attributes::new([
             SubjectId::try_new("alice@example.com")?.into(),
             PairwiseId::try_new("pairwise@regex.example.com")?.into(),
         ])),

@@ -215,7 +215,7 @@ fn identity_provider_produces_and_service_provider_consumes_each_attribute_name_
     ]);
 
     let exchange = exchange(
-        SsoAssertion::new(alice()).attributes(attributes),
+        SsoAssertion::new(alice(), SystemTime::now()).attributes(attributes),
         RespondSso::post(),
     )?;
 
@@ -285,7 +285,8 @@ fn signed_sso_preserves_xml_characters_in_attribute_names_formats_and_values(
             "urn:groups:research&design".into(),
         ));
     let exchange = exchange(
-        SsoAssertion::new(alice()).attributes(Attributes::new([attribute.clone()])),
+        SsoAssertion::new(alice(), SystemTime::now())
+            .attributes(Attributes::new([attribute.clone()])),
         RespondSso::post().sign_response(),
     )?;
     assert_eq!(exchange.xml.matches("<saml:AttributeValue ").count(), 1);
@@ -305,7 +306,8 @@ fn unsolicited_response_carries_attribute_name_formats_and_a_generated_identifie
 
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(name_id.clone()).attributes(Attributes::new(vec![mail.clone()])),
+        SsoAssertion::new(name_id.clone(), SystemTime::now())
+            .attributes(Attributes::new(vec![mail.clone()])),
         RespondSso::post(),
     )?;
     let session = sp.accept_unsolicited_sso(
@@ -323,8 +325,8 @@ fn unsolicited_response_carries_attribute_name_formats_and_a_generated_identifie
 fn response_without_typed_attributes_has_no_attribute_statement(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for assertion in [
-        SsoAssertion::new(alice()),
-        SsoAssertion::new(alice()).attributes(Attributes::default()),
+        SsoAssertion::new(alice(), SystemTime::now()),
+        SsoAssertion::new(alice(), SystemTime::now()).attributes(Attributes::default()),
     ] {
         let exchange = exchange(assertion, RespondSso::post())?;
         assert!(!exchange.xml.contains("AttributeStatement"));
@@ -341,7 +343,7 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
             Attribute::new(name, values(&["x"])).with_name_format(AttributeNameFormat::Basic)
         ]);
         match respond(
-            SsoAssertion::new(alice()).attributes(attributes),
+            SsoAssertion::new(alice(), SystemTime::now()).attributes(attributes),
             RespondSso::post(),
         ) {
             Err(SamlError::Invalid(message)) if message.contains("basic") => {}
@@ -354,7 +356,7 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
         .with_name_format(AttributeNameFormat::Custom(BASIC.to_string()));
     assert_eq!(spelled_out.name_format(), Some(&AttributeNameFormat::Basic));
     match respond(
-        SsoAssertion::new(alice()).attributes(Attributes::new([spelled_out])),
+        SsoAssertion::new(alice(), SystemTime::now()).attributes(Attributes::new([spelled_out])),
         RespondSso::post(),
     ) {
         Err(SamlError::Invalid(message)) if message.contains("basic") => {}
@@ -365,7 +367,7 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
             Attribute::new(name, values(&["x"])).with_name_format(AttributeNameFormat::Basic)
         ]);
         respond(
-            SsoAssertion::new(alice()).attributes(attributes),
+            SsoAssertion::new(alice(), SystemTime::now()).attributes(attributes),
             RespondSso::post(),
         )?;
     }
@@ -377,7 +379,7 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
             Attribute::new("given name", values(&["x"])).with_name_format(format)
         ]);
         respond(
-            SsoAssertion::new(alice()).attributes(attributes),
+            SsoAssertion::new(alice(), SystemTime::now()).attributes(attributes),
             RespondSso::post(),
         )?;
     }
@@ -544,7 +546,7 @@ fn service_provider_keeps_every_value_of_repeated_attribute_elements(
     ]);
 
     let exchange = exchange(
-        SsoAssertion::new(alice()).attributes(attributes),
+        SsoAssertion::new(alice(), SystemTime::now()).attributes(attributes),
         RespondSso::post(),
     )?;
 
@@ -577,7 +579,7 @@ fn identity_provider_does_not_generate_a_name_format_that_is_not_an_absolute_uri
         let attribute = Attribute::new("role", values(&["admin"]))
             .with_name_format(AttributeNameFormat::Custom(name_format.to_string()));
         match respond(
-            SsoAssertion::new(alice()).attributes(Attributes::new([attribute])),
+            SsoAssertion::new(alice(), SystemTime::now()).attributes(Attributes::new([attribute])),
             RespondSso::post(),
         ) {
             Err(SamlError::Invalid(message)) if message.contains("NameFormat") => {}
@@ -628,7 +630,7 @@ fn identity_provider_does_not_generate_a_blank_attribute_string_or_a_uri_name_th
     ];
     for (case, attribute) in rejected {
         match respond(
-            SsoAssertion::new(alice()).attributes(Attributes::new([attribute])),
+            SsoAssertion::new(alice(), SystemTime::now()).attributes(Attributes::new([attribute])),
             RespondSso::post(),
         ) {
             Err(SamlError::Invalid(_)) => {}
@@ -640,7 +642,8 @@ fn identity_provider_does_not_generate_a_blank_attribute_string_or_a_uri_name_th
         .with_name_format(AttributeNameFormat::Uri)
         .with_friendly_name("mail");
     let exchange = exchange(
-        SsoAssertion::new(alice()).attributes(Attributes::new([empty_value.clone()])),
+        SsoAssertion::new(alice(), SystemTime::now())
+            .attributes(Attributes::new([empty_value.clone()])),
         RespondSso::post(),
     )?;
     assert_eq!(attribute(&exchange.session, MAIL_OID)?, &empty_value);
@@ -662,7 +665,10 @@ fn assert_opaque_identifier(value: &str) {
 #[test]
 fn generated_request_response_and_assertion_ids_have_160_random_bits(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange(SsoAssertion::new(alice()), RespondSso::post())?;
+    let exchange = exchange(
+        SsoAssertion::new(alice(), SystemTime::now()),
+        RespondSso::post(),
+    )?;
     let request_id = exchange
         .session
         .in_response_to()
@@ -693,7 +699,10 @@ fn generated_transient_and_persistent_identifiers_follow_the_producer_rules(
         assert_eq!(name_id.sp_provided_id(), None);
         assert_ne!(name_id.value(), generate().value());
 
-        let exchange = exchange(SsoAssertion::new(name_id.clone()), RespondSso::post())?;
+        let exchange = exchange(
+            SsoAssertion::new(name_id.clone(), SystemTime::now()),
+            RespondSso::post(),
+        )?;
         assert_eq!(
             name_id_element(&exchange.xml)?,
             format!(
@@ -712,11 +721,11 @@ fn stored_persistent_identifier_is_reissued_unchanged() -> Result<(), Box<dyn st
     let stored = NameId::generate_persistent().value().to_string();
 
     let first = exchange(
-        SsoAssertion::new(NameId::persistent(stored.clone())?),
+        SsoAssertion::new(NameId::persistent(stored.clone())?, SystemTime::now()),
         RespondSso::post(),
     )?;
     let second = exchange(
-        SsoAssertion::new(NameId::persistent(stored.clone())?),
+        SsoAssertion::new(NameId::persistent(stored.clone())?, SystemTime::now()),
         RespondSso::post(),
     )?;
 
@@ -742,7 +751,10 @@ fn identity_provider_writes_the_qualifiers_and_alternative_identifier_of_the_iss
         .with_sp_name_qualifier("\"affiliation\" <group>")
         .with_sp_provided_id("sp-alias");
 
-    let exchange = exchange(SsoAssertion::new(name_id.clone()), RespondSso::post())?;
+    let exchange = exchange(
+        SsoAssertion::new(name_id.clone(), SystemTime::now()),
+        RespondSso::post(),
+    )?;
 
     assert_eq!(
         name_id_element(&exchange.xml)?,
@@ -779,17 +791,26 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
 ) -> Result<(), Box<dyn std::error::Error>> {
     for format in [NameIdFormat::Persistent, NameIdFormat::Transient] {
         let longest = NameId::new("é".repeat(256)).with_format(format.clone());
-        let exchange = exchange(SsoAssertion::new(longest.clone()), RespondSso::post())?;
+        let exchange = exchange(
+            SsoAssertion::new(longest.clone(), SystemTime::now()),
+            RespondSso::post(),
+        )?;
         assert_eq!(exchange.session.name_id(), Some(&longest));
 
         let too_long = NameId::new("é".repeat(257)).with_format(format);
-        expect_name_id_length_error(respond(SsoAssertion::new(too_long), RespondSso::post()))?;
+        expect_name_id_length_error(respond(
+            SsoAssertion::new(too_long, SystemTime::now()),
+            RespondSso::post(),
+        ))?;
     }
 
     for format in [PERSISTENT, TRANSIENT] {
         let padded = NameIdFormat::Custom(format!("\n {format}\t"));
         let too_long = NameId::new("é".repeat(257)).with_format(padded);
-        expect_name_id_length_error(respond(SsoAssertion::new(too_long), RespondSso::post()))?;
+        expect_name_id_length_error(respond(
+            SsoAssertion::new(too_long, SystemTime::now()),
+            RespondSso::post(),
+        ))?;
     }
 
     let sp = sp()?;
@@ -807,13 +828,16 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
     let unformatted = NameId::new("x".repeat(257));
     expect_name_id_length_error(idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(unformatted),
+        SsoAssertion::new(unformatted, SystemTime::now()),
         RespondSso::post(),
     ))?;
 
     let email = NameId::new(format!("{}@example.com", "x".repeat(300)))
         .with_format(NameIdFormat::EmailAddress);
-    let exchange = exchange(SsoAssertion::new(email.clone()), RespondSso::post())?;
+    let exchange = exchange(
+        SsoAssertion::new(email.clone(), SystemTime::now()),
+        RespondSso::post(),
+    )?;
     assert_eq!(exchange.session.name_id(), Some(&email));
     Ok(())
 }
@@ -998,7 +1022,10 @@ fn existing_name_id_format_uris_resolve_as_before() -> Result<(), Box<dyn std::e
     ] {
         assert_eq!(format.as_uri(), uri);
         let name_id = NameId::new("https://idp.example.com/subjects/1").with_format(format);
-        let exchange = exchange(SsoAssertion::new(name_id.clone()), RespondSso::post())?;
+        let exchange = exchange(
+            SsoAssertion::new(name_id.clone(), SystemTime::now()),
+            RespondSso::post(),
+        )?;
         assert!(
             name_id_element(&exchange.xml)?.contains(&format!("Format=\"{uri}\"")),
             "{uri}"
@@ -1030,7 +1057,10 @@ fn identity_provider_does_not_write_a_name_id_format_that_is_not_an_absolute_uri
     let sp = sp()?;
     for format in INVALID_FORMATS {
         let name_id = NameId::new("subject-1").with_format(NameIdFormat::Custom(format.into()));
-        expect_name_id_format_error(respond(SsoAssertion::new(name_id), RespondSso::post()))?;
+        expect_name_id_format_error(respond(
+            SsoAssertion::new(name_id, SystemTime::now()),
+            RespondSso::post(),
+        ))?;
         let mut raw_idp = idp()?.engine().clone();
         raw_idp.setting.name_id_format = vec![format.to_string()];
         expect_name_id_format_error(raw_idp.create_login_response(
@@ -1050,7 +1080,10 @@ fn identity_provider_writes_xml_markup_in_a_name_id_format_as_character_data(
     // is an absolute URI reference. The XML writer escapes the markup.
     let name_id =
         NameId::new("subject-1").with_format(NameIdFormat::Custom("urn:example:a<b\"c>&d".into()));
-    let exchange = exchange(SsoAssertion::new(name_id.clone()), RespondSso::post())?;
+    let exchange = exchange(
+        SsoAssertion::new(name_id.clone(), SystemTime::now()),
+        RespondSso::post(),
+    )?;
     assert!(
         name_id_element(&exchange.xml)?.contains("Format=\"urn:example:a&lt;b&quot;c&gt;&amp;d\"")
     );

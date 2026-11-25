@@ -118,7 +118,8 @@ impl IdentityProvider {
     /// );
     /// let input = Inbound::post(fields);
     /// let request = idp.receive_sso(sp, input, validation)?;
-    /// let response = idp.respond_sso(sp, &request, SsoAssertion::new(name_id), RespondSso::post())?;
+    /// let assertion = SsoAssertion::new(name_id, SystemTime::now());
+    /// let response = idp.respond_sso(sp, &request, assertion, RespondSso::post())?;
     ///
     /// let form = response.post_form()?;
     /// # let _ = form;
@@ -256,11 +257,12 @@ impl IdentityProvider {
     /// [`SsoAssertion::authn_context`](crate::SsoAssertion::authn_context) is
     /// not an absolute URI reference or does not meet an exact
     /// `RequestedAuthnContext`,
-    /// [`SsoAssertion::authn_instant`](crate::SsoAssertion::authn_instant) is
-    /// later than the response `IssueInstant`,
-    /// or is before year 1, or the issued `Subject` does not strongly match
-    /// the request's `Subject`, in its identifier or its
-    /// `SubjectConfirmation` (see [`RequestedSubject`](crate::RequestedSubject)).
+    /// the authentication instant passed to
+    /// [`SsoAssertion::new`](crate::SsoAssertion::new) is later than the
+    /// moment the response is issued, or is before year 1, or the issued
+    /// `Subject` does not strongly match the request's `Subject`, in its
+    /// identifier or its `SubjectConfirmation` (see
+    /// [`RequestedSubject`](crate::RequestedSubject)).
     /// When `NameIDPolicy` requests an `SPNameQualifier`, a specific standard
     /// format requires the issued `NameId` to carry that qualifier. An omitted
     /// or `unspecified` format requires the identifier to belong to the
@@ -274,15 +276,20 @@ impl IdentityProvider {
     ///     AuthnRequest, IdentityProvider, NameId, Received, RespondSso, SpDescriptor,
     ///     SsoAssertion, SsoOutcome, Status,
     /// };
+    /// use std::time::SystemTime;
     ///
+    /// // The subject and the time it authenticated, from the identity
+    /// // provider's login session.
     /// # fn respond(
     /// #     idp: &IdentityProvider,
     /// #     sp: &SpDescriptor,
     /// #     request: &Received<AuthnRequest>,
-    /// #     authenticated: Option<NameId>,
+    /// #     authenticated: Option<(NameId, SystemTime)>,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let outcome = match authenticated {
-    ///     Some(name_id) => SsoOutcome::Success(SsoAssertion::new(name_id)),
+    ///     Some((name_id, authenticated_at)) => {
+    ///         SsoOutcome::Success(SsoAssertion::new(name_id, authenticated_at))
+    ///     }
     ///     None => SsoOutcome::Failure(Status::responder()),
     /// };
     /// let response = idp.respond_sso(sp, request, outcome, RespondSso::post())?;
@@ -387,9 +394,9 @@ impl IdentityProvider {
     /// [`SsoAssertion::attributes`](crate::SsoAssertion::attributes),
     /// [`SsoAssertion::authn_context`](crate::SsoAssertion::authn_context) is
     /// not an absolute URI reference,
-    /// [`SsoAssertion::authn_instant`](crate::SsoAssertion::authn_instant) is
-    /// later than the response `IssueInstant`,
-    /// or is before year 1, the persistent or transient `NameId` is longer
+    /// the authentication instant passed to
+    /// [`SsoAssertion::new`](crate::SsoAssertion::new) is later than the
+    /// moment the response is issued, or is before year 1, the persistent or transient `NameId` is longer
     /// than 256 characters, or an `entity` `NameId` breaks the rules of
     /// [`NameId`](crate::NameId).
     ///
@@ -413,7 +420,7 @@ impl IdentityProvider {
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let response = idp.initiate_sso(
     ///     sp_descriptor,
-    ///     SsoAssertion::new(name_id),
+    ///     SsoAssertion::new(name_id, SystemTime::now()),
     ///     RespondSso::post(),
     /// )?;
     /// let form = response.post_form()?;

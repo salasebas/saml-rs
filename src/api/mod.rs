@@ -19,7 +19,7 @@
 //! let request: Received<AuthnRequest> = unreachable!();
 //! let name_id: NameId = unreachable!();
 //!
-//! let _ = sp.respond_sso(&peer, &request, SsoAssertion::new(name_id), RespondSso::post());
+//! let _ = sp.respond_sso(&peer, &request, SsoAssertion::new(name_id, std::time::SystemTime::now()), RespondSso::post());
 //! ```
 //!
 //! ```compile_fail
@@ -47,7 +47,7 @@
 //! let name_id: NameId = unreachable!();
 //!
 //! let options = RespondSso::artifact(ArtifactDelivery::redirect(0));
-//! let _ = idp.respond_sso(&peer, &request, SsoAssertion::new(name_id), options);
+//! let _ = idp.respond_sso(&peer, &request, SsoAssertion::new(name_id, std::time::SystemTime::now()), options);
 //! ```
 //!
 //! ```compile_fail
@@ -61,7 +61,7 @@
 //! let request: Received<AuthnRequest> = unreachable!();
 //! let name_id: NameId = unreachable!();
 //! let mut issued = IssuedArtifacts::expire_after(std::time::Duration::from_secs(60));
-//! let assertion = SsoAssertion::new(name_id);
+//! let assertion = SsoAssertion::new(name_id, std::time::SystemTime::now());
 //!
 //! let _ = idp.respond_sso_artifact(&peer, &request, assertion, RespondSso::post(), &mut issued);
 //! ```

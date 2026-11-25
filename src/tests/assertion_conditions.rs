@@ -109,7 +109,7 @@ fn exchange_for(
     if unsolicited {
         let response = idp.initiate_sso(
             &sp_descriptor,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post(),
         )?;
         return Ok(Exchange {
@@ -128,7 +128,7 @@ fn exchange_for(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     Ok(Exchange {
@@ -398,7 +398,7 @@ fn exchange_simple_sign(
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::simple_sign(),
     )?;
     Ok(Exchange {

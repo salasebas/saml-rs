@@ -120,6 +120,7 @@ scoped_identifier!(
     ///
     /// ```
     /// use saml_rs::{Attribute, Attributes, NameId, SamlError, SsoAssertion, SubjectId};
+    /// use std::time::SystemTime;
     ///
     /// # fn main() -> Result<(), SamlError> {
     /// let subject_id = SubjectId::try_new("idm123456789@example.com")?;
@@ -127,7 +128,7 @@ scoped_identifier!(
     /// assert_eq!(subject_id.scope(), "example.com");
     /// assert_eq!(subject_id, SubjectId::try_new("IDM123456789@EXAMPLE.COM")?);
     ///
-    /// let assertion = SsoAssertion::new(NameId::generate_transient())
+    /// let assertion = SsoAssertion::new(NameId::generate_transient(), SystemTime::now())
     ///     .attributes(Attributes::new([Attribute::from(subject_id)]));
     /// # let _ = assertion;
     /// # Ok(())

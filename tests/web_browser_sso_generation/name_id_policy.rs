@@ -1,5 +1,6 @@
 use super::*;
 use saml_rs::NameIdCreationRequest;
+use std::time::SystemTime;
 
 const AFFILIATION: &str = "https://federation.example.com/affiliation?group=research&region=west";
 
@@ -47,7 +48,7 @@ fn signed_browser_sso_issues_an_affiliation_qualified_persistent_name_id(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal.clone()),
+        SsoAssertion::new(principal.clone(), SystemTime::now()),
         RespondSso::post().sign_response(),
     )?;
     let session = sp.finish_sso(

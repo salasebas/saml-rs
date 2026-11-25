@@ -183,7 +183,7 @@ fn a_response_delivered_as_an_artifact_establishes_the_session(
     let mismatched = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(NameId::new(USER)),
+        SsoAssertion::new(NameId::new(USER), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     );
@@ -198,7 +198,7 @@ fn a_response_delivered_as_an_artifact_establishes_the_session(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -240,7 +240,7 @@ fn an_artifact_response_keeps_exclusive_canonicalization_inside_soap(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -283,7 +283,7 @@ fn relay_state_travels_with_the_artifact() -> Result<(), Box<dyn std::error::Err
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -311,7 +311,7 @@ fn an_artifact_redirect_keeps_the_consumer_fragment_after_the_query(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -340,7 +340,7 @@ fn an_artifact_redirect_refuses_a_consumer_query_with_a_saml_parameter(
     let result = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     );
@@ -373,7 +373,7 @@ fn an_artifact_form_refuses_a_relay_state_with_a_lone_line_feed(
     let result = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::post_form(0)),
         &mut issued,
     );
@@ -400,7 +400,7 @@ fn a_relay_state_the_service_provider_did_not_send_is_rejected(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -445,7 +445,7 @@ fn a_received_relay_state_up_to_the_receive_limit_travels_with_the_artifact(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -541,7 +541,7 @@ fn an_artifact_delivered_in_a_form_establishes_the_session(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::post_form(0)),
         &mut issued,
     )?;
@@ -703,7 +703,7 @@ fn an_unsolicited_artifact_response_establishes_the_session(
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.initiate_sso_artifact(
         &parties.sp_metadata,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)).relay_state(relay_state.clone()),
         &mut issued,
     )?;
@@ -734,7 +734,7 @@ fn a_request_for_an_artifact_response_is_not_answered_over_post(
         parties.idp.respond_sso(
             &parties.sp_metadata,
             &request,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post()
         ),
         Err(SamlError::Invalid(_))
@@ -751,7 +751,7 @@ fn a_missing_resolution_service_is_rejected() -> Result<(), Box<dyn std::error::
         parties.idp.respond_sso_artifact(
             &parties.sp_metadata,
             &request,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::artifact(ArtifactDelivery::redirect(7)),
             &mut issued
         ),
@@ -770,7 +770,7 @@ fn a_message_resolved_from_another_artifact_is_rejected() -> Result<(), Box<dyn 
         parties.idp.respond_sso_artifact(
             &parties.sp_metadata,
             &request,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::artifact(ArtifactDelivery::redirect(0)),
             issued,
         )
@@ -804,7 +804,7 @@ fn a_resolved_response_is_not_accepted_at_a_post_consumer() -> Result<(), Box<dy
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.initiate_sso_artifact(
         &parties.sp_metadata,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -851,7 +851,7 @@ fn unsigned_response(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         issued,
     )?;
@@ -954,7 +954,7 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = other.initiate_sso_artifact(
         &parties.sp_metadata,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -1033,7 +1033,7 @@ fn a_pending_artifact_login_survives_a_snapshot() -> Result<(), Box<dyn std::err
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -1049,7 +1049,7 @@ fn an_unsolicited_artifact_is_not_sent_when_the_default_consumer_has_another_bin
     assert!(matches!(
         parties.idp.initiate_sso_artifact(
             &parties.sp_metadata,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::artifact(ArtifactDelivery::redirect(0)),
             &mut IssuedArtifacts::expire_after(ARTIFACT_LIFETIME)
         ),
@@ -1084,7 +1084,7 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.initiate_sso_artifact(
         &sp_metadata,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::post_form(0)),
         &mut issued,
     )?;
@@ -1200,7 +1200,7 @@ fn a_request_for_a_posted_response_is_not_answered_with_an_artifact(
         parties.idp.respond_sso_artifact(
             &parties.sp_metadata,
             &request,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::artifact(ArtifactDelivery::redirect(0)),
             &mut issued
         ),
@@ -1275,7 +1275,7 @@ fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -1316,7 +1316,7 @@ fn an_artifact_response_returns_the_session_index_of_its_encrypted_assertion(
     let response = parties.idp.respond_sso_artifact(
         &sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)).sign_response(),
         &mut issued,
     )?;
@@ -1379,7 +1379,7 @@ fn a_typed_sso_artifact_response_is_withheld_without_confidentiality(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;

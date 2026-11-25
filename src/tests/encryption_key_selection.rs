@@ -6,6 +6,7 @@ use super::encrypted_assertion_elements::{
     signing_credentials, sp, sp_validation, sp_with_credentials, xml, CERT, IDP_ENTITY_ID,
     IDP_SSO_POST, SP_ENTITY_ID, UNKNOWN_CERT,
 };
+use std::time::SystemTime;
 
 use saml_rs::constants::CertUse;
 use saml_rs::metadata::SpMetadata;
@@ -243,7 +244,7 @@ fn crypto_error(
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
     match idp(encryption)?.initiate_sso(
         &sp_descriptor(metadata)?,
-        SsoAssertion::new(alice()).attributes(attributes()),
+        SsoAssertion::new(alice(), SystemTime::now()).attributes(attributes()),
         RespondSso::post(),
     ) {
         Err(error @ SamlError::Crypto { .. }) => {
@@ -293,12 +294,12 @@ fn attribute_encryption_needs_no_certificate_when_the_assertion_has_no_attribute
 
     idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(alice()),
+        SsoAssertion::new(alice(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let with_attributes = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(alice()).attributes(attributes()),
+        SsoAssertion::new(alice(), SystemTime::now()).attributes(attributes()),
         RespondSso::post(),
     );
     assert!(

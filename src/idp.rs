@@ -182,10 +182,10 @@ impl Engine {
             recipient_entity_id,
         )?;
         let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
-        let authn_instant = match rendering.authn_instant {
-            Some(authenticated) => written_authn_instant(authenticated, &window)?,
-            None => window.issue_instant.clone(),
-        };
+        let authenticated = rendering.authn_instant.ok_or_else(|| {
+            SamlError::Invalid("a success response needs the authentication instant".into())
+        })?;
+        let authn_instant = written_authn_instant(authenticated, &window)?;
         let session_not_on_or_after = rendering
             .session_not_on_or_after
             .map(written_session_not_on_or_after)

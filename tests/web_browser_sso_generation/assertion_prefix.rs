@@ -1,5 +1,6 @@
 use super::*;
 use saml_rs::{Attribute, AttributeValue, Attributes};
+use std::time::SystemTime;
 
 #[cfg(not(feature = "crypto-fips"))]
 #[test]
@@ -38,7 +39,7 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
         let response = idp.respond_sso(
             &sp_descriptor,
             &received,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post(),
         )?;
 
@@ -69,7 +70,7 @@ fn assertion_prefix_preserves_attribute_value_namespaces() -> Result<(), Box<dyn
         let role = Attribute::new("role", vec![AttributeValue::new("staff")]);
         let response = idp.initiate_sso(
             &sp_descriptor,
-            SsoAssertion::new(principal()).attributes(Attributes::new([role])),
+            SsoAssertion::new(principal(), SystemTime::now()).attributes(Attributes::new([role])),
             RespondSso::post(),
         )?;
         let xml = response_xml(&response)?;

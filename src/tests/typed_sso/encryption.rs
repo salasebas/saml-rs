@@ -1,5 +1,6 @@
 use super::*;
 use saml_rs::{AlgorithmPolicy, DataEncryptionAlgorithm, SsoAssertion, X509Credential};
+use std::time::SystemTime;
 
 fn encrypted_exchange(
     algorithm: DataEncryptionAlgorithm,
@@ -29,7 +30,7 @@ fn encrypted_exchange(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post().allow_unsigned_encrypted_cbc(),
     )?;
     Ok(SsoExchange {
@@ -53,7 +54,7 @@ fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std
         let response = exchange.idp.respond_sso(
             &exchange.sp_descriptor,
             &exchange.received,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post(),
         )?;
         let fields = post_fields(&response)?;
@@ -286,7 +287,7 @@ fn passphrase_protected_keys_sign_requests_and_decrypt_assertions(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let fields = post_fields(&response)?;

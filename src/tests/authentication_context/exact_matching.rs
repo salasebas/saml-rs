@@ -3,6 +3,7 @@ use super::{
     DECLARATION, IDP, MFA,
 };
 use crate::tests::post_validation::post_validation;
+use std::time::SystemTime;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -147,7 +148,7 @@ fn exact_authn_context_opt_in_accepts_matching_class_and_declaration_across_snap
         let response = idp.respond_sso(
             &sp_descriptor,
             &received,
-            SsoAssertion::new(principal()).authn_context(achieved.clone()),
+            SsoAssertion::new(principal(), SystemTime::now()).authn_context(achieved.clone()),
             RespondSso::post(),
         )?;
         let session = sp.finish_sso(
@@ -193,7 +194,7 @@ fn exact_authn_context_opt_in_matches_later_statement_or_declaration_alongside_c
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()).authn_context(mfa),
+        SsoAssertion::new(principal(), SystemTime::now()).authn_context(mfa),
         RespondSso::post().sign_response(),
     )?;
     let multi_statement = resign_response_with_statements(
@@ -228,7 +229,7 @@ fn exact_authn_context_opt_in_matches_later_statement_or_declaration_alongside_c
     let response_decl = idp.respond_sso(
         &sp_descriptor,
         &received_decl,
-        SsoAssertion::new(principal()).authn_context(decl),
+        SsoAssertion::new(principal(), SystemTime::now()).authn_context(decl),
         RespondSso::post().sign_response(),
     )?;
     let combined = resign_response_with_statements(
@@ -269,7 +270,7 @@ fn exact_authn_context_opt_in_rejects_different_wrong_kind_and_missing_reference
     let base_response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()).authn_context(mfa.clone()),
+        SsoAssertion::new(principal(), SystemTime::now()).authn_context(mfa.clone()),
         RespondSso::post().sign_response(),
     )?;
 
@@ -400,7 +401,7 @@ fn matching_outstanding_logout_records_replay_even_when_authn_context_mismatches
     let base_response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()).authn_context(mfa),
+        SsoAssertion::new(principal(), SystemTime::now()).authn_context(mfa),
         RespondSso::post().sign_response(),
     )?;
     let different = resign_response_with_statements(
@@ -461,7 +462,7 @@ fn exact_authn_context_opt_in_ignores_unselected_assertion_and_preserves_other_c
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()).authn_context(mfa.clone()),
+        SsoAssertion::new(principal(), SystemTime::now()).authn_context(mfa.clone()),
         RespondSso::post().sign_response(),
     )?;
     let xml = String::from_utf8(
@@ -598,7 +599,7 @@ fn non_opted_in_requests_and_old_snapshots_keep_existing_behavior(
     let base_response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()).authn_context(mfa),
+        SsoAssertion::new(principal(), SystemTime::now()).authn_context(mfa),
         RespondSso::post().sign_response(),
     )?;
     let different = resign_response_with_statements(
@@ -658,7 +659,7 @@ fn old_json_snapshot_finishes_sso_without_authn_context_opt_in(
     let base_response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()).authn_context(mfa),
+        SsoAssertion::new(principal(), SystemTime::now()).authn_context(mfa),
         RespondSso::post().sign_response(),
     )?;
     let different = resign_response_with_statements(
@@ -735,7 +736,7 @@ fn exact_authn_context_opt_in_works_with_encrypted_assertions(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()).authn_context(mfa),
+        SsoAssertion::new(principal(), SystemTime::now()).authn_context(mfa),
         RespondSso::post(),
     )?;
     sp.finish_sso(
