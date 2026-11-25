@@ -89,8 +89,7 @@ impl MetadataAggregate {
     /// Refuse the aggregate unless its root `EntitiesDescriptor` carries a
     /// `validUntil` at most `max_validity` after `now`.
     ///
-    /// A `validUntil` on an inner group, an entity, or a role does not satisfy
-    /// the requirement. Call this right after [`Self::from_xml`], with the
+    /// A `validUntil` below the root does not satisfy the requirement. Call this right after [`Self::from_xml`], with the
     /// time that the import is accepted at.
     ///
     /// The check does not refuse a root `validUntil` that has already been

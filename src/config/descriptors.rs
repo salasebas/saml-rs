@@ -595,9 +595,9 @@ impl IdpDescriptor {
     /// The root is the element at the top of the imported document: the
     /// `EntityDescriptor`, or the outermost `EntitiesDescriptor`, including
     /// the aggregate root for a descriptor looked up in a
-    /// [`MetadataAggregate`]. A `validUntil` on an inner group, the entity, or
-    /// a role does not satisfy the requirement. Call this right after import,
-    /// with the time that the import is accepted at.
+    /// [`MetadataAggregate`]. A `validUntil` below the root does not satisfy
+    /// the requirement. Call this right after import, with the time that the
+    /// import is accepted at.
     ///
     /// The check does not refuse a root `validUntil` that has already been
     /// reached; typed flows refuse the descriptor from that instant.
@@ -825,9 +825,9 @@ impl SpDescriptor {
     /// The root is the element at the top of the imported document: the
     /// `EntityDescriptor`, or the outermost `EntitiesDescriptor`, including
     /// the aggregate root for a descriptor looked up in a
-    /// [`MetadataAggregate`]. A `validUntil` on an inner group, the entity, or
-    /// a role does not satisfy the requirement. Call this right after import,
-    /// with the time that the import is accepted at.
+    /// [`MetadataAggregate`]. A `validUntil` below the root does not satisfy
+    /// the requirement. Call this right after import, with the time that the
+    /// import is accepted at.
     ///
     /// The check does not refuse a root `validUntil` that has already been
     /// reached; typed flows refuse the descriptor from that instant.

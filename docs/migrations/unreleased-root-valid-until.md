@@ -3,9 +3,8 @@
 `MetadataAggregate`, `IdpDescriptor`, and `SpDescriptor` have a new
 `require_root_valid_until(now, max_validity)` method. It refuses metadata
 whose root element has no `validUntil`, or whose root `validUntil` lies more
-than `max_validity` after `now`. A `validUntil` on an inner
-`EntitiesDescriptor`, on the entity, or on a role does not count. Import does
-not call the method, so existing imports behave as before.
+than `max_validity` after `now`. A `validUntil` below the root does not count.
+Import does not call the method, so existing imports behave as before.
 
 To apply the saml2int SDP-MD03 rule, call the method right after import, with
 the time that you accept the document at:

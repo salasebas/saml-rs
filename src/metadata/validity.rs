@@ -194,6 +194,13 @@ mod tests {
                 Some(RootValidUntilReason::BeyondMaxValidity),
                 "{xml}"
             );
+
+            let expired =
+                idp_descriptor(&xml)?.require_root_valid_until(at(Y2030), MAX_VALIDITY)?;
+            assert!(
+                is_valid_until_error(&expired.ensure_valid_at(at(Y2030))),
+                "{xml}"
+            );
         }
         Ok(())
     }
