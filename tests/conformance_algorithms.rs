@@ -837,6 +837,41 @@ fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn s
     Ok(())
 }
 
+#[cfg(not(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms")))]
+#[test]
+fn builds_without_triple_des_or_rsa15_do_not_encrypt_with_them(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut triple_des = AlgorithmPolicy::default();
+    triple_des.data_encryption = DataEncryptionAlgorithm::TripleDesCbc;
+    let mut unavailable = vec![triple_des];
+    if cfg!(any(
+        not(feature = "crypto-legacy-algorithms"),
+        feature = "crypto-fips"
+    )) {
+        let mut rsa15 = AlgorithmPolicy::default();
+        rsa15.key_encryption = KeyEncryptionAlgorithm::Rsa15;
+        unavailable.push(rsa15);
+    }
+    for idp_algorithms in unavailable {
+        let peers = peers(
+            rsa(AlgorithmPolicy::default()),
+            rsa(idp_algorithms.clone()),
+            encrypted_assertions(),
+        )?;
+        let refused = signed_redirect_request_then_post_response(&peers, alice())
+            .err()
+            .ok_or_else(|| format!("encrypted with {idp_algorithms:?}"))?;
+        assert!(
+            matches!(
+                refused.downcast_ref::<SamlError>(),
+                Some(SamlError::Crypto { .. })
+            ),
+            "{refused:?}"
+        );
+    }
+    Ok(())
+}
+
 #[cfg(feature = "crypto-rustcrypto")]
 const SP_HMAC_SECRET: &[u8] = b"service-provider-hmac-sha1-secret";
 #[cfg(feature = "crypto-rustcrypto")]
