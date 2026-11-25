@@ -177,7 +177,10 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 | Verify that a requested ACS URL or index used for delivery names the SP's assertion consumer. Collapse XML whitespace in a requested URL before comparing | Mandatory | Profiles §4.1.4.1, `AuthnRequestType`, XML Schema Part 2 §4.3.6 | Always |
 | Expose `ForceAuthn`, `IsPassive`, `RequestedAuthnContext`, the requested `Subject`, and `NameIDPolicy`. Presence never rejects the request, and the caller decides how to authenticate. A `Subject` with no identifier means the presenter | Optional | Core §3.4.1, §3.4.1.1, §3.4.1.4, E45, E75 | Always |
 | Permit schema-allowed foreign attributes on `SubjectConfirmationData` in the requested `Subject` | Mandatory | Core §2.4.1.2, §3.4.1, `SubjectConfirmationDataType` | Always |
-| Allow at most one `RequestedAuthnContext`. Require one or more assertion-namespace references, all class or all declaration. Keep them in request order, most preferred first. An optional unqualified `Comparison` is `exact`, `minimum`, `maximum`, or `better`, and defaults to `exact` | Mandatory | Core §3.3.2.2.1, E45, `RequestedAuthnContextType` | Always |
+| Allow at most one `RequestedAuthnContext` | Mandatory | `AuthnRequestType` | Always |
+| Require one or more assertion-namespace references in `RequestedAuthnContext`, all class or all declaration | Mandatory | `RequestedAuthnContextType` | Always |
+| Keep the references in request order, most preferred first | Mandatory | Core §3.3.2.2.1, E45 | Always |
+| Read an optional unqualified `Comparison` as `exact`, `minimum`, `maximum`, or `better`, and default it to `exact` | Mandatory | Core §3.3.2.2.1, E45, `RequestedAuthnContextType` | Always |
 | Read the `ID` with XML whitespace collapsed, and write that value as `InResponseTo` | Mandatory | `RequestAbstractType`, Core §3.2.2, XML Schema Part 2 §3.3.8, §4.3.6 | `AuthnRequest::id` |
 | Read context references with XML whitespace collapsed, including relative references | Library policy: Core §1.3.2 requires absolute URI references from the producer. | Core §1.3.2, XML Schema Part 2 §4.3.6 | `AuthnRequest::requested_authn_context` |
 | Read `ForceAuthn`, `IsPassive`, and `AllowCreate` as `xs:boolean` and `AssertionConsumerServiceIndex` as `xs:unsignedShort`, with XML whitespace collapsed. Reject another value or a qualified attribute | Mandatory | `AuthnRequestType`, `NameIDPolicyType`, XML Schema Part 2 §3.2.2, §3.3.23, §4.3.6 | Always |
@@ -194,10 +197,26 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 | When verifying a SimpleSign signature, use the raw XML, then `RelayState` when present, then `SigAlg` | Mandatory | CD-04 §2.5, §2.6 | Always |
 | Ignore ASCII whitespace in the message and the detached `Signature` value, and reject any other character outside the base64 alphabet | Library policy: Bindings §3.4.4.1 requires the sender to remove whitespace and §3.5.4 allows only line wrapping, so any other character means the value was altered. | Bindings §3.4.4.1, §3.5.4, RFC 2045 §6.8 | Always |
 
+### Caller duties in the identity provider
+
+The caller applies these rules to the `AuthnRequest` that `receive_sso`
+returns. The [generation rules](web-browser-sso-generation.md#not-implemented)
+list the authentication and error decisions.
+
+- Treat the content of an unauthenticated `AuthnRequest` as advisory.
+  Mandatory, Profiles §4.1.4.1. `Received::authentication` reports
+  `MessageAuthentication::Unauthenticated` when no verified signature covers
+  the request.
+- Read an absent `AllowCreate`, or an absent `NameIDPolicy`, as `false`.
+  Mandatory, Core §3.4.1.1, E14. `NameIdCreationRequest::Unspecified` and a
+  `None` policy report the absence.
+- Ignore `AllowCreate` in a request for the transient format. Recommended,
+  Core §3.4.1.1, E14.
+
 ### Not implemented in the identity provider
 
 - Decoding of a `BaseID` in a requested `Subject`. Optional, Core §3.4.1.
-- Treating the content of an unauthenticated `AuthnRequest` as advisory.
-  Mandatory, Profiles §4.1.4.1. The caller decides from
-  `Received::authentication`, which reports `MessageAuthentication::Unauthenticated`
-  when no verified signature covers the request.
+- Reading `Conditions`, `Scoping`, and `AttributeConsumingServiceIndex` in a
+  received request. Optional, Core §3.4.1, §3.4.1.2. `receive_sso` exposes
+  none of them.
+- Proxying the request to another identity provider. Optional, Core §3.4.1.5.

@@ -15,7 +15,8 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Write `Issuer` as the service provider identifier, with `Format` omitted (the profile also permits `entity`) | Mandatory | Profiles §4.1.4.1 | Always |
 | Write `ID`, `Version` `2.0`, and `IssueInstant` | Mandatory | Core §3.2.1, `RequestAbstractType` | Always |
 | Write every time value in UTC, and never a leap second | Mandatory | Core §1.3.3 | Always |
-| Write `Destination` as the URL the user agent is sent to. A signed request needs it, and the crate writes it on every request | Mandatory | Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4 | Always |
+| Write `Destination` on a signed request as the URL the user agent is sent to | Mandatory | Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4 | Always |
+| Write `Destination` on an unsigned request too | Library policy: without it, the identity provider cannot discard a request that reaches an endpoint other than the one the service provider chose. | Core §3.2.1 | Always |
 | Limit `RelayState` to 80 bytes | Mandatory | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | `RelayState::try_new` |
 | Refuse a form `RelayState` with a CR or LF outside a CRLF pair | Library policy: HTML form submission sends the character as CRLF, so the receiver gets another value and a SimpleSign signature over it fails. | Bindings §3.5.4, CD-04 §2.3 | Always |
 | Refuse a form `RelayState` with a character outside the XML `Char` production, such as U+0000 | Mandatory | Bindings §3.5.4, XML 1.0 §2.2 | Always |
@@ -37,12 +38,23 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Reject a requested authentication context reference that is not an absolute URI reference | Mandatory | Core §1.3.2 | Always |
 | For a non-transient format, write `AllowCreate="true"`. `NameIdCreationPolicy::DoNotAllowCreate` writes `false` instead | Recommended | Core §3.4.1.1, E14 | `SpValidationPolicy::name_id_creation` |
 | Omit `AllowCreate` when the `NameIDPolicy` format is transient | Mandatory | Core §3.4.1.1, E14 | Always |
-| Request the first configured NameID format as an absolute URI reference. With none configured, the typed service provider advertises and requests `emailAddress` | Mandatory | Core §1.3.2 | Always |
+| Write the requested NameID format as an absolute URI reference | Mandatory | Core §1.3.2, §3.4.1.1 | Always |
+| Request the first configured NameID format. With none configured, request the `emailAddress` format that the [generated metadata](metadata-and-replay.md#generating-metadata) advertises | Library policy: the request then asks for a format the service provider metadata advertises. | Core §3.4.1.1 | `name_id_format`, `name_id_formats` |
 | Write the requested SP or affiliation as `NameIDPolicy@SPNameQualifier`. Omit it by default | Optional | Core §3.4.1.1, `NameIDPolicyType` | `StartSso::sp_name_qualifier` |
 | Require the qualifier to be an absolute URI reference of at most 1024 characters with collapsed whitespace | Library policy: the API uses the syntax of a SAML entity identifier for the requested namespace. | Core §3.4.1.1, §8.3.6 | Always |
 | Return an error when a qualifier is set and the requested format is `entity` | Library policy: no issued entity identifier can satisfy both request conditions. | Core §8.3.6, E15 | Always |
 | Write `AssertionConsumerServiceURL` and `ProtocolBinding` from the default endpoint of the response binding, unless an index is set | Library policy: the request then names its endpoint explicitly. | Core §3.4.1 | `StartSso::acs_index` |
 | Return `Cache-Control: no-cache, no-store` and `Pragma: no-cache` for the redirect, the POST form, and the SimpleSign form | Recommended | Bindings §3.4.5.1, §3.5.5.1, CD-04 §2.7.1 | Always |
+
+### Not implemented in the service provider request
+
+`start_sso` writes none of these optional parts of an `AuthnRequest`.
+
+- A requested `Subject` that names the principal. Optional, Core §3.4.1, Profiles §4.1.4.1.
+- `Conditions` for the issued assertion. Optional, Core §3.4.1. The identity provider may change or add to them.
+- `Scoping`, with `IDPList`, `RequesterID`, and `ProxyCount`. Optional, Core §3.4.1.2. An application that proxies the request outside the crate applies Core §3.4.1.5 itself.
+- `AttributeConsumingServiceIndex`. Optional, Core §3.4.1.
+- An `AuthnRequest` without `NameIDPolicy`. Optional, Core §3.4.1. `start_sso` always writes one.
 
 ## Identity provider Response
 
