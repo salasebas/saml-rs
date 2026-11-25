@@ -52,7 +52,7 @@ The peer descriptors read the role the peer acts in. `Metadata::parse` has no ro
 | Read the published `entityID` with XML Schema whitespace collapse during typed peer import. | Mandatory | Metadata §2.3.2, `entityIDType`, [XML Schema 1.0 Part 2 §4.3.6](https://www.w3.org/TR/xmlschema-2/#rf-whiteSpace) | Always |
 | Read keys, signing flags, `NameIDFormat`, endpoints, and role-level `validUntil` only from role descriptors in the metadata namespace that list `urn:oasis:names:tc:SAML:2.0:protocol`. Refuse an entity with none | Library policy: a role published for another protocol must not supply keys, flags, or endpoints for SAML 2.0 messages. | Metadata §2.4.1 | Always |
 | Read several such roles of one kind together | Library policy: Metadata §2.3.2 leaves the choice among role descriptors that share a protocol undefined. | Metadata §2.3.2 | Always |
-| Read `AuthnRequestsSigned` as true when any SAML 2.0 `SPSSODescriptor` sets it, so the identity provider refuses an unsigned request from that service provider | Mandatory | Metadata §2.4.4, E7 | Always |
+| Read `AuthnRequestsSigned` as true when any SAML 2.0 `SPSSODescriptor` sets it. The identity provider then [refuses an unsigned request](web-browser-sso-acceptance.md#identity-provider) | Library policy: E7 makes the identity provider refuse an unsigned request from a service provider whose metadata sets the flag, and the request does not name a role. | Metadata §2.3.2, §2.4.4, E7 | Always |
 | Read `WantAssertionsSigned` as true when any selected `SPSSODescriptor` sets it | Library policy: an IdP serving these roles together honors each role's request for signed assertions. | Metadata §2.3.2, §2.4.4 | Always |
 | Read `WantAuthnRequestsSigned` from the first SAML 2.0 `IDPSSODescriptor` that specifies it | Library policy: reason not recorded. | Metadata §2.4.3 | Always |
 | Read the keys of a peer from the `KeyDescriptor` elements of the role it acts in. Verify its signatures and encrypt to it with that role's certificates | Mandatory | Metadata §2.4.1 | Always |
@@ -157,7 +157,7 @@ application's.
 | Ignore `EntityAttributes` in a role descriptor's `Extensions` or nested in another extension element | Library policy: MDAttr §2.3 leaves its meaning undefined outside the `Extensions` of an entity or group. | MDAttr §2.3 | Always |
 | Write at most one `EntityAttributes` in one `Extensions` | Mandatory | MDAttr §2.3 | Always |
 | Publish entity attributes as `saml:Attribute` children of one `mdattr:EntityAttributes` in the entity's `Extensions`. Values have no `xsi:type`, and a set `FriendlyName` is written | Optional | MDAttr §2.3 | `SpMetadataInput::entity_attributes`, `IdpMetadataInput::entity_attributes`, the builders' `entity_attribute` and `entity_attributes` |
-| Write that `Extensions` as the first child of `EntityDescriptor` | Mandatory | `EntityDescriptorType` | Always |
+| Write that `Extensions` after any `ds:Signature` and before the role descriptors | Mandatory | Metadata §2.3.2, `EntityDescriptorType` | Always |
 | Write them in the entity's `Extensions`, not in the SP role's `Extensions` that saml2int SDP-SP39 uses | Optional | MDAttr §2.3, Subject Identifier §3.5.1 | Always |
 | Reject a generated `NameFormat` that is not an absolute URI reference, a `basic` name that is not an XML name, a `uri` name that is not an absolute URI reference, a `Name`, `FriendlyName`, or nonempty value with no non-whitespace character, or text XML cannot carry | Mandatory | Core §1.3.1, §1.3.2, §8.2.2, §8.2.3 | Always |
 | Match a well-known entity attribute by its `Name` with the URI `NameFormat`, no `NameFormat`, or `unspecified`, and ignore `FriendlyName` | Library policy: Core §2.7.3.1 gives an absent `NameFormat` the unspecified meaning, and the Shibboleth `EntityAttributes` predicate matches such an attribute. | RFC 8409 §§3.1, 4.1, Identity Assurance §3.3, Subject Identifier §3.5.1 | Always |
@@ -169,7 +169,11 @@ application's.
 | Publish `subject-id:req` with exactly one value: `subject-id`, `pairwise-id`, `none`, or `any`, with the URI `NameFormat` and no `xsi:type` | Mandatory | Subject Identifier §3.5.1, §4.2 | `Attribute::from(SubjectIdRequirement)` |
 | Reject a read `subject-id:req` without exactly one value, with a value outside the four, or repeated with a different requirement. Import does not reject it | Library policy: the profile rules these out, and one requirement cannot be chosen from them. | Subject Identifier §3.5.1 | `EntityAttributes::subject_id_requirement` |
 
-- Read or write signed `saml:Assertion` children of `EntityAttributes`. Import ignores them. A publisher that includes one must sign it independently, MDAttr §2.4, and a relying party that reads one must process it by the Core rules, MDAttr §2.3. Mandatory for each actor that uses the form.
+Not implemented:
+
+- Read or write `saml:Assertion` children of `EntityAttributes`. Import ignores them. A relying party that reads one must process it by the Core rules, MDAttr §2.3.
+- A publisher that puts an assertion in an entity's `EntityAttributes` must sign it independently, MDAttr §2.4. Mandatory for the publisher.
+- A group's `EntityAttributes` must hold no assertion, MDAttr §2.3. Mandatory for the publisher.
 
 ## IdP scope declarations
 
