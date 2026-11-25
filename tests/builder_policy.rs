@@ -36,6 +36,11 @@ fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::
         let mut sha1_oaep = AlgorithmPolicy::default();
         sha1_oaep.key_encryption = KeyEncryptionAlgorithm::RsaOaepMgf1p;
         algorithms.push(sha1_oaep);
+        let mut sha1_oaep_uri = AlgorithmPolicy::default();
+        sha1_oaep_uri.key_encryption = KeyEncryptionAlgorithm::Custom(
+            "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p".into(),
+        );
+        algorithms.push(sha1_oaep_uri);
     }
     for algorithms in algorithms {
         let sp = SpConfig::builder(

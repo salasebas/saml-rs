@@ -151,8 +151,8 @@ impl DataEncryptionAlgorithm {
 pub enum KeyEncryptionAlgorithm {
     /// RSA-OAEP-MGF1P, with SHA-1 as the OAEP digest and in MGF1.
     ///
-    /// With `crypto-fips`, config builders reject it with
-    /// [`crate::SamlError::Unsupported`].
+    /// With `crypto-fips`, config builders reject it, and a
+    /// [`Self::Custom`] with its URI, with [`crate::SamlError::Unsupported`].
     RsaOaepMgf1p,
     /// XML Encryption 1.1 RSA-OAEP with explicit digest and mask generation.
     ///

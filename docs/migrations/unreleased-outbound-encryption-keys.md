@@ -18,7 +18,8 @@ A peer without an encryption certificate still returns
 
 In a build without a crypto provider, `StartSlo::identifier_encryption`
 with `EncryptIdentifiers` now returns `SamlError::Unsupported` before it
-looks at the peer metadata, as name identifier management already did.
+looks up the peer encryption certificate, as name identifier management
+already did.
 Before, a peer without an encryption certificate gave
 `SamlError::MissingMetadata` there. If you match that error in such a
 build, also match `SamlError::Unsupported`.
@@ -45,8 +46,9 @@ several published keys can then pick its matching private key. OpenSAML
 5.2.0, and so the Shibboleth identity provider, writes the same element.
 
 Each encrypted element grows by the base64 certificate, about 1.3 KB for a
-typical 2048-bit RSA certificate. An HTTP-Redirect message with encrypted identifiers
-grows by about that much per element. You do not need to change code.
+typical 2048-bit RSA certificate. HTTP-Redirect compresses the whole message
+before it encodes it, so the URL grows by less, and a second copy of the same
+certificate adds little. You do not need to change code.
 
 ## KeyInfo outside the XML Signature namespace holds no key
 
@@ -63,7 +65,10 @@ is schema-invalid, and other SAML implementations read no key from it.
 With such metadata, `x509_certificates` now returns no certificate for that
 `KeyDescriptor`. Signature verification then fails, and encryption returns
 `SamlError::MissingMetadata`. To fix it, ask the peer to publish valid
-metadata, or bind the XML Signature namespace in your copy:
+metadata. Signed metadata must come back re-signed by its publisher, because
+an edit breaks its signature. If you import the metadata with
+`MetadataTrustPolicy::Unverified`, you can instead bind the XML Signature
+namespace in your copy:
 
 ```xml
 <!-- Before -->
@@ -95,7 +100,8 @@ message was built. Other providers keep `RsaOaepMgf1p` as the default.
 
 `SpConfigBuilder::build` and `IdpConfigBuilder::build` with `crypto-fips` now
 return `SamlError::Unsupported` when `AlgorithmPolicy::key_encryption` is
-`KeyEncryptionAlgorithm::RsaOaepMgf1p`. Before, the builders accepted it and
+`KeyEncryptionAlgorithm::RsaOaepMgf1p`, or a `KeyEncryptionAlgorithm::Custom`
+with its URI. Before, the builders accepted it and
 encryption failed later.
 
 The change affects `crypto-fips` deployments:

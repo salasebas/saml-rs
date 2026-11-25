@@ -10,10 +10,10 @@ use crate::constants::namespace;
 use crate::crypto::keys::load_certificate;
 use crate::entity::EntitySetting;
 use crate::error::{crypto_err, SamlError};
-use crate::util::normalize_cert_string;
 use crate::xml::dom;
 use crate::xml::fragment::standalone_element;
 use crate::xml::name::validate_namespace_prefix;
+use bergshamra::keys::build_x509_key_info_from_der;
 use bergshamra::xml::{Document as XmlDocument, NodeId};
 use bergshamra::{encrypt, EncContext, Key, KeysManager};
 
@@ -82,9 +82,14 @@ impl<'a> EncryptionRecipient<'a> {
         let mut first_error = None;
         for certificate in &self.certificates {
             let attempt = load_certificate(certificate).and_then(|key| {
+                let [certificate] = &key.x509_chain[..] else {
+                    return Err(SamlError::crypto(
+                        "encryption certificate did not load as one X.509 certificate",
+                    ));
+                };
                 let key = EncryptionKey {
+                    key_info: build_x509_key_info_from_der(&[certificate]),
                     key,
-                    certificate: normalize_cert_string(certificate),
                     data_algorithm: self.data_algorithm,
                     key_transport: self.key_transport,
                 };
@@ -104,7 +109,7 @@ impl<'a> EncryptionRecipient<'a> {
 
 pub(super) struct EncryptionKey<'a> {
     key: Key,
-    certificate: String,
+    key_info: String,
     data_algorithm: &'a str,
     key_transport: KeyTransport<'a>,
 }
@@ -123,9 +128,9 @@ fn encrypted_data_xml(
         None => String::new(),
     };
     let key_alg = xml_escape(key_alg.uri);
-    let certificate = xml_escape(&recipient.certificate);
+    let key_info = &recipient.key_info;
     let template = format!(
-        "<xenc:EncryptedData xmlns:xenc=\"{enc}\" Type=\"{enc}Element\"><xenc:EncryptionMethod Algorithm=\"{data_alg}\"/><ds:KeyInfo xmlns:ds=\"{dsig}\"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm=\"{key_alg}\">{parameters}</xenc:EncryptionMethod><ds:KeyInfo xmlns:ds=\"{dsig}\"><ds:X509Data><ds:X509Certificate>{certificate}</ds:X509Certificate></ds:X509Data></ds:KeyInfo><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedData>",
+        "<xenc:EncryptedData xmlns:xenc=\"{enc}\" Type=\"{enc}Element\"><xenc:EncryptionMethod Algorithm=\"{data_alg}\"/><ds:KeyInfo xmlns:ds=\"{dsig}\"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm=\"{key_alg}\">{parameters}</xenc:EncryptionMethod>{key_info}<xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedData>",
         enc = ENC,
         dsig = namespace::DSIG,
     );

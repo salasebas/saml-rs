@@ -449,10 +449,11 @@ impl StartSlo {
     /// `<NameID>` before the request is signed, with the configured data and
     /// key encryption algorithms, for the first encryption key in the peer
     /// metadata those algorithms can use. A key that does not load or that
-    /// the crypto provider refuses, such as an EC key, is skipped. A peer
-    /// without an encryption certificate returns
+    /// the crypto provider refuses, such as an EC key, is skipped. With a
+    /// crypto provider, a peer without an encryption certificate returns
     /// [`crate::SamlError::MissingMetadata`], and a peer without a usable one
     /// returns [`crate::SamlError::Crypto`] with the first key's error.
+    /// Without one, encryption returns [`crate::SamlError::Unsupported`].
     pub fn identifier_encryption(mut self, policy: IdentifierEncryptionPolicy) -> Self {
         self.identifier_encryption = policy;
         self
@@ -597,9 +598,11 @@ impl StartNameIdManagement {
     /// encryption key in the peer's metadata those algorithms can use. A key
     /// that does not load or that the crypto provider refuses, such as an EC
     /// key, is skipped. Over HTTP-Redirect that happens before the request is
-    /// signed. A peer without an encryption certificate returns
-    /// [`crate::SamlError::MissingMetadata`], and a peer without a usable one
-    /// returns [`crate::SamlError::Crypto`] with the first key's error.
+    /// signed. With a crypto provider, a peer without an encryption
+    /// certificate returns [`crate::SamlError::MissingMetadata`], and a peer
+    /// without a usable one returns [`crate::SamlError::Crypto`] with the
+    /// first key's error. Without one, encryption returns
+    /// [`crate::SamlError::Unsupported`].
     pub fn identifier_encryption(mut self, policy: IdentifierEncryptionPolicy) -> Self {
         self.identifier_encryption = policy;
         self
