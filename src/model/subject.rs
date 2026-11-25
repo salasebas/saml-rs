@@ -229,19 +229,25 @@ impl NameId {
         self
     }
 
-    /// Set the `NameQualifier`. An empty value writes an empty attribute.
+    /// Set the `NameQualifier`. A service provider request writes the value as
+    /// set. An identity provider refuses one made only of XML whitespace, as
+    /// [`NameId`] describes.
     pub fn with_name_qualifier(mut self, name_qualifier: impl Into<String>) -> Self {
         self.name_qualifier = Some(name_qualifier.into());
         self
     }
 
-    /// Set the `SPNameQualifier`. An empty value writes an empty attribute.
+    /// Set the `SPNameQualifier`. A service provider request writes the value as
+    /// set. An identity provider refuses one made only of XML whitespace, as
+    /// [`NameId`] describes.
     pub fn with_sp_name_qualifier(mut self, sp_name_qualifier: impl Into<String>) -> Self {
         self.sp_name_qualifier = Some(sp_name_qualifier.into());
         self
     }
 
-    /// Set the `SPProvidedID`. An empty value writes an empty attribute.
+    /// Set the `SPProvidedID`. A service provider request writes the value as
+    /// set. An identity provider refuses one made only of XML whitespace, as
+    /// [`NameId`] describes.
     pub fn with_sp_provided_id(mut self, sp_provided_id: impl Into<String>) -> Self {
         self.sp_provided_id = Some(sp_provided_id.into());
         self

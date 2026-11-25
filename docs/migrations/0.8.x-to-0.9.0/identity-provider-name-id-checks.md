@@ -47,9 +47,11 @@ Before, these methods wrote the empty or whitespace-only string. A peer that
 follows Core §1.3.1 could not use it to identify the principal.
 
 If a user record can hold an empty identifier, check it before you call these
-methods, and issue a generated identifier instead, such as
-`NameId::generate_persistent`. Do not set a qualifier to an empty string. Omit
-it.
+methods. For a new SSO relationship, generate an identifier, such as
+`NameId::generate_persistent`, and store it for later responses. For logout
+or name identifier management, pass the identifier already established with
+the service provider: a new value would not name the principal's session or
+alias. Omit a qualifier instead of setting it to an empty string.
 
 ## The service provider sends the NameID it received
 
