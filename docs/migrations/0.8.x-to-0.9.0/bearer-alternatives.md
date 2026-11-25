@@ -10,8 +10,9 @@ below, and tests that expect these responses to be rejected.
 
 `finish_sso`, `accept_unsolicited_sso`, and their `_with_outstanding_logout`
 and `_with_resolver` variants read one assertion: the first bearer assertion
-with an `AuthnStatement`, or else the first bearer assertion. That assertion
-must pass every check, as before.
+with an `AuthnStatement`. That assertion must pass every check, as before. A
+response in which no bearer assertion has an `AuthnStatement` is rejected; see
+[Send an `AuthnStatement` in every successful SSO response](sso-authn-statement.md).
 
 Another assertion in the same response no longer rejects it when its own
 bearer confirmation, `AudienceRestriction`, `Conditions` children or window,
