@@ -158,7 +158,7 @@ fn node_has_bearer(assertion: &Node) -> bool {
     subject_confirmations(assertion).any(is_bearer_confirmation)
 }
 
-fn is_bearer_confirmation(confirmation: &Node) -> bool {
+pub(crate) fn is_bearer_confirmation(confirmation: &Node) -> bool {
     confirmation
         .unqualified_attr("Method")
         .is_some_and(|method| collapse_whitespace(method) == BEARER_SUBJECT_CONFIRMATION_METHOD)

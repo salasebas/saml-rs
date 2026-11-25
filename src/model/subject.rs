@@ -1,9 +1,11 @@
+use crate::assertion_acceptance::is_bearer_confirmation;
 use crate::config::{validate_entity_id_syntax, IdentifierEncryptionPolicy, NameIdFormat};
 use crate::constants::name_id_format;
 use crate::entity::generate_id;
 use crate::error::SamlError;
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
-use crate::xml::OutboundNameIdQualifiers;
+use crate::xml::dom;
+use crate::xml::{OutboundNameIdQualifiers, XmlLimits};
 
 const MAX_OPAQUE_NAME_ID_CHARS: usize = 256;
 const ENCRYPTED_NAME_ID_POLICY_FORMAT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:encrypted";
@@ -436,6 +438,11 @@ impl SubjectConfirmation {
     pub fn raw_xml(&self) -> &str {
         &self.raw_xml
     }
+
+    fn is_bearer(&self, limits: XmlLimits) -> Result<bool, SamlError> {
+        let confirmation = dom::parse_fragment_with_limits(&self.raw_xml, limits)?;
+        Ok(is_bearer_confirmation(&confirmation.root))
+    }
 }
 
 /// Subject requested by an `<AuthnRequest>` (Core §3.4.1).
@@ -448,7 +455,11 @@ impl SubjectConfirmation {
 /// decides that it names the same principal. A requested `<BaseID>`, or an
 /// `<EncryptedID>` that was not decrypted, has no success response there. A
 /// principal that is not the requested subject is answered with an error
-/// status. `<SubjectConfirmation>` elements are not compared.
+/// status. When the subject has `<SubjectConfirmation>` elements, at least
+/// one must use the bearer `Method`, compared after `xs:anyURI` whitespace
+/// collapse, because the assertion carries only a bearer confirmation. A
+/// subject that accepts only another method, such as holder-of-key, has no
+/// success response there; answer it with [`crate::Status::responder`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RequestedSubject {
     identifier: RequestedSubjectIdentifier,
@@ -508,6 +519,33 @@ impl RequestedSubject {
     }
 
     pub(crate) fn ensure_strongly_matched_by(
+        &self,
+        value: &str,
+        format: Option<&str>,
+        qualifiers: OutboundNameIdQualifiers<'_>,
+        policy: Option<&NameIdPolicy>,
+        limits: XmlLimits,
+    ) -> Result<(), SamlError> {
+        self.ensure_identifier_matched_by(value, format, qualifiers, policy)?;
+        self.ensure_bearer_confirmation_requested(limits)
+    }
+
+    fn ensure_bearer_confirmation_requested(&self, limits: XmlLimits) -> Result<(), SamlError> {
+        if self.confirmations.is_empty() {
+            return Ok(());
+        }
+        for confirmation in &self.confirmations {
+            if confirmation.is_bearer(limits)? {
+                return Ok(());
+            }
+        }
+        Err(SamlError::Invalid(
+            "the requested Subject has no bearer SubjectConfirmation, which is the only method this identity provider writes; answer with an error status"
+                .into(),
+        ))
+    }
+
+    fn ensure_identifier_matched_by(
         &self,
         value: &str,
         format: Option<&str>,

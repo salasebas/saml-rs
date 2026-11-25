@@ -107,8 +107,8 @@ request that `receive_sso` refuses.
 | Issue a `Subject` that strongly matches the requested `<NameID>` in value, `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`. Compare formats after `xs:anyURI` whitespace collapse, and read an omitted format as `unspecified` | Mandatory | Core §3.4.1.4, §3.3.4, E75 | Always |
 | Allow the `NameIDPolicy` `Format` to differ from the requested `<NameID>` format. The caller must establish that both identifiers name the same principal | Optional | Core §3.4.1.4, E75 | Always |
 | Reject a success response to a requested `<BaseID>`, which an issued `<NameID>` cannot strongly match | Mandatory | Core §3.4.1.4, §3.3.4 | Always |
-| Reject a success response to a requested `<EncryptedID>` that was not decrypted | Library policy: the identity provider cannot show the match. | Core §3.4.1.4, §3.3.4 | Always |
-| Skip the comparison of requested `<SubjectConfirmation>` elements | Library policy: Profiles §4.1.4.1 forbids the service provider from sending them. | Core §3.3.4 | Always |
+| Reject a success response to a requested `<EncryptedID>` that was not decrypted | Mandatory | Core §3.4.1.4, §3.3.4, E75 | Always |
+| Reject a success response when the requested `Subject` has `<SubjectConfirmation>` elements and none uses the bearer `Method`, the only one the assertion carries. Compare `Method` after `xs:anyURI` whitespace collapse | Mandatory | Core §3.4.1.4, §3.3.4, E75 | Always |
 | Return the exact `RelayState` received with the request, including a value over 80 bytes. Reject `RespondSso::relay_state` on a request that carried one | Mandatory | Bindings §3.1.1, §3.4.3, §3.5.3, CD-04 §2.3 | Always |
 | Send a `RelayState` the identity provider chooses, when the request carried none or the response is unsolicited | Optional | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | `RespondSso::relay_state` |
 | Limit a `RelayState` the identity provider chooses to 80 bytes | Mandatory | Bindings §3.5.3, CD-04 §2.3 | `RespondSso::relay_state` |

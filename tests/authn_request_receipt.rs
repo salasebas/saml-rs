@@ -34,6 +34,7 @@ const PERSISTENT_FORMAT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:persi
 const UNSPECIFIED_FORMAT: &str = "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified";
 const ENCRYPTED_FORMAT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:encrypted";
 const BEARER: &str = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
+const HOLDER_OF_KEY: &str = "urn:oasis:names:tc:SAML:2.0:cm:holder-of-key";
 const SMARTCARD: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:Smartcard";
 const PASSWORD_PROTECTED_TRANSPORT: &str =
     "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport";
@@ -1214,6 +1215,22 @@ fn respond_sso_issues_only_the_requested_subject() -> Result<(), Box<dyn std::er
         let error = respond_failure(&receipt, Status::responder());
         assert!(error.is_ok(), "{subject}: {error:?}");
     }
+
+    let holder_of_key = format!("<saml:SubjectConfirmation Method=\"{HOLDER_OF_KEY}\"/>");
+    let alice = format!("<saml:NameID Format=\"{PERSISTENT_FORMAT}\">alice</saml:NameID>");
+    for subject in [holder_of_key.clone(), format!("{alice}{holder_of_key}")] {
+        let receipt = receive_subject(&subject, "")?;
+        let refused = respond(&receipt, persistent("alice"), RespondSso::post());
+        assert!(is_refused(&refused), "{subject}: {refused:?}");
+        let error = respond_failure(&receipt, Status::responder());
+        assert!(error.is_ok(), "{subject}: {error:?}");
+    }
+    let either = receive_subject(
+        &format!("{alice}{holder_of_key}<saml:SubjectConfirmation Method=\"&#xA; {BEARER} \"/>"),
+        "",
+    )?;
+    let bearer = respond(&either, persistent("alice"), RespondSso::post());
+    assert!(bearer.is_ok(), "{bearer:?}");
     Ok(())
 }
 

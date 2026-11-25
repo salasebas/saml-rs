@@ -290,6 +290,7 @@ impl Engine {
                 name_id_format,
                 qualifiers,
                 rendering.requested_name_id_policy,
+                self.setting.xml_limits,
             )?;
         }
         Ok(())
