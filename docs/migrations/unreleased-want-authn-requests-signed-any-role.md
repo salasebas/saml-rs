@@ -15,5 +15,6 @@ A service provider that does not sign its `AuthnRequest` now gets
 `SamlError::AuthnRequestSigningRequired` for such an identity provider. To
 upgrade, give the service provider a signing credential and set
 `SpValidationPolicy::authn_request_signing` to
-`AuthnRequestSigningPolicy::Sign`. Unsigned requests keep working only when
-no SAML 2.0 role of the identity provider sets `WantAuthnRequestsSigned`.
+`AuthnRequestSigningPolicy::Sign`. Unsigned requests keep working when no
+SAML 2.0 role of the identity provider sets `WantAuthnRequestsSigned` to
+`true` or `1`.
