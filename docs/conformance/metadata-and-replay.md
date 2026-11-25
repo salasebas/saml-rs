@@ -41,7 +41,7 @@ their enclosing groups, which can publish validity bounds and entity attributes.
 
 ## Reading peer metadata
 
-The peer descriptors read the role the peer acts in. `Metadata::parse` has no role and reads every SSO role descriptor.
+The peer descriptors read the role the peer acts in. `Metadata::parse` has no role and reads every SSO role descriptor, whatever its namespace or `protocolSupportEnumeration`. The rows that select role descriptors apply to `SpMetadata` and `IdpMetadata`.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
