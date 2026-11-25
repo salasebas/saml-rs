@@ -46,9 +46,9 @@ several published keys can then pick its matching private key. OpenSAML
 5.2.0, and so the Shibboleth identity provider, writes the same element.
 
 Each encrypted element grows by the base64 certificate, about 1.3 KB for a
-typical 2048-bit RSA certificate. HTTP-Redirect compresses the whole message
-before it encodes it, so the URL grows by less, and a second copy of the same
-certificate adds little. You do not need to change code.
+typical 2048-bit RSA certificate. An HTTP-Redirect URL grows by about as
+much, depending on compression and URL encoding. A second copy of the same
+certificate in one message compresses well. You do not need to change code.
 
 ## KeyInfo outside the XML Signature namespace holds no key
 
