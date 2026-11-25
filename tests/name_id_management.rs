@@ -323,13 +323,21 @@ fn a_service_provider_error_status_is_returned_to_the_caller() -> TestResult {
         r#"<samlp:StatusCode Value="{REQUESTER}"><samlp:StatusCode Value="{UNKNOWN_PRINCIPAL}"/></samlp:StatusCode>"#
     );
 
-    let result = started.finish(&sp_response(&request_id, SP_ENTITY_ID, &status)?);
+    let envelope = sp_response(&request_id, SP_ENTITY_ID, &status)?.replacen(
+        "<soap:Envelope",
+        r#"<soap:Envelope xmlns:xml="&#x68;ttp://www.w3.org/XML/1998/namespace""#,
+        1,
+    );
+    let result = started.finish(&envelope);
 
-    assert!(matches!(
-        result,
-        Err(SamlError::StatusNotSuccess { status, .. })
-            if status.top_level().as_uri() == REQUESTER && status.subordinate().map(saml_rs::SubordinateStatusCode::as_uri) == Some(UNKNOWN_PRINCIPAL)
-    ));
+    assert!(
+        matches!(
+            &result,
+            Err(SamlError::StatusNotSuccess { status, .. })
+                if status.top_level().as_uri() == REQUESTER && status.subordinate().map(saml_rs::SubordinateStatusCode::as_uri) == Some(UNKNOWN_PRINCIPAL)
+        ),
+        "{result:?}"
+    );
     Ok(())
 }
 

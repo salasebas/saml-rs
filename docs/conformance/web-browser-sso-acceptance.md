@@ -20,11 +20,11 @@ for their binding. The SP compares a received `Issuer` as described in
 [entity identifiers](identifiers.md#entity-identifiers).
 
 An otherwise valid browser `Response` can fail when a declaration spells the
-protocol or assertion namespace with an XML character reference. The response
-checks use raw namespace bindings throughout this path. This conformance gap
-has no caller option. Namespaces in XML 1.0 §2.3 requires comparing the
-normalized values. SimpleSAMLphp 6.0.0 passes normalized DOM names to its
-HTTP-POST message reader. [Namespaces in XML 1.0 §2.3](https://www.w3.org/TR/REC-xml-names/#NSNameComparison) ·
+protocol or assertion namespace with an XML character reference. The protocol
+profile and assertion condition checks still use raw namespace bindings.
+This conformance gap has no caller option. Namespaces in XML 1.0 §2.3 requires
+comparing the normalized values. SimpleSAMLphp 6.0.0 passes normalized DOM
+names to its HTTP-POST message reader. [Namespaces in XML 1.0 §2.3](https://www.w3.org/TR/REC-xml-names/#NSNameComparison) ·
 [SimpleSAMLphp 6.0.0](https://github.com/simplesamlphp/saml2/blob/v6.0.0/src/Binding/HTTPPost.php#L89-L105) ·
 [Issue #629](https://github.com/salasebas/saml-rs/issues/629)
 
