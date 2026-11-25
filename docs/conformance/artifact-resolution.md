@@ -20,7 +20,8 @@ Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browse
 | Encode the 44 artifact bytes as padded base64 | Mandatory | Bindings §3.6.4 | Always |
 | Accept an unpadded artifact and normalize it to padded base64 for lookup | Library policy: reason not recorded. | Bindings §3.6.4 | Always |
 | Reject whitespace in the value passed to `Artifact::try_new`. The SOAP reader first trims whitespace around the `Artifact` text | Library policy: strict decoding does not silently skip characters outside the alphabet (RFC 4648 §3.3), while RFC 2045 permits whitespace. | Bindings §3.6.4 | Always |
-| Associate the stored message with the service provider it is for | Mandatory | Core §3.5.3, Profiles §4.1.4.4 | Always |
+| Associate a message intended for a specific service provider with that service provider | Mandatory | Core §3.5.3, Profiles §4.1.4.4 | Always |
+| Associate every stored message with the service provider passed to `issue_artifact`, including one that any party may consume | Library policy: the issuer cannot tell from the element whether any party may consume it, and one presenter per artifact never releases a recipient-specific message to another. | Core §3.5.3 | Always |
 | Store only one element in the SAML protocol namespace | Library policy: `ArtifactResolution::finish` rejects any other payload, so another element could never be resolved. | Bindings §3.6 | Always |
 | Reject processing instructions inside the element before issuing an artifact | Library policy: the stored element must be deliverable in a SOAP response when the artifact resolves. | SOAP 1.1 §3 | Always |
 | Budget the complete SOAP response before storing the message | Library policy: issue only artifacts whose responses fit the crate's XML limits. | Core §3.5.3, Bindings §3.2.2.1, E19 | Default `XmlLimits` |
@@ -53,6 +54,7 @@ with a higher receive limit could accept. [OpenSAML 5.2.3 source release](https:
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Send `ArtifactResolve` directly to the issuer using a synchronous binding and the endpoint identified by `EndpointIndex` | Mandatory | Profiles §5.3.1, §5.5, Bindings §3.6.4.2, E31 | Always |
+| Resolve only an artifact whose `SourceID` is the SHA-1 of the selected identity provider's entity ID | Library policy: SAML V2.0 metadata publishes no other `SourceID`, so another value names an issuer that the selected descriptor cannot be shown to be. | Bindings §3.6.4, §3.6.4.2 | Always |
 | Include the requester's entity ID in `Issuer` and omit `Format` or set it to `entity` | Mandatory | Profiles §5.4.1 | Always |
 | Include `ID`, `Version` `2.0`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §3.2.1, §1.3.3 | Always |
 | Do not generate a leap-second instant | Mandatory | Core §1.3.3 | Always |
@@ -121,7 +123,7 @@ profile. Web SSO applies its own checks to the dereferenced response.
 | Require the unqualified response `InResponseTo`, after XML whitespace collapse, to equal the pending request ID | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2, `StatusResponseType`, XML Schema Part 2 §4.3.6 | Always |
 | Verify a present `ArtifactResponse` signature over the SOAP body message using the expected IdP's signing keys before reporting its status or returning its message | Mandatory | Core §3.2.2, §5.4.1–§5.4.2 | Always |
 | Reject an `ArtifactResponse` with more than one message element | Mandatory | `ArtifactResponseType` | Always |
-| Return a message only from a Success status that carries one | Library policy: reason not recorded. | Profiles §5.3.2, Core §3.5.3 | Always |
+| Return a message only from a Success status that carries one | Library policy: Core §3.5.3 pairs a returned message with `Success`, so a message under another status has no defined meaning. | Profiles §5.3.2, Core §3.5.3 | Always |
 | Reject a second direct `Issuer` | Mandatory | `StatusResponseType` | Always |
 | Require an `Issuer` equal to the identity provider that omits `Format` or sets it to `entity` | Library policy: the requester attributes the responder by this `Issuer` together with `SoapChannel`, so without it `finish` would return a message not attributed to the artifact issuer. | Profiles §5.4.2 | Always |
 | Require the message to be one element in the SAML protocol namespace | Library policy: `finish` returns the dereferenced protocol message, and another element would be presented as that message. | `ArtifactResponseType`, Profiles §5.3.2 | Always |
