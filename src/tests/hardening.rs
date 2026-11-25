@@ -1,6 +1,6 @@
 #![cfg(crypto)]
 
-use crate::tests::template::fill_template;
+use crate::tests::template::{fill_template, AUTHN_STATEMENT};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
@@ -94,7 +94,7 @@ fn response_for_audience_restrictions(
             "grouped audience tests must replace the template audience restriction"
         );
         let xml = fill_template(
-            &prepared,
+            &prepared.replacen("{AuthnStatement}", AUTHN_STATEMENT, 1),
             &[
                 ("ID", id.clone()),
                 ("AssertionID", "_assertion_audience_restrictions".into()),
@@ -117,7 +117,6 @@ fn response_for_audience_restrictions(
                 ),
                 ("NameID", "a@example.com".into()),
                 ("InResponseTo", "_req1".into()),
-                ("AuthnStatement", String::new()),
             ],
         );
         Ok((id, xml))
@@ -160,7 +159,7 @@ fn response_for_subject_confirmation(
             None => prepared.replacen(" InResponseTo=\"{InResponseTo}\"", "", 1),
         };
         let xml = fill_template(
-            &prepared,
+            &prepared.replacen("{AuthnStatement}", AUTHN_STATEMENT, 1),
             &[
                 ("ID", id.clone()),
                 ("AssertionID", "_assertion_subject_confirmation".into()),
@@ -193,7 +192,6 @@ fn response_for_subject_confirmation(
                     "SubjectInResponseTo",
                     case.subject_in_response_to.to_string(),
                 ),
-                ("AuthnStatement", String::new()),
             ],
         );
         Ok((id, xml))
@@ -228,7 +226,7 @@ fn response_for_destination(
             template.replacen(" Destination=\"{Destination}\"", "", 1)
         };
         let xml = fill_template(
-            &prepared,
+            &prepared.replacen("{AuthnStatement}", AUTHN_STATEMENT, 1),
             &[
                 ("ID", id.clone()),
                 ("AssertionID", "_assertion_destination".into()),
@@ -254,7 +252,6 @@ fn response_for_destination(
                 ),
                 ("NameID", "a@example.com".into()),
                 ("InResponseTo", "_req1".into()),
-                ("AuthnStatement", String::new()),
             ],
         );
         Ok((id, xml))

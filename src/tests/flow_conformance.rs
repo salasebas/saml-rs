@@ -1,7 +1,7 @@
 #![cfg(crypto)]
 
-use crate::tests::template::fill_template;
 use crate::tests::template::LoginResponseAttribute;
+use crate::tests::template::{fill_template, AUTHN_STATEMENT};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
@@ -174,7 +174,7 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) 
     );
     let template = template.replacen("{AttributeStatement}", &attributes, 1);
     let xml = fill_template(
-        &template,
+        &template.replacen("{AuthnStatement}", AUTHN_STATEMENT, 1),
         &[
             ("ID", id.clone()),
             ("AssertionID", "_assertion0123456789".into()),
@@ -197,7 +197,6 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) 
             ),
             ("NameID", email.to_string()),
             ("InResponseTo", "_req".into()),
-            ("AuthnStatement", String::new()),
             ("attrUserEmail", email.to_string()),
             ("attrUserName", "user name".into()),
         ],

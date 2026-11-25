@@ -193,6 +193,7 @@ fn response_xml_with_issue_instants(
 <p:Status><p:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></p:Status>
 <a:Assertion ID="_assertion" Version="2.0"{assertion_issue_instant}>
 <a:Subject><a:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><a:SubjectConfirmationData NotOnOrAfter="2999-01-01T00:00:00Z"/></a:SubjectConfirmation></a:Subject>
+<a:AuthnStatement AuthnInstant="2024-01-01T00:00:00Z"><a:AuthnContext><a:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified</a:AuthnContextClassRef></a:AuthnContext></a:AuthnStatement>
 </a:Assertion>
 </p:Response>"#
     )

@@ -16,7 +16,7 @@ use common::signing_credentials;
 
 use std::time::SystemTime;
 
-use crate::tests::template::fill_template;
+use crate::tests::template::{fill_template, AUTHN_STATEMENT};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::name_id_format::{PERSISTENT, TRANSIENT};
@@ -861,7 +861,7 @@ fn accept_peer_response(
         let now = iso8601_offset(-60);
         let later = iso8601_offset(300);
         let xml = fill_template(
-            template,
+            &template.replacen("{AuthnStatement}", AUTHN_STATEMENT, 1),
             &[
                 ("ID", id.clone()),
                 ("AssertionID", "_peer-assertion".into()),
@@ -880,7 +880,6 @@ fn accept_peer_response(
                 ("NameIDFormat", format.clone()),
                 ("NameID", name_id.value().to_string()),
                 ("InResponseTo", request_id.clone()),
-                ("AuthnStatement", String::new()),
             ],
         );
         Ok((id, xml.replacen("{AttributeStatement}", statement, 1)))

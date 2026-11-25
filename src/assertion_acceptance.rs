@@ -59,6 +59,11 @@ pub(crate) fn accept_response_assertions(
     if !node_has_bearer(selected) {
         return Err(missing_bearer_error(&assertions, opts, expected_recipient));
     }
+    if selected.child_named("AuthnStatement").is_none() {
+        return Err(SamlError::ProtocolProfile(
+            "no bearer assertion has an AuthnStatement".into(),
+        ));
+    }
     let assertion_xml = &response_xml[selected.start..selected.end];
     let extracted = extract_with_limits(
         assertion_xml,

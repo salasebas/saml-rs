@@ -92,5 +92,6 @@ Check the topics that affect your integration.
 - [Handle documents with a malformed XML declaration](xml-declaration.md)
 - [Handle unsigned HTTP-POST-SimpleSign messages](unsigned-simplesign.md)
 - [Accept SSO responses whose assertions name the principal differently](sso-assertion-subjects.md)
+- [Send an `AuthnStatement` in every successful SSO response](sso-authn-statement.md)
 
 [All migration guides](../README.md)

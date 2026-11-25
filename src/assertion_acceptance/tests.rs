@@ -13,7 +13,7 @@ fn confirmation_checks_read_the_unqualified_attributes() -> Result<(), Box<dyn s
                 Recipient="https://sp/acs" extra:Recipient="wrong"
                 InResponseTo="_req1" extra:InResponseTo="wrong"/>
         </SubjectConfirmation>
-    </Subject></Assertion></Response>"#;
+    </Subject><AuthnStatement/></Assertion></Response>"#;
     let opts = FlowOptions {
         now: Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000)),
         expected_in_response_to: Some("_req1"),
@@ -37,7 +37,7 @@ fn an_unsolicited_confirmation_with_a_request_id_in_a_second_data_child_is_unsat
             <SubjectConfirmationData NotOnOrAfter="2100-01-01T00:00:00Z" Recipient="https://sp/acs"/>
             <SubjectConfirmationData InResponseTo="_req1"/>
         </SubjectConfirmation>
-    </Subject></Assertion></Response>"#;
+    </Subject><AuthnStatement/></Assertion></Response>"#;
     let opts = FlowOptions {
         now: Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000)),
         ..FlowOptions::new(Binding::Post, ParserType::SamlResponse)

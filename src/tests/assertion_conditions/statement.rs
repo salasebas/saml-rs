@@ -89,6 +89,31 @@ fn browser_sso_rejects_a_statement_missing_authn_context_without_a_schema_valida
     Ok(())
 }
 
+#[test]
+fn browser_sso_rejects_a_bearer_assertion_without_an_authn_statement(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for unsolicited in [false, true] {
+        let exchange = exchange_for(SpValidationPolicy::default(), unsolicited)?;
+        let xml = response_xml(&exchange.response_fields)?;
+        let start = xml
+            .find("<saml:AuthnStatement ")
+            .ok_or("missing AuthnStatement")?;
+        let end_tag = "</saml:AuthnStatement>";
+        let end = xml[start..]
+            .find(end_tag)
+            .ok_or("unterminated AuthnStatement")?
+            + start
+            + end_tag.len();
+        let mut omitted = xml.clone();
+        omitted.replace_range(start..end, "");
+        expect_error(accept(&exchange, &resigned(&omitted)?), |err| {
+            matches!(err, SamlError::ProtocolProfile(message)
+                if message == "no bearer assertion has an AuthnStatement")
+        })?;
+    }
+    Ok(())
+}
+
 const MISSING_AUTHN_INSTANT: &str =
     "AuthnStatement is missing required unqualified attribute AuthnInstant";
 const NON_UTC_AUTHN_INSTANT: &str =

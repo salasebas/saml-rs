@@ -310,7 +310,8 @@ impl ServiceProvider {
     /// `InResponseTo`, or required authentication context mismatches; when an
     /// artifact input pairs the artifact with a message resolved from another
     /// artifact or another identity provider; when XML, signature, certificate
-    /// trust, audience, condition, or time validation fails; when the
+    /// trust, audience, condition, or time validation fails; when no bearer
+    /// assertion has an `AuthnStatement` ([`SamlError::ProtocolProfile`]); when the
     /// assertions do not share one issuer, or repeat an `ID`
     /// ([`SamlError::PotentialWrappingAttack`]); or when replay
     /// validation fails. When `pending` carries
@@ -433,7 +434,8 @@ impl ServiceProvider {
     /// [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES),
     /// the IdP metadata cannot be parsed or trusted, XML parsing or signature
     /// verification fails, destination, recipient, audience, condition, or
-    /// time validation fails,
+    /// time validation fails, no bearer assertion has an `AuthnStatement`
+    /// ([`SamlError::ProtocolProfile`]),
     /// the assertions do not share one issuer or repeat an
     /// `ID` ([`SamlError::PotentialWrappingAttack`]), or replay
     /// validation fails. After response parsing and verification, HTTP-POST
