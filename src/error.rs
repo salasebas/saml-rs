@@ -117,7 +117,12 @@ impl fmt::Display for SubjectConfirmationReason {
     }
 }
 
-/// SAML time-bound field whose validation failed.
+/// Time-bound check that failed.
+///
+/// Variants cover SAML time-bound fields, such as [`Self::Conditions`] and
+/// [`Self::MetadataValidUntil`]. They also cover derived expiration checks
+/// computed by the library, such as [`Self::ReplayExpiration`] and
+/// [`Self::IdpIssuanceExpiration`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum TimeWindowField {
