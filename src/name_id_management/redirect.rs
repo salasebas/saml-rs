@@ -162,22 +162,20 @@ impl UndecryptedRequest {
         setting: &EntitySetting,
         mut validation: SamlValidationContext<'_>,
     ) -> Result<ParsedRequest, SamlError> {
-        let age_is_valid = validation
-            .check_manage_name_id_request_issue_instant(&self.issue_instant)
-            .is_ok();
-        if age_is_valid {
-            validation
-                .check_and_store_message_replay(ReplayKey::ManageNameIdRequest(self.id.clone()))?;
-        }
         let (identifier, change) = match self.content {
             RequestContent::VersionMismatch(mismatch) => {
                 return Ok(ParsedRequest::Refused(Refusal::VersionMismatch(mismatch)));
             }
-            RequestContent::Identifiers(identifier, change) if age_is_valid => (identifier, change),
-            RequestContent::Identifiers(..) => {
-                return Ok(ParsedRequest::Refused(Refusal::RequestAgeOutsideWindow));
-            }
+            RequestContent::Identifiers(identifier, change) => (identifier, change),
         };
+        if validation
+            .check_manage_name_id_request_issue_instant(&self.issue_instant)
+            .is_err()
+        {
+            return Ok(ParsedRequest::Refused(Refusal::RequestAgeOutsideWindow));
+        }
+        validation
+            .check_and_store_message_replay(ReplayKey::ManageNameIdRequest(self.id.clone()))?;
         Ok(
             match plaintext_content(&flow.saml_content, identifier, change, setting) {
                 Ok((name_id, change)) => ParsedRequest::Plain(ManageNameIdRequest {

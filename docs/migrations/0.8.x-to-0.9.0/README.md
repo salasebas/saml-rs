@@ -79,5 +79,6 @@ Check the topics that affect your integration.
 - [Require a `validUntil` on the metadata root](root-valid-until.md)
 - [Encrypt logout and name identifier management for the receiving role](logout-and-nim-encryption-role.md)
 - [Handle NameID value errors in identity provider logout and management](identity-provider-name-id-checks.md)
+- [Repeat unsigned and refused requests without a replay error](replay-storage.md)
 
 [All migration guides](../README.md)

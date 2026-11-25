@@ -44,10 +44,10 @@ use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, ClockSkew,
     EndpointUrl, EntityId, ForceAuthn, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
-    OutboundDelivery, PendingAuthnRequest, PendingAuthnRequestSnapshot, Received, RelayState,
-    ReplayCache, ReplayPolicy, RequestAgePolicy, RespondSso, ResponseSignaturePolicy, SamlError,
-    SamlValidationContext, ServiceProvider, SloEndpoint, SpConfig, SpDescriptor,
+    IdpValidationPolicy, Inbound, MessageAuthentication, MetadataTrustPolicy, NameId, NameIdFormat,
+    Outbound, OutboundDelivery, PendingAuthnRequest, PendingAuthnRequestSnapshot, Received,
+    RelayState, ReplayCache, ReplayPolicy, RequestAgePolicy, RespondSso, ResponseSignaturePolicy,
+    SamlError, SamlValidationContext, ServiceProvider, SloEndpoint, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponseBinding, StartSso,
     Status, SubordinateStatusCode, VerifiedXmlSignatureCoverage, XmlSignatureProfile,
 };
@@ -397,6 +397,14 @@ fn post_authn_request_input_with_xml(xml: &str) -> Inbound<AuthnRequest> {
         "SAMLRequest",
         STANDARD.encode(xml.as_bytes()),
     )])
+}
+
+fn signed_post_authn_request_input_with_xml(
+    xml: &str,
+) -> Result<Inbound<AuthnRequest>, Box<dyn std::error::Error>> {
+    let key = read_private_key(PRIVKEY, None)?;
+    let signed = sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
+    Ok(post_authn_request_input_with_xml(&signed))
 }
 
 fn replace_issue_instant(
@@ -1040,7 +1048,7 @@ fn rejected_authn_request_age_does_not_occupy_a_replay_key(
 
     match issued.idp.receive_sso(
         &issued.sp_descriptor,
-        post_authn_request_input_with_xml(&misdirected),
+        signed_post_authn_request_input_with_xml(&misdirected)?,
         bounded_authn_request_age_with_cache(now, &mut cache),
     ) {
         Err(SamlError::DestinationMismatch { .. }) => {}
@@ -1053,7 +1061,7 @@ fn rejected_authn_request_age_does_not_occupy_a_replay_key(
             .idp
             .receive_sso(
                 &issued.sp_descriptor,
-                post_authn_request_input_with_xml(&stale),
+                signed_post_authn_request_input_with_xml(&stale)?,
                 bounded_authn_request_age_with_cache(now, &mut cache),
             )
             .map_err(Into::into),
@@ -1062,7 +1070,7 @@ fn rejected_authn_request_age_does_not_occupy_a_replay_key(
 
     let received = issued.idp.receive_sso(
         &issued.sp_descriptor,
-        post_authn_request_input_with_xml(&fresh),
+        signed_post_authn_request_input_with_xml(&fresh)?,
         bounded_authn_request_age_with_cache(now, &mut cache),
     )?;
     let replay_key = format!("authn_request_id:{}", received.message().id().as_str());
@@ -1071,7 +1079,7 @@ fn rejected_authn_request_age_does_not_occupy_a_replay_key(
     let mut disabled_cache = RecordingReplayCache::default();
     issued.idp.receive_sso(
         &issued.sp_descriptor,
-        post_authn_request_input_with_xml(&stale),
+        signed_post_authn_request_input_with_xml(&stale)?,
         SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut disabled_cache))
             .with_replay_retention(Duration::from_secs(5 * 60)),
     )?;
@@ -1114,6 +1122,64 @@ fn signed_authn_request_age_check_does_not_replace_signature_verification(
         other => Err(
             format!("expected XML signature failure before the age check, got {other:?}").into(),
         ),
+    }
+}
+
+#[test]
+fn an_unsigned_authn_request_is_not_stored_for_replay() -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = unsigned_request_facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let request_fields = post_fields(&started.outbound)?;
+    let mut cache = RecordingReplayCache::default();
+
+    for _ in 0..2 {
+        let received = idp.receive_sso(
+            &sp_descriptor,
+            Inbound::post(request_fields.clone()),
+            validation_with_cache(&mut cache),
+        )?;
+        assert_eq!(
+            received.authentication(),
+            MessageAuthentication::Unauthenticated
+        );
+    }
+    assert!(cache.seen.is_empty(), "{:?}", cache.seen);
+    Ok(())
+}
+
+#[test]
+fn a_padded_signed_request_id_is_one_replay_key() -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = unsigned_request_facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let generated = started.pending.request_id().as_str();
+    let xml = authn_request_xml(&started.outbound)?;
+    let with_id = |request_id: &str| {
+        let unsigned = xml.replace(
+            &format!("ID=\"{generated}\""),
+            &format!("ID=\"{request_id}\""),
+        );
+        signed_post_authn_request_input_with_xml(&unsigned)
+    };
+    let mut cache = RecordingReplayCache::default();
+
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        with_id(" _padded ")?,
+        validation_with_cache(&mut cache),
+    )?;
+    assert_eq!(received.message().id().as_str(), "_padded");
+    match idp.receive_sso(
+        &sp_descriptor,
+        with_id("_padded")?,
+        validation_with_cache(&mut cache),
+    ) {
+        Err(SamlError::ReplayDetected { key }) => {
+            assert_eq!(key.cache_key(), "authn_request_id:_padded");
+            Ok(())
+        }
+        other => Err(format!("expected AuthnRequest ReplayDetected, got {other:?}").into()),
     }
 }
 
@@ -2927,7 +2993,10 @@ fn post_sso_requires_replay_storage() -> Result<(), Box<dyn std::error::Error>> 
 #[test]
 fn recommended_sso_receive_does_not_store_replay_without_a_caller_cache(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = ServiceProvider::new(sp_with_validation(recommended_sso_accept_validation())?);
+    let sp = ServiceProvider::new(sp_with_validation(SpValidationPolicy {
+        authn_request_signing: AuthnRequestSigningPolicy::Sign,
+        ..recommended_sso_accept_validation()
+    })?);
     let idp = IdentityProvider::new(idp_with_validation(recommended_sso_accept_idp_validation())?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     assert!(!idp_descriptor.signed_metadata_xml().is_some());

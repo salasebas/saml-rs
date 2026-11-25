@@ -209,6 +209,13 @@ impl ServiceProvider {
     /// RelayState received with the response: the value the request carried,
     /// or, when it carried none, whatever the identity provider supplied.
     ///
+    /// With [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache),
+    /// the `ID` of a `Success` response is stored for
+    /// [`SamlValidationContext::with_replay_retention`], and a repeated `ID`
+    /// returns [`SamlError::ReplayDetected`]. A response with another status is
+    /// not stored. [`ReplayPolicy::NoCache`](crate::ReplayPolicy::NoCache) is
+    /// enough when your store hands out each pending request once.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError::StatusNotSuccess`] with the identity provider's
@@ -217,7 +224,7 @@ impl ServiceProvider {
     /// checks pass. Returns another [`SamlError`] when the response does not
     /// answer `pending`, its RelayState differs from one the request carried,
     /// or any of those checks or replay validation fails. Returns
-    /// [`SamlError::TimeWindowInvalid`] when
+    /// [`SamlError::TimeWindowInvalid`] for a `Success` response when
     /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
     /// selected and `validation` has no
     /// [`SamlValidationContext::with_replay_retention`].

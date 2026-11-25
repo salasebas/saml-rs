@@ -77,7 +77,7 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | Compare a present `Destination` with the receiving SOAP `ManageNameIDService` after collapsing XML whitespace. Accept an absent value | Mandatory | Core §3.2.1, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Require at most one `Issuer`, `ds:Signature`, and `Extensions` in that order, then one `NameID` or `EncryptedID`, then one `NewID`, `NewEncryptedID`, or `Terminate`, with text-only `NameID` and `NewID` and an empty `Terminate` | Mandatory | `RequestAbstractType`, `ManageNameIDRequestType`, `TerminateType` | Always |
 | Answer an authenticated request outside the configured age window with `Requester` and leave its ID out of the replay cache | Library policy: the age window limits acceptance after replay storage expires. | Core §1.3.3 | `SamlValidationContext::with_manage_name_id_request_age`. Disabled by default |
-| Reject a repeated request `ID` | Library policy: retaining the ID prevents the same message from being accepted twice during the retention period. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
+| Reject a repeated request `ID`. Store it as the [protocol message ID rule](metadata-and-replay.md#protocol-message-ids) states | Library policy: name identifier management requires no identifier cache, so the cache is the caller's choice. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
 | Accept a persistent `NameID` without its qualifiers | Library policy: the receiver preserves the identifier as sent, including absent qualifiers. | Core §3.6.3 | Always |
 
 ## SOAP: ManageNameIDResponse from the identity provider
@@ -134,7 +134,7 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | Return an error for an older request version that forbids a SAML 2.0 response | Mandatory | Core §4.1.3.2 | Always |
 | Answer an authenticated 2.0 request outside the configured age window with signed `Requester`, before replay storage and decryption | Library policy: the age window limits acceptance after replay storage expires. | Core §1.3.3 | `SamlValidationContext::with_manage_name_id_request_age`. Disabled by default |
 | Accept a persistent `NameID` without its qualifiers | Library policy: the receiver preserves the identifier as sent, including absent qualifiers. | Core §3.6.3 | Always |
-| Reject a repeated request `ID` | Library policy: retaining the ID prevents the same message from being accepted twice during the retention period. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
+| Reject a repeated request `ID`. Store it as the [protocol message ID rule](metadata-and-replay.md#protocol-message-ids) states | Library policy: name identifier management requires no identifier cache, so the cache is the caller's choice. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
 | Accept a received `RelayState` over 80 bytes, up to 4096 bytes | Library policy: Bindings §3.4.3 binds the creator and gives the receiver no rule, and the 4096-byte bound limits unauthenticated input. | Bindings §3.4.3 | `MAX_RECEIVED_RELAY_STATE_BYTES` |
 | Reject a repeated `RelayState` parameter | Library policy: Bindings §3.4.3 defines one value per message and no receiver rule, and saml-rs compares and echoes one value while a caller's framework may read another. | Bindings §3.4.3 | Always |
 | Raw-inflate the message when `SAMLEncoding` is absent or names DEFLATE | Mandatory | Bindings §3.4.4 | Always |
@@ -182,7 +182,7 @@ both clock-skew tolerances to cover the full window on either binding.
 | Require `Destination` on the signed response. Compare it with this provider's response location after collapsing XML whitespace | Mandatory | Core §3.2.2, Bindings §3.4.5.2, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Require one `Status` with one direct `StatusCode` | Mandatory | `StatusResponseType`, `StatusType` | Always |
 | Report a status other than `Success` after verifying the signature, issuer, request ID, and destination | Library policy: failed authentication or correlation takes precedence over a reported status. | Core §3.2.2.2 | Always |
-| Reject a repeated response `ID` | Library policy: retaining the ID prevents the same message from being accepted twice during the retention period. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
+| Reject a repeated `Success` response `ID`. A response with another status is not stored, as the [protocol message ID rule](metadata-and-replay.md#protocol-message-ids) states | Library policy: name identifier management requires no identifier cache, so the cache is the caller's choice. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
 
 ## EncryptedID and NewEncryptedID
 
