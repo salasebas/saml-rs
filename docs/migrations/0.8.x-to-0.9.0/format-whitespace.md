@@ -21,9 +21,6 @@ XML whitespace, or inner whitespace other than one space:
   with a padded `uri` or `unspecified` `NameFormat`. An identifier that the
   session missed before can now be returned, or reported as an error when it
   breaks the profile.
-- A response is accepted when the `NameID` `Format` values of its assertions
-  are equal after collapse but not as written. Before, `finish_sso` and
-  `accept_unsolicited_sso` returned `SamlError::PrincipalMismatch`.
 
 If you match `NameIdFormat::Custom` or `AttributeNameFormat::Custom` against
 padded text, or store the padded spelling, match the named variant or the

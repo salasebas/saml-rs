@@ -24,14 +24,6 @@ enum ElementNamespace {
     Other,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-struct Principal {
-    name_id: String,
-    format: String,
-    name_qualifier: Option<String>,
-    sp_name_qualifier: Option<String>,
-}
-
 pub(crate) fn accept_response_assertions(
     response_xml: &str,
     opts: &FlowOptions<'_>,
@@ -60,10 +52,8 @@ pub(crate) fn accept_response_assertions(
             return Err(SamlError::PotentialWrappingAttack);
         }
         let first_issuer = issuer_text(first);
-        let mut shared_principal: Option<Principal> = None;
         for assertion in &assertions {
             require_shared_issuer(opts.from_issuer, first_issuer, assertion)?;
-            remember_same_principal(assertion, &mut shared_principal)?;
         }
     }
     if !node_has_bearer(selected) {
@@ -222,46 +212,6 @@ fn require_shared_issuer(
         ));
     }
     Ok(())
-}
-
-fn remember_same_principal(
-    assertion: &Node,
-    shared_principal: &mut Option<Principal>,
-) -> Result<(), SamlError> {
-    let principal = principal_of(assertion)?;
-    match shared_principal {
-        None => *shared_principal = Some(principal),
-        Some(previous) if previous != &principal => return Err(SamlError::PrincipalMismatch),
-        Some(_) => {}
-    }
-    Ok(())
-}
-
-fn principal_of(assertion: &Node) -> Result<Principal, SamlError> {
-    let Some(subject) = assertion
-        .children
-        .iter()
-        .find(|child| child.local_name == "Subject")
-    else {
-        return Err(SamlError::PrincipalMismatch);
-    };
-    let name_ids: Vec<_> = subject
-        .children
-        .iter()
-        .filter(|child| child.local_name == "NameID")
-        .collect();
-    let [name_id] = name_ids.as_slice() else {
-        return Err(SamlError::PrincipalMismatch);
-    };
-    Ok(Principal {
-        name_id: name_id.text.clone(),
-        format: name_id
-            .attr("Format")
-            .map(collapse_whitespace)
-            .unwrap_or_else(|| crate::constants::name_id_format::UNSPECIFIED.to_string()),
-        name_qualifier: name_id.attr("NameQualifier").map(str::to_string),
-        sp_name_qualifier: name_id.attr("SPNameQualifier").map(str::to_string),
-    })
 }
 
 struct OpenElement {

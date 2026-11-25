@@ -33,9 +33,6 @@ A session without a `NameID` cannot start Single Logout.
 `SsoSession::logout_subject` returns `None` for it, and an `OutstandingLogout`
 does not reject it.
 
-A response with several assertions still needs a `NameID` in each of them.
-Without one, it returns `SamlError::PrincipalMismatch`, as before.
-
 These subjects without a direct `NameID` are still rejected, with a different
 error:
 

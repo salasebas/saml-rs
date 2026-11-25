@@ -140,18 +140,13 @@ fn a_subject_without_a_readable_name_id_is_rejected() -> Result<(), Box<dyn std:
 }
 
 #[test]
-fn two_assertions_without_a_name_id_are_not_one_principal() -> Result<(), Box<dyn std::error::Error>>
-{
+fn two_assertions_without_a_name_id_are_accepted() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let original = response_xml(&exchange.response_fields)?;
     let without_name_id = replace_name_id(&strip_embedded_signatures(&original)?, "")?;
     let xml = resigned(&duplicate_assertion(&without_name_id, "_second_assertion")?)?;
 
-    match accept(&exchange, &xml) {
-        Err(error) => match error.downcast_ref::<SamlError>() {
-            Some(SamlError::PrincipalMismatch) => Ok(()),
-            _ => Err(format!("expected PrincipalMismatch, got {error}").into()),
-        },
-        Ok(_) => Err("expected PrincipalMismatch".into()),
-    }
+    let session = accept(&exchange, &xml)?;
+    assert_eq!(session.name_id(), None);
+    Ok(())
 }

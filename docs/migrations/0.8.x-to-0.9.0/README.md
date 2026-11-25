@@ -91,5 +91,6 @@ Check the topics that affect your integration.
 - [Handle responses with an invalid `AuthnContext`](authn-context-choice.md)
 - [Handle documents with a malformed XML declaration](xml-declaration.md)
 - [Handle unsigned HTTP-POST-SimpleSign messages](unsigned-simplesign.md)
+- [Accept SSO responses whose assertions name the principal differently](sso-assertion-subjects.md)
 
 [All migration guides](../README.md)
