@@ -1,6 +1,6 @@
 use quick_xml::events::{BytesStart, Event};
-use quick_xml::name::{Namespace, ResolveResult};
-use quick_xml::reader::{NsReader, Reader};
+use quick_xml::name::{Namespace, NamespaceResolver, ResolveResult};
+use quick_xml::reader::Reader;
 
 use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::namespace;
@@ -9,7 +9,7 @@ use crate::crypto::verify::verify_soap_body_signature;
 use crate::error::{xml_err, SamlError};
 use crate::http_header::{HttpHeader, CACHE_CONTROL, PRAGMA};
 use crate::model::EndpointUrl;
-use crate::xml::dom::{self, reader_err, Node};
+use crate::xml::dom::{self, push_normalized_namespaces, reader_err, Node};
 use crate::xml::fragment::standalone_element;
 use crate::xml::protocol_element::{parse_saml_with_limits, SamlElement};
 use crate::xml::write::XmlWriter;
@@ -559,10 +559,9 @@ fn single_element_child(body: &Node) -> Result<&Node, SamlError> {
 }
 
 fn scan_envelope(xml: &str, limits: XmlLimits) -> Result<SoapScan, SamlError> {
-    let mut reader = NsReader::from_str(xml);
-    reader
-        .resolver_mut()
-        .set_max_namespace_bindings(limits.max_attributes_per_element);
+    let mut reader = Reader::from_str(xml);
+    let mut resolver = NamespaceResolver::default();
+    resolver.set_max_namespace_bindings(limits.max_attributes_per_element);
     let mut buf = Vec::new();
     let mut depth = 0usize;
     let mut scan = SoapScan::default();
@@ -571,12 +570,16 @@ fn scan_envelope(xml: &str, limits: XmlLimits) -> Result<SoapScan, SamlError> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(element)) => {
                 depth += 1;
-                observe_start(&reader, &element, depth, &mut scan, false)?;
+                push_normalized_namespaces(&mut resolver, &element)?;
+                observe_start(&resolver, &element, depth, &mut scan, false)?;
             }
             Ok(Event::Empty(element)) => {
-                observe_start(&reader, &element, depth + 1, &mut scan, true)?;
+                push_normalized_namespaces(&mut resolver, &element)?;
+                observe_start(&resolver, &element, depth + 1, &mut scan, true)?;
+                resolver.pop();
             }
             Ok(Event::End(_)) => {
+                resolver.pop();
                 if scan.in_header && depth == scan.header_depth {
                     scan.in_header = false;
                 }
@@ -615,14 +618,14 @@ struct SoapScan {
 }
 
 fn observe_start(
-    reader: &NsReader<&[u8]>,
+    resolver: &NamespaceResolver,
     element: &BytesStart<'_>,
     depth: usize,
     scan: &mut SoapScan,
     empty: bool,
 ) -> Result<(), SamlError> {
     if depth == 1 {
-        let (local_name, namespace) = expanded_name(reader, element)?;
+        let (local_name, namespace) = expanded_name(resolver, element);
         if local_name != "Envelope" {
             return Err(SamlError::xml("SOAP message root must be Envelope"));
         }
@@ -637,7 +640,7 @@ fn observe_start(
     }
 
     if depth == 2 && scan.saw_envelope {
-        let (local_name, namespace) = expanded_name(reader, element)?;
+        let (local_name, namespace) = expanded_name(resolver, element);
         if namespace.as_deref() != Some(SOAP_NAMESPACE) {
             return Err(SamlError::xml(
                 "SOAP Header and Body must use the SOAP 1.1 namespace",
@@ -663,7 +666,7 @@ fn observe_start(
 
     if scan.in_header
         && depth == scan.header_depth + 1
-        && requires_local_processing(reader, element)?
+        && requires_local_processing(resolver, element)?
     {
         return Err(SamlError::soap_envelope(
             SoapFaultCode::MustUnderstand,
@@ -678,7 +681,7 @@ fn observe_start(
                 "SOAP body must contain exactly one SAML protocol element".into(),
             ));
         }
-        let (local_name, namespace) = expanded_name(reader, element)?;
+        let (local_name, namespace) = expanded_name(resolver, element);
         scan.child = Some(NamedNamespace {
             local_name,
             namespace: namespace.unwrap_or_default(),
@@ -688,37 +691,28 @@ fn observe_start(
 }
 
 fn expanded_name(
-    reader: &NsReader<&[u8]>,
+    resolver: &NamespaceResolver,
     element: &BytesStart<'_>,
-) -> Result<(String, Option<String>), SamlError> {
-    let (namespace, local_name) = reader.resolver().resolve_element(element.name());
-    let namespace = bound_namespace(&namespace)
-        .map(|uri| {
-            quick_xml::escape::unescape(uri)
-                .map(std::borrow::Cow::into_owned)
-                .map_err(xml_err)
-        })
-        .transpose()?;
-    Ok((local_name.as_ref().to_owned(), namespace))
+) -> (String, Option<String>) {
+    let (namespace, local_name) = resolver.resolve_element(element.name());
+    (
+        local_name.as_ref().to_owned(),
+        bound_namespace(&namespace).map(str::to_owned),
+    )
 }
 
-/// Whether a header entry is addressed to this receiver, through no SOAP
-/// `actor` or the `next` actor, and sets SOAP `mustUnderstand`.
 fn requires_local_processing(
-    reader: &NsReader<&[u8]>,
+    resolver: &NamespaceResolver,
     element: &BytesStart<'_>,
 ) -> Result<bool, SamlError> {
     let mut must_understand = false;
     for attribute in element.attributes() {
         let attribute = attribute.map_err(xml_err)?;
-        let (namespace, local_name) = reader.resolver().resolve_attribute(attribute.key);
+        let (namespace, local_name) = resolver.resolve_attribute(attribute.key);
         if !matches!(local_name.as_ref(), "actor" | "mustUnderstand") {
             continue;
         }
-        let Some(uri) = bound_namespace(&namespace) else {
-            continue;
-        };
-        if quick_xml::escape::unescape(uri).map_err(xml_err)? != SOAP_NAMESPACE {
+        if bound_namespace(&namespace) != Some(SOAP_NAMESPACE) {
             continue;
         }
         let value = attribute
@@ -936,6 +930,17 @@ mod tests {
         assert_eq!(
             message.xml(),
             r#"<samlp:LogoutRequest xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_logout"/>"#
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn soap_envelope_accepts_an_escaped_xml_prefix_declaration(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let envelope = r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xml="&#x68;ttp://www.w3.org/XML/1998/namespace"><soap:Body><samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></soap:Body></soap:Envelope>"#;
+        assert_eq!(
+            SoapBodyElement::from_envelope(envelope)?.local_name(),
+            "ArtifactResolve"
         );
         Ok(())
     }
