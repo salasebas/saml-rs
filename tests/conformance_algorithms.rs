@@ -262,14 +262,9 @@ fn custom_rsa_pss_signs_a_post_response_with_a_sha256_reference_digest(
         algorithm_attributes(&exchange.response_xml, "SignatureMethod"),
         [algorithm]
     );
-    let oaep_digest: &[&str] = if cfg!(feature = "crypto-fips") {
-        &[saml_rs::constants::digest_algorithm::SHA256]
-    } else {
-        &[]
-    };
     assert_eq!(
         algorithm_attributes(&exchange.response_xml, "DigestMethod"),
-        [&[saml_rs::constants::digest_algorithm::SHA256], oaep_digest].concat()
+        [saml_rs::constants::digest_algorithm::SHA256]
     );
     assert_eq!(verified_algorithms(&exchange.session), [algorithm]);
     Ok(())

@@ -260,7 +260,10 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
     let mut algorithms = AlgorithmPolicy::default();
     algorithms.signature = SignatureAlgorithm::RsaSha512;
     algorithms.data_encryption = DataEncryptionAlgorithm::Aes128Cbc;
-    algorithms.key_encryption = KeyEncryptionAlgorithm::RsaOaepMgf1p;
+    algorithms.key_encryption = KeyEncryptionAlgorithm::RsaOaep {
+        digest: DigestAlgorithm::Sha512,
+        mgf: MaskGenerationFunction::Mgf1Sha512,
+    };
     algorithms.signed_reference_transforms = vec![TransformAlgorithm::ExclusiveCanonicalization];
     let mut xml = XmlPolicy::default();
     xml.redirect_inflate_max_bytes = 64 * 1024;
@@ -292,7 +295,10 @@ fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
     let mut algorithms = AlgorithmPolicy::default();
     algorithms.signature = SignatureAlgorithm::RsaSha384;
     algorithms.data_encryption = DataEncryptionAlgorithm::Aes256Cbc;
-    algorithms.key_encryption = KeyEncryptionAlgorithm::RsaOaepMgf1p;
+    algorithms.key_encryption = KeyEncryptionAlgorithm::RsaOaep {
+        digest: DigestAlgorithm::Sha512,
+        mgf: MaskGenerationFunction::Mgf1Sha512,
+    };
     algorithms.signed_reference_transforms = vec![TransformAlgorithm::EnvelopedSignature];
     let mut xml = XmlPolicy::default();
     xml.redirect_inflate_max_bytes = 128 * 1024;

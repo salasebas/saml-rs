@@ -61,7 +61,7 @@ impl KeyCertificates {
                 .flat_map(x509_certificates)
                 .map(|certificate| certificate.text.clone())
                 .collect();
-            match key_descriptor.attr("use") {
+            match key_use(key_descriptor) {
                 None => {
                     certificates
                         .signing
@@ -102,6 +102,14 @@ fn key_descriptors(role: &SamlElement) -> impl Iterator<Item = &SamlElement> {
         .filter(|child| child.is(namespace::METADATA, "KeyDescriptor"))
 }
 
+fn key_use(key_descriptor: &SamlElement) -> Option<&str> {
+    key_descriptor
+        .attrs
+        .iter()
+        .find(|(_, name, _)| name == "use")
+        .map(|(_, _, value)| value.as_str())
+}
+
 fn key_infos(key_descriptor: &SamlElement) -> impl Iterator<Item = &SamlElement> {
     key_descriptor
         .children
@@ -127,9 +135,7 @@ fn x509_certificates(x509_data: &SamlElement) -> impl Iterator<Item = &SamlEleme
 fn role_encryption_keys(role: &SamlElement) -> Vec<String> {
     let mut keys = Vec::new();
     let key_descriptors = key_descriptors(role).filter(|key_descriptor| {
-        key_descriptor
-            .attr("use")
-            .is_none_or(|use_| use_ == CertUse::Encryption.as_str())
+        key_use(key_descriptor).is_none_or(|use_| use_ == CertUse::Encryption.as_str())
     });
     for key_descriptor in key_descriptors {
         let key_infos: Vec<&SamlElement> = key_infos(key_descriptor).collect();
@@ -509,6 +515,18 @@ mod tests {
         for certificates in certificates(&metadata(&read))? {
             assert_eq!(certificates, [certificate]);
         }
+        let qualified_use = format!(
+            r#"<KeyDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" md:use="encryption"><ds:KeyInfo xmlns:ds="{DS}"><ds:X509Data><ds:X509Certificate>{certificate}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>"#
+        );
+        let typed = SpMetadata::from_xml(&metadata(&qualified_use))?;
+        assert!(typed
+            .as_metadata()
+            .x509_certificates(CertUse::Signing)
+            .is_empty());
+        assert_eq!(
+            typed.as_metadata().x509_certificates(CertUse::Encryption),
+            [certificate]
+        );
         for key_descriptor in ignored {
             for certificates in certificates(&metadata(&key_descriptor))? {
                 assert!(certificates.is_empty(), "{key_descriptor}");

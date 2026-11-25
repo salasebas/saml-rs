@@ -16,6 +16,13 @@ A peer without an encryption certificate still returns
 `SamlError::MissingMetadata`. A peer without a usable key still returns the
 `SamlError::Crypto` error of its first key. You do not need to change code.
 
+In a build without a crypto provider, `StartSlo::identifier_encryption`
+with `EncryptIdentifiers` now returns `SamlError::Unsupported` before it
+looks at the peer metadata, as name identifier management already did.
+Before, a peer without an encryption certificate gave
+`SamlError::MissingMetadata` there. If you match that error in such a
+build, also match `SamlError::Unsupported`.
+
 ## Each EncryptedKey names the certificate it was encrypted for
 
 Every `xenc:EncryptedKey` that the crate writes now carries a `ds:KeyInfo`
@@ -91,13 +98,13 @@ return `SamlError::Unsupported` when `AlgorithmPolicy::key_encryption` is
 `KeyEncryptionAlgorithm::RsaOaepMgf1p`. Before, the builders accepted it and
 encryption failed later.
 
-The change affects a `crypto-fips` deployment that encrypts for a peer:
+The change affects `crypto-fips` deployments:
 
-- If your code sets `key_encryption` to `RsaOaepMgf1p`, remove that line or
-  select `KeyEncryptionAlgorithm::RsaOaep` with SHA-256, SHA-384, or SHA-512.
-- Check that each peer that receives encrypted content supports XML
-  Encryption 1.1 RSA-OAEP with SHA-256. OpenSAML and the Shibboleth service
-  provider do.
+- If your code sets `key_encryption` to `RsaOaepMgf1p`, the config no longer
+  builds, even when it never encrypts. Remove that line or select
+  `KeyEncryptionAlgorithm::RsaOaep` with SHA-256, SHA-384, or SHA-512.
+- If you encrypt for a peer, check that the peer supports XML Encryption 1.1
+  RSA-OAEP with SHA-256. OpenSAML and the Shibboleth service provider do.
 
 ## RSA-v1.5 key transport on AWS-LC
 
