@@ -10,6 +10,7 @@ use crate::xml::{dom, extract_with_limits, ExtractorField, XmlLimits};
 
 use super::description_read::EntityDescription;
 use super::role::{self, SelectedDescriptors, SsoDescriptorRole};
+use super::validity::ValidUntilBounds;
 use super::{endpoints, entity_attributes, Metadata};
 
 const MULTIPLE_ENTITY_DESCRIPTORS: &str = "metadata has more than one EntityDescriptor";
@@ -126,7 +127,7 @@ impl Metadata {
         let entity_xml = &xml[member.start..member.end];
         let entity = dom::parse_fragment_with_limits(entity_xml, limits)?.root;
         let descriptors =
-            role.typed_descriptors(&entity, member, role::valid_until_bounds(path))?;
+            role.typed_descriptors(&entity, member, ValidUntilBounds::from_path(path))?;
         let source = role_xml(
             entity_xml,
             0..entity_xml.len(),

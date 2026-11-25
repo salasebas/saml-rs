@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use crate::constants::namespace;
+use crate::metadata::RootValidUntil;
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::protocol_element::{parse_saml_with_limits, SamlElement};
 
@@ -82,6 +84,32 @@ impl MetadataAggregate {
             trust,
             limits,
         })
+    }
+
+    /// Refuse the aggregate unless its root `EntitiesDescriptor` carries a
+    /// `validUntil` at most `max_validity` after `now`.
+    ///
+    /// A `validUntil` below the root does not satisfy the requirement. Call this right after [`Self::from_xml`], with the
+    /// time that the import is accepted at.
+    ///
+    /// The check does not refuse a root `validUntil` that has already been
+    /// reached; typed flows refuse descriptors looked up here from that
+    /// instant.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::MetadataRootValidUntilRefused`] when the root has no
+    /// `validUntil` or it lies more than `max_validity` after `now`.
+    /// Returns [`SamlError::TimeWindowInvalid`] when the root `validUntil` is
+    /// not an `xs:dateTime` with a timezone, and [`SamlError::Invalid`] when
+    /// `now` is outside the supported SAML time range.
+    pub fn require_root_valid_until(
+        self,
+        now: SystemTime,
+        max_validity: Duration,
+    ) -> Result<Self, SamlError> {
+        RootValidUntil::parse(self.root.attr("validUntil"))?.ensure_within(now, max_validity)?;
+        Ok(self)
     }
 
     /// Import the named entity's SAML 2.0 identity provider roles.

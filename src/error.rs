@@ -117,6 +117,26 @@ impl fmt::Display for SubjectConfirmationReason {
     }
 }
 
+/// Why the root element of imported metadata failed a `validUntil` requirement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum RootValidUntilReason {
+    /// The root element has no `validUntil`.
+    Missing,
+    /// The root `validUntil` lies further after the validation time than the
+    /// maximum validity interval.
+    BeyondMaxValidity,
+}
+
+impl fmt::Display for RootValidUntilReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Missing => f.write_str("missing"),
+            Self::BeyondMaxValidity => f.write_str("beyond the maximum validity interval"),
+        }
+    }
+}
+
 /// Time-bound check that failed.
 ///
 /// Variants cover SAML time-bound fields, such as [`Self::Conditions`] and
@@ -525,6 +545,14 @@ pub enum SamlError {
     TimeWindowInvalid {
         /// SAML field or validation scope whose time window failed.
         field: TimeWindowField,
+    },
+    /// The root element of imported metadata does not meet the required
+    /// `validUntil` bound.
+    #[error("metadata root validUntil is {reason}")]
+    #[non_exhaustive]
+    MetadataRootValidUntilRefused {
+        /// Which part of the requirement failed.
+        reason: RootValidUntilReason,
     },
     /// Bearer subject confirmation requirements are not satisfied.
     #[error("subject confirmation is not satisfied: {reason}")]

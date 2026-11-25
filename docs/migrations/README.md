@@ -38,5 +38,6 @@ additions.
 - [Use plural names for metadata generation collections](unreleased-metadata-generation-collections.md)
 - [Sign encrypted assertions for the response they arrive in](unreleased-decrypted-assertion-signatures.md)
 - [Read metadata endpoints only in the metadata namespace](unreleased-metadata-endpoint-namespace.md)
+- [Require a `validUntil` on the metadata root](unreleased-root-valid-until.md)
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

@@ -1,25 +1,64 @@
-use std::time::SystemTime;
+use std::time::{Duration as StdDuration, SystemTime};
 
 use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime};
 
-use crate::error::{SamlError, TimeWindowField};
+use crate::error::{RootValidUntilReason, SamlError, TimeWindowField};
 use crate::validator::offset_datetime_from_system_time;
 use crate::xml::parse_timezoned_date_time;
+use crate::xml::protocol_element::SamlElement;
+
+#[derive(Debug, Clone, Default)]
+pub(super) struct ValidUntilBounds {
+    root: Option<String>,
+    bounds: Vec<String>,
+}
+
+impl ValidUntilBounds {
+    pub(super) fn from_path(path: &[&SamlElement]) -> Self {
+        Self {
+            root: path
+                .first()
+                .and_then(|root| group_valid_until(root))
+                .map(str::to_owned),
+            bounds: path
+                .iter()
+                .filter_map(|element| group_valid_until(element))
+                .map(str::to_owned)
+                .collect(),
+        }
+    }
+
+    pub(super) fn push_role(&mut self, descriptor: &SamlElement) {
+        self.bounds
+            .extend(descriptor.attr("validUntil").map(str::to_owned));
+    }
+}
+
+fn group_valid_until(element: &SamlElement) -> Option<&str> {
+    match element.local_name.as_str() {
+        "EntitiesDescriptor" | "EntityDescriptor" => element.attr("validUntil"),
+        _ => None,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct MetadataValidity {
     valid_until: Option<OffsetDateTime>,
+    root: RootValidUntil,
 }
 
 impl MetadataValidity {
-    pub(super) fn from_bounds(bounds: &[String]) -> Result<Self, SamlError> {
+    pub(super) fn from_bounds(bounds: &ValidUntilBounds) -> Result<Self, SamlError> {
         let mut valid_until: Option<OffsetDateTime> = None;
-        for bound in bounds {
+        for bound in &bounds.bounds {
             let bound = parse_valid_until(bound)?;
             valid_until = Some(valid_until.map_or(bound, |earliest| earliest.min(bound)));
         }
-        Ok(Self { valid_until })
+        Ok(Self {
+            valid_until,
+            root: RootValidUntil::parse(bounds.root.as_deref())?,
+        })
     }
 
     pub(crate) fn ensure_valid_at(self, now: SystemTime) -> Result<(), SamlError> {
@@ -31,6 +70,39 @@ impl MetadataValidity {
         }
         Ok(())
     }
+
+    pub(crate) fn root(self) -> RootValidUntil {
+        self.root
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RootValidUntil(Option<OffsetDateTime>);
+
+impl RootValidUntil {
+    pub(crate) fn parse(value: Option<&str>) -> Result<Self, SamlError> {
+        value.map(parse_valid_until).transpose().map(Self)
+    }
+
+    pub(crate) fn ensure_within(
+        self,
+        now: SystemTime,
+        max_validity: StdDuration,
+    ) -> Result<(), SamlError> {
+        let Some(valid_until) = self.0 else {
+            return Err(root_valid_until_refused(RootValidUntilReason::Missing));
+        };
+        if valid_until - offset_datetime_from_system_time(now)? > max_validity {
+            return Err(root_valid_until_refused(
+                RootValidUntilReason::BeyondMaxValidity,
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn root_valid_until_refused(reason: RootValidUntilReason) -> SamlError {
+    SamlError::MetadataRootValidUntilRefused { reason }
 }
 
 fn parse_valid_until(value: &str) -> Result<OffsetDateTime, SamlError> {
@@ -57,11 +129,12 @@ fn metadata_valid_until() -> SamlError {
 mod tests {
     use std::time::{Duration, SystemTime};
 
-    use crate::error::{SamlError, TimeWindowField};
+    use crate::error::{RootValidUntilReason, SamlError, TimeWindowField};
     use crate::metadata::{IdpMetadata, SpMetadata};
-    use crate::{EntityId, IdpDescriptor, MetadataTrustPolicy};
+    use crate::{EntityId, IdpDescriptor, MetadataTrustPolicy, SpDescriptor};
 
     const Y2030: u64 = 1_893_456_000;
+    const MAX_VALIDITY: Duration = Duration::from_secs(28 * 86_400);
 
     fn at(unix_seconds: u64) -> SystemTime {
         SystemTime::UNIX_EPOCH + Duration::from_secs(unix_seconds)
@@ -84,6 +157,86 @@ mod tests {
 
     fn valid_until(value: &str) -> String {
         format!(r#" validUntil="{value}""#)
+    }
+
+    fn idp_descriptor(xml: &str) -> Result<IdpDescriptor, SamlError> {
+        IdpDescriptor::from_metadata_xml(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            xml,
+            MetadataTrustPolicy::Unverified,
+        )
+    }
+
+    fn root_refused(result: Result<IdpDescriptor, SamlError>) -> Option<RootValidUntilReason> {
+        match result {
+            Err(SamlError::MetadataRootValidUntilRefused { reason }) => Some(reason),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn a_root_valid_until_is_accepted_up_to_the_max_validity() -> Result<(), SamlError> {
+        let earliest_accepted = at(Y2030) - MAX_VALIDITY;
+        for xml in [
+            entity(&valid_until("2030-01-01T00:00:00Z"), "", ""),
+            format!(
+                r#"<EntitiesDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"{}>{}</EntitiesDescriptor>"#,
+                valid_until("2030-01-01T00:00:00Z"),
+                entity("", "", "")
+            ),
+        ] {
+            idp_descriptor(&xml)?.require_root_valid_until(earliest_accepted, MAX_VALIDITY)?;
+            assert_eq!(
+                root_refused(idp_descriptor(&xml)?.require_root_valid_until(
+                    earliest_accepted - Duration::from_secs(1),
+                    MAX_VALIDITY
+                )),
+                Some(RootValidUntilReason::BeyondMaxValidity),
+                "{xml}"
+            );
+
+            let expired =
+                idp_descriptor(&xml)?.require_root_valid_until(at(Y2030), MAX_VALIDITY)?;
+            assert!(
+                is_valid_until_error(&expired.ensure_valid_at(at(Y2030))),
+                "{xml}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_valid_until_below_the_root_does_not_satisfy_the_root_requirement() -> Result<(), SamlError>
+    {
+        let near = valid_until("2030-01-01T00:00:00Z");
+        let now = at(Y2030 - 86_400);
+        for xml in [
+            entity("", "", ""),
+            entity("", &near, ""),
+            format!(
+                r#"<EntitiesDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata">{}</EntitiesDescriptor>"#,
+                entity(&near, &near, "")
+            ),
+        ] {
+            assert_eq!(
+                root_refused(idp_descriptor(&xml)?.require_root_valid_until(now, MAX_VALIDITY)),
+                Some(RootValidUntilReason::Missing),
+                "{xml}"
+            );
+        }
+
+        let sp = SpDescriptor::from_metadata_xml(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            &entity("", "", &near),
+            MetadataTrustPolicy::Unverified,
+        )?;
+        assert!(matches!(
+            sp.require_root_valid_until(now, MAX_VALIDITY),
+            Err(SamlError::MetadataRootValidUntilRefused {
+                reason: RootValidUntilReason::Missing
+            })
+        ));
+        Ok(())
     }
 
     #[test]
