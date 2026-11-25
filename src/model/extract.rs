@@ -112,7 +112,7 @@ pub(super) fn name_id_policy_from_extract(
 ) -> Result<Option<NameIdPolicy>, SamlError> {
     let format = extract
         .get_str(authn_request::NAME_ID_POLICY_FORMAT)
-        .map(NameIdFormat::from_uri);
+        .map(|format| NameIdFormat::from_uri(&collapse_whitespace(format)));
     let sp_name_qualifier = extract
         .get_str(authn_request::NAME_ID_POLICY_SP_NAME_QUALIFIER)
         .map(str::to_string);

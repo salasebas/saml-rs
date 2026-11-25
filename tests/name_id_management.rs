@@ -506,6 +506,30 @@ fn sp_initiated_new_id_is_received_and_answered() -> TestResult {
 }
 
 #[test]
+fn a_received_name_id_format_is_read_by_its_schema_value() -> TestResult {
+    let idp = identity_provider(Some(IDP_NIM_URL))?;
+    let sp = soap_service_provider()?;
+    let envelope = sp_request(&format!(
+        r#"<saml:NameID Format="&#xA; {PERSISTENT}&#x9;" SPNameQualifier="{SP_ENTITY_ID}">current-value</saml:NameID><samlp:Terminate/>"#
+    ))?;
+
+    let request = received_request(idp.receive_name_id_management(
+        &sp,
+        &envelope,
+        authenticated(),
+        validation(),
+    )?)?;
+
+    assert_eq!(
+        request.message().name_id(),
+        &NameId::new("current-value")
+            .with_format(NameIdFormat::Persistent)
+            .with_sp_name_qualifier(SP_ENTITY_ID)
+    );
+    Ok(())
+}
+
+#[test]
 fn sp_initiated_termination_is_received_and_answered() -> TestResult {
     let idp =
         identity_provider_with_templates(Some(IDP_NIM_URL), tag_prefixes::templates("p", "a"))?;

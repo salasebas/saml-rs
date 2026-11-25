@@ -304,7 +304,7 @@ fn name_id_from_extract(extract: &crate::util::Value, value: &str) -> Result<Nam
         authn_request::REQUESTED_NAME_ID_FORMAT,
         "AuthnRequest NameID Format",
     )?
-    .map(NameIdFormat::from_uri);
+    .map(|format| NameIdFormat::from_uri(&collapse_whitespace(format)));
     Ok(NameId::received(
         value.to_string(),
         format,

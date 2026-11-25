@@ -548,7 +548,9 @@ fn name_id(element: &SamlElement) -> NameId {
     let attr = |name| element.attr(name).map(str::to_string);
     NameId::received(
         element.text.clone(),
-        element.attr("Format").map(NameIdFormat::from_uri),
+        element
+            .attr("Format")
+            .map(|format| NameIdFormat::from_uri(&collapse_whitespace(format))),
         attr("NameQualifier"),
         attr("SPNameQualifier"),
         attr("SPProvidedID"),

@@ -314,6 +314,37 @@ fn received_authn_request_exposes_requested_name_id_and_confirmation(
 }
 
 #[test]
+fn received_authn_request_reads_name_id_formats_by_their_schema_value(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        let xml = insert_before_name_id_policy(
+            xml,
+            &format!(
+                "<saml:Subject><saml:NameID Format=\"&#xA; {PERSISTENT_FORMAT}&#x9;\">alice</saml:NameID></saml:Subject>"
+            ),
+        )?;
+        replace_name_id_policy(
+            xml,
+            &format!(
+                "<samlp:NameIDPolicy Format=\"&#x9;{PERSISTENT_FORMAT}  \" AllowCreate=\"true\"/>"
+            ),
+        )
+    })?;
+    let message = receipt.received.message();
+    assert_eq!(
+        message
+            .requested_subject()
+            .and_then(RequestedSubject::name_id),
+        Some(&NameId::new("alice").with_format(NameIdFormat::Persistent))
+    );
+    assert_eq!(
+        message.name_id_policy().and_then(NameIdPolicy::format),
+        Some(&NameIdFormat::Persistent)
+    );
+    Ok(())
+}
+
+#[test]
 fn received_authn_request_without_subject_leaves_it_absent(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), Ok)?;
