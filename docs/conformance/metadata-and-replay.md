@@ -172,7 +172,7 @@ application's.
 Not implemented:
 
 - Read or write `saml:Assertion` children of `EntityAttributes`. Import ignores them. A relying party that reads one must process it by the Core rules, MDAttr §2.3.
-- A publisher that puts an assertion in an entity's `EntityAttributes` must sign it independently, MDAttr §2.4. Mandatory for the publisher.
+- An assertion published in an entity's `EntityAttributes` must carry its own signature, not only the metadata's, MDAttr §2.4. Mandatory for the publisher.
 - A group's `EntityAttributes` must hold no assertion, MDAttr §2.3. Mandatory for the publisher.
 
 ## IdP scope declarations
