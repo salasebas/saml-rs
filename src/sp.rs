@@ -224,7 +224,7 @@ impl Engine {
                     true,
                     sig_alg,
                     &self.setting.transformation_algorithms,
-                    self.setting.signature_config.as_ref(),
+                    &self.setting.signature_prefix,
                 )?;
                 (encode_base64(signed.as_bytes()), None, None)
             }

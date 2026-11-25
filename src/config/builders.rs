@@ -8,7 +8,6 @@ use crate::idp;
 use crate::metadata::MetadataLifetime;
 use crate::sp;
 use crate::xml::name::validate_namespace_prefix;
-use crate::xml::signature_placement::signature_reference_path;
 use crate::xml::write::validate_tag_prefixes;
 
 use super::algorithms::NameIdFormat;
@@ -277,7 +276,7 @@ impl SpConfigBuilder {
         self
     }
 
-    /// Set the XML prefixes and embedded-signature placement.
+    /// Set the XML tag and signature prefixes.
     pub fn templates(mut self, templates: TemplatePolicy) -> Self {
         self.templates = templates;
         self
@@ -306,9 +305,8 @@ impl SpConfigBuilder {
     ///   base64 ([`SamlError::Invalid`] or [`SamlError::Base64`]);
     /// - the crypto provider does not support the selected combination of
     ///   RSA-OAEP digest and mask generation function;
-    /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
-    ///   begins with `xml` in any case, or the two tag prefixes are equal;
-    /// - the `SignatureConfig` reference uses unsupported path syntax;
+    /// - a tag prefix or the signature prefix is not an XML NCName or begins
+    ///   with `xml` in any case, or the two tag prefixes are equal;
     /// - generating SP metadata fails: a NameID format or an endpoint URL that
     ///   is not an absolute URI reference, such as a URL with `[` in its path,
     ///   two ACS endpoints with the same index, more ACS endpoints than
@@ -624,7 +622,7 @@ impl IdpConfigBuilder {
         self
     }
 
-    /// Set the XML prefixes and embedded-signature placement.
+    /// Set the XML tag and signature prefixes.
     pub fn templates(mut self, templates: TemplatePolicy) -> Self {
         self.templates = templates;
         self
@@ -654,9 +652,8 @@ impl IdpConfigBuilder {
     ///   base64 ([`SamlError::Invalid`] or [`SamlError::Base64`]);
     /// - the crypto provider does not support the selected combination of
     ///   RSA-OAEP digest and mask generation function;
-    /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
-    ///   begins with `xml` in any case, or the two tag prefixes are equal;
-    /// - the `SignatureConfig` reference uses unsupported path syntax;
+    /// - a tag prefix or the signature prefix is not an XML NCName or begins
+    ///   with `xml` in any case, or the two tag prefixes are equal;
     /// - generating IdP metadata fails: a NameID format or an endpoint URL
     ///   that is not an absolute URI reference, such as a URL with `[` in its
     ///   path, two artifact resolution endpoints with the same index, a
@@ -695,12 +692,7 @@ fn validate_shared_policy(
         &templates.tag_prefix_protocol,
         &templates.tag_prefix_assertion,
     )?;
-    if let Some(signature) = &templates.signature_config {
-        validate_namespace_prefix("SignatureConfig.prefix XML prefix", &signature.prefix)?;
-        if let Some(reference) = &signature.reference {
-            signature_reference_path(reference)?;
-        }
-    }
+    validate_namespace_prefix("signature prefix", &templates.signature_prefix)?;
     Ok(())
 }
 

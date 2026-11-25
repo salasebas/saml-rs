@@ -14,7 +14,7 @@ const FEDERATION_EXPIRY: u64 = 1_924_992_000;
 
 #[test]
 fn signed_federation_import_selects_named_idp_and_sp() -> Result<(), Box<dyn std::error::Error>> {
-    let xml = sign_metadata_root(FEDERATION, "EntitiesDescriptor", &[])?;
+    let xml = sign_metadata_root(FEDERATION, &[])?;
     let aggregate = MetadataAggregate::from_xml(
         &xml,
         trust(&[CertificatePem::new(CERT)]),
@@ -185,7 +185,7 @@ fn signed_federation_import_honors_raised_byte_limit() -> Result<(), Box<dyn std
         index += 1;
     }
     xml.push_str(end);
-    let signed = sign_metadata_root(&xml, "EntitiesDescriptor", &[])?;
+    let signed = sign_metadata_root(&xml, &[])?;
     let certificates = [CertificatePem::new(CERT)];
     assert!(matches!(
         MetadataAggregate::from_xml(&signed, trust(&certificates), limits),

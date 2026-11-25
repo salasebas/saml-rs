@@ -1,16 +1,12 @@
 use super::*;
-use saml_rs::{SignatureAction, SignatureConfig, TemplatePolicy};
+use saml_rs::TemplatePolicy;
 
 #[test]
 fn typed_logout_round_trips_with_swapped_prefixes() -> Result<(), Box<dyn std::error::Error>> {
     let templates = TemplatePolicy {
         tag_prefix_protocol: "saml".into(),
         tag_prefix_assertion: "samlp".into(),
-        signature_config: Some(SignatureConfig {
-            prefix: "sig".into(),
-            reference: None,
-            action: SignatureAction::After,
-        }),
+        signature_prefix: "sig".into(),
         ..TemplatePolicy::default()
     };
     let sp = ServiceProvider::new(

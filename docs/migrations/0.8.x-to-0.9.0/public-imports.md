@@ -11,7 +11,7 @@ and `xml` no longer compile. The same applies to the compatibility crates
 | --- | --- |
 | `xml::XmlLimits` or `xml::dom::XmlLimits` | `saml_rs::XmlLimits` |
 | `context::SchemaValidator` | `saml_rs::SchemaValidator` |
-| `entity::{SignatureConfig, SignatureAction}` | `saml_rs::{SignatureConfig, SignatureAction}` |
+| `entity::{SignatureConfig, SignatureAction}` | Removed; set `TemplatePolicy::signature_prefix`. See [Set the signature prefix on `TemplatePolicy`](signature-placement.md) |
 | `template::{LOGOUT_REQUEST_TEMPLATE, LOGOUT_RESPONSE_TEMPLATE}` | [Typed logout operations](config.md#replace-logout-templates-with-typed-operations) |
 | `crypto::{crypto_provider_info, initialize_crypto_provider, CryptoFipsStatus, CryptoProvider, CryptoProviderInfo}` | The same names in `saml_rs`, with a crypto provider enabled |
 

@@ -3,8 +3,8 @@ use bergshamra::{DsigContext, Key, KeysManager};
 use saml_rs::crypto::keys::load_hmac_secret;
 use saml_rs::{
     CertificatePem, Credentials, HmacSecret, IdpValidationPolicy, InMemoryReplayCache,
-    PrivateKeyPem, SignatureConfig, SoapBodyElement, SoapResponse, SpValidationPolicy,
-    TemplatePolicy, X509Credential, XmlSignatureProfile,
+    PrivateKeyPem, SoapBodyElement, SoapResponse, SpValidationPolicy, TemplatePolicy,
+    X509Credential, XmlSignatureProfile,
 };
 use std::time::SystemTime;
 
@@ -87,11 +87,7 @@ fn signed_artifact_resolve_completes_the_protected_soap_exchange() -> TestResult
         AcsEndpoint::artifact(SP_ACS_ARTIFACT)?.with_default(),
     )?;
     let templates = TemplatePolicy {
-        signature_config: Some(SignatureConfig {
-            prefix: "sig".into(),
-            reference: Some("/*[local-name(.)='AuthnRequest']/*[local-name(.)='Issuer']".into()),
-            ..SignatureConfig::default()
-        }),
+        signature_prefix: "sig".into(),
         ..TemplatePolicy::default()
     };
     let parties = build_parties(

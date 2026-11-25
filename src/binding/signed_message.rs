@@ -1,7 +1,7 @@
 #[cfg(crypto)]
 use crate::binding::encode_base64;
 use crate::constants::{Binding, ParserType};
-use crate::entity::{BindingContext, EntitySetting, SignatureConfig};
+use crate::entity::{BindingContext, EntitySetting};
 use crate::error::SamlError;
 
 pub(crate) struct SignedMessage {
@@ -61,15 +61,11 @@ pub(crate) fn sign_message(
                 true,
                 sig_alg,
                 &setting.transformation_algorithms,
-                setting.signature_config.as_ref(),
+                &setting.signature_prefix,
             )?;
             (encode_base64(signed.as_bytes()), None, None)
         }
-        Binding::Soap => (
-            sign_soap_message(setting, xml, setting.signature_config.as_ref())?,
-            None,
-            None,
-        ),
+        Binding::Soap => (sign_soap_message(setting, xml)?, None, None),
         Binding::Artifact => return Err(SamlError::UnsupportedBinding { binding }),
     };
     Ok(SignedMessage {
@@ -82,11 +78,7 @@ pub(crate) fn sign_message(
 }
 
 #[cfg(crypto)]
-pub(crate) fn sign_soap_message(
-    setting: &EntitySetting,
-    xml: &str,
-    config: Option<&SignatureConfig>,
-) -> Result<String, SamlError> {
+pub(crate) fn sign_soap_message(setting: &EntitySetting, xml: &str) -> Result<String, SamlError> {
     use crate::constants::transform_algorithm;
     use crate::crypto::SigningCredential;
 
@@ -98,16 +90,12 @@ pub(crate) fn sign_soap_message(
             transform_algorithm::ENVELOPED_SIGNATURE.to_string(),
             transform_algorithm::EXC_C14N.to_string(),
         ],
-        config,
+        &setting.signature_prefix,
     )
 }
 
 #[cfg(not(crypto))]
-pub(crate) fn sign_soap_message(
-    _setting: &EntitySetting,
-    _xml: &str,
-    _config: Option<&SignatureConfig>,
-) -> Result<String, SamlError> {
+pub(crate) fn sign_soap_message(_setting: &EntitySetting, _xml: &str) -> Result<String, SamlError> {
     Err(SamlError::Unsupported(
         "signing SOAP messages requires a crypto provider feature".into(),
     ))

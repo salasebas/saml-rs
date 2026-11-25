@@ -670,18 +670,12 @@ fn hardening_signed_metadata_verifies_against_trust_anchor(
     use saml_rs::crypto::keys::read_private_key;
     use saml_rs::crypto::sign_saml_xml;
     use saml_rs::{
-        CertificatePem, EntityId, IdpDescriptor, MetadataTrustPolicy, SignatureAction,
-        SignatureConfig, SignatureVerificationReason,
+        CertificatePem, EntityId, IdpDescriptor, MetadataTrustPolicy, SignatureVerificationReason,
     };
 
     let md = "<EntityDescriptor ID=\"_md1\" entityID=\"https://idp.example.com/metadata\" xmlns=\"urn:oasis:names:tc:SAML:2.0:metadata\" xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><IDPSSODescriptor protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><SingleSignOnService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://idp/sso\"/></IDPSSODescriptor></EntityDescriptor>";
     let key = read_private_key(PRIVKEY, None)?;
-    let config = SignatureConfig {
-        prefix: "ds".into(),
-        reference: Some("/*[local-name(.)='EntityDescriptor']".into()),
-        action: SignatureAction::Prepend,
-    };
-    let signed = sign_saml_xml(md, true, &key, CERT, RSA_SHA256, &[], Some(&config))?;
+    let signed = sign_saml_xml(md, true, &key, CERT, RSA_SHA256, &[], None)?;
 
     let trusted_certificates = [CertificatePem::new(CERT)];
     let trust = MetadataTrustPolicy::RequireSignature {

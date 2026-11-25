@@ -56,7 +56,6 @@ use saml_rs::{
 use saml_rs::{
     AssertionEncryptionPolicy, Credentials, PrivateKeyPem, XmlEncryptionPolicy, XmlPolicy,
 };
-use saml_rs::{SignatureAction, SignatureConfig};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use url::Url;
 
@@ -209,12 +208,7 @@ fn signed_idp_metadata() -> Result<String, SamlError> {
         r#"<EntityDescriptor ID="_idp_md1" entityID="{IDP_ENTITY_ID}" xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{IDP_SSO_POST}"/></IDPSSODescriptor></EntityDescriptor>"#
     );
     let key = read_private_key(PRIVKEY, None)?;
-    let config = SignatureConfig {
-        prefix: "ds".into(),
-        reference: Some("/*[local-name(.)='EntityDescriptor']".into()),
-        action: SignatureAction::Prepend,
-    };
-    sign_saml_xml(&xml, true, &key, CERT, RSA_SHA256, &[], Some(&config))
+    sign_saml_xml(&xml, true, &key, CERT, RSA_SHA256, &[], None)
 }
 
 fn sp_with_validation(validation: SpValidationPolicy) -> Result<SpConfig, SamlError> {

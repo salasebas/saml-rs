@@ -41,7 +41,7 @@ pub struct EntitySetting {
     pub schema_validator: Option<crate::SchemaValidator>,
     pub tag_prefix_protocol: String,
     pub tag_prefix_assertion: String,
-    pub signature_config: Option<SignatureConfig>,
+    pub signature_prefix: String,
     pub transformation_algorithms: Vec<String>,
 }
 
@@ -111,55 +111,9 @@ impl fmt::Debug for EntitySetting {
             .field("schema_validator", &self.schema_validator)
             .field("tag_prefix_protocol", &self.tag_prefix_protocol)
             .field("tag_prefix_assertion", &self.tag_prefix_assertion)
-            .field("signature_config", &self.signature_config)
+            .field("signature_prefix", &self.signature_prefix)
             .field("transformation_algorithms", &self.transformation_algorithms)
             .finish()
-    }
-}
-
-/// Where to place the `<Signature>` relative to the reference element.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SignatureAction {
-    /// Insert as the reference's next sibling.
-    #[default]
-    After,
-    /// Insert as the reference's previous sibling.
-    Before,
-    /// Insert as the reference's first child.
-    Prepend,
-    /// Insert as the reference's last child.
-    Append,
-}
-
-/// Customizes the embedded XML-DSig signature.
-///
-/// Start from [`Default`](Default::default) and assign the fields you change.
-#[derive(Debug, Clone)]
-#[non_exhaustive]
-pub struct SignatureConfig {
-    /// Element prefix for the signature (default `ds`).
-    ///
-    /// Must be an XML NCName that does not begin with `xml` in any case.
-    pub prefix: String,
-    /// Element used as the anchor for signature placement.
-    ///
-    /// Use one or more literal `/*[local-name(.)='NCName']` steps, starting at
-    /// the document element. Each step after the first selects direct children
-    /// by local name. The first complete match in document order is used.
-    /// The builders reject unsupported syntax. Signing fails if nothing matches.
-    /// With `None`, the signature is placed after the signed target's `<Issuer>`.
-    pub reference: Option<String>,
-    /// Placement relative to `reference`.
-    pub action: SignatureAction,
-}
-
-impl Default for SignatureConfig {
-    fn default() -> Self {
-        Self {
-            prefix: "ds".to_string(),
-            reference: None,
-            action: SignatureAction::After,
-        }
     }
 }
 
@@ -201,7 +155,7 @@ impl Default for EntitySetting {
             schema_validator: None,
             tag_prefix_protocol: "samlp".to_string(),
             tag_prefix_assertion: "saml".to_string(),
-            signature_config: None,
+            signature_prefix: "ds".to_string(),
             transformation_algorithms: vec![
                 transform_algorithm::ENVELOPED_SIGNATURE.to_string(),
                 transform_algorithm::EXC_C14N.to_string(),

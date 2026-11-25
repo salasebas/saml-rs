@@ -22,7 +22,6 @@ use saml_rs::tests::engine::{create_logout_request, create_logout_response};
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::xml::dom::{parse_all_roots, Node};
 use saml_rs::SamlError;
-use saml_rs::{SignatureAction, SignatureConfig};
 
 const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -102,12 +101,6 @@ fn assert_invalid(result: &Result<String, SamlError>) {
 #[test]
 fn crypto_signature_custom_prefix_still_verifies() -> TestResult {
     let key = read_private_key(PRIVKEY, None)?;
-    let config = SignatureConfig {
-        prefix: "ds2".into(),
-        reference: Some("/*[local-name(.)='AuthnRequest']/*[local-name(.)='Issuer']".into()),
-        action: SignatureAction::Before,
-    };
-
     let signed = sign_saml_xml(
         AUTHN_REQUEST,
         true,
@@ -115,7 +108,7 @@ fn crypto_signature_custom_prefix_still_verifies() -> TestResult {
         CERT,
         RSA_SHA256,
         &[],
-        Some(&config),
+        Some("ds2"),
     )?;
 
     assert!(signed.contains("<ds2:Signature"));
@@ -128,12 +121,6 @@ fn crypto_signature_custom_prefix_still_verifies() -> TestResult {
 fn crypto_signature_prefix_rejects_invalid_ncname() -> TestResult {
     let key = read_private_key(PRIVKEY, None)?;
     for prefix in ["", "ds sig", "ds:sig", "1ds", "xml", "xmlns"] {
-        let config = SignatureConfig {
-            prefix: prefix.into(),
-            reference: None,
-            action: SignatureAction::After,
-        };
-
         assert_invalid(&sign_saml_xml(
             AUTHN_REQUEST,
             true,
@@ -141,7 +128,7 @@ fn crypto_signature_prefix_rejects_invalid_ncname() -> TestResult {
             CERT,
             RSA_SHA256,
             &[],
-            Some(&config),
+            Some(prefix),
         ));
     }
     Ok(())

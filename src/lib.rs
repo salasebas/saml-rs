@@ -453,9 +453,9 @@ pub use config::{
     IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpMetadataConfig, IdpValidationPolicy,
     KeyEncryptionAlgorithm, ManageNameIdService, MaskGenerationFunction, MetadataAggregate,
     MetadataTrustPolicy, NameIdCreationPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
-    ResponseSignaturePolicy, Rsa15KeyTransportPolicy, SignatureAction, SignatureAlgorithm,
-    SignatureConfig, SpConfig, SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpValidationPolicy,
-    TemplatePolicy, TransformAlgorithm, X509Credential, XmlEncryptionPolicy, XmlLimits, XmlPolicy,
+    ResponseSignaturePolicy, Rsa15KeyTransportPolicy, SignatureAlgorithm, SpConfig,
+    SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpValidationPolicy, TemplatePolicy,
+    TransformAlgorithm, X509Credential, XmlEncryptionPolicy, XmlLimits, XmlPolicy,
     XmlSignatureProfile,
 };
 #[cfg(crypto)]

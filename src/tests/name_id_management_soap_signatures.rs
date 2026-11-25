@@ -4,12 +4,13 @@ use bergshamra::{DsigContext, KeysManager};
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::transform_algorithm::{C14N, ENVELOPED_SIGNATURE};
 use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
+use saml_rs::tests::signature_relocation::{relocate_signature, Relocation};
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EndpointUrl, EntityId, IdentityProvider, IdpConfig,
     InMemoryReplayCache, ManageNameIdService, MetadataTrustPolicy, NameId, NameIdChange,
     NameIdManagementReceipt, PrivateKeyPem, ReplayPolicy, SamlError, SamlValidationContext,
-    ServiceProvider, SignatureConfig, SoapBodyElement, SoapChannel, SoapResponse, SpConfig,
-    SpDescriptor, SsoEndpoint, StartNameIdManagement, X509Credential,
+    ServiceProvider, SoapBodyElement, SoapChannel, SoapResponse, SpConfig, SpDescriptor,
+    SsoEndpoint, StartNameIdManagement, X509Credential,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -59,9 +60,9 @@ fn providers() -> Result<(IdentityProvider, SpDescriptor, SpDescriptor), Box<dyn
     ))
 }
 
-fn sign(xml: &str, config: Option<&SignatureConfig>) -> Result<String, SamlError> {
+fn sign(xml: &str) -> Result<String, SamlError> {
     let key = read_private_key(SP_KEY, None)?;
-    sign_saml_xml(xml, true, &key, SP_CERT, RSA_SHA256, &[], config)
+    sign_saml_xml(xml, true, &key, SP_CERT, RSA_SHA256, &[], None)
 }
 
 fn sign_in_soap_body(
@@ -104,7 +105,7 @@ fn soap_manage_name_id_request_checks_the_unqualified_id() -> TestResult {
               <samlp:Terminate/>
             </samlp:ManageNameIDRequest>"#
     );
-    let xml = sign(&xml, None)?.replacen(" ID=", r#" xmlns:ID="urn:test" ID="#, 1);
+    let xml = sign(&xml)?.replacen(" ID=", r#" xmlns:ID="urn:test" ID="#, 1);
     let envelope = saml_rs::SoapRequest::try_new(EndpointUrl::try_new(IDP_MANAGE)?, &xml)?;
     let receipt = idp.receive_name_id_management(
         &sp,
@@ -165,15 +166,13 @@ fn soap_manage_name_id_request_verifies_the_sp_signature() -> TestResult {
             <samlp:Terminate/>
         </samlp:ManageNameIDRequest>"#
     );
-    let misplaced = SignatureConfig {
-        reference: Some(
-            "/*[local-name(.)='ManageNameIDRequest']/*[local-name(.)='Extensions']".into(),
-        ),
-        ..SignatureConfig::default()
-    };
+    let misplaced = relocate_signature(
+        &sign(&xml)?,
+        &["ManageNameIDRequest", "Extensions"],
+        Relocation::After,
+    )?;
     let destination = EndpointUrl::try_new(IDP_MANAGE)?;
-    let misplaced =
-        saml_rs::SoapRequest::try_new(destination.clone(), &sign(&xml, Some(&misplaced))?)?;
+    let misplaced = saml_rs::SoapRequest::try_new(destination.clone(), &misplaced)?;
     let result = idp.receive_name_id_management(
         &sp,
         misplaced.envelope(),
@@ -184,7 +183,7 @@ fn soap_manage_name_id_request_verifies_the_sp_signature() -> TestResult {
         matches!(result, Err(SamlError::ProtocolProfile(_))),
         "{result:?}"
     );
-    let request = saml_rs::SoapRequest::try_new(destination, &sign(&xml, None)?)?;
+    let request = saml_rs::SoapRequest::try_new(destination, &sign(&xml)?)?;
     let mut cache = InMemoryReplayCache::with_clock(|| SystemTime::UNIX_EPOCH);
     fn validation(cache: &mut InMemoryReplayCache) -> SamlValidationContext<'_> {
         SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::RequireCache(cache))
@@ -223,15 +222,12 @@ fn soap_manage_name_id_response_verifies_the_sp_signature() -> TestResult {
         let request = SoapBodyElement::from_envelope(started.request().envelope())?;
         let request = crate::xml::protocol_element::parse_saml(request.xml())?;
         let request_id = request.required_attr("ID")?;
-        let xml = sign(
-            &format!(
-                r#"<samlp:ManageNameIDResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_response" Version="2.0" IssueInstant="2026-01-01T00:00:00Z" InResponseTo="{request_id}">
+        let xml = sign(&format!(
+            r#"<samlp:ManageNameIDResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_response" Version="2.0" IssueInstant="2026-01-01T00:00:00Z" InResponseTo="{request_id}">
                 <saml:Issuer>{SP}</saml:Issuer>
                 <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>
             </samlp:ManageNameIDResponse>"#
-            ),
-            None,
-        )?;
+        ))?;
         let response = SoapResponse::try_new(&xml)?;
         let result = started.finish(response.envelope());
         if trusted {
