@@ -12,7 +12,9 @@ and `IdentityProvider::start_name_id_management_redirect` now return
 `SamlError::Invalid` before they sign or encrypt the request when, with the
 format the request writes:
 
-- a persistent or transient value is longer than 256 characters
+- a persistent value is longer than 256 characters, and for `start_slo` also
+  a transient value (name identifier management refuses every transient
+  identifier, as before)
 - an `entity` value is not an absolute URI reference of at most 1024
   characters with collapsed whitespace
 - an `entity` `NameId` has `NameQualifier`, `SPNameQualifier`, or
@@ -38,3 +40,8 @@ never checked the value. Both now send the identifier as the identity
 provider issued it, because the request must name the principal as both
 providers know it. You do not need to change code. If you matched that
 `SamlError::Invalid` error, the request now succeeds instead.
+
+An `entity` `NameId` must still omit `NameQualifier`, `SPNameQualifier`, and
+`SPProvidedID`. The service provider forwards a received one unchanged so
+that the session stays manageable, but do not add qualifiers to an `entity`
+`NameId` you build yourself.

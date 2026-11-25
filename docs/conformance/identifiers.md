@@ -108,7 +108,8 @@ other `Format` URI.
 | For a persistent or pairwise transient ID, omit `NameQualifier` only when context identifies its creator, and `SPNameQualifier` only in a message solely for the service provider it would name | Optional | Core §8.3.7, §8.3.8 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Reject an `entity` `<NameID>` that the identity provider writes in a `Response`, a `LogoutRequest`, or a `ManageNameIDRequest` whose value or `NewID` is not an absolute URI reference of at most 1024 characters, or that has `NameQualifier`, `SPNameQualifier`, or `SPProvidedID` | Mandatory | Core §8.3.6, §1.3.2 | Always |
 | Reject an `entity` value in those identity provider messages that the `anyURI` whitespace collapse would change | Library policy: a peer compares the value with an entity ID without collapsing it. | Core §8.3.6 | Always |
-| Send the `<NameID>` of a service provider `LogoutRequest` or `ManageNameIDRequest` without the length and `entity` checks above | Library policy: Conformance §3.3 places Core §8.3.7 and §8.3.8 on the identifier's producer, and the request must identify the principal as the identity provider issued it. | Conformance §3.3, Core §3.6.1, Profiles §4.4.4.1 | Always |
+| Send a persistent or transient `<NameID>` over 256 characters in a service provider `LogoutRequest` or `ManageNameIDRequest` as received | Library policy: Conformance §3.3 places Core §8.3.7 and §8.3.8 on the identity provider that produced the identifier, and the request must name the principal as it was issued. | Conformance §3.3, Core §3.6.1, Profiles §4.4.4.1 | Always |
+| Forward an `entity` `<NameID>` that breaks Core §8.3.6 in those service provider requests as received | Library policy: a compatibility exception to Core §8.3.6, so that a session accepted from an identity provider that sent such an identifier can still be logged out or managed. | Core §8.3.6, Profiles §4.4.4.1, Core §3.6.1 | Always |
 | For a persistent ID, write the alternative identifier most recently set by the service provider or affiliation, and omit `SPProvidedID` if none exists | Mandatory | Core §8.3.7, §3.6.3, E55 | `NameId::with_sp_provided_id` |
 | Accept a caller-supplied persistent or transient value without checking randomness, opacity, or reassignment | Library policy: the crate cannot check those properties on a value it did not generate. | Core §8.3.7, §8.3.8 | `NameId::new` |
 | Accept a received persistent or transient `<NameID>` that misses the producer rules, including one over 256 characters | Library policy: Conformance §3.3 places Core §8.3.7 and §8.3.8 on the producer. | Conformance §3.3 | Always |
@@ -130,6 +131,10 @@ The caller owns these rules, and the crate has no identifier store or log.
 - Treat a transient value as opaque and temporary. Recommended, Core §8.3.8.
 - Set `NameQualifier` and `SPNameQualifier` to the entities Core §8.3.7
   names. Mandatory, Core §8.3.7.
+- Omit `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` on an
+  `entity`-format `NameId` that the service provider builds for a
+  `LogoutRequest` or a `ManageNameIDRequest`, which write every qualifier
+  they are given. Mandatory, Core §8.3.6.
 
 A requested `NameIDPolicy` `SPNameQualifier` is checked as in
 [Web Browser SSO generation](web-browser-sso-generation.md#identity-provider-response).
