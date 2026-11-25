@@ -32,13 +32,14 @@ the caller decoded.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Read a received browser binding payload as UTF-8, with or without a byte order mark, and refuse bytes that are not UTF-8 | Mandatory | XML 1.0 §4.3.3 | Always |
+| Read a received browser binding payload as UTF-8, with or without a byte order mark | Mandatory | XML 1.0 §4.3.3 | Always |
 | Read the document as UTF-8 whatever its `encoding` declaration names | Library policy: reason not recorded. | XML 1.0 §4.3.3 | Always |
 
 ## Not implemented
 
 - Reading an entity encoded in UTF-16. Mandatory for an XML processor, XML 1.0
-  §4.3.3. A UTF-16 payload is refused as malformed XML.
+  §4.3.3. A UTF-16 payload, like any payload that is not UTF-8, is refused as
+  malformed XML.
 - Reporting an `encoding` declaration that does not match the bytes as a fatal
   error. Mandatory for an XML processor without external encoding
   information, XML 1.0 §4.3.3.
