@@ -7,7 +7,7 @@ use std::{
 };
 
 use axum_sp::{Config, IdpLogoutTransport};
-use saml_rs::InMemoryReplayCache;
+use saml_rs::{CertificatePem, InMemoryReplayCache, PrivateKeyPem, X509Credential};
 use url::Url;
 
 const EXAMPLE_DIR: &str = env!("CARGO_MANIFEST_DIR");
@@ -20,8 +20,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         public_base_url: Url::parse(&setting("SP_PUBLIC_BASE_URL", "http://localhost:3000/")?)?,
         idp_entity_id: setting("IDP_ENTITY_ID", "http://127.0.0.1:8080/realms/saml-rs")?,
         idp_metadata_xml: read_file("IDP_METADATA_FILE", "keycloak/idp-metadata.xml")?,
-        sp_certificate_pem: read_file("SP_CERTIFICATE_FILE", "keys/sp-cert.pem")?,
-        sp_private_key_pem: read_file("SP_PRIVATE_KEY_FILE", "keys/sp-key.pem")?,
+        sp_signing_credential: X509Credential::new(
+            CertificatePem::new(read_file("SP_CERTIFICATE_FILE", "keys/sp-cert.pem")?),
+            PrivateKeyPem::new(read_file("SP_PRIVATE_KEY_FILE", "keys/sp-key.pem")?),
+        ),
         max_session_lifetime: Duration::from_secs(
             setting("SESSION_MAX_LIFETIME_SECONDS", "28800")?.parse()?,
         ),

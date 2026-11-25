@@ -173,18 +173,32 @@ pub(crate) async fn home(State(app): App, headers: HeaderMap) -> Result<Response
     let Some(session) = session else {
         return redirect("home", paths::LOGIN);
     };
-    Ok(Html(format!(
+    let page = Html(format!(
         "<!doctype html>\n<html lang=\"en\">\n<meta charset=\"utf-8\">\n<title>Signed in</title>\n\
          <p>Signed in as <strong>{}</strong>.</p>\n\
          <form method=\"post\" action=\"{}\"><button>Sign out</button></form>\n",
         escape_html(session.name_id.value()),
         paths::LOGOUT
-    ))
-    .into_response())
+    ));
+    Ok(([(header::CACHE_CONTROL, "no-store")], page).into_response())
 }
 
 pub(crate) async fn logout(State(app): App, headers: HeaderMap) -> Result<Response, Failure> {
     const OPERATION: &str = "start_slo";
+    let origin = headers.get(header::ORIGIN).map(HeaderValue::as_bytes);
+    if origin
+        != Some(
+            app.public_base_url
+                .origin()
+                .ascii_serialization()
+                .as_bytes(),
+        )
+    {
+        return Err(forbidden(
+            OPERATION,
+            "the logout form was posted from another origin",
+        ));
+    }
     let now = app.now();
     let session = match cookie::SESSION.read(&headers) {
         Some(session_id) => app.sessions.take_live(session_id, now)?,
@@ -266,7 +280,7 @@ impl IntoResponse for Failure {
     fn into_response(self) -> Response {
         let (status, body) = match self {
             Self::BadRequest => (StatusCode::BAD_REQUEST, "Bad request.\n"),
-            Self::Refused => (StatusCode::FORBIDDEN, "Sign-in refused.\n"),
+            Self::Refused => (StatusCode::FORBIDDEN, "Request refused.\n"),
             Self::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "Internal error.\n"),
         };
         (status, body).into_response()
@@ -286,6 +300,11 @@ impl From<StoreUnavailable> for Failure {
 fn bad_request(operation: &'static str, reason: &'static str) -> Failure {
     warn!(operation, outcome = "bad_request", reason);
     Failure::BadRequest
+}
+
+fn forbidden(operation: &'static str, reason: &'static str) -> Failure {
+    warn!(operation, outcome = "forbidden", reason);
+    Failure::Refused
 }
 
 fn refused(operation: &'static str, request_id: &str, error: impl Debug) -> Failure {

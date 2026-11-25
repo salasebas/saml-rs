@@ -35,6 +35,7 @@ use url::{form_urlencoded, Url};
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
 const SP_BASE_URL: &str = "https://sp.example.test/";
+const SP_ORIGIN: &str = "https://sp.example.test";
 const SP_ENTITY_ID: &str = "https://sp.example.test/saml/metadata";
 const IDP_ENTITY_ID: &str = "https://idp.example.test/metadata";
 const NAME_ID: &str = "alice@example.com";
@@ -92,8 +93,10 @@ impl Harness {
                 public_base_url: Url::parse(SP_BASE_URL)?,
                 idp_entity_id: IDP_ENTITY_ID.to_owned(),
                 idp_metadata_xml: idp.metadata_xml().to_owned(),
-                sp_certificate_pem: SP_CERTIFICATE.to_owned(),
-                sp_private_key_pem: SP_PRIVATE_KEY.to_owned(),
+                sp_signing_credential: X509Credential::new(
+                    CertificatePem::new(SP_CERTIFICATE),
+                    PrivateKeyPem::new(SP_PRIVATE_KEY),
+                ),
                 max_session_lifetime: MAX_SESSION_LIFETIME,
                 idp_logout_transport: IdpLogoutTransport::HttpsOnly,
             },
@@ -159,6 +162,23 @@ impl Harness {
             .router
             .clone()
             .oneshot(request.body(Body::from(body))?)
+            .await?)
+    }
+
+    /// `POST /logout` from a page with `origin`, as the sign-out button posts it.
+    async fn logout(
+        &self,
+        session_cookie: &str,
+        origin: Option<&str>,
+    ) -> TestResult<Response<Body>> {
+        let mut request = Request::post(paths::LOGOUT).header(header::COOKIE, session_cookie);
+        if let Some(origin) = origin {
+            request = request.header(header::ORIGIN, origin);
+        }
+        Ok(self
+            .router
+            .clone()
+            .oneshot(request.body(Body::empty())?)
             .await?)
     }
 
@@ -283,14 +303,21 @@ fn query_value(url: &Url, name: &str) -> Option<String> {
 
 /// The `name=value` pair of a `Set-Cookie` that stores a non-empty value.
 fn set_cookie(response: &Response<Body>, name: &str) -> Option<String> {
+    set_cookie_header(response, name).and_then(|cookie| cookie.split(';').next().map(str::to_owned))
+}
+
+/// The whole `Set-Cookie` header that stores a non-empty value under `name`.
+fn set_cookie_header(response: &Response<Body>, name: &str) -> Option<String> {
     response
         .headers()
         .get_all(header::SET_COOKIE)
         .iter()
         .filter_map(|value| value.to_str().ok())
-        .filter_map(|cookie| cookie.split(';').next())
-        .find(|pair| {
-            pair.split_once('=')
+        .find(|cookie| {
+            cookie
+                .split(';')
+                .next()
+                .and_then(|pair| pair.split_once('='))
                 .is_some_and(|(key, value)| key == name && !value.is_empty())
         })
         .map(str::to_owned)
@@ -315,12 +342,32 @@ async fn sp_initiated_login_reaches_the_protected_page() -> TestResult {
     assert_eq!(unauthenticated.status(), StatusCode::SEE_OTHER);
     assert_eq!(location(&unauthenticated)?, paths::LOGIN);
 
+    let login = harness.get(paths::LOGIN, None).await?;
+    let pending_cookie = set_cookie_header(&login, "saml_pending").ok_or("no pending cookie")?;
+    let attributes: Vec<&str> = pending_cookie.split("; ").skip(1).collect();
+    assert_eq!(
+        attributes,
+        [
+            "HttpOnly",
+            "Secure",
+            "SameSite=None",
+            "Path=/saml/acs",
+            "Max-Age=600"
+        ],
+        "the IdP's cross-site POST to the ACS must carry the pending cookie"
+    );
+
     let session_cookie = harness.sign_in(alice()).await?;
 
-    let page = harness
-        .protected_page(&session_cookie)
-        .await?
-        .ok_or("redirected to login")?;
+    let page = harness.get("/", Some(&session_cookie)).await?;
+    assert_eq!(page.status(), StatusCode::OK);
+    assert_eq!(
+        page.headers()
+            .get(header::CACHE_CONTROL)
+            .map(|value| value.as_bytes()),
+        Some(&b"no-store"[..])
+    );
+    let page = body_text(page).await?;
     assert!(page.contains(NAME_ID), "page: {page}");
     Ok(())
 }
@@ -539,9 +586,7 @@ async fn logout_ends_the_session_and_correlates_the_response() -> TestResult {
     let harness = Harness::new().await?;
 
     let session_cookie = harness.sign_in(alice()).await?;
-    let logout = harness
-        .post(paths::LOGOUT, &[], Some(&session_cookie))
-        .await?;
+    let logout = harness.logout(&session_cookie, Some(SP_ORIGIN)).await?;
     assert_eq!(logout.status(), StatusCode::SEE_OTHER);
     assert_eq!(harness.protected_page(&session_cookie).await?, None);
     let logout_request = Url::parse(location(&logout)?)?;
@@ -576,9 +621,7 @@ async fn logout_ends_the_session_and_correlates_the_response() -> TestResult {
     // A signed response for another logout request, sent with this logout's
     // live RelayState.
     let session_cookie = harness.sign_in(alice()).await?;
-    let logout = harness
-        .post(paths::LOGOUT, &[], Some(&session_cookie))
-        .await?;
+    let logout = harness.logout(&session_cookie, Some(SP_ORIGIN)).await?;
     let relay_state =
         query_value(&Url::parse(location(&logout)?)?, "RelayState").ok_or("no RelayState")?;
     let other_request = second_service_provider()?.start_slo(
@@ -617,6 +660,30 @@ async fn logout_ends_the_session_and_correlates_the_response() -> TestResult {
     let refused = harness.get(&mismatched_path, None).await?;
     assert!(refused.status().is_client_error(), "{}", refused.status());
     assert_eq!(harness.protected_page(&session_cookie).await?, None);
+    Ok(())
+}
+
+#[tokio::test]
+async fn logout_posted_from_another_origin_changes_nothing() -> TestResult {
+    let harness = Harness::new().await?;
+    let session_cookie = harness.sign_in(alice()).await?;
+
+    for origin in [
+        Some("https://evil.example"),
+        Some("https://idp.example.test"),
+        None,
+    ] {
+        let logout = harness.logout(&session_cookie, origin).await?;
+        assert_eq!(logout.status(), StatusCode::FORBIDDEN, "Origin {origin:?}");
+        assert!(
+            logout.headers().get(header::SET_COOKIE).is_none(),
+            "Origin {origin:?}"
+        );
+        assert!(
+            harness.protected_page(&session_cookie).await?.is_some(),
+            "Origin {origin:?} ended the session"
+        );
+    }
     Ok(())
 }
 

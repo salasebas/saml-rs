@@ -19,9 +19,9 @@ use axum::{
     Router,
 };
 use saml_rs::{
-    AcsEndpoint, AuthnRequestSigningPolicy, CertificatePem, Credentials, EntityId, IdpDescriptor,
-    InMemoryReplayCache, MetadataTrustPolicy, PendingLogoutRequest, PrivateKeyPem, SamlError,
-    ServiceProvider, SloEndpoint, SpConfig, SpValidationPolicy, X509Credential,
+    AcsEndpoint, AuthnRequestSigningPolicy, Credentials, EntityId, IdpDescriptor,
+    InMemoryReplayCache, MetadataTrustPolicy, PendingLogoutRequest, SamlError, ServiceProvider,
+    SloEndpoint, SpConfig, SpValidationPolicy, X509Credential,
 };
 use url::Url;
 
@@ -42,12 +42,11 @@ pub struct Config {
     pub public_base_url: Url,
     /// The entity ID of the identity provider in [`Self::idp_metadata_xml`].
     pub idp_entity_id: String,
-    /// The identity provider's SAML metadata.
+    /// The identity provider's SAML metadata, trusted as given.
     pub idp_metadata_xml: String,
-    /// The PEM certificate published in SP metadata for its signing key.
-    pub sp_certificate_pem: String,
-    /// The PEM private key that signs `AuthnRequest` and `LogoutRequest`.
-    pub sp_private_key_pem: String,
+    /// The key that signs `AuthnRequest` and `LogoutRequest`, and the
+    /// certificate SP metadata publishes for it.
+    pub sp_signing_credential: X509Credential,
     /// The longest a session lasts, whatever `SessionNotOnOrAfter` says.
     pub max_session_lifetime: Duration,
     /// Whether logout may use an identity provider endpoint that is not `https`.
@@ -140,10 +139,7 @@ impl AppState {
             )
             .slo_endpoint(SloEndpoint::redirect(url(paths::SLO)?)?)
             .credentials(
-                Credentials::default().with_signing_credential(X509Credential::new(
-                    CertificatePem::new(config.sp_certificate_pem),
-                    PrivateKeyPem::new(config.sp_private_key_pem),
-                )),
+                Credentials::default().with_signing_credential(config.sp_signing_credential),
             )
             .validation(validation)
             .build()?,
