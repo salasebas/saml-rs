@@ -49,27 +49,35 @@ of `AttributeNameFormat::Uri`.
 
 An identity provider that encrypts assertions, identifiers, or attributes
 now uses the first encryption key in the service provider metadata that the
-configured algorithms can encrypt for. The keys come from the
-`KeyDescriptor` elements whose `use` is `encryption` or absent, in the first
-service provider role that publishes such a certificate. The first one with
-a certificate gives its first certificate. A later one gives a key only when
-its `KeyInfo` holds one `X509Data` with one `X509Certificate`, and otherwise
-only `KeyName` elements. Before, the identity provider
-used the first such certificate and failed with `SamlError::Crypto` when it
-did not load or the crypto provider could not encrypt for it, such as an EC
-key or an RSA key too small for the key transport. Now it tries the next key. When no key works, it
-still returns the `SamlError::Crypto` error of the first key.
+configured algorithms can encrypt for. Before, the identity provider used the
+first encryption certificate and failed with `SamlError::Crypto` when it did
+not load or the crypto provider could not encrypt for it, such as an EC key
+or an RSA key too small for the key transport. Now it tries the next key.
+When no key works, it still returns the `SamlError::Crypto` error of the
+first key.
 
-A later certificate in the same `KeyDescriptor`, such as an issuer
-certificate, is never used, and neither is a later `KeyDescriptor` with a
-certificate chain or another key declaration, such as `KeyValue` or
-`X509SubjectName`, nor a key of another service provider role.
+The keys come from the service provider role that publishes the
+`AssertionConsumerService` receiving the response. When several roles
+publish that endpoint, they come from the first of them. Before, the
+identity provider took the first encryption certificate of any service
+provider role. A role that publishes the endpoint but no
+encryption certificate now returns `SamlError::MissingMetadata`, even when
+another role of the entity publishes one. To fix it, ask the service provider
+to publish its encryption certificate in the role that receives the response.
+
+Each `ds:X509Data` of a `KeyDescriptor` whose `use` is `encryption` or absent
+gives one key, in document order. A sole certificate is that key, whatever
+else the `KeyInfo` declares, such as `KeyName`, `KeyValue`, or
+`X509SubjectName`. In a certificate chain, the key is the first certificate
+that issued none of the others, in any order. Before, the identity provider used the first
+certificate of the first `KeyDescriptor`, which in a chain that lists its
+issuer first is the issuer certificate.
 
 With attribute encryption alone, an assertion without attributes no longer
 needs an encryption certificate in the service provider metadata. Before,
 the response failed with `SamlError::MissingMetadata`.
 
-You do not need to change code for these two changes. Logout and name
-identifier management requests choose their key the same way, as
+You do not need to change code for these changes. Logout and name
+identifier management requests read keys from a role the same way, as
 [Encrypt for a usable key and write its certificate](unreleased-outbound-encryption-keys.md)
 describes.

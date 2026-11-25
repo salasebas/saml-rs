@@ -23,8 +23,8 @@ pub use generate::{
 pub use idp::{ArtifactResolutionServiceEndpoint, IdpMetadata};
 pub use lifetime::MetadataLifetime;
 pub use scope::MetadataScope;
-pub(crate) use sp::DefaultMarking;
 pub use sp::SpMetadata;
+pub(crate) use sp::{AcsMetadataEndpoint, DefaultMarking};
 pub(crate) use validity::{MetadataValidity, RootValidUntil};
 
 use key_certificates::KeyCertificates;
@@ -215,8 +215,13 @@ impl Metadata {
     }
 
     #[cfg(crypto)]
-    pub(crate) fn encryption_key_certificates(&self) -> &[String] {
+    pub(crate) fn encryption_key_certificates(&self) -> &[Vec<String>] {
         self.key_certificates.encryption_keys()
+    }
+
+    #[cfg(crypto)]
+    pub(crate) fn role_encryption_key_certificates(&self, role: usize) -> &[Vec<String>] {
+        self.key_certificates.role_encryption_keys(role)
     }
 
     /// First non-empty `SingleLogoutService` `Location` for `binding`, in

@@ -13,6 +13,7 @@ pub(crate) struct AcsMetadataEndpoint {
     pub(crate) location: String,
     pub(crate) index: Option<u16>,
     pub(crate) is_default: DefaultMarking,
+    pub(crate) role: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,8 +156,9 @@ impl SpMetadata {
     ) -> Option<AcsMetadataEndpoint> {
         self.assertion_consumer_service_roles
             .iter()
-            .find_map(|role| {
-                let endpoints = role_endpoints(role)
+            .enumerate()
+            .find_map(|(role, services)| {
+                let endpoints = role_endpoints(role, services)
                     .filter(|endpoint| endpoint.binding == binding)
                     .collect();
                 select_indexed_default(endpoints, |endpoint| endpoint.is_default)
@@ -173,7 +175,7 @@ impl SpMetadata {
             DefaultMarking::from_attribute(value.get_str("isDefault"))
         })
         .map(|value| {
-            acs_metadata_endpoint_from_value(value).ok_or_else(|| {
+            acs_metadata_endpoint_from_value(0, value).ok_or_else(|| {
                 SamlError::Invalid(
                     "default AssertionConsumerService is unsupported or malformed".into(),
                 )
@@ -187,8 +189,8 @@ impl SpMetadata {
         index: u16,
     ) -> Result<Option<AcsMetadataEndpoint>, SamlError> {
         let mut found = None;
-        for role in &self.assertion_consumer_service_roles {
-            let Some(endpoint) = role_endpoint_at_index(role, index)? else {
+        for (role, services) in self.assertion_consumer_service_roles.iter().enumerate() {
+            let Some(endpoint) = role_endpoint_at_index(services, index)? else {
                 continue;
             };
             if found.is_some() {
@@ -196,9 +198,9 @@ impl SpMetadata {
                     "AssertionConsumerService index {index} is published by more than one SPSSODescriptor"
                 )));
             }
-            found = Some(endpoint);
+            found = Some((role, endpoint));
         }
-        Ok(found.and_then(acs_metadata_endpoint_from_value))
+        Ok(found.and_then(|(role, endpoint)| acs_metadata_endpoint_from_value(role, endpoint)))
     }
 
     pub(crate) fn assertion_consumer_service_locations(&self, binding: Binding) -> Vec<String> {
@@ -208,9 +210,18 @@ impl SpMetadata {
             .collect()
     }
 
-    pub(crate) fn has_assertion_consumer_service(&self, binding: Binding, location: &str) -> bool {
+    pub(crate) fn assertion_consumer_service_at(
+        &self,
+        binding: Binding,
+        location: &str,
+    ) -> Option<AcsMetadataEndpoint> {
         self.assertion_consumer_service_endpoints()
-            .any(|endpoint| endpoint.binding == binding && endpoint.location == location)
+            .find(|endpoint| endpoint.binding == binding && endpoint.location == location)
+    }
+
+    #[cfg(crypto)]
+    pub(crate) fn encryption_key_certificates(&self, acs: &AcsMetadataEndpoint) -> &[Vec<String>] {
+        self.inner.role_encryption_key_certificates(acs.role)
     }
 
     fn assertion_consumer_service_endpoints(
@@ -218,14 +229,15 @@ impl SpMetadata {
     ) -> impl Iterator<Item = AcsMetadataEndpoint> + '_ {
         self.assertion_consumer_service_roles
             .iter()
-            .flat_map(role_endpoints)
+            .enumerate()
+            .flat_map(|(role, services)| role_endpoints(role, services))
     }
 }
 
-fn role_endpoints(services: &Value) -> impl Iterator<Item = AcsMetadataEndpoint> + '_ {
+fn role_endpoints(role: usize, services: &Value) -> impl Iterator<Item = AcsMetadataEndpoint> + '_ {
     as_object_list(services)
         .into_iter()
-        .filter_map(acs_metadata_endpoint_from_value)
+        .filter_map(move |value| acs_metadata_endpoint_from_value(role, value))
 }
 
 fn role_endpoint_at_index(services: &Value, index: u16) -> Result<Option<&Value>, SamlError> {
@@ -241,7 +253,10 @@ fn role_endpoint_at_index(services: &Value, index: u16) -> Result<Option<&Value>
     Ok(first)
 }
 
-fn acs_metadata_endpoint_from_value(value: &crate::util::Value) -> Option<AcsMetadataEndpoint> {
+fn acs_metadata_endpoint_from_value(
+    role: usize,
+    value: &crate::util::Value,
+) -> Option<AcsMetadataEndpoint> {
     let binding = Binding::from_urn(value.get_str("binding")?)?;
     let location = value.get_str("location")?.to_string();
     Some(AcsMetadataEndpoint {
@@ -249,6 +264,7 @@ fn acs_metadata_endpoint_from_value(value: &crate::util::Value) -> Option<AcsMet
         location,
         index: endpoint_index(value),
         is_default: DefaultMarking::from_attribute(value.get_str("isDefault")),
+        role,
     })
 }
 

@@ -529,7 +529,7 @@ impl IdentityProvider {
                 let outbound = Outbound::<SsoResponse>::artifact(
                     rendered.id,
                     relay_state,
-                    &acs,
+                    &acs.location,
                     &artifact,
                     delivery.encoding(),
                 )?

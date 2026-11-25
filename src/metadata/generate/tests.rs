@@ -99,6 +99,7 @@ fn typed_sp_metadata_reserves_explicit_acs_indexes() -> TestResult {
         location: location.into(),
         index: Some(index),
         is_default: crate::metadata::DefaultMarking::Unmarked,
+        role: 0,
     };
     assert_eq!(
         parsed.assertion_consumer_service_by_index(0)?,
