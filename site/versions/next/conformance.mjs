@@ -4,6 +4,11 @@ export const pages = {
 		description:
 			'Rules for issuing, resolving, and answering artifacts over SOAP, including how the SP can sign an artifact resolution request.',
 	},
+	'browser-bindings.md': {
+		title: 'Browser bindings',
+		description:
+			'Rules that every HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign exchange shares: `RelayState`, base64, DEFLATE, the detached signature input, and cache headers, with the HTTP duties of the application.',
+	},
 	'common-message-fields.md': {
 		title: 'Common message fields',
 		description:

@@ -60,6 +60,10 @@ export const sidebar = [
 					},
 					{ label: 'Logout', slug: 'reference/conformance/single-logout' },
 					{
+						label: 'Browser bindings',
+						slug: 'reference/conformance/browser-bindings',
+					},
+					{
 						label: 'Identity Provider Discovery',
 						slug: 'reference/conformance/identity-provider-discovery',
 					},

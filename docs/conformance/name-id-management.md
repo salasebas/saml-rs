@@ -3,7 +3,10 @@
 Rules for typed name identifier management, over SOAP at the identity provider (`IdentityProvider::start_name_id_management`, `StartedNameIdManagement::finish`, `receive_name_id_management`, `respond_name_id_management`) and over HTTP-Redirect at either provider (`start_name_id_management_redirect`, `receive_name_id_management_redirect`, `respond_name_id_management_redirect`, `finish_name_id_management_redirect` on `IdentityProvider` and `ServiceProvider`). Normative text is Core §§3.2 and 3.6, Profiles §4.5, Bindings §§3.2 and 3.4, and Metadata §2.4.2, as corrected by Approved Errata 05 (E8, E11, E12, E14, E19, E43, E55). Conformance Requirements Table 2 makes HTTP-Redirect `MUST` for the IdP and SP, SOAP `MUST` for the IdP and `OPTIONAL` for the SP, and every cell `MUST NOT` for IdP Lite and SP Lite, and this record does not claim the IdP or SP operational mode. SOAP envelope, header, and transport rules are in [Artifact resolution](artifact-resolution.md#soap-envelope-rules). `NameID` format and length rules are in [Identifiers](identifiers.md#name-identifier-formats).
 
 Both bindings use the shared [issuer](identifiers.md#entity-identifiers)
-and [status code](web-browser-sso-acceptance.md#status-codes) rules.
+and [status code](web-browser-sso-acceptance.md#status-codes) rules. HTTP-Redirect
+uses the shared [browser binding](browser-bindings.md) rules for encoding,
+`RelayState`, signature input, and cache headers, and the HTTP duties of the
+application.
 
 ## Turning the protocol on
 
@@ -113,9 +116,6 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | Send to the peer's first HTTP-Redirect `ManageNameIDService` with an `https` `Location`, or its first under `allow_http` | Library policy: an earlier `http` entry would otherwise hide an advertised `https` one. | Metadata §2.2.2, Profiles §4.5.3.1 | `StartNameIdManagement::allow_http` |
 | Set `Destination` to that `Location` | Mandatory | Bindings §3.4.5.2 | Always |
 | Send only to an `https` peer endpoint | Recommended | Profiles §4.5.3.1 | `StartNameIdManagement::allow_http` |
-| Reject a `RelayState` over 80 bytes | Mandatory | Bindings §3.4.3 | `StartNameIdManagement::relay_state` |
-| Keep the endpoint's own query parameters before the SAML parameters, and refuse an endpoint query that already has `SAMLRequest`, `SAMLResponse`, `SAMLart`, `RelayState`, `SigAlg`, `Signature`, or `SAMLEncoding`, by decoded name | Library policy: the bindings name these parameters, so a configured one can repeat a message field or be read as one by an endpoint that serves several bindings. | Bindings §3.4.4 | Always |
-| Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Recommended | Bindings §3.4.5.1 | Always |
 
 ## HTTP-Redirect: receiving a ManageNameIDRequest
 
@@ -135,11 +135,6 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | Answer an authenticated 2.0 request outside the configured age window with signed `Requester`, before replay storage and decryption | Library policy: the age window limits acceptance after replay storage expires. | Core §1.3.3 | `SamlValidationContext::with_manage_name_id_request_age`. Disabled by default |
 | Accept a persistent `NameID` without its qualifiers | Library policy: the receiver preserves the identifier as sent, including absent qualifiers. | Core §3.6.3 | Always |
 | Reject a repeated request `ID`. Store it as the [protocol message ID rule](metadata-and-replay.md#protocol-message-ids) states | Library policy: name identifier management requires no identifier cache, so the cache is the caller's choice. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
-| Accept a received `RelayState` over 80 bytes, up to 4096 bytes | Library policy: Bindings §3.4.3 binds the creator and gives the receiver no rule, and the 4096-byte bound limits unauthenticated input. | Bindings §3.4.3 | `MAX_RECEIVED_RELAY_STATE_BYTES` |
-| Reject a repeated `RelayState` parameter | Library policy: Bindings §3.4.3 defines one value per message and no receiver rule, and saml-rs compares and echoes one value while a caller's framework may read another. | Bindings §3.4.3 | Always |
-| Raw-inflate the message when `SAMLEncoding` is absent or names DEFLATE | Mandatory | Bindings §3.4.4 | Always |
-| Reject a repeated `SAMLEncoding`, or one that names another encoding, an empty value included | Library policy: saml-rs implements only DEFLATE, and inflating another encoding misreads the message. | Bindings §3.4.4 | Always |
-| Reject a received HTTP-Redirect `RelayState`, or another SAML parameter the message reads, that is not UTF-8 after percent-decoding | Library policy: `RelayState` is text, and replacing the bytes would change the value the responder returns. | Bindings §3.4.3 | Always |
 
 With an enabled age window, retain request IDs for at least `max_age` plus
 both clock-skew tolerances to cover the full window on either binding.
@@ -159,10 +154,7 @@ both clock-skew tolerances to cover the full window on either binding.
 | Take each response endpoint from the peer's HTTP-Redirect `ManageNameIDService`: `ResponseLocation`, else `Location` | Optional | Metadata §2.2.2, E41, Profiles §4.5.3.2 | Always |
 | Answer at the first of those endpoints that is `https`, or the first under `allow_http` | Library policy: an earlier `http` entry would otherwise hide an advertised `https` one. | Metadata §2.2.2, Profiles §4.5.3.2 | `RespondNameIdManagement::allow_http`, `ReceiveNameIdManagement::allow_http` for a refusal |
 | Set `Destination` to that endpoint | Mandatory | Bindings §3.4.5.2 | Always |
-| Return the exact `RelayState` received with the request | Mandatory | Bindings §3.4.3 | Always |
-| Keep the endpoint's own query parameters before the SAML parameters, and refuse an endpoint query that already has `SAMLRequest`, `SAMLResponse`, `SAMLart`, `RelayState`, `SigAlg`, `Signature`, or `SAMLEncoding`, by decoded name | Library policy: the bindings name these parameters, so a configured one can repeat a message field or be read as one by an endpoint that serves several bindings. | Bindings §3.4.4 | Always |
 | Send only to an `https` peer endpoint | Recommended | Profiles §4.5.3.2 | `RespondNameIdManagement::allow_http`, `ReceiveNameIdManagement::allow_http` for a refusal |
-| Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Recommended | Bindings §3.4.5.1 | Always |
 
 ## HTTP-Redirect: receiving a ManageNameIDResponse
 
@@ -174,11 +166,6 @@ both clock-skew tolerances to cover the full window on either binding.
 | Require the unqualified response `InResponseTo`, after XML whitespace collapse, to equal the pending request ID, including on an error response | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2, `StatusResponseType`, XML Schema Part 2 §4.3.6 | `PendingManageNameIdRequest` |
 | Require the response to come from the peer the request went to | Library policy: another peer must not complete the pending transaction. | Profiles §4.5.4.2 | Always |
 | Require the `RelayState` the request carried, and accept any when it carried none | Library policy: Bindings §3.4.3 binds the responder, and another transaction's state must not complete this one. | Bindings §3.4.3 | Always |
-| Accept a received `RelayState` over 80 bytes, up to 4096 bytes | Library policy: Bindings §3.4.3 binds the creator and gives the receiver no rule, and the 4096-byte bound limits unauthenticated input. | Bindings §3.4.3 | `MAX_RECEIVED_RELAY_STATE_BYTES` |
-| Reject a repeated `RelayState` parameter | Library policy: Bindings §3.4.3 defines one value per message and no receiver rule, and saml-rs compares and echoes one value while a caller's framework may read another. | Bindings §3.4.3 | Always |
-| Raw-inflate the message when `SAMLEncoding` is absent or names DEFLATE | Mandatory | Bindings §3.4.4 | Always |
-| Reject a repeated `SAMLEncoding`, or one that names another encoding, an empty value included | Library policy: saml-rs implements only DEFLATE, and inflating another encoding misreads the message. | Bindings §3.4.4 | Always |
-| Reject a received HTTP-Redirect `RelayState`, or another SAML parameter the message reads, that is not UTF-8 after percent-decoding | Library policy: `RelayState` is text, and replacing the bytes would change the value the responder returns. | Bindings §3.4.3 | Always |
 | Require `Destination` on the signed response. Compare it with this provider's response location after collapsing XML whitespace | Mandatory | Core §3.2.2, Bindings §3.4.5.2, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Require one `Status` with one direct `StatusCode` | Mandatory | `StatusResponseType`, `StatusType` | Always |
 | Report a status other than `Success` after verifying the signature, issuer, request ID, and destination | Library policy: failed authentication or correlation takes precedence over a reported status. | Core §3.2.2.2 | Always |
@@ -217,7 +204,7 @@ The caller owns these rules, and the crate keeps no identifier state or sessions
 - After a termination, delete or mark obsolete the state kept for the identifier, and act as if it never existed. Recommended, Core §3.6.3, E14.
 - After a termination, do not invalidate the principal's active sessions, and an identity provider does not end sessions with other service providers. Recommended, E8.
 - Accept either identifier while a change propagates. Optional, Core §3.6.3.
-- Sanitize the permitted URL schemes of a `RelayState` that is used in a redirect or in response content. Mandatory, E90.
+- Sanitize a `RelayState` used in a redirect or in response content, as the [application duties](browser-bindings.md#application-duties) of the browser bindings state. Mandatory, E90.
 - Keep the `RelayState` value free of information beyond what the exchange needs. Recommended, Profiles §4.5.3.1.
 
 ## Outside this flow

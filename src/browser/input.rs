@@ -161,11 +161,17 @@ impl<Message> Inbound<Message> {
     ///
     /// The receiving operation reads `SAMLRequest`, `SAMLResponse`,
     /// `RelayState`, `SigAlg`, `Signature`, and `SAMLEncoding` by their
-    /// decoded names and ignores other parameters. It reads `SAMLEncoding`
-    /// first and returns [`SamlError::Unsupported`] when it names an encoding
-    /// other than DEFLATE, before it reads the other parameters. It returns
+    /// decoded names and ignores other parameters. Names and values are
+    /// form-URL-decoded: `+` is a space and `%2B` is a plus sign. The
+    /// signature is still verified over the values as received.
+    ///
+    /// The operation reads `SAMLEncoding` first and returns
+    /// [`SamlError::Unsupported`] when it names an encoding other than
+    /// DEFLATE, before it reads the other parameters. It returns
     /// [`SamlError::Invalid`] when a parameter it reads is not UTF-8 after
-    /// percent-decoding.
+    /// decoding, when the query also carries the message parameter of the
+    /// other kind, such as `SAMLResponse` next to `SAMLRequest`, or when it
+    /// carries only one of `SigAlg` and `Signature`.
     pub fn redirect(raw_query: impl Into<String>) -> Self
     where
         Message: RedirectMessage,
@@ -176,6 +182,11 @@ impl<Message> Inbound<Message> {
     }
 
     /// Create HTTP-POST input from the parsed form fields.
+    ///
+    /// The receiving operation reads only the SAML fields, so other controls
+    /// and the way the form was submitted do not matter. It returns
+    /// [`SamlError::Invalid`] when the form also carries the message field of
+    /// the other kind, such as `SAMLResponse` next to `SAMLRequest`.
     ///
     /// `Inbound::post` requires a message type that implements [`PostMessage`]:
     ///
@@ -192,6 +203,10 @@ impl<Message> Inbound<Message> {
     }
 
     /// Create HTTP-POST-SimpleSign input from the parsed form fields.
+    ///
+    /// The receiving operation reads the same fields as [`Self::post`] and
+    /// also `SigAlg` and `Signature`. It ignores a `KeyInfo` field and
+    /// verifies the signature with the peer descriptor's keys.
     ///
     /// `Inbound::simple_sign` requires a message type that implements
     /// [`PostMessage`]:
