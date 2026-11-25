@@ -117,18 +117,35 @@ pub(super) fn assertion_subject_name_id(extract: &Value) -> Result<Option<NameId
         }
         None | Some(Value::Null) => {}
     }
-    let unreadable = [
-        (login_response::SUBJECT_BASE_ID, "a BaseID"),
-        (
-            login_response::SUBJECT_ENCRYPTED_ID,
-            "an EncryptedID that was not decrypted",
-        ),
-    ];
-    for (field, identifier) in unreadable {
-        if !matches!(extract.get(field), None | Some(Value::Null)) {
-            return Err(SamlError::Unsupported(format!(
-                "the assertion Subject identifies the principal with {identifier}"
-            )));
+    let subject = match extract.get(login_response::SUBJECT) {
+        Some(Value::Str(subject)) => subject,
+        Some(Value::Array(_) | Value::Object(_)) => {
+            return Err(SamlError::Invalid(
+                "the assertion must contain at most one Subject".into(),
+            ))
+        }
+        None | Some(Value::Null) => return Ok(None),
+    };
+    let subject = dom::parse_fragment_with_limits(subject, XmlLimits::unbounded())?;
+    for child in &subject.root.children {
+        match child.local_name.as_str() {
+            "SubjectConfirmation" => {}
+            "BaseID" => {
+                return Err(SamlError::Unsupported(
+                    "the assertion Subject identifies the principal with a BaseID".into(),
+                ))
+            }
+            "EncryptedID" => {
+                return Err(SamlError::Unsupported(
+                    "the assertion Subject identifies the principal with an EncryptedID that was not decrypted"
+                        .into(),
+                ))
+            }
+            other => {
+                return Err(SamlError::ProtocolProfile(format!(
+                    "the assertion Subject has an unexpected {other} element"
+                )))
+            }
         }
     }
     Ok(None)

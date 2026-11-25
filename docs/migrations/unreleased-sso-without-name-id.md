@@ -24,7 +24,6 @@ After:
 
 ```rust
 let Some(name_id) = session.name_id() else {
-    // Identify the principal from session.attributes(), or refuse the login.
     return Err(AppError::MissingNameId);
 };
 let name_id = name_id.value();
@@ -34,13 +33,21 @@ A session without a `NameID` cannot start Single Logout.
 `SsoSession::logout_subject` returns `None` for it, and an `OutstandingLogout`
 does not reject it.
 
-Two other subjects are still rejected, with a different error:
+A response with several assertions still needs a `NameID` in each of them.
+Without one, it returns `SamlError::PrincipalMismatch`, as before.
+
+These subjects without a direct `NameID` are still rejected, with a different
+error:
 
 - A `Subject` that names the principal with a `BaseID` returns
   `SamlError::Unsupported`. Before, it returned `SamlError::Invalid`.
-- A `Subject` whose `EncryptedID` was not decrypted, for example because the
-  service provider has no decryption key, returns `SamlError::Unsupported`.
-  Before, it returned `SamlError::Invalid`.
+- A `Subject` whose `EncryptedID` was not decrypted, as when the service
+  provider has no decryption key, returns `SamlError::Unsupported`. Before, it
+  returned `SamlError::Invalid`. An `EncryptedID` that a configured key fails
+  to decrypt still returns `SamlError::Crypto`.
+- A `Subject` with another child element, such as a `NameID` inside an
+  element of another namespace, returns `SamlError::ProtocolProfile`. Before,
+  it returned `SamlError::Invalid`.
 
-If you match `SamlError::Invalid` for these subjects, match
-`SamlError::Unsupported` instead.
+If you match `SamlError::Invalid` for these subjects, match the new variant
+instead.

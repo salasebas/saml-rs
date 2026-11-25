@@ -66,8 +66,7 @@ pub(crate) mod login_response {
     pub(crate) const AUDIENCE: &str = "audience";
     pub(crate) const AUDIENCE_RESTRICTION: &str = "audienceRestriction";
     pub(crate) const SUBJECT_CONFIRMATION: &str = "subjectConfirmation";
-    pub(crate) const SUBJECT_BASE_ID: &str = "subjectBaseId";
-    pub(crate) const SUBJECT_ENCRYPTED_ID: &str = "subjectEncryptedId";
+    pub(crate) const SUBJECT: &str = "subject";
     pub(crate) const AUTHN_STATEMENTS: &str = "sessionIndex";
     pub(crate) const ATTRIBUTES: &str = "attributes";
     pub(crate) const ATTRIBUTE_ELEMENTS: &str = "attributeNameFormats";
@@ -227,18 +226,9 @@ pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
         ExtractorField::new(name_id::QUALIFIERS, &["Assertion", "Subject", "NameID"])
             .attrs(&["NameQualifier", "SPNameQualifier", "SPProvidedID"])
             .source_xml(assertion),
-        ExtractorField::new(
-            login_response::SUBJECT_BASE_ID,
-            &["Assertion", "Subject", "BaseID"],
-        )
-        .capture_source()
-        .source_xml(assertion),
-        ExtractorField::new(
-            login_response::SUBJECT_ENCRYPTED_ID,
-            &["Assertion", "Subject", "EncryptedID"],
-        )
-        .capture_source()
-        .source_xml(assertion),
+        ExtractorField::new(login_response::SUBJECT, &["Assertion", "Subject"])
+            .capture_source()
+            .source_xml(assertion),
         ExtractorField::new(
             login_response::SUBJECT_CONFIRMATION,
             &["Assertion", "Subject", "SubjectConfirmation"],

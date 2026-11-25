@@ -333,11 +333,13 @@ impl ServiceProvider {
     /// An `Attribute` without an unqualified `Name` returns
     /// [`SamlError::ProtocolProfile`]. A consumed assertion whose `Subject`
     /// names the principal with a `BaseID`, or with an `EncryptedID` that was
-    /// not decrypted, returns [`SamlError::Unsupported`]. The `Conditions`
-    /// time window returns [`SamlError::TimeWindowInvalid`] when both bounds
-    /// are present and `NotBefore` is at or after `NotOnOrAfter`. The same
-    /// bounds in bearer `SubjectConfirmationData` leave that confirmation
-    /// unsatisfied.
+    /// not decrypted because no decryption key is configured, returns
+    /// [`SamlError::Unsupported`]. A `Subject` without a `NameID` that has a
+    /// child other than `SubjectConfirmation` returns
+    /// [`SamlError::ProtocolProfile`]. The `Conditions` time window returns
+    /// [`SamlError::TimeWindowInvalid`] when both bounds are present and
+    /// `NotBefore` is at or after `NotOnOrAfter`. The same bounds in bearer
+    /// `SubjectConfirmationData` leave that confirmation unsatisfied.
     ///
     /// # Examples
     ///

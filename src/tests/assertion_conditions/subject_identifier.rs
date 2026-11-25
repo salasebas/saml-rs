@@ -1,6 +1,8 @@
 use super::*;
 use saml_rs::{OutstandingLogout, SamlInstant};
 
+type ErrorMatches = fn(&SamlError) -> bool;
+
 fn replace_name_id(xml: &str, identifier: &str) -> Result<String, Box<dyn std::error::Error>> {
     let start = xml.find("<saml:NameID").ok_or("missing NameID")?;
     let close = "</saml:NameID>";
@@ -32,9 +34,15 @@ fn a_confirmation_only_subject_signs_in_without_a_logout_subject(
     for unsolicited in [false, true] {
         let exchange = exchange_for(SpValidationPolicy::default(), unsolicited)?;
         let original = response_xml(&exchange.response_fields)?;
-        let xml = resigned(&with_department_attribute(&replace_name_id(
-            &original, "",
-        )?)?)?;
+        let unsigned = with_department_attribute(&replace_name_id(
+            &strip_embedded_signatures(&original)?,
+            "",
+        )?)?;
+        let xml = if unsolicited {
+            sign_first_assertion(&unsigned, RSA_SHA256)?
+        } else {
+            resigned(&unsigned)?
+        };
 
         let session = accept(&exchange, &xml)?;
 
@@ -75,35 +83,45 @@ fn an_outstanding_logout_does_not_apply_to_a_confirmation_only_subject(
 }
 
 #[test]
-fn an_identifier_the_service_provider_cannot_read_is_rejected(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn a_subject_without_a_readable_name_id_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let original = response_xml(&exchange.response_fields)?;
-    let identifiers = [
-        concat!(
-            r#"<saml:BaseID xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" "#,
-            r#"xmlns:ext="urn:example:ext" xsi:type="ext:ExampleID"/>"#,
+    let unsupported: ErrorMatches = |error| matches!(error, SamlError::Unsupported(_));
+    let protocol_profile: ErrorMatches = |error| matches!(error, SamlError::ProtocolProfile(_));
+    let cases = [
+        (
+            concat!(
+                r#"<saml:BaseID xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" "#,
+                r#"xmlns:ext="urn:example:ext" xsi:type="ext:ExampleID"/>"#,
+            ),
+            unsupported,
         ),
-        concat!(
-            r#"<saml:EncryptedID><xenc:EncryptedData xmlns:xenc="http://www.w3.org/2001/04/xmlenc#">"#,
-            "<xenc:CipherData><xenc:CipherValue>AAAA</xenc:CipherValue></xenc:CipherData>",
-            "</xenc:EncryptedData></saml:EncryptedID>",
+        (
+            concat!(
+                r#"<saml:EncryptedID><xenc:EncryptedData xmlns:xenc="http://www.w3.org/2001/04/xmlenc#">"#,
+                "<xenc:CipherData><xenc:CipherValue>AAAA</xenc:CipherValue></xenc:CipherData>",
+                "</xenc:EncryptedData></saml:EncryptedID>",
+            ),
+            unsupported,
+        ),
+        (
+            concat!(
+                r#"<ext:Wrapper xmlns:ext="urn:example:ext">"#,
+                "<saml:NameID>alice@example.com</saml:NameID></ext:Wrapper>",
+            ),
+            protocol_profile,
         ),
     ];
-    for identifier in identifiers {
+    for (identifier, expected) in cases {
         let xml = resigned(&replace_name_id(&original, identifier)?)?;
         match accept(&exchange, &xml) {
             Err(error) => match error.downcast_ref::<SamlError>() {
-                Some(SamlError::Unsupported(_)) => {}
-                _ => {
-                    return Err(
-                        format!("expected Unsupported for {identifier}, got {error}").into(),
-                    )
-                }
+                Some(error) if expected(error) => {}
+                _ => return Err(format!("unexpected error for {identifier}: {error}").into()),
             },
             Ok(session) => {
                 return Err(format!(
-                    "expected Unsupported for {identifier}, got NameID {:?}",
+                    "expected an error for {identifier}, got NameID {:?}",
                     session.name_id()
                 )
                 .into())
@@ -111,4 +129,21 @@ fn an_identifier_the_service_provider_cannot_read_is_rejected(
         }
     }
     Ok(())
+}
+
+#[test]
+fn two_assertions_without_a_name_id_are_not_one_principal() -> Result<(), Box<dyn std::error::Error>>
+{
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
+    let original = response_xml(&exchange.response_fields)?;
+    let without_name_id = replace_name_id(&strip_embedded_signatures(&original)?, "")?;
+    let xml = resigned(&duplicate_assertion(&without_name_id, "_second_assertion")?)?;
+
+    match accept(&exchange, &xml) {
+        Err(error) => match error.downcast_ref::<SamlError>() {
+            Some(SamlError::PrincipalMismatch) => Ok(()),
+            _ => Err(format!("expected PrincipalMismatch, got {error}").into()),
+        },
+        Ok(_) => Err("expected PrincipalMismatch".into()),
+    }
 }

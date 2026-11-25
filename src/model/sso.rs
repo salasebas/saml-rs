@@ -293,8 +293,7 @@ impl SsoSession {
     ///
     /// Every present `SessionIndex` is included in `AuthnStatement` document
     /// order. Returns `None` when the assertion has no `NameID` or its value
-    /// is blank, because a `LogoutRequest` must name the principal with the
-    /// identifier of the assertion.
+    /// is blank.
     ///
     /// # Examples
     ///
