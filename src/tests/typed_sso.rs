@@ -2470,7 +2470,7 @@ fn typed_finish_sso_rejects_an_error_status_with_two_issuers(
 }
 
 #[test]
-fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
+fn typed_finish_sso_reports_a_simplesign_error_status_after_its_signature_checks(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = start_receive_respond_with(
         StartSso::post().response_binding(SsoResponseBinding::SimpleSign),
@@ -2497,6 +2497,21 @@ fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
             );
         }
         other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
+    }
+
+    let unsigned: Vec<FormField> = exchange
+        .response_fields
+        .iter()
+        .filter(|field| !matches!(field.name(), "SigAlg" | "Signature"))
+        .cloned()
+        .collect();
+    match finish(unsigned) {
+        Err(SamlError::StatusNotSuccess { status, .. }) => {
+            assert_eq!(status, auth_failed_status()?);
+        }
+        other => {
+            return Err(format!("expected unsigned StatusNotSuccess, got {other:?}").into());
+        }
     }
 
     let mut tampered = exchange.response_fields.clone();
