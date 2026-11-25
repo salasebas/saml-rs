@@ -8,18 +8,18 @@ See [Standards conformance](https://github.com/salasebas/saml-rs/blob/main/docs/
 
 | Record | Public entry points and scope |
 | --- | --- |
-| [SSO generation](web-browser-sso-generation.md) | `start_sso`, `respond_sso`, `initiate_sso` |
-| [SSO acceptance](web-browser-sso-acceptance.md) | `receive_sso`, `finish_sso`, `accept_unsolicited_sso`, `accept_unsolicited_sso_with_resolver` |
-| [HTTP-Artifact response](web-browser-sso-artifact.md) | `respond_sso_artifact`, `initiate_sso_artifact`, `finish_sso` with `Inbound::artifact` |
-| [Artifact resolution over SOAP](artifact-resolution.md) | `issue_artifact`, `resolve_artifact`, `resolve_artifact_with_signed_request`, `answer_artifact_resolve` |
-| [Single Logout](single-logout.md) | `start_slo`, `receive_slo`, `respond_slo`, `finish_slo`. See [asynchronous logout](single-logout.md#asynchronous-single-logout) for `start_async_slo` and `receive_slo_with_async`, and [SOAP](single-logout.md#soap-binding) for back-channel logout. |
-| [Name identifier management](name-id-management.md) | `start_name_id_management`, `receive_name_id_management`, and `respond_name_id_management`, including their Redirect variants and `finish_name_id_management_redirect` |
+| [SSO generation](web-browser-sso-generation.md) | `ServiceProvider::start_sso`. `IdentityProvider::respond_sso`, `respond_sso_refusal`, and `initiate_sso` |
+| [SSO acceptance](web-browser-sso-acceptance.md) | `IdentityProvider::receive_sso`. `ServiceProvider::finish_sso`, `finish_sso_with_outstanding_logout`, `accept_unsolicited_sso`, and `accept_unsolicited_sso_with_outstanding_logout` with `Inbound::post` or `Inbound::simple_sign`, and `accept_unsolicited_sso_with_resolver` with `Inbound::post` |
+| [HTTP-Artifact response](web-browser-sso-artifact.md) | `IdentityProvider::respond_sso_artifact`, `respond_sso_refusal_artifact`, and `initiate_sso_artifact`. `ServiceProvider::finish_sso`, `finish_sso_with_outstanding_logout`, `accept_unsolicited_sso`, and `accept_unsolicited_sso_with_outstanding_logout` with `Inbound::artifact` |
+| [Artifact resolution over SOAP](artifact-resolution.md) | `IdentityProvider::issue_artifact` and `answer_artifact_resolve`. `ServiceProvider::resolve_artifact`, `resolve_artifact_with_signed_request`, and `ArtifactResolution::finish` |
+| [Single Logout](single-logout.md) | `start_slo`, `receive_slo`, `respond_slo`, `respond_slo_refusal`, and `finish_slo` on both roles, over HTTP-Redirect, HTTP-POST, HTTP-POST-SimpleSign, and [SOAP](single-logout.md#soap-binding). `ServiceProvider::start_async_slo` and `IdentityProvider::receive_slo_with_async` for [asynchronous logout](single-logout.md#asynchronous-single-logout) over HTTP-Redirect and HTTP-POST |
+| [Name identifier management](name-id-management.md) | `IdentityProvider::start_name_id_management`, `receive_name_id_management`, and `respond_name_id_management`, and `StartedNameIdManagement::finish`, over SOAP. `start_name_id_management_redirect`, `receive_name_id_management_redirect`, `respond_name_id_management_redirect`, and `finish_name_id_management_redirect` on both roles |
 | [Browser bindings](browser-bindings.md) | `Outbound`, `Inbound::redirect`, `Inbound::post`, `Inbound::simple_sign`, `DeliveredArtifact`, `RelayState`, and `Artifact` encoding, shared by every browser flow |
-| [Identity Provider Discovery](identity-provider-discovery.md) | `common_domain_cookie` and unsupported discovery exchanges |
+| [Identity Provider Discovery](identity-provider-discovery.md) | `IdentityProvider::common_domain_cookie` and unsupported discovery exchanges |
 | [Identifiers](identifiers.md) | `NameId`, `AttributeNameFormat`, subject identifier attributes, and generated IDs |
 | [Metadata and replay](metadata-and-replay.md) | Peer descriptor and aggregate imports, `MetadataTrustPolicy`, and `ReplayPolicy` |
 | [XML security algorithms](xml-security-algorithms.md) | `AlgorithmPolicy`, `XmlSignatureProfile`, and signature coverage |
 | [XML schema validation](xml-schema-validation.md) | `SchemaValidator` on typed flows and explicit metadata imports |
 | [XML input limits and encoding](xml-input.md) | `XmlLimits`, the XML declaration, and the character encoding of received XML |
 | [Common message fields](common-message-fields.md) | `Consent`, `StatusDetail`, status code depth, and `Extensions` on every typed message |
-| [IdP and SP operational modes](idp-sp-operational-modes.md) | Supported exchanges, excluded modes, and application duties |
+| [IdP and SP operational modes](idp-sp-operational-modes.md) | Supported exchanges, exchanges not implemented, unclaimed modes, and deployment duties |

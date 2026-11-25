@@ -34,6 +34,8 @@ Initialisation, attestation, unsupported-algorithm, and key-import failures retu
 
 Turn the default features off and enable exactly one of `crypto-rustcrypto`, `crypto-aws-lc`, or `crypto-fips`. Combinations fail at compile time. `--all-features` does not apply.
 
+RustCrypto with `crypto-legacy-algorithms`, which the default build enables, implements every algorithm that Conformance §4.1 and §4.2 require, and both SHA-1 `SigAlg` methods that HTTP-Redirect and HTTP-POST-SimpleSign require. `crypto-rustcrypto` without `crypto-legacy-algorithms` lacks DSA-SHA1, Triple DES, and RSA-v1.5. [Signature algorithms by build](../reference/conformance/xml-security-algorithms.md#signature-algorithms-by-build) and [encryption algorithms by provider](../reference/conformance/xml-security-algorithms.md#encryption-algorithms-by-provider) list what each build implements.
+
 Bergshamra supports AWS-LC and FIPS on Linux x86_64 and aarch64. The provider tests in this repository run on Linux x86_64.
 
 `crypto-fips` means the selected AWS-LC provider attested FIPS mode. It does not certify the binary or the deployment. In a `crypto-fips` build, a successful `initialize_crypto_provider` reports `CryptoFipsStatus::Active`.

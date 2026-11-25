@@ -231,10 +231,7 @@ sessions. The actor is the provider that sent or received the request.
 
 ## Outside this flow
 
-- Name identifier management over HTTP-POST and HTTP-Artifact. Optional, Profiles §4.5.3.1.
-- SOAP name identifier management at the service provider. Optional, Conformance Table 2.
 - Signing outbound SOAP management messages. Optional, Profiles §§4.5.3.1-2.
 - A responder that adds `RelayState` to a request that had none. Optional, Bindings §3.4.3.
 - Checking a present `Destination` on a SOAP `ManageNameIDResponse`. Mandatory, Core §3.2.2. The synchronous `finish` API has no receiving URL and skips this check.
-- Name identifier mapping over SOAP. Mandatory for the Extended IdP and SP, Conformance Table 3.
-- The IdP operational mode and the SP operational mode.
+- Exchanges the crate does not implement, and the operational modes it does not claim: [IdP and SP operational modes](idp-sp-operational-modes.md#exchanges-not-implemented).

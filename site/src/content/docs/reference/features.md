@@ -24,7 +24,7 @@ With `default-features = false`, the crate still builds messages, parses metadat
 
 At most one of `crypto-rustcrypto`, `crypto-aws-lc`, and `crypto-fips` can be selected. Combinations are rejected at compile time. AWS-LC and FIPS are selected with the default features off.
 
-`crypto-legacy-algorithms`, `crypto-post-quantum`, and `crypto-pkcs11` forward bergshamra capabilities. They do not select a provider. The default `crypto-bergshamra` feature enables those capabilities together with RustCrypto.
+`crypto-legacy-algorithms`, `crypto-post-quantum`, and `crypto-pkcs11` forward bergshamra capabilities. They do not select a provider. The default `crypto-bergshamra` feature enables those capabilities together with RustCrypto. Without `crypto-legacy-algorithms`, a build lacks algorithms that Conformance §4 requires, as [Crypto provider](../guides/crypto-provider.md#aws-lc-and-fips) explains.
 
 Bergshamra supports AWS-LC and FIPS on Linux x86_64 and aarch64. This repository's provider tests run on Linux x86_64.
 

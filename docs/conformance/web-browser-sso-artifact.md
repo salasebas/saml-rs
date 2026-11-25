@@ -72,5 +72,4 @@ The artifact value, the mutually authenticated, integrity-protected, and confide
 - The XHTML document and `method="POST"` of the form-encoded artifact. Mandatory, Bindings §3.6.3.3. The caller renders `Outbound::post_form`.
 - TLS for the browser exchange. Recommended, Bindings §3.6.5.2 and Profiles §4.1.3.5.
 - Accepting a `Response` with no XML signature on the strength of the dereference channel alone. Optional, Profiles §4.1.4.4.
-- `<AuthnRequest>` over HTTP-Artifact, and Single Logout over HTTP-Artifact. Optional, Bindings §3.6.
-- The IdP operational mode and the SP operational mode. Conformance §3.1.
+- Exchanges the crate does not implement, and the operational modes it does not claim: [IdP and SP operational modes](idp-sp-operational-modes.md#exchanges-not-implemented).

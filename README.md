@@ -133,7 +133,7 @@ To run both sides of a login from a checkout, follow the
 | Artifact resolution | SOAP `ArtifactResolve` and `ArtifactResponse` |
 | Name identifier management | HTTP-Redirect for both roles, SOAP for the identity provider |
 | Identity Provider Discovery | The `_saml_idp` cookie |
-| Crypto | XML-DSig, XML-Enc, detached signatures, and metadata key pinning through `bergshamra` |
+| Crypto | XML-DSig, XML-Enc, detached signatures, and metadata key pinning through `bergshamra`. The [build](#features) decides which algorithms are available |
 
 The deployment sends SOAP HTTP requests itself. What each flow checks, and what
 is out of scope, is in the [conformance records](docs/conformance/).
@@ -166,6 +166,14 @@ available with the default features off. Without a provider
 (`--no-default-features`), the crate builds and parses messages, and signing,
 verification, and encryption return `SamlError::Unsupported`. Details are in
 [crypto providers on Next](https://samlrs.vercel.app/next/guides/crypto-provider/).
+
+RustCrypto with `crypto-legacy-algorithms`, which the default build enables,
+implements every algorithm that Conformance §4.1 and §4.2 require, and both
+SHA-1 `SigAlg` methods that HTTP-Redirect and HTTP-POST-SimpleSign require.
+`crypto-rustcrypto` without `crypto-legacy-algorithms`, `crypto-aws-lc`, and
+`crypto-fips` lack some of them. Each build is in
+[signature algorithms by build](docs/conformance/xml-security-algorithms.md#signature-algorithms-by-build) and
+[encryption algorithms by provider](docs/conformance/xml-security-algorithms.md#encryption-algorithms-by-provider).
 
 On `main`, the `serde` feature is off by default. It implements `Serialize` and
 `Deserialize` for the pending snapshot types, so you can keep pending state in
