@@ -619,6 +619,20 @@ fn an_acs_index_is_unique_only_within_its_sp_role() -> Result<(), Box<dyn std::e
         other => return Err(format!("expected a refused shared index, got {other:?}").into()),
     }
 
+    let shared_with_paos = sp_with_roles(&[
+        format!(
+            r#"{first_role}<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:PAOS" Location="https://sp.example.com/ecp" index="1"/>"#
+        ),
+        second_role.clone(),
+    ])?;
+    match respond_to_request(&shared_with_paos, &index(1), RespondSso::post())? {
+        Err(SamlError::Invalid(message)) => assert_eq!(
+            message,
+            "AssertionConsumerService index 1 is published by more than one SPSSODescriptor"
+        ),
+        other => return Err(format!("expected a refused shared index, got {other:?}").into()),
+    }
+
     let repeated_in_one_role = sp_with_roles(&[
         first_role,
         format!(

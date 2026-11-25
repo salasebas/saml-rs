@@ -215,7 +215,7 @@ impl SpMetadata {
             }
             found = Some(endpoint);
         }
-        Ok(found)
+        Ok(found.and_then(acs_metadata_endpoint_from_value))
     }
 
     pub(crate) fn assertion_consumer_service_locations(&self, binding: Binding) -> Vec<String> {
@@ -245,11 +245,10 @@ fn role_endpoints(services: &Value) -> impl Iterator<Item = AcsMetadataEndpoint>
         .filter_map(acs_metadata_endpoint_from_value)
 }
 
-fn role_endpoint_at_index(
-    services: &Value,
-    index: u16,
-) -> Result<Option<AcsMetadataEndpoint>, SamlError> {
-    let mut matches = role_endpoints(services).filter(|endpoint| endpoint.index == Some(index));
+fn role_endpoint_at_index(services: &Value, index: u16) -> Result<Option<&Value>, SamlError> {
+    let mut matches = as_object_list(services)
+        .into_iter()
+        .filter(|value| endpoint_index(value) == Some(index));
     let first = matches.next();
     if matches.next().is_some() {
         return Err(SamlError::Invalid(format!(
@@ -277,15 +276,18 @@ fn role_assertion_consumer_services(role: &str, limits: XmlLimits) -> Result<Val
 fn acs_metadata_endpoint_from_value(value: &crate::util::Value) -> Option<AcsMetadataEndpoint> {
     let binding = Binding::from_urn(value.get_str("binding")?)?;
     let location = value.get_str("location")?.to_string();
-    let index = value
-        .get_str("index")
-        .and_then(|index| index.parse::<u16>().ok());
     Some(AcsMetadataEndpoint {
         binding,
         location,
-        index,
+        index: endpoint_index(value),
         is_default: DefaultMarking::from_attribute(value.get_str("isDefault")),
     })
+}
+
+fn endpoint_index(value: &Value) -> Option<u16> {
+    value
+        .get_str("index")
+        .and_then(|index| index.parse::<u16>().ok())
 }
 
 fn select_indexed_default<T>(
