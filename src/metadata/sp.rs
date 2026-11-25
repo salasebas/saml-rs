@@ -5,7 +5,7 @@ use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::xml::protocol_element::SamlElement;
-use crate::xml::{extract_with_limits, ExtractorField, XmlLimits};
+use crate::xml::XmlLimits;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AcsMetadataEndpoint {
@@ -51,6 +51,9 @@ impl SpMetadata {
     /// Keys, flags, and endpoints are read from the entity's `SPSSODescriptor`
     /// elements in the SAML metadata namespace whose
     /// `protocolSupportEnumeration` lists `urn:oasis:names:tc:SAML:2.0:protocol`.
+    /// Endpoints are the children of those descriptors in the SAML metadata
+    /// namespace. A child with the same local name in another namespace is
+    /// not an endpoint.
     ///
     /// # Errors
     ///
@@ -71,13 +74,12 @@ impl SpMetadata {
     /// Returns the errors from [`Self::from_xml`] and any schema validation
     /// error from `policy`.
     pub fn from_xml_with_policy(xml: &str, policy: &crate::XmlPolicy) -> Result<Self, SamlError> {
-        let inner = Metadata::parse_role_with_policy(
+        let (inner, roles) = Metadata::parse_role_with_policy(
             xml,
             super::SsoDescriptorRole::ServiceProvider,
-            Self::fields(),
             policy,
         )?;
-        Self::from_extracted(inner, policy.limits)
+        Ok(Self::from_roles(inner, &roles))
     }
 
     pub(crate) fn from_aggregate_entity(
@@ -85,57 +87,38 @@ impl SpMetadata {
         path: &[&SamlElement],
         limits: XmlLimits,
     ) -> Result<Self, SamlError> {
-        let inner = Metadata::from_aggregate_entity(
+        let (inner, roles) = Metadata::from_aggregate_entity(
             xml,
             path,
             super::SsoDescriptorRole::ServiceProvider,
-            Self::fields(),
             limits,
         )?;
-        Self::from_extracted(inner, limits)
+        Ok(Self::from_roles(inner, &roles))
     }
 
-    fn fields() -> Vec<ExtractorField> {
-        vec![
-            ExtractorField::new("spRoleContext", &["EntityDescriptor", "SPSSODescriptor"])
-                .capture_source(),
-            ExtractorField::new(
-                "manageNameIDService",
-                &["EntityDescriptor", "SPSSODescriptor", "ManageNameIDService"],
-            )
-            .capture_source(),
-        ]
-    }
-
-    fn from_extracted(mut inner: Metadata, limits: XmlLimits) -> Result<Self, SamlError> {
-        let role_context = match &mut inner.meta {
-            Value::Object(entries) => entries
-                .iter()
-                .position(|(key, _)| key == "spRoleContext")
-                .map(|index| entries.remove(index).1)
-                .unwrap_or_default(),
-            Value::Null | Value::Str(_) | Value::Array(_) => Value::Null,
-        };
-        let roles: Vec<&str> = match &role_context {
-            Value::Array(roles) => roles.iter().map(Value::as_str).collect(),
-            Value::Str(role) => Some(vec![role.as_str()]),
-            Value::Null | Value::Object(_) => None,
-        }
-        .filter(|roles: &Vec<&str>| !roles.is_empty())
-        .ok_or_else(|| SamlError::MissingMetadata("SPSSODescriptor".into()))?;
+    fn from_roles(mut inner: Metadata, roles: &[SamlElement]) -> Self {
         let assertion_consumer_service_roles = roles
-            .into_iter()
-            .map(|role| role_assertion_consumer_services(role, limits))
-            .collect::<Result<_, _>>()?;
-        super::endpoints::read_endpoints(
-            &mut inner.meta,
+            .iter()
+            .map(|role| {
+                super::endpoints::role_endpoints(
+                    role,
+                    "AssertionConsumerService",
+                    &["Binding", "Location", "isDefault", "index"],
+                )
+            })
+            .collect();
+        inner.meta.insert(
             "manageNameIDService",
-            &["Binding", "Location", "ResponseLocation"],
-        )?;
-        Ok(Self {
+            super::endpoints::roles_endpoints(
+                roles,
+                "ManageNameIDService",
+                &["Binding", "Location", "ResponseLocation"],
+            ),
+        );
+        Self {
             inner,
             assertion_consumer_service_roles,
-        })
+        }
     }
 
     /// `WantAssertionsSigned` flag.
@@ -256,21 +239,6 @@ fn role_endpoint_at_index(services: &Value, index: u16) -> Result<Option<&Value>
         )));
     }
     Ok(first)
-}
-
-fn role_assertion_consumer_services(role: &str, limits: XmlLimits) -> Result<Value, SamlError> {
-    let field = ExtractorField::new(
-        "assertionConsumerService",
-        &["SPSSODescriptor", "AssertionConsumerService"],
-    )
-    .capture_source();
-    let extracted = extract_with_limits(role, &[field], limits)?;
-    super::endpoints::parse_endpoint_fragments(
-        extracted
-            .get("assertionConsumerService")
-            .unwrap_or(&Value::Null),
-        &["Binding", "Location", "isDefault", "index"],
-    )
 }
 
 fn acs_metadata_endpoint_from_value(value: &crate::util::Value) -> Option<AcsMetadataEndpoint> {

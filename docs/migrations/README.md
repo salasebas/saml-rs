@@ -37,5 +37,6 @@ additions.
 - [Replace calls to `constants::digest_for_signature`](unreleased-remove-digest-for-signature.md)
 - [Use plural names for metadata generation collections](unreleased-metadata-generation-collections.md)
 - [Sign encrypted assertions for the response they arrive in](unreleased-decrypted-assertion-signatures.md)
+- [Read metadata endpoints only in the metadata namespace](unreleased-metadata-endpoint-namespace.md)
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)
