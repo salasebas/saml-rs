@@ -20,6 +20,7 @@ use crate::error::{SamlError, TimeWindowField};
 use crate::flow::FlowResult;
 use crate::xml::fields::{login_response, response};
 use crate::xml::{dom, parse_saml_utc_instant, XmlLimits};
+use std::time::SystemTime;
 use time::{Duration, OffsetDateTime};
 
 const REPLAY_EXPIRATION_FIELD: TimeWindowField = TimeWindowField::ReplayExpiration;
@@ -106,6 +107,7 @@ pub struct SsoSession {
     audience_restrictions: Vec<AudienceRestriction>,
     not_before: Option<SamlInstant>,
     not_on_or_after: Option<SamlInstant>,
+    session_not_on_or_after: Option<SystemTime>,
     binding_signature_algorithm_uri: Option<String>,
     verified_xml_signatures: Vec<VerifiedXmlSignature>,
     raw_flow: FlowResult,
@@ -252,18 +254,16 @@ impl SsoSession {
         self.not_on_or_after.as_ref()
     }
 
-    /// The earliest `SessionNotOnOrAfter` in the consumed assertion.
+    /// The earliest `SessionNotOnOrAfter` in the consumed assertion, before
+    /// clock skew.
     ///
     /// Returns `None` when its authentication statements specify no deadline.
-    /// Use this deadline to cap the application's session lifetime. The value
-    /// retains the precision sent by the identity provider, before clock skew.
-    pub fn session_not_on_or_after(&self) -> Option<&SamlInstant> {
-        // Acceptance restricts these values to fixed-width RFC 3339 UTC date
-        // and time fields. Removing Z lets a whole second sort before fractions.
-        self.authn_statements
-            .iter()
-            .filter_map(AuthnStatement::session_not_on_or_after)
-            .min_by_key(|deadline| deadline.as_str().trim_end_matches('Z'))
+    /// End the application session at this instant unless the principal signs
+    /// in again. A fraction of a second finer than the platform's
+    /// [`SystemTime`] resolution is dropped. [`AuthnStatement::session_not_on_or_after`]
+    /// keeps the text of each value.
+    pub fn session_not_on_or_after(&self) -> Option<SystemTime> {
+        self.session_not_on_or_after
     }
 
     /// The `SigAlg` URI of the verified binding signature, when the response
@@ -505,6 +505,7 @@ impl SsoSession {
             authn_statements_from_extract(&raw_flow.extract, &raw_flow.saml_content)?;
         let audience_restrictions = audience_restrictions_from_extract(&raw_flow.extract)?;
         let (not_before, not_on_or_after) = conditions_instants(&raw_flow.extract)?;
+        let session_not_on_or_after = earliest_session_not_on_or_after(&authn_statements)?;
         let binding_signature_algorithm_uri = raw_flow.sig_alg.clone();
         Ok(Self {
             response_id,
@@ -521,9 +522,28 @@ impl SsoSession {
             audience_restrictions,
             not_before,
             not_on_or_after,
+            session_not_on_or_after,
             binding_signature_algorithm_uri,
             verified_xml_signatures,
             raw_flow,
         })
     }
+}
+
+fn earliest_session_not_on_or_after(
+    statements: &[AuthnStatement],
+) -> Result<Option<SystemTime>, SamlError> {
+    const FIELD: TimeWindowField = TimeWindowField::SessionNotOnOrAfter;
+    earliest_authn_session_expiration(
+        statements
+            .iter()
+            .filter_map(AuthnStatement::session_not_on_or_after)
+            .map(SamlInstant::as_str),
+        FIELD,
+    )?
+    .map(|deadline| {
+        system_time_from_offset_datetime(deadline)
+            .map_err(|_| SamlError::TimeWindowInvalid { field: FIELD })
+    })
+    .transpose()
 }

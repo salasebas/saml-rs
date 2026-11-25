@@ -17,7 +17,6 @@ use common::signing_credentials;
 use post_validation::post_validation;
 
 use std::time::{Duration, SystemTime};
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -363,13 +362,7 @@ fn typed_sso_response_round_trips_the_session_deadline() -> Result<(), Box<dyn s
         Inbound::post(response.post_form()?.fields().to_vec()),
         post_validation(&mut Default::default()),
     )?;
-    let received_deadline = session
-        .session_not_on_or_after()
-        .ok_or("missing session deadline")?;
-    assert_eq!(
-        SystemTime::from(OffsetDateTime::parse(received_deadline.as_str(), &Rfc3339)?),
-        deadline
-    );
+    assert_eq!(session.session_not_on_or_after(), Some(deadline));
     Ok(())
 }
 

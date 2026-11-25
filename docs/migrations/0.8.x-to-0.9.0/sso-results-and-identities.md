@@ -190,9 +190,9 @@ let attributes = Attributes::new([
 `authn_session()` returned an empty `AuthnSession` when the assertion had no
 `AuthnStatement`. Such a response is now rejected, as
 [Send an `AuthnStatement` in every successful SSO response](sso-authn-statement.md)
-describes. The renamed `session_not_on_or_after()` is the statement's `SessionNotOnOrAfter`.
-`SsoSession::not_on_or_after()` is still the assertion's
-`Conditions@NotOnOrAfter`.
+describes. The renamed `session_not_on_or_after()` is the statement's
+`SessionNotOnOrAfter`. `SsoSession::not_on_or_after()` is still the
+assertion's `Conditions@NotOnOrAfter`.
 
 Before the upgrade:
 
@@ -212,6 +212,11 @@ let expires = session
 # }
 ```
 
+To cap the application session, read the earliest deadline as a `SystemTime`
+from `SsoSession::session_not_on_or_after()`, as
+[Read the SSO session deadline as a `SystemTime`](session-deadline-system-time.md)
+shows.
+
 `replay_keys()` listed keys without their expirations and skipped values it
 could not read. `finish_sso` and the other receiving methods already store
 the keys in the `ReplayCache` of the validation context.
@@ -219,8 +224,8 @@ the keys in the `ReplayCache` of the validation context.
 ## Read the selected authentication assertion
 
 When a response has several bearer assertions, `SsoSession` now reads the
-first one that contains an `AuthnStatement`. It reads the first bearer
-assertion if none contains an `AuthnStatement`.
+first one that contains an `AuthnStatement`. A response in which no bearer
+assertion contains one is rejected.
 
 If the IdP sends attributes in a separate bearer assertion, configure it to
 include any attributes your application needs in the authentication assertion.

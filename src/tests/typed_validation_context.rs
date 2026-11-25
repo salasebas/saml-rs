@@ -283,16 +283,32 @@ fn typed_validation_context_repeated_session_applies_skew_after_raw_minimum(
         SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::NoCache)
             .with_clock_skew(ClockSkew::from_millis(0, 60_000));
 
-    for deadline in [EARLIEST, "2024-12-31T23:59:30Z"] {
+    for (deadline, expected) in [
+        (EARLIEST, "2024-12-31T23:59:30.123456789Z"),
+        ("2024-12-31T23:59:30Z", "2024-12-31T23:59:30Z"),
+    ] {
         let flow = parse_response_at(&xml.replace(EARLIEST, deadline), &validation)?;
         let session = SsoSession::try_from_with_verified_xml_signatures(flow, Vec::new(), None)?;
-        assert_eq!(
-            session
-                .session_not_on_or_after()
-                .map(saml_rs::SamlInstant::as_str),
-            Some(deadline)
-        );
+        assert_eq!(session.session_not_on_or_after(), Some(instant(expected)?));
     }
+    Ok(())
+}
+
+#[test]
+fn typed_validation_context_reports_a_session_deadline_before_1970(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let xml = xml_with_time_window(
+        "1969-12-31T23:00:00Z",
+        FAR_FUTURE,
+        FAR_FUTURE,
+        "1969-12-31T23:59:59.5Z",
+    );
+    let flow = parse_response_at(&xml, &context_at("1969-12-31T23:30:00Z")?)?;
+    let session = SsoSession::try_from_with_verified_xml_signatures(flow, Vec::new(), None)?;
+    assert_eq!(
+        session.session_not_on_or_after(),
+        SystemTime::UNIX_EPOCH.checked_sub(Duration::from_millis(500))
+    );
     Ok(())
 }
 
@@ -876,7 +892,7 @@ fn typed_validation_context_replay_expiration_uses_earliest_authn_statement(
 }
 
 #[test]
-fn typed_validation_context_unrepresentable_authn_statement_expiration_fails_replay_closed(
+fn typed_validation_context_unrepresentable_authn_statement_expiration_fails_closed(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut flow = session_flow();
     remove_extract_keys(&mut flow, &["conditions", "subjectConfirmation"]);
@@ -893,19 +909,13 @@ fn typed_validation_context_unrepresentable_authn_statement_expiration_fails_rep
             ]),
         ]),
     );
-    let session = SsoSession::try_from_with_verified_xml_signatures(flow, Vec::new(), None)?;
-    let mut cache = RecordingReplayCache::default();
-    let mut validation = SamlValidationContext::new(
-        instant("2026-07-04T12:05:00Z")?,
-        ReplayPolicy::RequireCache(&mut cache),
-    );
 
-    match session.check_and_store_replay(&mut validation, XmlLimits::default()) {
+    match SsoSession::try_from_with_verified_xml_signatures(flow, Vec::new(), None) {
         Err(SamlError::TimeWindowInvalid { field, .. }) => {
-            assert_eq!(field, TimeWindowField::ReplayExpiration);
+            assert_eq!(field, TimeWindowField::SessionNotOnOrAfter);
             Ok(())
         }
-        other => Err(format!("expected ReplayExpiration failure, got {other:?}").into()),
+        other => Err(format!("expected SessionNotOnOrAfter failure, got {other:?}").into()),
     }
 }
 
