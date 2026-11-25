@@ -439,9 +439,9 @@ impl SubjectConfirmation {
         &self.raw_xml
     }
 
-    fn is_bearer(&self, limits: XmlLimits) -> Result<bool, SamlError> {
-        let confirmation = dom::parse_fragment_with_limits(&self.raw_xml, limits)?;
-        Ok(is_bearer_confirmation(&confirmation.root))
+    fn is_unconstrained_bearer(&self, limits: XmlLimits) -> Result<bool, SamlError> {
+        let confirmation = dom::parse_fragment_with_limits(&self.raw_xml, limits)?.root;
+        Ok(is_bearer_confirmation(&confirmation) && confirmation.children.is_empty())
     }
 }
 
@@ -457,9 +457,11 @@ impl SubjectConfirmation {
 /// principal that is not the requested subject is answered with an error
 /// status. When the subject has `<SubjectConfirmation>` elements, at least
 /// one must use the bearer `Method`, compared after `xs:anyURI` whitespace
-/// collapse, because the assertion carries only a bearer confirmation. A
-/// subject that accepts only another method, such as holder-of-key, has no
-/// success response there; answer it with [`crate::Status::responder`].
+/// collapse, and have no identifier and no `<SubjectConfirmationData>`,
+/// because the assertion carries only its own bearer confirmation. A subject
+/// that accepts only another method, such as holder-of-key, or only a
+/// constrained bearer confirmation, has no success response there; answer it
+/// with [`crate::Status::responder`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RequestedSubject {
     identifier: RequestedSubjectIdentifier,
@@ -535,12 +537,12 @@ impl RequestedSubject {
             return Ok(());
         }
         for confirmation in &self.confirmations {
-            if confirmation.is_bearer(limits)? {
+            if confirmation.is_unconstrained_bearer(limits)? {
                 return Ok(());
             }
         }
         Err(SamlError::Invalid(
-            "the requested Subject has no bearer SubjectConfirmation, which is the only method this identity provider writes; answer with an error status"
+            "the requested Subject has no bearer SubjectConfirmation without an identifier or SubjectConfirmationData, the only confirmation this identity provider can match; answer with an error status"
                 .into(),
         ))
     }

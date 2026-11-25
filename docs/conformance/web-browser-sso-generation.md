@@ -109,6 +109,7 @@ request that `receive_sso` refuses.
 | Reject a success response to a requested `<BaseID>`, which an issued `<NameID>` cannot strongly match | Mandatory | Core §3.4.1.4, §3.3.4 | Always |
 | Reject a success response to a requested `<EncryptedID>` that was not decrypted | Mandatory | Core §3.4.1.4, §3.3.4, E75 | Always |
 | Reject a success response when the requested `Subject` has `<SubjectConfirmation>` elements and none uses the bearer `Method`, the only one the assertion carries. Compare `Method` after `xs:anyURI` whitespace collapse | Mandatory | Core §3.4.1.4, §3.3.4, E75 | Always |
+| Also reject it when every requested bearer `<SubjectConfirmation>` has an identifier or `<SubjectConfirmationData>` | Library policy: such data can constrain the recipient, time, or address in ways the issued bearer confirmation does not meet, and service providers must not send `<SubjectConfirmation>` (Profiles §4.1.4.1), so the crate does not compare it. | Core §3.3.4, §2.4.1.2 | Always |
 | Return the exact `RelayState` received with the request, including a value over 80 bytes. Reject `RespondSso::relay_state` on a request that carried one | Mandatory | Bindings §3.1.1, §3.4.3, §3.5.3, CD-04 §2.3 | Always |
 | Send a `RelayState` the identity provider chooses, when the request carried none or the response is unsolicited | Optional | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | `RespondSso::relay_state` |
 | Limit a `RelayState` the identity provider chooses to 80 bytes | Mandatory | Bindings §3.5.3, CD-04 §2.3 | `RespondSso::relay_state` |
