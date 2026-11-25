@@ -278,6 +278,13 @@ impl ServiceProvider {
     /// The service provider verifies every signature on the response and its
     /// assertions, including any embedded signatures on HTTP-POST-SimpleSign.
     ///
+    /// The session reads the assertion that [`SsoSession`] describes. Its
+    /// bearer confirmation, audience, conditions, and session expiry decide
+    /// whether the response is accepted. Every other assertion must name the
+    /// same issuer and principal and have its own `ID`. Its own bearer
+    /// confirmation, audience, conditions, and session expiry do not reject
+    /// the response, and the session accessors read none of its values.
+    ///
     /// A present `Destination` and the bearer `Recipient` must name the
     /// assertion consumer that received the response, which must be the one
     /// [`PendingAuthnRequest::acs`] asked for. Supply the receiving URL with
@@ -303,7 +310,8 @@ impl ServiceProvider {
     /// artifact input pairs the artifact with a message resolved from another
     /// artifact or another identity provider; when XML, signature, certificate
     /// trust, audience, condition, or time validation fails; when the
-    /// assertions do not share one issuer and one principal; or when replay
+    /// assertions do not share one issuer and one principal, or repeat an `ID`
+    /// ([`SamlError::PotentialWrappingAttack`]); or when replay
     /// validation fails. When `pending` carries
     /// [`PendingAuthnRequest::required_authn_context`], returns
     /// [`SamlError::AuthnContextMismatch`] unless a validated `AuthnStatement`
@@ -420,12 +428,17 @@ impl ServiceProvider {
     /// the IdP metadata cannot be parsed or trusted, XML parsing or signature
     /// verification fails, destination, recipient, audience, condition, or
     /// time validation fails,
-    /// the assertions do not share one issuer and one principal, or replay
+    /// the assertions do not share one issuer and one principal or repeat an
+    /// `ID` ([`SamlError::PotentialWrappingAttack`]), or replay
     /// validation fails. After response parsing and verification, HTTP-POST
     /// returns [`SamlError::ReplayCacheRequired`] if the cache is absent. Returns
-    /// [`SamlError::InResponseToMismatch`] when the response or a bearer
-    /// `SubjectConfirmationData` carries an `InResponseTo` attribute, including
-    /// an empty one. A status other than `Success` returns
+    /// [`SamlError::InResponseToMismatch`] when a successful response carries an
+    /// `InResponseTo` attribute, including an empty one. A bearer
+    /// `SubjectConfirmationData` that carries one leaves its confirmation
+    /// unsatisfied. When no other bearer confirmation of the selected assertion
+    /// is satisfied, returns [`SamlError::SubjectConfirmationInvalid`] with the
+    /// reason of the last confirmation checked. A status
+    /// other than `Success` returns
     /// [`SamlError::StatusNotSuccess`] once all present signatures verify and
     /// the issuer and destination checks pass. An error response can be
     /// unsigned. Its operator diagnostic requires a signature over the response

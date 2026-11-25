@@ -29,6 +29,9 @@ fn response_request(xml: &str) -> HttpRequest {
     )])
 }
 
+const REQUEST_ID: &str = "_41e758fee373d51639552c4b040b1090e97f6685";
+const FIXTURE_BEARER_REQUEST_ID: &str = "_4fee3b046395c4e751011e97f8900b5273d56685";
+
 fn parse_response_at(
     xml: &str,
     validation: &SamlValidationContext<'_>,
@@ -36,9 +39,11 @@ fn parse_response_at(
     let options = FlowOptions {
         now: Some(validation.now()),
         clock_skew: validation.clock_skew(),
+        expected_in_response_to: Some(REQUEST_ID),
         ..FlowOptions::new(Binding::Post, ParserType::SamlResponse)
     };
-    flow(&options, &response_request(xml))
+    let solicited = xml.replace(FIXTURE_BEARER_REQUEST_ID, REQUEST_ID);
+    flow(&options, &response_request(&solicited))
 }
 
 fn xml_with_late_subject_and_session() -> String {

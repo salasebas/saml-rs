@@ -52,6 +52,7 @@ pub(super) fn optional_request_id(
 ) -> Result<Option<MessageId>, SamlError> {
     extract
         .get_str(path)
+        .map(collapse_whitespace)
         .filter(|value| !value.is_empty())
         .map(MessageId::try_new)
         .transpose()

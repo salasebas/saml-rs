@@ -356,12 +356,16 @@ impl SsoSession {
                     if replay.id == self.assertion_id.as_str() {
                         continue;
                     }
-                    let expires_at = match replay.bearer_not_on_or_after {
-                        Some(instant) => system_time_from_offset_datetime(replay_deadline(
-                            parse_replay_expiration(&instant)?,
+                    let bearer_expires = match replay.bearer_not_on_or_after {
+                        Some(instant) => bearer_confirmable_until(
+                            &instant,
                             validation_now,
                             not_on_or_after_skew_ms,
-                        )?)?,
+                        )?,
+                        None => None,
+                    };
+                    let expires_at = match bearer_expires {
+                        Some(instant) => system_time_from_offset_datetime(instant)?,
                         None => assertion_expires,
                     };
                     cache.check_and_store(
@@ -423,17 +427,36 @@ fn replay_deadline(
     validation_now: OffsetDateTime,
     not_on_or_after_skew_ms: i64,
 ) -> Result<OffsetDateTime, SamlError> {
-    let expires_at = raw_expires_at
-        .checked_add(Duration::milliseconds(not_on_or_after_skew_ms))
-        .ok_or(SamlError::TimeWindowInvalid {
-            field: REPLAY_EXPIRATION_FIELD,
-        })?;
+    let expires_at = shifted_replay_expiration(raw_expires_at, not_on_or_after_skew_ms)?;
     if validation_now >= expires_at {
         return Err(SamlError::TimeWindowInvalid {
             field: REPLAY_EXPIRATION_FIELD,
         });
     }
     Ok(expires_at)
+}
+
+fn bearer_confirmable_until(
+    latest_not_on_or_after: &str,
+    validation_now: OffsetDateTime,
+    not_on_or_after_skew_ms: i64,
+) -> Result<Option<OffsetDateTime>, SamlError> {
+    let Some(raw_expires_at) = parse_saml_utc_instant(latest_not_on_or_after) else {
+        return Ok(None);
+    };
+    let expires_at = shifted_replay_expiration(raw_expires_at, not_on_or_after_skew_ms)?;
+    Ok((validation_now < expires_at).then_some(expires_at))
+}
+
+fn shifted_replay_expiration(
+    raw_expires_at: OffsetDateTime,
+    not_on_or_after_skew_ms: i64,
+) -> Result<OffsetDateTime, SamlError> {
+    raw_expires_at
+        .checked_add(Duration::milliseconds(not_on_or_after_skew_ms))
+        .ok_or(SamlError::TimeWindowInvalid {
+            field: REPLAY_EXPIRATION_FIELD,
+        })
 }
 
 fn parse_replay_expiration(value: &str) -> Result<OffsetDateTime, SamlError> {

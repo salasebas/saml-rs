@@ -1094,6 +1094,46 @@ fn the_service_provider_rejects_an_artifact_response_it_cannot_attribute(
 }
 
 #[test]
+fn the_service_provider_reads_the_artifact_response_in_response_to_after_whitespace_collapse(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
+    let channel = confidential();
+    let resolution = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        &artifact,
+        channel,
+        without_replay_cache(),
+    )?;
+    let answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        resolution.request().envelope(),
+        resolution.request().endpoint(),
+        &mut issued,
+        channel,
+    )?;
+    let envelope = answer.response().envelope();
+    let key = "InResponseTo=\"";
+    let value_start = envelope.find(key).ok_or("InResponseTo is missing")? + key.len();
+    let value_end = envelope[value_start..]
+        .find('"')
+        .ok_or("InResponseTo is missing its closing quote")?
+        + value_start;
+    let padded = format!(
+        "{}&#10; {}&#9;{}",
+        &envelope[..value_start],
+        &envelope[value_start..value_end],
+        &envelope[value_end..]
+    );
+
+    let resolved = resolution.finish(&padded)?;
+
+    assert!(resolved.xml().contains(WEB_SSO_MARKER));
+    Ok(())
+}
+
+#[test]
 fn a_non_entity_resolve_issuer_does_not_receive_the_message(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;

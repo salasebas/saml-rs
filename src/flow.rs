@@ -284,14 +284,6 @@ impl FlowResultWithSignatureEvidence {
     pub(crate) fn into_flow_result(self) -> FlowResult {
         self.flow_result
     }
-
-    pub(crate) fn extract(&self) -> &Value {
-        &self.flow_result.extract
-    }
-
-    pub(crate) fn saml_content(&self) -> &str {
-        &self.flow_result.saml_content
-    }
 }
 
 fn default_fields(
@@ -468,7 +460,12 @@ pub(crate) fn correlated_status_message(
     signed_destination: SignedMessageDestination,
 ) -> Option<StatusMessage> {
     let response = parse_saml_with_limits(xml, limits).ok()?;
-    if response.attr("InResponseTo") != expected_in_response_to {
+    if response
+        .attr("InResponseTo")
+        .map(collapse_whitespace)
+        .as_deref()
+        != expected_in_response_to
+    {
         return None;
     }
     validate_destination(
@@ -560,7 +557,7 @@ fn validate_in_response_to(actual: Option<&str>, expected: Option<&str>) -> Resu
     let Some(expected) = expected else {
         return Ok(());
     };
-    if actual != Some(expected) {
+    if actual.map(collapse_whitespace).as_deref() != Some(expected) {
         return Err(SamlError::in_response_to_mismatch(Some(expected), actual));
     }
     Ok(())

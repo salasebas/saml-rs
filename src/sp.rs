@@ -1,4 +1,3 @@
-use crate::assertion_acceptance::reject_unsolicited_bearer_in_response_to;
 use crate::binding::{build_redirect_url, encode_base64};
 use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting};
@@ -329,7 +328,7 @@ impl Engine {
                 .assertion_consumer_location(binding)
                 .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
         };
-        let result = validate_received_message(
+        validate_received_message(
             &FlowOptions {
                 signature_check: SignatureCheck::Require,
                 require_audience_restriction: self.setting.require_audience_restriction,
@@ -370,20 +369,7 @@ impl Engine {
                 ResponseSignatureRequirement::Optional
             },
             options.signed_destination,
-        )?;
-        if let LoginResponseCorrelation::Unsolicited = correlation {
-            let in_response_to = result
-                .extract()
-                .get_str(crate::xml::fields::response::IN_RESPONSE_TO);
-            if in_response_to.is_some() {
-                return Err(SamlError::in_response_to_mismatch(None, in_response_to));
-            }
-            reject_unsolicited_bearer_in_response_to(
-                result.saml_content(),
-                self.setting.xml_limits,
-            )?;
-        }
-        Ok(result)
+        )
     }
 }
 
