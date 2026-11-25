@@ -99,5 +99,6 @@ Check the topics that affect your integration.
 - [Send the ArtifactResponse for store and signature failures](artifact-resolve-answers.md)
 - [Handle relative status codes in name identifier management responses](name-id-management-status.md)
 - [Set the signature prefix on `TemplatePolicy`](signature-placement.md)
+- [Answer malformed name identifier management requests](name-id-management-malformed-requests.md)
 
 [All migration guides](../README.md)

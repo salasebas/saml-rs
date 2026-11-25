@@ -121,6 +121,7 @@ pub(crate) struct UndecryptedRequest {
 
 enum RequestContent {
     VersionMismatch(RequestVersionMismatch),
+    Malformed(SamlError),
     Identifiers(Identifier, Change),
 }
 
@@ -142,10 +143,10 @@ pub(crate) fn request_from_flow(
     let issuer = EntityId::try_new(issuer.value)?;
     let content = match RequestVersionMismatch::for_request(&request.required_attr("Version")?)? {
         Some(mismatch) => RequestContent::VersionMismatch(mismatch),
-        None => {
-            let (identifier, change) = identifier_and_change(&request)?;
-            RequestContent::Identifiers(identifier, change)
-        }
+        None => match identifier_and_change(&request) {
+            Ok((identifier, change)) => RequestContent::Identifiers(identifier, change),
+            Err(error) => RequestContent::Malformed(error),
+        },
     };
     Ok(UndecryptedRequest {
         id,
@@ -165,6 +166,9 @@ impl UndecryptedRequest {
         let (identifier, change) = match self.content {
             RequestContent::VersionMismatch(mismatch) => {
                 return Ok(ParsedRequest::Refused(Refusal::VersionMismatch(mismatch)));
+            }
+            RequestContent::Malformed(error) => {
+                return Ok(ParsedRequest::Refused(Refusal::Malformed(error)));
             }
             RequestContent::Identifiers(identifier, change) => (identifier, change),
         };
