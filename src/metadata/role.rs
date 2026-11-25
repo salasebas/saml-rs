@@ -3,7 +3,7 @@ use crate::error::SamlError;
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::dom::{self, XmlLimits};
 use crate::xml::protocol_element::{self, SamlElement};
-use crate::xml::{xs_boolean, ExtractorField};
+use crate::xml::xs_boolean;
 
 use super::KeyCertificates;
 
@@ -16,6 +16,7 @@ pub(super) enum SsoDescriptorRole {
 
 pub(super) struct SelectedDescriptors<'a> {
     pub(super) nodes: Vec<&'a dom::Node>,
+    pub(super) namespaced: Vec<SamlElement>,
     pub(super) key_certificates: KeyCertificates,
     pub(super) entity_id: Option<String>,
     pub(super) valid_until_bounds: Vec<String>,
@@ -31,19 +32,6 @@ pub(super) struct SigningFlags {
 }
 
 impl SsoDescriptorRole {
-    pub(super) fn fields(self) -> Vec<ExtractorField> {
-        let descriptor = match self {
-            Self::Any => "~SSODescriptor",
-            Self::ServiceProvider => "SPSSODescriptor",
-            Self::IdentityProvider => "IDPSSODescriptor",
-        };
-        vec![ExtractorField::new(
-            "singleLogoutService",
-            &["EntityDescriptor", descriptor, "SingleLogoutService"],
-        )
-        .capture_source()]
-    }
-
     pub(super) fn descriptors<'a>(
         self,
         xml: &str,
@@ -121,6 +109,7 @@ impl SsoDescriptorRole {
         Ok(SelectedDescriptors {
             nodes,
             key_certificates: KeyCertificates::from_descriptors(&namespaced_descriptors),
+            namespaced: namespaced_descriptors.into_iter().cloned().collect(),
             entity_id,
             valid_until_bounds,
             signing_flags,
@@ -141,6 +130,7 @@ impl SsoDescriptorRole {
         SelectedDescriptors {
             nodes,
             key_certificates: KeyCertificates::from_descriptors(&namespaced_descriptors),
+            namespaced: namespaced_descriptors.into_iter().cloned().collect(),
             entity_id: entity.attr("entityID").map(str::to_owned),
             valid_until_bounds: Vec::new(),
             signing_flags: SigningFlags::default(),
@@ -151,6 +141,7 @@ impl SsoDescriptorRole {
     fn no_descriptors<'a>() -> SelectedDescriptors<'a> {
         SelectedDescriptors {
             nodes: Vec::new(),
+            namespaced: Vec::new(),
             key_certificates: KeyCertificates::default(),
             entity_id: None,
             valid_until_bounds: Vec::new(),

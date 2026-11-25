@@ -5,10 +5,7 @@ use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::xml::protocol_element::SamlElement;
-use crate::xml::{extract_with_limits, ExtractorField, XmlLimits};
-
-const IDP_ROLES: &str = "idpRoles";
-const ARTIFACT_RESOLUTION_SERVICE: &str = "artifactResolutionService";
+use crate::xml::XmlLimits;
 
 /// One `ArtifactResolutionService` endpoint read from IdP metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,6 +69,9 @@ impl IdpMetadata {
     /// Keys, flags, and endpoints are read from the entity's `IDPSSODescriptor`
     /// elements in the SAML metadata namespace whose
     /// `protocolSupportEnumeration` lists `urn:oasis:names:tc:SAML:2.0:protocol`.
+    /// Endpoints are the children of those descriptors in the SAML metadata
+    /// namespace. A child with the same local name in another namespace is
+    /// not an endpoint.
     ///
     /// # Errors
     ///
@@ -92,13 +92,12 @@ impl IdpMetadata {
     /// Returns the errors from [`Self::from_xml`] and any schema validation
     /// error from `policy`.
     pub fn from_xml_with_policy(xml: &str, policy: &crate::XmlPolicy) -> Result<Self, SamlError> {
-        let inner = Metadata::parse_role_with_policy(
+        let (inner, roles) = Metadata::parse_role_with_policy(
             xml,
             super::SsoDescriptorRole::IdentityProvider,
-            Self::fields(),
             policy,
         )?;
-        Self::from_extracted(inner, policy.limits)
+        Ok(Self::from_roles(inner, &roles))
     }
 
     pub(crate) fn from_aggregate_entity(
@@ -106,60 +105,46 @@ impl IdpMetadata {
         path: &[&SamlElement],
         limits: XmlLimits,
     ) -> Result<Self, SamlError> {
-        let inner = Metadata::from_aggregate_entity(
+        let (inner, roles) = Metadata::from_aggregate_entity(
             xml,
             path,
             super::SsoDescriptorRole::IdentityProvider,
-            Self::fields(),
             limits,
         )?;
-        Self::from_extracted(inner, limits)
+        Ok(Self::from_roles(inner, &roles))
     }
 
-    fn fields() -> Vec<ExtractorField> {
-        vec![
-            ExtractorField::new(
-                "singleSignOnService",
-                &[
-                    "EntityDescriptor",
-                    "IDPSSODescriptor",
-                    "SingleSignOnService",
-                ],
-            )
-            .capture_source(),
-            ExtractorField::new(IDP_ROLES, &["EntityDescriptor", "IDPSSODescriptor"])
-                .capture_source(),
-            ExtractorField::new(
-                "manageNameIDService",
-                &[
-                    "EntityDescriptor",
-                    "IDPSSODescriptor",
-                    "ManageNameIDService",
-                ],
-            )
-            .capture_source(),
-        ]
-    }
-
-    fn from_extracted(mut inner: Metadata, limits: XmlLimits) -> Result<Self, SamlError> {
-        let artifact_resolution_roles = take_role_sources(&mut inner.meta)
+    fn from_roles(mut inner: Metadata, roles: &[SamlElement]) -> Self {
+        let artifact_resolution_roles = roles
             .iter()
-            .map(|role| role_artifact_resolution_services(role, limits))
-            .collect::<Result<_, _>>()?;
-        super::endpoints::read_endpoints(
-            &mut inner.meta,
+            .map(|role| {
+                super::endpoints::role_endpoints(
+                    role,
+                    "ArtifactResolutionService",
+                    &["Binding", "Location", "index"],
+                )
+            })
+            .collect();
+        inner.meta.insert(
             "singleSignOnService",
-            &["Binding", "Location"],
-        )?;
-        super::endpoints::read_endpoints(
-            &mut inner.meta,
+            super::endpoints::roles_endpoints(
+                roles,
+                "SingleSignOnService",
+                &["Binding", "Location"],
+            ),
+        );
+        inner.meta.insert(
             "manageNameIDService",
-            &["Binding", "Location", "ResponseLocation"],
-        )?;
-        Ok(Self {
+            super::endpoints::roles_endpoints(
+                roles,
+                "ManageNameIDService",
+                &["Binding", "Location", "ResponseLocation"],
+            ),
+        );
+        Self {
             inner,
             artifact_resolution_roles,
-        })
+        }
     }
 
     /// `WantAuthnRequestsSigned` flag.
@@ -249,41 +234,6 @@ impl IdpMetadata {
             .map(role_artifact_resolution_endpoints)
             .collect()
     }
-}
-
-fn take_role_sources(meta: &mut Value) -> Vec<String> {
-    let Value::Object(entries) = meta else {
-        return Vec::new();
-    };
-    let Some(position) = entries.iter().position(|(key, _)| key == IDP_ROLES) else {
-        return Vec::new();
-    };
-    match entries.remove(position).1 {
-        Value::Str(role) => vec![role],
-        Value::Array(roles) => roles
-            .into_iter()
-            .filter_map(|role| match role {
-                Value::Str(role) => Some(role),
-                Value::Null | Value::Array(_) | Value::Object(_) => None,
-            })
-            .collect(),
-        Value::Null | Value::Object(_) => Vec::new(),
-    }
-}
-
-fn role_artifact_resolution_services(role: &str, limits: XmlLimits) -> Result<Value, SamlError> {
-    let field = ExtractorField::new(
-        ARTIFACT_RESOLUTION_SERVICE,
-        &["IDPSSODescriptor", "ArtifactResolutionService"],
-    )
-    .capture_source();
-    let extracted = extract_with_limits(role, &[field], limits)?;
-    super::endpoints::parse_endpoint_fragments(
-        extracted
-            .get(ARTIFACT_RESOLUTION_SERVICE)
-            .unwrap_or(&Value::Null),
-        &["Binding", "Location", "index"],
-    )
 }
 
 fn role_artifact_resolution_endpoints(

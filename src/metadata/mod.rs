@@ -116,8 +116,10 @@ impl Metadata {
     /// must contain exactly one `<EntityDescriptor>` member in the SAML metadata
     /// namespace. Content inside `<Extensions>` does not count.
     /// `KeyDescriptor` certificates and `SingleLogoutService` endpoints are
-    /// read from every SSO role descriptor of the entity. [`SpMetadata`] and
-    /// [`IdpMetadata`] read only their own role's SAML 2.0 descriptors.
+    /// read from every SSO role descriptor of the entity. A
+    /// `SingleLogoutService` is read only in the SAML metadata namespace.
+    /// [`SpMetadata`] and [`IdpMetadata`] read only their own role's SAML 2.0
+    /// descriptors.
     ///
     /// # Errors
     ///
@@ -135,7 +137,8 @@ impl Metadata {
     /// Returns [`SamlError`] when XML parsing, parser resource limits, schema
     /// validation, extraction, or the single-`EntityDescriptor` check fails.
     pub fn parse_with_policy(xml: &str, policy: &crate::XmlPolicy) -> Result<Self, SamlError> {
-        Self::parse_role_with_policy(xml, SsoDescriptorRole::Any, Vec::new(), policy)
+        Self::parse_role_with_policy(xml, SsoDescriptorRole::Any, policy)
+            .map(|(metadata, _)| metadata)
     }
 
     pub(crate) fn validity(&self) -> Result<MetadataValidity, SamlError> {
@@ -275,7 +278,6 @@ impl Metadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::xml::ExtractorField;
 
     const IDPMETA: &str = include_str!("../../tests/fixtures/misc/idpmeta.xml");
     const SPMETA: &str = include_str!("../../tests/fixtures/misc/spmeta.xml");
@@ -310,20 +312,6 @@ mod tests {
                 "{xml}"
             );
         }
-    }
-
-    #[test]
-    fn reads_extra_fields_under_a_root_that_is_not_an_entity() -> Result<(), SamlError> {
-        let xml = r#"<Foo><SPSSODescriptor><X a="1"/></SPSSODescriptor></Foo>"#;
-        let field = ExtractorField::new("x", &["Foo", "SPSSODescriptor", "X"]).attrs(&["a"]);
-        let metadata = Metadata::parse_role_with_policy(
-            xml,
-            SsoDescriptorRole::Any,
-            vec![field],
-            &crate::XmlPolicy::default(),
-        )?;
-        assert_eq!(metadata.meta.get_str("x"), Some("1"));
-        Ok(())
     }
 
     #[test]
@@ -788,6 +776,89 @@ mod tests {
             sp.as_metadata()
                 .manage_name_id_service_locations(Binding::Redirect, EndpointDirection::Request),
             vec!["https://sp.example.com/mnid".to_string()]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn endpoints_are_read_only_in_the_metadata_namespace() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let post = r#"Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST""#;
+        let soap = r#"Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP""#;
+        let idp = IdpMetadata::from_xml(&format!(
+            r#"<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ext="urn:example:ext" entityID="https://idp.example.com">
+  <md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <ext:ArtifactResolutionService {soap} Location="https://foreign.example.com/ars" index="0"/>
+    <md:ArtifactResolutionService {soap} Location="https://idp.example.com/ars" index="1"/>
+    <ext:SingleLogoutService {post} Location="https://foreign.example.com/slo"/>
+    <md:SingleLogoutService {post} Location="https://idp.example.com/slo"/>
+    <ext:ManageNameIDService {soap} Location="https://foreign.example.com/mnid"/>
+    <md:ManageNameIDService {soap} Location="https://idp.example.com/mnid"/>
+    <ext:SingleSignOnService {post} Location="https://foreign.example.com/sso"/>
+    <md:SingleSignOnService {post} Location="https://idp.example.com/sso"/>
+  </md:IDPSSODescriptor>
+</md:EntityDescriptor>"#
+        ))?;
+        assert_eq!(
+            idp.single_sign_on_service_locations(Binding::Post),
+            vec!["https://idp.example.com/sso".to_string()]
+        );
+        assert_eq!(
+            idp.as_metadata()
+                .single_logout_service_locations(Binding::Post, EndpointDirection::Request),
+            vec!["https://idp.example.com/slo".to_string()]
+        );
+        assert_eq!(
+            idp.as_metadata()
+                .manage_name_id_service_locations(Binding::Soap, EndpointDirection::Request),
+            vec!["https://idp.example.com/mnid".to_string()]
+        );
+        let artifact_resolution = idp.artifact_resolution_services()?;
+        assert_eq!(
+            artifact_resolution
+                .iter()
+                .map(|service| (service.index(), service.location()))
+                .collect::<Vec<_>>(),
+            vec![(1, "https://idp.example.com/ars")]
+        );
+        assert!(idp.artifact_resolution_service(0)?.is_none());
+
+        let sp_xml = format!(
+            r#"<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ext="urn:example:ext" entityID="https://sp.example.com/metadata">
+  <md:SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <ext:SingleLogoutService {post} Location="https://foreign.example.com/slo"/>
+    <md:SingleLogoutService {post} Location="https://sp.example.com/slo"/>
+    <ext:ManageNameIDService {soap} Location="https://foreign.example.com/mnid"/>
+    <md:ManageNameIDService {soap} Location="https://sp.example.com/mnid"/>
+    <ext:AssertionConsumerService {post} Location="https://foreign.example.com/acs" index="0"/>
+    <md:AssertionConsumerService {post} Location="https://sp.example.com/acs" index="1"/>
+  </md:SPSSODescriptor>
+</md:EntityDescriptor>"#
+        );
+        let sp = SpMetadata::from_xml(&sp_xml)?;
+        assert_eq!(
+            sp.assertion_consumer_location(Binding::Post).as_deref(),
+            Some("https://sp.example.com/acs")
+        );
+        assert_eq!(
+            sp.assertion_consumer_service_locations(Binding::Post),
+            vec!["https://sp.example.com/acs".to_string()]
+        );
+        assert_eq!(sp.assertion_consumer_service_by_index(0)?, None);
+        assert_eq!(
+            sp.as_metadata()
+                .single_logout_service_locations(Binding::Post, EndpointDirection::Request),
+            vec!["https://sp.example.com/slo".to_string()]
+        );
+        assert_eq!(
+            sp.as_metadata()
+                .manage_name_id_service_locations(Binding::Soap, EndpointDirection::Request),
+            vec!["https://sp.example.com/mnid".to_string()]
+        );
+        assert_eq!(
+            Metadata::parse(&sp_xml)?
+                .single_logout_service_locations(Binding::Post, EndpointDirection::Request),
+            vec!["https://sp.example.com/slo".to_string()]
         );
         Ok(())
     }

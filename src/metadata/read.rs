@@ -82,9 +82,8 @@ impl Metadata {
     pub(super) fn parse_role_with_policy(
         xml: &str,
         role: SsoDescriptorRole,
-        extra: Vec<ExtractorField>,
         policy: &crate::XmlPolicy,
-    ) -> Result<Self, SamlError> {
+    ) -> Result<(Self, Vec<SamlElement>), SamlError> {
         let limits = policy.limits;
         let mut descriptor_starts = HashSet::new();
         let roots = dom::parse_roots_with_element_names(xml, limits, |start, ns, name| {
@@ -107,7 +106,7 @@ impl Metadata {
         let (extraction, entity) = entity_descriptor_xml(xml, &roots, &descriptor_starts)?;
         let descriptors = role.descriptors(xml, entity, limits)?;
         let source = role_xml(xml, extraction, entity, &descriptors.nodes);
-        let meta = extract_role_fields(&source, role, extra, limits)?;
+        let meta = extract_name_id_formats(&source, limits)?;
         Ok(Self::from_extracted(
             Arc::from(xml),
             meta,
@@ -121,9 +120,8 @@ impl Metadata {
         xml: &Arc<str>,
         path: &[&SamlElement],
         role: SsoDescriptorRole,
-        extra: Vec<ExtractorField>,
         limits: XmlLimits,
-    ) -> Result<Self, SamlError> {
+    ) -> Result<(Self, Vec<SamlElement>), SamlError> {
         let member = path.last().ok_or_else(role::missing_entity)?;
         let entity_xml = &xml[member.start..member.end];
         let entity = dom::parse_fragment_with_limits(entity_xml, limits)?.root;
@@ -135,7 +133,7 @@ impl Metadata {
             Some(&entity),
             &descriptors.nodes,
         );
-        let meta = extract_role_fields(&source, role, extra, limits)?;
+        let meta = extract_name_id_formats(&source, limits)?;
         Ok(Self::from_extracted(
             Arc::clone(xml),
             meta,
@@ -147,12 +145,20 @@ impl Metadata {
 
     fn from_extracted(
         xml: Arc<str>,
-        meta: Value,
+        mut meta: Value,
         descriptors: SelectedDescriptors<'_>,
         description: EntityDescription,
         entity_attributes: Vec<SamlElement>,
-    ) -> Self {
-        Self {
+    ) -> (Self, Vec<SamlElement>) {
+        meta.insert(
+            "singleLogoutService",
+            endpoints::roles_endpoints(
+                &descriptors.namespaced,
+                "SingleLogoutService",
+                &["Binding", "Location", "ResponseLocation"],
+            ),
+        );
+        let metadata = Self {
             xml,
             meta,
             entity_id: descriptors.entity_id,
@@ -162,27 +168,18 @@ impl Metadata {
             scope_elements: descriptors.scope_elements,
             description,
             entity_attributes,
-        }
+        };
+        (metadata, descriptors.namespaced)
     }
 }
 
-fn extract_role_fields(
-    source: &str,
-    role: SsoDescriptorRole,
-    extra: Vec<ExtractorField>,
-    limits: XmlLimits,
-) -> Result<Value, SamlError> {
-    let mut fields = vec![ExtractorField::new(
-        "nameIDFormat",
-        &["EntityDescriptor", "~SSODescriptor", "NameIDFormat"],
-    )];
-    fields.extend(role.fields());
-    fields.extend(extra);
-    let mut meta = extract_with_limits(source, &fields, limits)?;
-    endpoints::read_endpoints(
-        &mut meta,
-        "singleLogoutService",
-        &["Binding", "Location", "ResponseLocation"],
-    )?;
-    Ok(meta)
+fn extract_name_id_formats(source: &str, limits: XmlLimits) -> Result<Value, SamlError> {
+    extract_with_limits(
+        source,
+        &[ExtractorField::new(
+            "nameIDFormat",
+            &["EntityDescriptor", "~SSODescriptor", "NameIDFormat"],
+        )],
+        limits,
+    )
 }
