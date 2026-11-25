@@ -15,6 +15,17 @@ chain. XML signatures and encryption go through
 > the crate has had no external security audit. Review it, your configuration,
 > and your peers' metadata trust before production use.
 
+## Project goals
+
+- Follow the applicable SAML 2.0 requirements for each supported exchange.
+  The [conformance index](docs/conformance/README.md) records the scope by
+  role and binding, the choices the crate makes, and known gaps.
+- Provide a typed Rust API for starting, receiving, and completing SAML
+  exchanges. Expose deployment choices through named options.
+- Fit into the application's web stack. The crate builds and validates SAML
+  messages. Your application owns HTTP transport, user authentication,
+  sessions, and storage.
+
 ## Install the published crate
 
 ```sh
@@ -175,7 +186,7 @@ The stored format is in
 | Published API reference | [docs.rs](https://docs.rs/saml-rs/latest/saml_rs/) |
 | Identity provider and logout examples | [`examples/sso.rs`](examples/sso.rs), [`examples/slo.rs`](examples/slo.rs) |
 | Upgrade an existing integration | [Migration guides](docs/migrations/README.md) |
-| See the rules each flow claims | [Conformance records](docs/conformance/) |
+| See the rules each flow claims | [Conformance records](docs/conformance/README.md) |
 | Contribute | [Contributing](CONTRIBUTING.md) |
 
 The [`opensaml`](https://crates.io/crates/opensaml) and

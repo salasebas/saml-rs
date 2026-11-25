@@ -2,23 +2,33 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const indexRecord = 'README.md';
+const indexPage = {
+	title: 'Conformance',
+	description: 'SAML conformance records by exchange and public API.',
+};
+
 export function conformancePages({ docsDir, recordsDir, pages, pagesOutsideRecords = {} }) {
 	const pagesDir = new URL('reference/conformance/', docsDir);
 
 	async function writePage(record) {
 		const source = await readFile(new URL(record, recordsDir), 'utf8');
-		const page = toPage(record, source, pages[record], pagesOutsideRecords);
-		await writeFile(new URL(record, pagesDir), page);
+		const isIndex = record === indexRecord;
+		const page = toPage(record, source, isIndex ? indexPage : pages[record], pagesOutsideRecords);
+		const target = isIndex ? new URL('reference/conformance.md', docsDir) : new URL(record, pagesDir);
+		await writeFile(target, page);
 	}
 
 	return {
 		name: 'saml-conformance-pages',
 		hooks: {
 			async 'astro:config:setup'() {
-				const records = await recordFiles(recordsDir, pages);
+				const entries = await readdir(recordsDir);
+				const records = recordFiles(entries, recordsDir, pages);
 				await rm(pagesDir, { recursive: true, force: true });
 				await mkdir(pagesDir, { recursive: true });
 				for (const record of records) await writePage(record);
+				if (entries.includes(indexRecord)) await writePage(indexRecord);
 			},
 			'astro:server:setup'({ server, logger }) {
 				const recordsPath = path.resolve(fileURLToPath(recordsDir));
@@ -36,8 +46,8 @@ export function conformancePages({ docsDir, recordsDir, pages, pagesOutsideRecor
 	};
 }
 
-async function recordFiles(recordsDir, pages) {
-	const records = (await readdir(recordsDir)).filter((file) => file.endsWith('.md')).sort();
+function recordFiles(entries, recordsDir, pages) {
+	const records = entries.filter((file) => file !== indexRecord && file.endsWith('.md')).sort();
 	const unpublished = records.filter((record) => !(record in pages));
 	const missing = Object.keys(pages).filter((record) => !records.includes(record));
 	if (unpublished.length > 0 || missing.length > 0) {
@@ -68,7 +78,7 @@ function sitePath(record, url, pagesOutsideRecords) {
 	const hashAt = url.indexOf('#');
 	const href = hashAt === -1 ? url : url.slice(0, hashAt);
 	const hash = hashAt === -1 ? '' : url.slice(hashAt);
-	if (!href.includes('/')) return url;
+	if (!href.includes('/')) return record === indexRecord ? `conformance/${url}` : url;
 
 	const page = pagesOutsideRecords[href];
 	if (!page) throw new Error(`${record} links to ${href}, which has no site page`);
