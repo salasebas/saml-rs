@@ -322,8 +322,8 @@ impl NameIdPolicy {
 
     /// Requested NameID format.
     ///
-    /// The format is read after XML whitespace collapse, so a standard URI
-    /// with surrounding whitespace is its named variant. The special
+    /// The format is read after XML whitespace collapse, so a Core §8.3 format
+    /// URI with surrounding whitespace is its named variant. The special
     /// `urn:oasis:names:tc:SAML:2.0:nameid-format:encrypted` URI is
     /// represented as [`NameIdFormat::Custom`].
     pub fn format(&self) -> Option<&NameIdFormat> {

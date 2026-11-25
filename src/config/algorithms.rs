@@ -259,7 +259,7 @@ impl TransformAlgorithm {
 /// A message or metadata that writes the format rejects a value that is not a
 /// non-blank absolute URI reference with [`crate::SamlError::Invalid`]. A
 /// received format is not rejected. It is read after XML whitespace collapse,
-/// so a standard URI with surrounding whitespace is its named variant.
+/// so a Core §8.3 format URI with surrounding whitespace is its named variant.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum NameIdFormat {
