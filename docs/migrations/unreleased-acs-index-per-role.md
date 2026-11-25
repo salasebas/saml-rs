@@ -37,5 +37,9 @@ message.
 Both checks now count every `AssertionConsumerService` with the index,
 including one whose binding saml-rs does not answer, such as PAOS. Before, a
 POST endpoint and a PAOS endpoint that shared an index resolved to the POST
-endpoint. This also applies to metadata with a single SP role. Ask the
-service provider to give each endpoint of a role its own index.
+endpoint. This also applies to metadata with a single SP role.
+
+If one role repeats the index, ask the service provider to give each endpoint
+of that role its own index. If several roles publish it, ask the service
+provider to send its `AssertionConsumerServiceURL`, or an
+`AssertionConsumerServiceIndex` that only one SAML 2.0 SP role publishes.
