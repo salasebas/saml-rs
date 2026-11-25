@@ -579,6 +579,74 @@ fn config_builders_reject_a_credential_that_cannot_be_used(
     Ok(())
 }
 
+#[cfg(crypto)]
+#[test]
+fn config_builders_reject_a_signature_method_the_provider_cannot_sign(
+) -> Result<(), Box<dyn std::error::Error>> {
+    use saml_rs::{CertificatePem, HmacSecret, PrivateKeyPem, X509Credential};
+
+    let rsa = signing_credentials();
+    let ec = Credentials::default().with_signing_credential(X509Credential::new(
+        CertificatePem::new(include_str!("fixtures/key/secp384r1/cert.pem")),
+        PrivateKeyPem::new(include_str!("fixtures/key/secp384r1/privkey.pkcs8.pem")),
+    ));
+    let hmac = Credentials::default()
+        .with_hmac_secret(HmacSecret::try_new(b"service-provider-hmac-sha1-secret")?);
+    let cases = [
+        (SignatureAlgorithm::RsaSha256, rsa.clone(), true),
+        (SignatureAlgorithm::DsaSha1, rsa.clone(), false),
+        (SignatureAlgorithm::RsaSha256, ec, false),
+        (
+            SignatureAlgorithm::Custom("urn:example:signature".into()),
+            rsa.clone(),
+            false,
+        ),
+        (
+            SignatureAlgorithm::RsaSha1,
+            rsa,
+            cfg!(feature = "crypto-rustcrypto"),
+        ),
+        (
+            SignatureAlgorithm::HmacSha1,
+            hmac,
+            !cfg!(feature = "crypto-fips"),
+        ),
+    ];
+    for (signature, credentials, accepted) in cases {
+        let mut algorithms = AlgorithmPolicy::default();
+        algorithms.signature = signature.clone();
+        let sp = SpConfig::builder(
+            EntityId::try_new("https://sp.example.com/metadata")?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .credentials(credentials.clone())
+        .algorithms(algorithms.clone())
+        .build();
+        let idp = IdpConfig::builder(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .credentials(credentials)
+        .algorithms(algorithms)
+        .build();
+        let expected = format!(
+            "the crypto provider cannot sign {} with the configured key",
+            signature.as_uri()
+        );
+        for (role, result) in [("SP", sp.map(drop)), ("IdP", idp.map(drop))] {
+            if accepted {
+                assert!(result.is_ok(), "{role} rejected {signature:?}: {result:?}");
+            } else {
+                assert!(
+                    matches!(&result, Err(SamlError::Crypto { message, .. }) if *message == expected),
+                    "{role} accepted {signature:?}: {result:?}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(not(crypto))]
 #[test]
 fn protocol_only_builders_reject_unpublishable_certificate_text(

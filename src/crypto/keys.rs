@@ -4,7 +4,7 @@ use crate::constants::signature_algorithm::{
 };
 use crate::error::{crypto_err, SamlError};
 use crate::util::normalize_cert_string;
-use bergshamra::crypto::sign::key_algorithm_matches_signature_uri;
+use bergshamra::crypto::sign::{is_hmac_algorithm, key_algorithm_matches_signature_uri};
 #[cfg(test)]
 use bergshamra::keys::keyinfo::build_x509_key_info;
 use bergshamra::keys::loader::{load_hmac_key, load_pem_auto, load_x509_cert_pem};
@@ -25,8 +25,11 @@ pub(crate) fn check_credentials(
             "Ed25519 signing is unavailable with crypto-fips".into(),
         ));
     }
-    if let Some(credential) = credentials.signing_credential() {
-        let key = check_credential(credential, "signing credential")?;
+    let signing_key = credentials
+        .signing_credential()
+        .map(|credential| check_credential(credential, "signing credential"))
+        .transpose()?;
+    if let Some(key) = &signing_key {
         if matches!(
             signature_uri,
             ECDSA_SHA256 | ECDSA_SHA384 | ECDSA_SHA512 | EDDSA_ED25519
@@ -37,6 +40,17 @@ pub(crate) fn check_credentials(
                 key.algorithm_name()
             )));
         }
+    }
+    let selected_key = if is_hmac_algorithm(signature_uri) {
+        credentials
+            .hmac_secret()
+            .map(load_hmac_secret)
+            .transpose()?
+    } else {
+        signing_key
+    };
+    if let Some(key) = &selected_key {
+        check_provider_signs(key, signature_uri)?;
     }
     for (index, certificate) in credentials
         .additional_signing_certificates()
@@ -55,6 +69,17 @@ pub(crate) fn check_credentials(
         )?;
     }
     Ok(())
+}
+
+fn check_provider_signs(key: &Key, signature_uri: &str) -> Result<(), SamlError> {
+    super::sign::sign_octet_string("saml-rs signing check", key, signature_uri)
+        .map(drop)
+        .map_err(|error| SamlError::Crypto {
+            message: format!(
+                "the crypto provider cannot sign {signature_uri} with the configured key"
+            ),
+            source: Some(Box::new(error)),
+        })
 }
 
 fn check_credential(credential: &X509Credential, name: &str) -> Result<Key, SamlError> {

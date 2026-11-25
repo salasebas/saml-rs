@@ -38,7 +38,7 @@ algorithms each build signs and verifies is in
 | Sign with RSA-SHA256, RSA-SHA384, or RSA-SHA512 | Optional | E50 | `SignatureAlgorithm::RsaSha256` (default), `RsaSha384`, `RsaSha512` |
 | Sign with ECDSA-SHA256, ECDSA-SHA384, or ECDSA-SHA512 and an EC key | Optional | E50, E81, RFC 9231 §2.3.6 | `SignatureAlgorithm::EcdsaSha256`, `EcdsaSha384`, `EcdsaSha512` |
 | Sign with Ed25519 and an Ed25519 key on RustCrypto and AWS-LC | Optional | E50, E81, RFC 9231 §2.3.12 | `SignatureAlgorithm::Ed25519` |
-| Reject an incompatible signing key family, or Ed25519 on FIPS, in the SP and IdP config builders | Library policy: the selected method cannot sign and would otherwise fail when the application sends a message. | — | Always for these four methods |
+| Reject a signature method that the provider cannot sign with the configured signing credential or HMAC secret, in the SP and IdP config builders. It is configuration and does not reject a message | Library policy: the selected method cannot sign and would otherwise fail when the application sends a message. | — | Always |
 | Sign embedded and detached messages with a custom signature URI the provider supports | Optional | E50, E81 | `SignatureAlgorithm::Custom` |
 | Use SHA-256 for the reference digest of an embedded signature outside the built-in digest mapping | Library policy: SHA-256 is the existing reference digest default and works independently of the signature method. | XMLDSig §4.4.2, §4.4.3.5 | ECDSA, Ed25519, and unmapped `Custom` methods |
 

@@ -302,6 +302,10 @@ impl SpConfigBuilder {
     /// - an ECDSA or Ed25519 signature method does not match the configured
     ///   signing key ([`SamlError::Invalid`]), or the `crypto-fips` build selects
     ///   Ed25519 signing ([`SamlError::Unsupported`]);
+    /// - the crypto provider cannot sign the selected signature method with
+    ///   the signing credential, or with the HMAC secret for an HMAC method
+    ///   ([`SamlError::Crypto`]). For example, `crypto-aws-lc` does not sign
+    ///   RSA-SHA1, and `crypto-fips` signs no SHA-1 method;
     /// - without a crypto provider, a certificate is empty or has malformed
     ///   base64 ([`SamlError::Invalid`] or [`SamlError::Base64`]);
     /// - `AlgorithmPolicy::signed_reference_transforms` is not empty and does
@@ -652,6 +656,10 @@ impl IdpConfigBuilder {
     /// - an ECDSA or Ed25519 signature method does not match the configured
     ///   signing key ([`SamlError::Invalid`]), or the `crypto-fips` build selects
     ///   Ed25519 signing ([`SamlError::Unsupported`]);
+    /// - the crypto provider cannot sign the selected signature method with
+    ///   the signing credential, or with the HMAC secret for an HMAC method
+    ///   ([`SamlError::Crypto`]). For example, `crypto-aws-lc` does not sign
+    ///   RSA-SHA1, and `crypto-fips` signs no SHA-1 method;
     /// - without a crypto provider, a certificate is empty or has malformed
     ///   base64 ([`SamlError::Invalid`] or [`SamlError::Base64`]);
     /// - `AlgorithmPolicy::signed_reference_transforms` is not empty and does
