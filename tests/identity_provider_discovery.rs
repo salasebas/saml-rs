@@ -128,6 +128,25 @@ fn writer_appends_this_identity_provider_and_moves_it_to_the_end(
     )?;
     assert_eq!(form_encoded.value(), MOVED);
 
+    let unpadded = [
+        "https://a.io",
+        "https://b.io",
+        "https://c.io",
+        "https://d.io",
+        "https://e.io",
+    ]
+    .map(|entity_id| STANDARD.encode(entity_id));
+    let form_encoded_unpadded = remember(
+        IDP_ENTITY_ID,
+        "example.org",
+        CommonDomainCookieLifetime::Session,
+        Some(&unpadded.join("+")),
+    )?;
+    assert_eq!(
+        form_encoded_unpadded.value(),
+        format!("{}%20{IDP_ENTITY_COOKIE_VALUE}", unpadded.join("%20"))
+    );
+
     let already_decoded = remember(
         IDP_ENTITY_ID,
         "example.org",
@@ -242,14 +261,14 @@ fn cookie_name_counts_toward_the_4096_byte_limit() -> Result<(), Box<dyn std::er
 #[test]
 fn writer_keeps_valid_history_and_omits_invalid_entity_ids(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let existing = [
-        "urn:example:archive-idp",
-        "legacy-idp",
-        "https://archive.example/idp%",
-        "https://other.example.net/metadata",
-    ]
-    .map(|entity_id| STANDARD.encode(entity_id))
-    .join(" ");
+    let entries: [&[u8]; 5] = [
+        b"urn:example:archive-idp",
+        b"legacy-idp",
+        &[0xfb],
+        b"https://archive.example/idp%",
+        b"https://other.example.net/metadata",
+    ];
+    let existing = entries.map(|entry| STANDARD.encode(entry)).join(" ");
     let cookie = remember(
         IDP_ENTITY_ID,
         "example.org",
@@ -446,15 +465,6 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
             Some("not-valid"),
         ),
         "not base64",
-    )?;
-    assert_invalid(
-        remember(
-            IDP_ENTITY_ID,
-            "example.org",
-            CommonDomainCookieLifetime::Session,
-            Some("%2Fw%3D%3D"),
-        ),
-        "not an entity identifier",
     )?;
     assert_invalid(
         remember(
