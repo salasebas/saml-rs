@@ -569,6 +569,46 @@ fn artifact_source_id_is_the_sha1_of_the_issuer_entity_id() -> Result<(), Box<dy
     )?;
     assert_eq!(answer.release(), ArtifactRelease::Returned);
     assert!(answer.response().envelope().contains(WEB_SSO_MARKER));
+
+    let wrapped_artifact = issue(&parties, &web_sso_response(), &mut issued)?;
+    let wrapped_resolution = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        &wrapped_artifact,
+        channel,
+        without_replay_cache(),
+    )?;
+    let (head, tail) = wrapped_artifact.as_str().split_at(30);
+    let wrapped = format!("{head}\r\n {tail}");
+    let wrapped_request = wrapped_resolution
+        .request()
+        .envelope()
+        .replace(wrapped_artifact.as_str(), &wrapped);
+    let wrapped_answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &wrapped_request,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
+        &mut issued,
+        channel,
+    )?;
+    assert_eq!(wrapped_answer.release(), ArtifactRelease::Returned);
+    assert!(wrapped_answer
+        .response()
+        .envelope()
+        .contains(WEB_SSO_MARKER));
+
+    for resolution in [&resolution, &wrapped_resolution] {
+        let again = parties.idp.answer_artifact_resolve(
+            &parties.sp_metadata,
+            resolution.request().envelope(),
+            resolution.request().endpoint(),
+            &mut issued,
+            channel,
+        )?;
+        assert_eq!(
+            again.release(),
+            ArtifactRelease::Withheld(ArtifactWithheld::NotOutstanding)
+        );
+    }
     Ok(())
 }
 
@@ -677,7 +717,7 @@ fn an_unknown_or_unreadable_artifact_does_not_consume_another(
     }
 
     let mut broken = artifact.as_str().to_string();
-    broken.insert(1, ' ');
+    broken.insert(1, '!');
     let spaced = resolution
         .request()
         .envelope()

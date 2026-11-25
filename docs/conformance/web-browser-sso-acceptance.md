@@ -120,7 +120,8 @@ names to its HTTP-POST message reader. [Namespaces in XML 1.0 §2.3](https://www
 | Treat a SimpleSign `Response` without `Signature` as carrying no detached signature, with or without `SigAlg` | Library policy: CS-01 §2.10 identifies a SimpleSign signature by the `Signature` field, and a `SigAlg` alone leaves nothing to verify. | SimpleSign CS-01 §2.4, §2.10 | Always |
 | Require a verified detached signature on a successful SimpleSign `Response`, even if it carries an XML signature | Library policy: the detached signature authenticates the full response and covers any `RelayState`. | CD-04 §2.4, §2.7.2 | Always |
 | For a SimpleSign error `Response`, allow `Signature` to be absent only if neither the response nor its assertions carry an XML signature | Library policy: unsigned errors cannot establish sessions. Verify signatures before reporting a signed error's status. | CD-04 §2.4, §2.6, Profiles §4.1.4.3 | Always |
-| Ignore ASCII whitespace in the message and the detached `Signature` value, and reject any other character outside the base64 alphabet | Library policy: Bindings §3.4.4.1 requires the sender to remove whitespace and §3.5.4 allows only line wrapping, so any other character means the value was altered. | Bindings §3.4.4.1, §3.5.4, RFC 2045 §6.8 | Always |
+
+The message and the detached `Signature` are decoded by the shared [base64 rules](single-logout.md#browser-bindings).
 
 ### Scoped attributes
 
@@ -210,7 +211,8 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 | Reject a repeated `SAMLEncoding`, or one that names another encoding, an empty value included | Library policy: saml-rs implements only DEFLATE, and inflating another encoding misreads the message. | Bindings §3.4.4 | Always |
 | Reject a received HTTP-Redirect `RelayState`, or another SAML parameter the message reads, that is not UTF-8 after percent-decoding | Library policy: `RelayState` is text, and replacing the bytes would change the value the responder returns. | Bindings §3.4.3 | Always |
 | When verifying a SimpleSign signature, use the raw XML, then `RelayState` when present, then `SigAlg` | Mandatory | CD-04 §2.5, §2.6 | Always |
-| Ignore ASCII whitespace in the message and the detached `Signature` value, and reject any other character outside the base64 alphabet | Library policy: Bindings §3.4.4.1 requires the sender to remove whitespace and §3.5.4 allows only line wrapping, so any other character means the value was altered. | Bindings §3.4.4.1, §3.5.4, RFC 2045 §6.8 | Always |
+
+The message and the detached `Signature` are decoded by the shared [base64 rules](single-logout.md#browser-bindings).
 
 ### Caller duties in the identity provider
 

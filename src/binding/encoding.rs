@@ -1,4 +1,4 @@
-use base64::engine::general_purpose::STANDARD;
+use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
 use base64::Engine as _;
 
 use crate::error::{ResourceLimit, SamlError};
@@ -9,7 +9,7 @@ pub(crate) fn encode_base64(input: &[u8]) -> String {
 
 pub(crate) fn decode_base64(input: &str) -> Result<Vec<u8>, SamlError> {
     let normalized: Vec<u8> = non_whitespace_bytes(input).collect();
-    STANDARD.decode(normalized).map_err(base64_error)
+    decode_normalized(&normalized)
 }
 
 pub(crate) fn decode_base64_with_limit(
@@ -31,7 +31,7 @@ pub(crate) fn decode_base64_with_limit(
 
     let mut normalized = Vec::with_capacity(normalized_len);
     normalized.extend(non_whitespace_bytes(input));
-    let out = STANDARD.decode(normalized).map_err(base64_error)?;
+    let out = decode_normalized(&normalized)?;
     if out.len() > max_output_len {
         return Err(limit_exceeded);
     }
@@ -42,6 +42,14 @@ pub(crate) fn base64_error(source: base64::DecodeError) -> SamlError {
     SamlError::Base64 {
         source: Box::new(source),
     }
+}
+
+fn decode_normalized(normalized: &[u8]) -> Result<Vec<u8>, SamlError> {
+    let engine = match normalized.last() {
+        Some(b'=') => STANDARD,
+        _ => STANDARD_NO_PAD,
+    };
+    engine.decode(normalized).map_err(base64_error)
 }
 
 fn non_whitespace_bytes(input: &str) -> impl Iterator<Item = u8> + '_ {
@@ -70,6 +78,28 @@ mod tests {
             }) => Ok(()),
             other => Err(format!("expected an output-limit error, got {other:?}").into()),
         }
+    }
+
+    #[test]
+    fn padding_may_be_omitted_but_not_left_incomplete() -> Result<(), Box<dyn std::error::Error>> {
+        for (input, expected) in [("QQ", b"A".as_slice()), ("QU\nI", b"AB".as_slice())] {
+            assert_eq!(decode_base64(input)?, expected, "{input:?}");
+            assert_eq!(decode_base64_with_limit(input, 2)?, expected, "{input:?}");
+        }
+        for input in ["QQ=", "QR==", "Q"] {
+            for (decoder, result) in [
+                (
+                    "decode_base64_with_limit",
+                    decode_base64_with_limit(input, 64),
+                ),
+                ("decode_base64", decode_base64(input)),
+            ] {
+                if !matches!(result, Err(SamlError::Base64 { .. })) {
+                    return Err(format!("{decoder} input {input:?} produced {result:?}").into());
+                }
+            }
+        }
+        Ok(())
     }
 
     #[test]

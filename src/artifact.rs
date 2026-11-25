@@ -1,4 +1,4 @@
-use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
+use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use sha1::{Digest, Sha1};
 
@@ -46,23 +46,18 @@ pub struct Artifact {
 impl Artifact {
     /// Decode the base64 value of a type 0x0004 artifact.
     ///
-    /// Padding may be omitted. [`Self::as_str`] returns the padded value.
+    /// ASCII whitespace, such as a line break, is ignored, and padding may be
+    /// omitted. [`Self::as_str`] returns the padded value without whitespace,
+    /// so every spelling of one artifact compares equal.
     ///
     /// # Errors
     ///
     /// Returns [`SamlError::Invalid`] when `value` is not a 44-byte type
-    /// 0x0004 artifact.
+    /// 0x0004 artifact, including a value with another character outside the
+    /// base64 alphabet or a last character whose unused bits are not zero.
     pub fn try_new(value: impl Into<String>) -> Result<Self, SamlError> {
-        let encoded = value.into();
-        if encoded.chars().any(char::is_whitespace) {
-            return Err(SamlError::Invalid(
-                "artifact must not contain whitespace".into(),
-            ));
-        }
-        let bytes = STANDARD
-            .decode(encoded.as_bytes())
-            .or_else(|_| STANDARD_NO_PAD.decode(encoded.as_bytes()))
-            .map_err(|_| SamlError::Invalid("artifact is not base64".into()))?;
+        let bytes = crate::binding::decode_base64_with_limit(&value.into(), ARTIFACT_LEN)
+            .map_err(|_| SamlError::Invalid("artifact is not the base64 of 44 bytes".into()))?;
         if bytes.len() != ARTIFACT_LEN {
             return Err(SamlError::Invalid(
                 "artifact must be a 44-byte type 0x0004 value".into(),
