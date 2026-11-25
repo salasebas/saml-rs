@@ -267,24 +267,94 @@ verifies on no build.
 ## XML Encryption
 
 For assertion delivery, the identity provider encrypts and the service
-provider decrypts. In name identifier management, either role can encrypt
-identifiers for its peer. The decryption rules apply to every encrypted element
-an entity receives.
+provider decrypts. In single logout and name identifier management, either
+role can encrypt identifiers for its peer. The decryption rules apply to every
+encrypted element an entity receives.
+
+Core §6.1 provides SAML encryption through XML Encryption 1.0, and
+Conformance §4.2 takes its mandatory algorithms from that specification. An
+XML Encryption 1.0 rule for an encryptor or a decryptor applies to each
+`EncryptedData` and `EncryptedKey` that `EncryptedElementType` admits, unless
+a SAML rule narrows it. The [provider table](#encryption-algorithms-by-provider)
+shows which builds implement each algorithm.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Encrypt and decrypt with AES-128 and AES-256 block encryption | Mandatory | Conformance §4.2 | `DataEncryptionAlgorithm::Aes128Cbc`, `Aes256Cbc` (default) |
-| Encrypt and decrypt with Triple DES block encryption. Needs `crypto-legacy-algorithms`. Not on AWS-LC or FIPS | Mandatory | Conformance §4.2 | `DataEncryptionAlgorithm::TripleDesCbc` |
+| Encrypt and decrypt with AES-128 and AES-256 block encryption on every crypto provider | Mandatory | Conformance §4.2 | `DataEncryptionAlgorithm::Aes128Cbc`, `Aes256Cbc` |
+| Encrypt and decrypt with Triple DES block encryption on RustCrypto with `crypto-legacy-algorithms`. AWS-LC and FIPS lack it | Mandatory | Conformance §4.2 | `DataEncryptionAlgorithm::TripleDesCbc` |
 | Encrypt and decrypt with RSA-OAEP key transport on RustCrypto and AWS-LC. FIPS refuses its SHA-1 digest and MGF1, and its config builders reject it | Mandatory | Conformance §4.2 | `KeyEncryptionAlgorithm::RsaOaepMgf1p` (default except on FIPS) |
 | Encrypt with XML Encryption 1.1 RSA-OAEP, SHA-256, and MGF1 with SHA-256 by default on FIPS | Library policy: the FIPS provider refuses SHA-1 in RSA-OAEP, and SHA-256 with MGF1-SHA-256 is the smallest digest pair it encrypts with. | Conformance §4.2, E50 | `KeyEncryptionAlgorithm::RsaOaep` (FIPS default) |
-| Encrypt and decrypt with RSA-v1.5 key transport. Needs `crypto-legacy-algorithms` on RustCrypto or AWS-LC. Not on FIPS | Mandatory | Conformance §4.2 | `KeyEncryptionAlgorithm::Rsa15` |
-| Generate Triple DES and RSA-v1.5 only when the caller selects them | Library policy: Conformance §4 does not say which algorithm a producer selects, and XML Encryption 1.1 §5.5.1 makes RSA-v1.5 optional and `NOT RECOMMENDED`. | Conformance §4.2 | `DataEncryptionAlgorithm::TripleDesCbc`, `KeyEncryptionAlgorithm::Rsa15` |
+| Encrypt and decrypt with RSA-v1.5 key transport with `crypto-legacy-algorithms` on RustCrypto or AWS-LC. FIPS lacks it | Mandatory | Conformance §4.2 | `KeyEncryptionAlgorithm::Rsa15` |
+| Encrypt with AES-256-CBC unless the caller selects another data-encryption algorithm | Library policy: every peer must decrypt AES-CBC under Conformance §4.2 but not AES-GCM, and the identity provider reads no `md:EncryptionMethod` that would show a peer supports AES-GCM. | Conformance §4.2, E50, XML Encryption 1.1 §5.1.1 | `AlgorithmPolicy::data_encryption` |
+| Generate Triple DES and RSA-v1.5 only when the caller selects them | Library policy: every peer must also decrypt AES and RSA-OAEP, and XML Encryption 1.1 §5.5.1 recommends RSA-OAEP for AES keys and calls implementing RSA-v1.5 `NOT RECOMMENDED`. | Conformance §4.2, XML Encryption 1.1 §5.1.1, §5.5.1 | `DataEncryptionAlgorithm::TripleDesCbc`, `KeyEncryptionAlgorithm::Rsa15` |
 | Decrypt RSA-v1.5 only when allowed. Otherwise reject an `EncryptionMethod` that names it before any key is decrypted | Library policy: Bleichenbacher's chosen-ciphertext attack, and no OASIS rule rejects it, because SAML V2.0 cites XML Encryption 1.0, whose §5.1 requires RSA-v1.5. | XML Encryption 1.1 §6.1.3 | `XmlEncryptionPolicy::rsa15_key_transport`, `Rsa15KeyTransportPolicy::AllowDecryption` |
 | Encrypt and decrypt with AES-128-GCM and AES-256-GCM on RustCrypto, AWS-LC, and FIPS. Forward a custom URI to the provider | Optional | E50, XML Encryption 1.1 §5.2.4 | `DataEncryptionAlgorithm::Aes128Gcm`, `Aes256Gcm`, `Custom` |
 | Write `ds:DigestMethod` and `xenc11:MGF` under the key's `EncryptionMethod`. SHA-256, SHA-384, and SHA-512 with the matching `MaskGenerationFunction` work on all providers, and RustCrypto also supports independent hashes. With a crypto provider, the config builders reject unsupported parameters | Optional | E50, XML Encryption 1.1 §5.5.2 | `KeyEncryptionAlgorithm::RsaOaep { digest, mgf }` |
-| Require a signed `Response` before the service provider processes an `EncryptedAssertion` encrypted with AES-128-CBC, AES-192-CBC, AES-256-CBC, or Triple DES, in inbound browser SSO | Recommended | Core §6.2, Profiles §4.1.3.5, §4.1.4.3, E93 | `ResponseSignaturePolicy::RequireForEncryptedCbc`. `AllowUnsignedEncryptedCbc` relaxes it |
-| Reject an `EncryptedAssertion` with a missing or unrecognized data-encryption algorithm | Library policy: the service provider cannot tell whether the ciphertext is CBC. | Core §6.2, E93 | `ResponseSignaturePolicy::RequireForEncryptedCbc` |
-| Verify a signature that covers a CBC-encrypted `EncryptedID` or `EncryptedAttribute` in an assertion before decrypting it | Recommended | Core §6.2, E93 | Always |
-| Require that covering signature for every other data-encryption algorithm too | Library policy: reason not recorded. | Core §6.2, E93 | Always |
-| Decrypt the `EncryptedID` in the requested `Subject` of an unauthenticated `AuthnRequest` only when its `EncryptedData` is AES-GCM | Library policy: an unsigned request is allowed by Profiles §4.1.4.1, and AES-GCM authenticates the ciphertext where E93 asks for integrity protection before CBC. | Profiles §4.1.4.1, E93 | Always |
 | Charge each `xenc:EncryptedData`, `xenc:EncryptedKey`, and `xenc11:DerivedKey` one unit per configured decryption key against a per-message allowance of 16 by default, shared with revealed encrypted content. Zero refuses encrypted input | Library policy: it bounds unauthenticated key resolution and key-rollover retries that XML byte limits alone do not bound. | XML Encryption 1.0 §6.4 | `XmlEncryptionPolicy::max_decryption_work` |
+
+Each flow record holds the integrity rules that decide whether an entity
+decrypts what it receives:
+[service provider SSO acceptance](web-browser-sso-acceptance.md#service-provider),
+the requested `Subject` in
+[identity provider SSO acceptance](web-browser-sso-acceptance.md#identity-provider),
+[single logout](single-logout.md#encrypted-principal-identifier), and
+[name identifier management](name-id-management.md#encryptedid-and-newencryptedid).
+
+### Key resolution
+
+An entity finds the key of each encrypted element it receives as follows.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Decrypt with an `EncryptedKey` embedded in the `ds:KeyInfo` of `EncryptedData` | Mandatory | XML Encryption 1.0 §3.5, §3.5.1 | Always |
+| With several embedded `EncryptedKey` elements, use the first one that a configured decryption key decrypts | Recommended | E43 | Always |
+| Resolve a `ds:RetrievalMethod` of type `EncryptedKey` whose same-document reference names an `EncryptedKey` inside the encrypted element, such as a sibling of `EncryptedData` | Mandatory | XML Encryption 1.0 §3.5, §3.5.2, E43 | Always |
+
+### Not implemented in the decrypter
+
+- A `ds:RetrievalMethod` that names an `EncryptedKey` elsewhere in the
+  message. The decrypter receives only the encrypted element. Mandatory,
+  XML Encryption 1.0 §3.5, E43.
+- A `ds:RetrievalMethod` after the first one whose reference resolves. An
+  element whose content key is wrapped for several recipients this way
+  decrypts only when this entity's key is named first. Recommended, E43,
+  XML Encryption 1.0 §3.5.2.
+- A `ds:KeyName` that names an `EncryptedKey` by its `CarriedKeyName`, the
+  E43 form for several recipients. Recommended, XML Encryption 1.0 §3.5,
+  E43.
+- Association of an `EncryptedKey` beside `EncryptedData` without a
+  `ds:RetrievalMethod`. Optional, E43.
+- An error for an `EncryptionMethod` child that its algorithm does not
+  permit, or for a `KeySize` inconsistent with the algorithm. Mandatory,
+  XML Encryption 1.0 §3.2. The decrypter ignores such a child, except that
+  an `xenc11:MGF` under `rsa-oaep-mgf1p` selects the mask generation
+  function.
+
+### Encryption algorithms by provider
+
+The default build is `crypto-bergshamra`: RustCrypto with
+`crypto-legacy-algorithms`. A cell marked Legacy needs
+`crypto-legacy-algorithms`. Each listed algorithm encrypts and decrypts
+unless its row or cell says otherwise. A build without a crypto provider
+neither encrypts nor decrypts.
+
+Conformance §4.2 requires Triple DES, AES-128, AES-256, RSA-v1.5, and
+RSA-OAEP-MGF1P. RustCrypto with `crypto-legacy-algorithms` implements all
+five. `crypto-aws-lc` lacks Triple DES, and implements RSA-v1.5 only with
+`crypto-legacy-algorithms`. `crypto-fips` lacks Triple DES, RSA-v1.5, and
+RSA-OAEP-MGF1P.
+
+| Algorithm | RustCrypto | `crypto-aws-lc` | `crypto-fips` |
+| --- | --- | --- | --- |
+| AES-128-CBC, AES-256-CBC | Yes | Yes | Yes |
+| AES-192-CBC, encrypted only with `DataEncryptionAlgorithm::Custom` | Yes | Yes | Yes |
+| Triple DES CBC | Legacy | No | No |
+| AES-128-GCM, AES-256-GCM | Yes | Yes | Yes |
+| AES-192-GCM, encrypted only with `DataEncryptionAlgorithm::Custom` | Yes | Yes | Decrypt only |
+| RSA-OAEP-MGF1P with its default SHA-1 digest | Yes | Yes | No |
+| RSA-OAEP-MGF1P with a SHA-256, SHA-384, or SHA-512 `ds:DigestMethod`, decrypted only | Yes | No | No |
+| XML Encryption 1.1 RSA-OAEP with SHA-256, SHA-384, or SHA-512 as both the digest and the MGF1 hash | Yes | Yes | Yes |
+| XML Encryption 1.1 RSA-OAEP with different digest and MGF1 hashes | Yes | No | No |
+| RSA-v1.5 | Legacy | Legacy | No |
+
+RSA-v1.5 decryption also needs `Rsa15KeyTransportPolicy::AllowDecryption`.

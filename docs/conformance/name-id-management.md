@@ -196,7 +196,6 @@ SOAP at the identity provider, and HTTP-Redirect at either provider.
 | Encrypt for a key of the responder role that publishes the receiving `ManageNameIDService`, or of the first such role when several do. Never use a key of another role | Library policy: E62 declares a key for the entity acting in its own role, so another role's key may not reach the receiving endpoint. | Profiles §4.5.5, Metadata §2.4.1, E62, E68 | `StartNameIdManagement::identifier_encryption` |
 | Within that role, read the keys as for [SSO responses](web-browser-sso-generation.md#encryption) and use the first one the configured algorithms can use. Skip a key that does not load or that the crypto provider refuses | Library policy: E68 lets the encrypting party use any key of the role, and OpenSAML 5.2.0 also skips a credential without a usable key transport. | Metadata §2.4.1.1, E68 | `AlgorithmPolicy::data_encryption`, `AlgorithmPolicy::key_encryption` |
 | Support `EncryptedID` wherever the operational mode requires `NameID` support | Mandatory | Conformance §3.4 | `IdentifierEncryptionPolicy::EncryptIdentifiers`, `Credentials::with_decryption_credential` |
-| Find an `EncryptedKey` embedded in `EncryptedData`, or beside it and named by a `ds:RetrievalMethod` | Optional | Core §6.2, E43 | Always |
 | Require the `NewEncryptedID` plaintext to be one text-only `NewID` | Mandatory | E12, `NewID` | Always |
 | Require text-only content in a `NameID` that `EncryptedID` carries | Mandatory | `NameIDType` | Always |
 | Accept only a `NameID` as the `EncryptedID` plaintext, not a `BaseID` or an `Assertion` | Library policy: the plaintext request offers only `NameID` beside `EncryptedID`, so another decrypted type has no plaintext form to manage. | Core §2.2.4, `ManageNameIDRequestType` | Always |
@@ -204,6 +203,9 @@ SOAP at the identity provider, and HTTP-Redirect at either provider.
 | Accept `NewID` or `NewEncryptedID` whichever form the identifier has, under the same conditions | Optional | Core §3.6.1, §3.6.3 | `Credentials::with_decryption_credential` |
 | For a SAML-domain decryption error over SOAP, return a SAML error status in the response | Recommended | Bindings §§3.2.2.1, 3.2.3.3, E19 | Always |
 | Answer an element that does not decrypt, including a missing key, or whose plaintext breaks the rules above, with `Requester` and `UnknownPrincipal` for `EncryptedID` and `Requester` for `NewEncryptedID` | Library policy: the crate follows the Shibboleth SP 3.6.0 status mapping for decryption failures. | Core §3.6.2, §3.6.3, E19 | `NameIdManagementRefusal::UndecryptableIdentifier`, `NameIdManagementRefusal::UndecryptableNewIdentifier` |
+
+The responder finds the key of each encrypted identifier by the
+[key resolution rules](xml-security-algorithms.md#key-resolution).
 
 ## After the exchange
 
