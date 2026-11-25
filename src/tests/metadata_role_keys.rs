@@ -197,7 +197,10 @@ fn http_post_honors_want_assertions_signed_with_multiple_saml2_sp_roles(
             MetadataTrustPolicy::Unverified,
         )?;
         let session = sso_response_from(&sp, &sp_descriptor, &idp_descriptor, &idp)??;
-        assert_eq!(session.name_id().value(), "alice@example.com");
+        assert_eq!(
+            session.name_id().ok_or("missing NameID")?.value(),
+            "alice@example.com"
+        );
     }
     Ok(())
 }

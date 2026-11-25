@@ -82,7 +82,10 @@ fn an_unsolicited_assertion_is_confirmed_by_a_bearer_confirmation_without_in_res
     let session = accept(&exchange, &resigned(&altered)?)?;
 
     assert_eq!(session.in_response_to(), None);
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
@@ -156,6 +159,9 @@ fn a_bearer_confirmation_is_found_when_it_declares_a_prefix_named_method(
 
     let session = accept_simple_sign(&exchange, &declared)?;
 
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }

@@ -218,7 +218,7 @@ fn finish_sso_rejects_a_later_assertion_for_the_same_principal_and_session(
     let issued = issued_sso()?;
     let now = unix_seconds()? + 2;
     let accepted = finish(&issued, now, ClockSkew::strict(), None)?;
-    assert_eq!(accepted.name_id(), &principal());
+    assert_eq!(accepted.name_id(), Some(&principal()));
     let index = session_index(&accepted)?;
 
     let outstanding = logout(principal(), vec![index], now + 120)?;
@@ -265,9 +265,15 @@ fn outstanding_logout_at_or_after_not_on_or_after_does_not_reject(
     let expired = logout(principal(), vec![index], now - 60)?;
 
     let at_deadline = finish(&issued, now, ClockSkew::strict(), Some(&at_deadline))?;
-    assert_eq!(at_deadline.name_id().value(), "alice@example.com");
+    assert_eq!(
+        at_deadline.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     let expired = finish(&issued, now, ClockSkew::strict(), Some(&expired))?;
-    assert_eq!(expired.name_id().value(), "alice@example.com");
+    assert_eq!(
+        expired.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
@@ -293,11 +299,17 @@ fn outstanding_logout_uses_the_not_on_or_after_clock_skew() -> Result<(), Box<dy
         }
     }
     let accepted = finish(&issued, now, minute, Some(&one_minute_ago))?;
-    assert_eq!(accepted.name_id().value(), "alice@example.com");
+    assert_eq!(
+        accepted.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
 
     let not_before_only = ClockSkew::from_millis(60_000, 0);
     let accepted = finish(&issued, now, not_before_only, Some(&at_now))?;
-    assert_eq!(accepted.name_id().value(), "alice@example.com");
+    assert_eq!(
+        accepted.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
 
     match finish(&issued, now, minute, Some(&at_now)) {
         Err(SamlError::AssertionMatchesOutstandingLogout) => Ok(()),
@@ -334,18 +346,21 @@ fn outstanding_logout_does_not_reject_a_different_principal_or_session(
     assert_eq!(
         finish(&issued, now, ClockSkew::strict(), Some(&other_principal))?
             .name_id()
+            .ok_or("missing NameID")?
             .value(),
         "alice@example.com"
     );
     assert_eq!(
         finish(&issued, now, ClockSkew::strict(), Some(&other_session))?
             .name_id()
+            .ok_or("missing NameID")?
             .value(),
         "alice@example.com"
     );
     assert_eq!(
         finish(&issued, now, ClockSkew::strict(), Some(&other_format))?
             .name_id()
+            .ok_or("missing NameID")?
             .value(),
         "alice@example.com"
     );
@@ -356,7 +371,7 @@ fn outstanding_logout_does_not_reject_a_different_principal_or_session(
         let outstanding = logout(name_id, Vec::new(), now + 120)?;
         assert_eq!(
             finish(&issued, now, ClockSkew::strict(), Some(&outstanding))?.name_id(),
-            &principal(),
+            Some(&principal()),
         );
     }
     Ok(())
@@ -391,9 +406,9 @@ fn sso_accepts_later_assertions_for_a_different_name_id_namespace(
     )?;
 
     let unsolicited = accept_unsolicited(&issued, now, ClockSkew::strict(), Some(&outstanding))?;
-    assert_eq!(unsolicited.name_id(), &sign_in);
+    assert_eq!(unsolicited.name_id(), Some(&sign_in));
     let solicited = finish(&issued, now, ClockSkew::strict(), Some(&outstanding))?;
-    assert_eq!(solicited.name_id(), &sign_in);
+    assert_eq!(solicited.name_id(), Some(&sign_in));
     Ok(())
 }
 
@@ -403,7 +418,7 @@ fn outstanding_logout_with_unspecified_format_rejects_an_assertion_without_forma
     let issued = issued_sso_for(NameId::new("alice@example.com"))?;
     let now = unix_seconds()? + 2;
     let accepted = finish(&issued, now, ClockSkew::strict(), None)?;
-    assert_eq!(accepted.name_id().format(), None);
+    assert_eq!(accepted.name_id().ok_or("missing NameID")?.format(), None);
 
     let outstanding = logout(
         NameId::new("alice@example.com").with_format(NameIdFormat::Unspecified),

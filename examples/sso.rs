@@ -81,7 +81,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ),
     );
     let session = session?;
-    println!("SP  <- authenticated   = {}", session.name_id().value());
+    println!(
+        "SP  <- authenticated   = {}",
+        session.name_id().ok_or("missing NameID")?.value()
+    );
     Ok(())
 }
 

@@ -125,7 +125,7 @@ fn exchange_with_encryption_keys_first(
     assert_encrypted(encryption, &exchange.xml);
     assert_each_encrypted_key_names(&exchange.xml, CERT);
     let session = exchange.session?;
-    assert_eq!(session.name_id(), &alice());
+    assert_eq!(session.name_id(), Some(&alice()));
     assert_eq!(session.attributes(), &attributes());
     Ok(())
 }

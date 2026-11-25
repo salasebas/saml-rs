@@ -30,7 +30,7 @@ fn elliptic_curve_signatures_round_trip_in_artifact_sso() -> Result<(), Box<dyn 
             &mut issued,
         )?;
         let session = follow_redirect_and_finish(&parties, &pending, &response, &mut issued)?;
-        assert_eq!(session.name_id().value(), USER);
+        assert_eq!(session.name_id().ok_or("missing NameID")?.value(), USER);
         for coverage in [
             VerifiedXmlSignatureCoverage::ResponseRoot,
             VerifiedXmlSignatureCoverage::ConsumedAssertion,

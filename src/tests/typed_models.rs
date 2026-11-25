@@ -1304,8 +1304,14 @@ fn typed_models_sso_session_from_flow_result_preserves_multi_valued_attributes(
         session.assertion_issue_instant().as_str(),
         "2024-01-01T00:00:01Z"
     );
-    assert_eq!(session.name_id().value(), "alice@example.com");
-    assert_eq!(session.name_id().format(), Some(&NameIdFormat::Persistent));
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.format(),
+        Some(&NameIdFormat::Persistent)
+    );
     assert_eq!(
         affiliation
             .values()
@@ -1703,7 +1709,10 @@ fn typed_models_existing_login_response_flow_converts_to_typed_session(
         .to_string();
     let session = SsoSession::try_from_with_verified_xml_signatures(parsed, Vec::new(), None)?;
 
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     assert_eq!(
         session.in_response_to().map(MessageId::as_str),
         Some("_request123")

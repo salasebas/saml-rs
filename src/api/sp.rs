@@ -331,7 +331,12 @@ impl ServiceProvider {
     /// the requested location as `expected` and the supplied URL as `actual`
     /// when it is another published assertion consumer.
     /// An `Attribute` without an unqualified `Name` returns
-    /// [`SamlError::ProtocolProfile`]. The `Conditions` time window returns
+    /// [`SamlError::ProtocolProfile`]. A consumed assertion whose `Subject`
+    /// names the principal with a `BaseID`, or with an `EncryptedID` that was
+    /// not decrypted because no decryption key is configured, returns
+    /// [`SamlError::Unsupported`]. A `Subject` without a `NameID` that has a
+    /// child other than `SubjectConfirmation`, `BaseID`, or `EncryptedID`
+    /// returns [`SamlError::ProtocolProfile`]. The `Conditions` time window returns
     /// [`SamlError::TimeWindowInvalid`] when both bounds are present and
     /// `NotBefore` is at or after `NotOnOrAfter`. The same bounds in bearer
     /// `SubjectConfirmationData` leave that confirmation unsatisfied.
@@ -359,7 +364,7 @@ impl ServiceProvider {
     /// let input = Inbound::post(fields);
     /// let session = sp.finish_sso(idp, pending, input, validation)?;
     ///
-    /// let name_id = session.name_id().value();
+    /// let name_id = session.name_id().map(saml_rs::NameId::value);
     /// # let _ = name_id;
     /// # Ok(()) }
     /// ```
@@ -446,8 +451,8 @@ impl ServiceProvider {
     /// Returns [`SamlError::RecipientEndpointNotPublished`] when
     /// the supplied recipient endpoint is not an assertion consumer published
     /// for the incoming binding. An `Attribute` without an unqualified `Name`
-    /// returns [`SamlError::ProtocolProfile`]. The assertion time window rules
-    /// are the same as for [`Self::finish_sso`].
+    /// returns [`SamlError::ProtocolProfile`]. The assertion `Subject` and time
+    /// window rules are the same as for [`Self::finish_sso`].
     pub fn accept_unsolicited_sso(
         &self,
         idp: &IdpDescriptor,

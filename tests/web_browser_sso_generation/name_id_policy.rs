@@ -56,7 +56,7 @@ fn signed_browser_sso_issues_an_affiliation_qualified_persistent_name_id(
         Inbound::post(response.post_form()?.fields().to_vec()),
         post_validation(&mut Default::default()),
     )?;
-    assert_eq!(session.name_id(), &principal);
+    assert_eq!(session.name_id(), Some(&principal));
     Ok(())
 }
 

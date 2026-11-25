@@ -171,7 +171,7 @@ fn signed_artifact_resolve_completes_the_protected_soap_exchange() -> TestResult
         Inbound::artifact(delivered, resolved),
         validation(),
     )?;
-    assert_eq!(session.name_id().value(), USER);
+    assert_eq!(session.name_id().ok_or("missing NameID")?.value(), USER);
     Ok(())
 }
 
@@ -223,7 +223,7 @@ fn artifact_resolve_signature_failure_leaves_the_artifact_outstanding() -> TestR
         Inbound::artifact(delivered, resolved),
         validation(),
     )?;
-    assert_eq!(session.name_id().value(), USER);
+    assert_eq!(session.name_id().ok_or("missing NameID")?.value(), USER);
     Ok(())
 }
 

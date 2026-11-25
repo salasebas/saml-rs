@@ -107,6 +107,50 @@ pub(super) fn name_id_from_extract(extract: &Value, value: &str) -> NameId {
     )
 }
 
+pub(super) fn assertion_subject_name_id(extract: &Value) -> Result<Option<NameId>, SamlError> {
+    match extract.get(name_id::VALUE) {
+        Some(Value::Str(value)) => return Ok(Some(name_id_from_extract(extract, value))),
+        Some(Value::Array(_) | Value::Object(_)) => {
+            return Err(SamlError::Invalid(
+                "the assertion Subject must contain at most one NameID".into(),
+            ))
+        }
+        None | Some(Value::Null) => {}
+    }
+    let subject = match extract.get(login_response::SUBJECT) {
+        Some(Value::Str(subject)) => subject,
+        Some(Value::Array(_) | Value::Object(_)) => {
+            return Err(SamlError::Invalid(
+                "the assertion must contain at most one Subject".into(),
+            ))
+        }
+        None | Some(Value::Null) => return Ok(None),
+    };
+    let subject = dom::parse_fragment_with_limits(subject, XmlLimits::unbounded())?;
+    for child in &subject.root.children {
+        match child.local_name.as_str() {
+            "SubjectConfirmation" => {}
+            "BaseID" => {
+                return Err(SamlError::Unsupported(
+                    "the assertion Subject identifies the principal with a BaseID".into(),
+                ))
+            }
+            "EncryptedID" => {
+                return Err(SamlError::Unsupported(
+                    "the assertion Subject identifies the principal with an EncryptedID that was not decrypted"
+                        .into(),
+                ))
+            }
+            other => {
+                return Err(SamlError::ProtocolProfile(format!(
+                    "the assertion Subject has an unexpected {other} element"
+                )))
+            }
+        }
+    }
+    Ok(None)
+}
+
 pub(super) fn name_id_policy_from_extract(
     extract: &Value,
 ) -> Result<Option<NameIdPolicy>, SamlError> {

@@ -82,7 +82,9 @@ fn sign_in(
         Inbound::post(posted_form),
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(replay_cache)),
     )?;
-    println!("{redirect_url} signed in {}", session.name_id().value());
+    if let Some(name_id) = session.name_id() {
+        println!("{redirect_url} signed in {}", name_id.value());
+    }
     Ok(())
 }
 ```

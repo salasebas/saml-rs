@@ -12,6 +12,7 @@
 | Write `ID`, `Version` `2.0`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §1.3.3 | Always |
 | Never write a time with a leap second | Mandatory | Core §1.3.3 | Always |
 | Identify the principal with `NameID`, or `EncryptedID` when selected | Mandatory | Profiles §4.4.4.1, `LogoutRequestType` | `StartSlo::identifier_encryption` |
+| Give no logout subject for an accepted assertion without a `NameID`, because no identifier can strongly match it | Mandatory | Profiles §4.4.4.1, Core §3.3.4 | `SsoSession::logout_subject` |
 | Copy `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` from the `LogoutSubject` `NameId` | Mandatory | Profiles §4.4.4.1, Core §3.7.1, §3.3.4 | Always |
 | Omit `Format` when the `NameId` has none | Optional | Core §2.2.2, E60 | Always |
 | Reject a `Format` that is not an absolute URI reference, also when the `NameId` came from an accepted assertion | Mandatory | Core §1.3.2 | Always |

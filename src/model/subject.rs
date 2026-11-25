@@ -115,10 +115,13 @@ impl NameId {
     /// Create a NameID with no `Format` and no qualifiers.
     ///
     /// An identity provider writes a `NameId` without a format with its first
-    /// configured NameID format, in a response and in a `LogoutRequest`, and
-    /// omits `Format` when none is configured. A service provider's
-    /// `LogoutRequest` omits it. Where `Format` is omitted, `unspecified` is in
-    /// effect.
+    /// configured NameID format, in a response, a `LogoutRequest`, and a
+    /// `ManageNameIDRequest`, and omits `Format` when none is configured. It
+    /// reads that configuration each time it writes a message. To keep the
+    /// format of an issued identifier after the configured formats change,
+    /// store the `NameId` with that format from [`Self::with_format`]. A
+    /// service provider's `LogoutRequest` and `ManageNameIDRequest` omit
+    /// `Format`. Where `Format` is omitted, `unspecified` is in effect.
     pub fn new(value: impl Into<String>) -> Self {
         Self {
             value: value.into(),

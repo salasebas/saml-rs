@@ -69,7 +69,10 @@ fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std
             Inbound::post(fields),
             post_validation(&mut Default::default()),
         )?;
-        assert_eq!(session.name_id().value(), "alice@example.com");
+        assert_eq!(
+            session.name_id().ok_or("missing NameID")?.value(),
+            "alice@example.com"
+        );
     }
     Ok(())
 }
@@ -114,7 +117,7 @@ fn recommended_sso_accept_rejects_unsigned_cbc_response_unless_relaxed(
                 Inbound::post(response_fields_with_xml(fields.clone(), &variant)?),
                 post_validation(&mut Default::default()),
             )?;
-            assert_eq!(session.name_id().value(), "alice@example.com");
+            assert_eq!(session.name_id().ok_or("missing NameID")?.value(), "alice@example.com");
         }
     }
     Ok(())
@@ -225,7 +228,10 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
                 post_validation(&mut Default::default()),
             );
             if accepted {
-                assert_eq!(result?.name_id().value(), "alice@example.com");
+                assert_eq!(
+                    result?.name_id().ok_or("missing NameID")?.value(),
+                    "alice@example.com"
+                );
             } else {
                 assert!(
                     matches!(
@@ -292,7 +298,10 @@ fn passphrase_protected_keys_sign_requests_and_decrypt_assertions(
         post_validation(&mut Default::default()),
     )?;
 
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 

@@ -5,6 +5,7 @@ mod replay;
 mod session_evidence;
 mod sibling_assertions;
 mod statement;
+mod subject_identifier;
 mod time_values;
 
 use super::common;
@@ -511,7 +512,10 @@ fn finish_sso_accepts_proxy_restriction() -> Result<(), Box<dyn std::error::Erro
         "<saml:ProxyRestriction Count=\"0\"/>",
     )?)?;
     let session = accept(&exchange, &xml)?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
@@ -523,7 +527,10 @@ fn accept_unsolicited_sso_accepts_proxy_restriction() -> Result<(), Box<dyn std:
         "<saml:ProxyRestriction Count=\"0\"/>",
     )?)?;
     let session = accept(&exchange, &xml)?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
@@ -536,7 +543,10 @@ fn one_time_use_is_accepted_and_a_later_exchange_succeeds() -> Result<(), Box<dy
         "<saml:OneTimeUse/>",
     )?)?;
     let session = accept(&first, &xml)?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
 
     let later = exchange_for(SpValidationPolicy::default(), false)?;
     let later_session = accept(&later, &response_xml(&later.response_fields)?)?;
@@ -657,7 +667,10 @@ fn every_assertion_is_evaluated_when_they_share_issuer_and_principal(
     let original = response_xml(&exchange.response_fields)?;
     let xml = resigned(&duplicate_assertion(&original, "_second_assertion")?)?;
     let session = accept(&exchange, &xml)?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     assert_eq!(
         session.assertion_id().as_str(),
         assertion_ids(&original)?[0]
@@ -717,7 +730,10 @@ fn one_valid_bearer_confirmation_is_enough() -> Result<(), Box<dyn std::error::E
         "<saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:holder-of-key\"><saml:SubjectConfirmationData/></saml:SubjectConfirmation>",
     );
     let session = accept(&exchange, &resigned(&altered)?)?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
@@ -734,7 +750,10 @@ fn an_additional_assertion_without_bearer_stays_accepted() -> Result<(), Box<dyn
         "urn:oasis:names:tc:SAML:2.0:cm:holder-of-key",
     )?)?;
     let session = accept(&exchange, &xml)?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
@@ -781,7 +800,7 @@ fn an_unsigned_sibling_assertion_is_rejected() -> Result<(), Box<dyn std::error:
         },
         Ok(session) => Err(format!(
             "trusted {}, including a forged sibling",
-            session.name_id().value()
+            session.name_id().ok_or("missing NameID")?.value()
         )
         .into()),
     }
@@ -834,7 +853,10 @@ fn the_session_comes_from_the_assertion_with_a_padded_bearer_method(
     let altered = altered.replace(bearer, &format!("&#10;{bearer} &#9;"));
     let session = accept(&exchange, &resigned(&altered)?)?;
     assert_eq!(session.assertion_id().as_str(), "_second_assertion");
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
@@ -943,7 +965,10 @@ fn an_omitted_name_id_format_matches_unspecified() -> Result<(), Box<dyn std::er
         None,
     )?)?;
     let session = accept(&exchange, &xml)?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
@@ -961,7 +986,10 @@ fn name_id_formats_that_differ_only_in_xml_whitespace_match(
         Some(&format!("  {PERSISTENT} ")),
     )?)?;
     let session = accept(&exchange, &xml)?;
-    assert_eq!(session.name_id().format(), Some(&NameIdFormat::Persistent));
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.format(),
+        Some(&NameIdFormat::Persistent)
+    );
     Ok(())
 }
 
@@ -1028,7 +1056,10 @@ fn several_assertions_are_accepted_over_simple_sign() -> Result<(), Box<dyn std:
         "_second_assertion",
     )?;
     let session = accept_simple_sign(&exchange, &xml)?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     assert_ne!(session.assertion_id().as_str(), "_second_assertion");
     Ok(())
 }
@@ -1216,7 +1247,10 @@ mod encrypted_assertions {
             &xml,
             SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache)),
         )?;
-        assert_eq!(session.name_id().value(), "alice@example.com");
+        assert_eq!(
+            session.name_id().ok_or("missing NameID")?.value(),
+            "alice@example.com"
+        );
         for id in assertion_ids(&plaintext)? {
             if !cache.seen.contains_key(&format!("assertion_id:{id}")) {
                 return Err(format!("assertion {id} was not replay-recorded").into());
@@ -1490,7 +1524,10 @@ mod encrypted_assertions {
                     ReplayPolicy::RequireCache(&mut cache),
                 ),
             )?;
-            assert_eq!(session.name_id().value(), "alice@example.com");
+            assert_eq!(
+                session.name_id().ok_or("missing NameID")?.value(),
+                "alice@example.com"
+            );
             for id in assertion_ids(&plaintext)? {
                 if !cache.seen.contains_key(&format!("assertion_id:{id}")) {
                     return Err(format!("assertion {id} was not replay-recorded").into());

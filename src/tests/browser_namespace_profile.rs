@@ -158,7 +158,10 @@ fn service_provider_reads_only_saml_bearer_fields_for_acceptance_and_replay(
         r#"ext:Recipient="directory-team" ext:InResponseTo="directory-lookup" ext:NotOnOrAfter="next-sync""#,
         r#"Name="mail""#,
     )?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(
+        session.name_id().ok_or("missing NameID")?.value(),
+        "alice@example.com"
+    );
     Ok(())
 }
 
