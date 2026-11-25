@@ -1,0 +1,38 @@
+[package]
+name = "axum-sp"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.88"
+license = "MIT"
+publish = false
+description = "Runnable Axum service provider on the typed saml-rs API."
+
+[features]
+default = ["crypto-bergshamra"]
+crypto-bergshamra = ["saml-rs/crypto-bergshamra"]
+crypto-rustcrypto = ["saml-rs/crypto-rustcrypto"]
+crypto-aws-lc = ["saml-rs/crypto-aws-lc"]
+crypto-fips = ["saml-rs/crypto-fips"]
+
+[dependencies]
+saml-rs = { path = "../..", default-features = false }
+axum = { version = "0.8", default-features = false, features = ["form", "http1", "tokio"] }
+getrandom = "0.4"
+time = { version = "0.3", default-features = false, features = ["std", "parsing"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "fmt"] }
+url = "2.5.9"
+
+[dev-dependencies]
+base64 = "0.23"
+roxmltree = "0.21"
+tower = { version = "0.5", features = ["util"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+panic = "warn"
+unwrap_used = "warn"
+expect_used = "warn"

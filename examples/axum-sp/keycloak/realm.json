@@ -1,0 +1,81 @@
+{
+  "realm": "saml-rs",
+  "enabled": true,
+  "sslRequired": "none",
+  "components": {
+    "org.keycloak.keys.KeyProvider": [
+      {
+        "name": "saml-rs-test-rsa",
+        "providerId": "rsa",
+        "subComponents": {},
+        "config": {
+          "priority": [
+            "200"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "active": [
+            "true"
+          ],
+          "algorithm": [
+            "RS256"
+          ],
+          "keyUse": [
+            "SIG"
+          ],
+          "privateKey": [
+            "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDhSe3jZW79lKI/nSKGgy/wvyaFEvPg7iJlIGV4hFCfjVQ7NHMJ1NhxCsTzPqnj5pAcnf3S/aA1hgRoj7WzvY2jKtK+MISySmlad4ByT4PKqFnEcvt/l69PPh3b5H6ZPIDDdoZiYs0gg+2i2jjT39FrVVfxJUTYFZhY1H3ZCrX4/lQ9gnYGuE5Sc9w0VvfvhGp3mp5qNsp3QECIGdalHEPY/vfmqsdiJ+wzOvtSRg8GRuh+wYi1ndKmcIV9VH7xclM83uD0vHwkpNNVGIjfhDsrasAx1fNkcvRbDl9Gbt6uytLczRI584BP+0qtDpwVx3nQoRUIGlkTeeGCC4rN7fKFAgMBAAECggEAAI+RsggTd4NG7B7ClvTYpWtY98WNKd3kv3RE59MKNg3A3n8lf+ENMOG0jYVRjmCJaZaJ9BMT105Eq/g/nPmArjAo0P/QxwjX0JT7AJb88LbHtv96RxUIudRYU9OE7k1LZegF6Z3t6xQ7SBDJSbbgokt7PEa6C7eo5tsi2H4Knn8yYlU3Hujlq0sOPJt8BHDIeD1wAH21p0nW0+2B7fAnahJekz7/NmFjRQN/Y+zKTWzsvomJt1pSKhAOlFgY/mIiSn9PaYSXuvhcmzodhd9ZwMYN2GUAk5l6ums37TjTTvwCNcuZaoXCXFtyiVDz+gVRoXgjPFVGJVHOkhtCToW3+QKBgQD78FJdFb3OSF3s/q+HApVkpG7Bl815+jb82b1J2fTJvISEu1twF01h+/d6O+Eta3UJJtdlo1o0Jnf7s0hnx8rXUNaaCCA4qgQCbxZv38Q8NYihWquJG/uvGtBW31qdxyfI4yVDHzrWvmWE05QCtAbrkkx1pR8IEhBBNrc+JUPoRwKBgQDk66F8uVtUQIrKhsrGrOkcbf4zdoG/AaSnk9Ttm3/rL6XR7FFPwEXLCwT/+d2TQXfwU+KQ3GfLoMzwRvecAx8HQr0ZPU2jqRxTHOrzzmhC6aHvD6vONuSZP+CvY6hEyjizwQQPBn7JN8U9QPL3WXFMckCvr0u2vjyEL1ntgZ6A0wKBgAJoD0FYXdHEmzESVbbibW7iqzQqMQpDO5c6tTYpYM80f8eMypjNgC25bGm8fLAkYJ/PwSr1Xn01CNxcoAptvCBGY2ZhQX2JEjS7vukeqA8zK7Tu2siafdL0XJ0X0RPEvTqMAOUdPUCj3PBh3P4RnidN5HETPLKlCYa18RYk4PstAoGAUFiLc1UzQtzsWaz5msWxg7LvV2yumTWgbtiqEUNUoF022/kPiOg5FsylUpqGNFr0F7u5d5KEM6oag/LEkVNfHpND/4nOqDSApoMty6iUW3fYyCk96cDGdys+VxCpTIuVXzHNlOB4u3MBnUAghsQzydsH7SGfd2JJpzNfYsbttNUCgYBV81cF64hXEuRlw/zgRFEaF51bVR6tXM0GLMDuuErHajGWULX/CU/GRWhH1MBkKsUq4EYwHpUKx3uvGvKTiWmbii2CDkD0OwXAgPtZgKxy3aNyhjomgDXxYHiI0AkKb+3fYCo+OJzRKHCk+Z/XEVPf2cNFFvTVpG3eNXdfkMjqAw=="
+          ],
+          "certificate": [
+            "MIIDFjCCAf6gAwIBAgIUTvPAuPLL2H7DAyHeIxocMFSyUjMwDQYJKoZIhvcNAQELBQAwKzEpMCcGA1UEAwwgc2FtbC1ycyBrZXljbG9hayByZWFsbSB0ZXN0IG9ubHkwHhcNMjYxMTI1MDgwNzUxWhcNMzYxMTIyMDgwNzUxWjArMSkwJwYDVQQDDCBzYW1sLXJzIGtleWNsb2FrIHJlYWxtIHRlc3Qgb25seTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOFJ7eNlbv2Uoj+dIoaDL/C/JoUS8+DuImUgZXiEUJ+NVDs0cwnU2HEKxPM+qePmkByd/dL9oDWGBGiPtbO9jaMq0r4whLJKaVp3gHJPg8qoWcRy+3+Xr08+Hdvkfpk8gMN2hmJizSCD7aLaONPf0WtVV/ElRNgVmFjUfdkKtfj+VD2Cdga4TlJz3DRW9++Eaneanmo2yndAQIgZ1qUcQ9j+9+aqx2In7DM6+1JGDwZG6H7BiLWd0qZwhX1UfvFyUzze4PS8fCSk01UYiN+EOytqwDHV82Ry9FsOX0Zu3q7K0tzNEjnzgE/7Sq0OnBXHedChFQgaWRN54YILis3t8oUCAwEAAaMyMDAwHQYDVR0OBBYEFGCVvEiZkuR7ifU4T49BceWwWeqEMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAMaRgQyd2i3LWBCzWYVMoWiIPl5yiPvl6x9x0FFDRhXvqaPnp90E06go7KHO47F7Abv3T8ZbAIWFH/VfCOU+e60kgMcL4FBM/y+HmDXoJMc3rQKYhN27b39kgELxUUI02NjsW5HNZyZb10KwMmt6ZnEXm8ChJpke55bAGDfjHmXZAUSYWwQ6Cp06uwaf6Flth8+zQtwocAYwRdKLrhTZ18b0F6IPPEdRqvGK3oIfjx315KCDWnLxmQnqYu5hEDmErERrLrdz2oLhuZfb6zRiYaB7burwcG4OyDBEACMokMdAnxl1XzEOFkby6mnZjS5xX9wj7mNzn/fqaBMu7pmHAcI="
+          ]
+        }
+      }
+    ]
+  },
+  "users": [
+    {
+      "username": "alice",
+      "email": "alice@example.com",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Example",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice-password",
+          "temporary": false
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "http://localhost:3000/saml/metadata",
+      "name": "saml-rs axum-sp",
+      "protocol": "saml",
+      "enabled": true,
+      "frontchannelLogout": true,
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "attributes": {
+        "saml_name_id_format": "email",
+        "saml_force_name_id_format": "false",
+        "saml.authnstatement": "true",
+        "saml.server.signature": "true",
+        "saml.assertion.signature": "true",
+        "saml.signature.algorithm": "RSA_SHA256",
+        "saml_signature_canonicalization_method": "http://www.w3.org/2001/10/xml-exc-c14n#",
+        "saml.client.signature": "true",
+        "saml.signing.certificate": "MIIDCDCCAfCgAwIBAgIUeJELwR4zZ9caTpxeA5xpmKwjvAcwDQYJKoZIhvcNAQELBQAwJDEiMCAGA1UEAwwZc2FtbC1ycyBheHVtLXNwIHRlc3Qgb25seTAeFw0yNjExMjUwODA3NTFaFw0zNjExMjIwODA3NTFaMCQxIjAgBgNVBAMMGXNhbWwtcnMgYXh1bS1zcCB0ZXN0IG9ubHkwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCyMWG6WcJv9RGRZ09cBDFka8lJ3kcHjt2P2EBZDX+dp2x6OmCStLJ54s8LNU8A91OcomZ1Y5xe/WwEFD1JnbhRXEK+InNSH/CumpWym0CqxUkrnh7Fvg5mPIzmlww54klDLA65dN9MMsWgFKzs8BxvSDoW5L/rYLxhf0tI7+RLX1iRNAAv8N9nqDrjKNBqUH1AIJH13W1QKAGsJXkME5xbj52lkeIYKtWLVaa+pN6nk0OMmbKsPCMkjWAypWzJFPx8f0T4lEX9hZmYtQAV1ztuE+aHKxBEBiw1AbjQkNf4vfDTG3yjzqHWkx6WIOAQv38f6XYxnfcf92oFank/7W6NAgMBAAGjMjAwMB0GA1UdDgQWBBRmySo23vVFkvKe87OJQYoMSlbO/jAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQAXijnjGdPxfREuIb7YvJh6vUS5CBAeYRRP/XF1lQVY8kYFBlAkdm5LIhgmXjmGBC4ute1LhKpmbpcDxlOGJdAlgerGhrRHGj8JBsIIkhbEz/M/gykD4grDad4Ylx+xaoWaykkcqoNGi9Qvs+B1vmbVAXkixniPFt27i6spiZnfas8R66PNYirHydel4ldEWxU6Dm+D5EBhi09NxzqqQtyi9+oHvUZ7/BK6kt0yOT6U7a2BNhYvlwdrVH7u6R0WpQqaM1sroN/Q7cI9rkEm/zyfrNDCTHQ/W1iIYmPQ9LBCXPQ+Oic25QfCqDIA22/6W8SVNzHPqbdW4T0k3j5rnePo",
+        "saml.encrypt": "false",
+        "saml.force.post.binding": "false",
+        "saml_assertion_consumer_url_post": "http://localhost:3000/saml/acs",
+        "saml_single_logout_service_url_redirect": "http://localhost:3000/saml/slo"
+      }
+    }
+  ]
+}
