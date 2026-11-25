@@ -416,3 +416,83 @@ fn logout_addresses_the_peer_role_of_a_dual_role_entity() -> Result<(), Box<dyn 
     )?;
     Ok(())
 }
+
+#[test]
+fn providers_whose_entity_ids_contain_a_space_complete_logout_in_both_directions(
+) -> Result<(), Box<dyn std::error::Error>> {
+    const SP_WITH_SPACE: &str = "https://sp.example.com/saml sp";
+    const IDP_WITH_SPACE: &str = "https://idp.example.com/saml idp";
+    let service_provider = ServiceProvider::new(
+        SpConfig::builder(
+            EntityId::try_new(SP_WITH_SPACE)?,
+            saml_rs::AcsEndpoint::post(SP_ACS)?,
+        )
+        .slo_endpoint(SloEndpoint::post(SP_SLO)?)
+        .credentials(signing_credentials())
+        .build()?,
+    );
+    let identity_provider = IdentityProvider::new(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_WITH_SPACE)?,
+            SsoEndpoint::post(IDP_SSO)?,
+        )
+        .slo_endpoint(SloEndpoint::post(IDP_SLO)?)
+        .credentials(signing_credentials())
+        .build()?,
+    );
+    let sp_peer = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_WITH_SPACE)?,
+        service_provider.metadata_xml(),
+        MetadataTrustPolicy::Unverified,
+    )?;
+    let idp_peer = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_WITH_SPACE)?,
+        identity_provider.metadata_xml(),
+        MetadataTrustPolicy::Unverified,
+    )?;
+    let subject = || -> Result<LogoutSubject, SamlError> {
+        Ok(LogoutSubject::new(NameId::new("alice@example.com"))
+            .with_session_index(SessionIndex::try_new("_session")?))
+    };
+
+    let sent = service_provider.start_slo(&idp_peer, subject()?, StartSlo::post())?;
+    let received = identity_provider.receive_slo(
+        &sp_peer,
+        Inbound::post(sent.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    let response = identity_provider.respond_slo(
+        &sp_peer,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
+    let completed = service_provider.finish_slo(
+        &idp_peer,
+        &sent.pending,
+        Inbound::post(response.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    assert_eq!(completed.response().issuer().as_str(), IDP_WITH_SPACE);
+
+    let sent = identity_provider.start_slo(&sp_peer, subject()?, StartSlo::post())?;
+    let received = service_provider.receive_slo(
+        &idp_peer,
+        Inbound::post(sent.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    let response = service_provider.respond_slo(
+        &idp_peer,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
+    let completed = identity_provider.finish_slo(
+        &sp_peer,
+        &sent.pending,
+        Inbound::post(response.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    assert_eq!(completed.response().issuer().as_str(), SP_WITH_SPACE);
+    Ok(())
+}
