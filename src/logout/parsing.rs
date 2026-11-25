@@ -39,7 +39,7 @@ fn is_schema_instance_hint((namespace, local_name, _): &(Option<String>, String,
     namespace.as_deref() == Some(XML_SCHEMA_INSTANCE_NAMESPACE)
         && matches!(
             local_name.as_str(),
-            "type" | "schemaLocation" | "noNamespaceSchemaLocation"
+            "schemaLocation" | "noNamespaceSchemaLocation"
         )
 }
 

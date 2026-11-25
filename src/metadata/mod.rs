@@ -316,15 +316,17 @@ impl Metadata {
         &self.key_certificates.encryption_keys
     }
 
-    /// First non-empty `SingleLogoutService` `Location` for `binding`.
+    /// First non-empty `SingleLogoutService` `Location` for `binding`, in
+    /// metadata order.
     ///
-    /// Logout requests are sent to this URL. Logout responses use
+    /// For the URL that receives logout responses, use
     /// [`Self::single_logout_response_location`].
     pub fn single_logout_location(&self, binding: Binding) -> Option<String> {
         self.single_logout_service_location(binding, EndpointDirection::Request)
     }
 
-    /// `SingleLogoutService` URL where logout responses are sent for `binding`.
+    /// First `SingleLogoutService` URL for logout responses on `binding`, in
+    /// metadata order.
     ///
     /// Each endpoint for `binding` offers its non-empty `ResponseLocation`, or
     /// else its non-empty `Location`. This is the first such URL.

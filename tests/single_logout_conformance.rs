@@ -291,6 +291,7 @@ fn session_participant_response_requires_https_unless_that_recommendation_is_rel
 fn session_participant_sends_to_an_https_endpoint_listed_after_an_http_one(
 ) -> Result<(), Box<dyn std::error::Error>> {
     const POST: &str = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
+    const IDP_SLO_RESPONSE_HTTP: &str = "http://idp.example.com/slo/post/response";
     const IDP_SLO_RESPONSE_HTTPS: &str = "https://idp.example.com/slo/post/response";
     let sp = sp(SP_SLO_HTTPS, SpValidationPolicy::default())?;
     let idp = idp(IDP_SLO_HTTPS, IdpValidationPolicy::default())?;
@@ -306,7 +307,7 @@ fn session_participant_sends_to_an_https_endpoint_listed_after_an_http_one(
         &idp_metadata.replace(
             &published,
             &format!(
-                r#"<SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTP}"/><SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTPS}" ResponseLocation="{IDP_SLO_RESPONSE_HTTPS}"/>"#
+                r#"<SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTP}"/><SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTPS}" ResponseLocation="{IDP_SLO_RESPONSE_HTTP}"/><SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTP}" ResponseLocation="{IDP_SLO_RESPONSE_HTTPS}"/>"#
             ),
         ),
         MetadataTrustPolicy::Unverified,

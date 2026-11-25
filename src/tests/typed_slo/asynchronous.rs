@@ -177,7 +177,6 @@ fn a_marker_with_schema_instance_hints_selects_local_completion(
     for attributes in [
         r#"xsi:schemaLocation="urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo saml-async-slo-v1.0.xsd""#,
         r#"xsi:noNamespaceSchemaLocation="extension.xsd""#,
-        r#"xsi:type="aslo:AsynchronousType""#,
     ] {
         assert!(
             matches!(receive(attributes)?, IdpLogoutAction::CompleteLocally(_)),
@@ -185,7 +184,8 @@ fn a_marker_with_schema_instance_hints_selects_local_completion(
         );
     }
     for attributes in [
-        r#"xsi:nil="true""#,
+        r#"xsi:type="aslo:AsynchronousType""#,
+        r#"xsi:nil="false""#,
         r#"xsi:other="value""#,
         r#"xmlns:other="urn:example:unrelated" other:schemaLocation="extension.xsd""#,
     ] {
