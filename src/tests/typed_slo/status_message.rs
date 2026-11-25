@@ -107,6 +107,38 @@ fn successful_logout_exposes_diagnostic_without_printing_it(
 }
 
 #[test]
+fn a_logout_status_message_needs_a_character_other_than_xml_whitespace(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = sp_started_exchange()?;
+    let respond = |message: &str| {
+        exchange.idp.respond_slo(
+            &exchange.sp_descriptor,
+            &exchange.received,
+            &Status::responder(),
+            RespondSlo::post().status_message(message),
+        )
+    };
+    for message in [" ", "\r\n\t"] {
+        let response = respond(message);
+        assert!(
+            matches!(response, Err(SamlError::Invalid(_))),
+            "{message:?}: {response:?}"
+        );
+    }
+    let no_break_space = "\u{a0}";
+    let xml = outbound_xml(&respond(no_break_space)?, "SAMLResponse")?;
+    assert!(
+        xml.contains(&format!(
+            "<samlp:StatusMessage>{no_break_space}</samlp:StatusMessage>"
+        )),
+        "{xml}"
+    );
+    let xml = outbound_xml(&respond("")?, "SAMLResponse")?;
+    assert!(!xml.contains("StatusMessage"), "{xml}");
+    Ok(())
+}
+
+#[test]
 fn directly_authenticated_soap_logout_covers_diagnostic_without_xml_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;

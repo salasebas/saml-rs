@@ -150,6 +150,54 @@ fn an_inexact_or_misplaced_marker_keeps_the_response_path() -> Result<(), Box<dy
 }
 
 #[test]
+fn a_marker_with_schema_instance_hints_selects_local_completion(
+) -> Result<(), Box<dyn std::error::Error>> {
+    const XSI: &str = "http://www.w3.org/2001/XMLSchema-instance";
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let binding = LogoutBinding::Post;
+    let xml = logout_request_xml("_hinted", SP_ENTITY_ID, Some(IDP_SLO_POST));
+    let marker = |attributes: &str| {
+        format!(
+            r#"<samlp:Extensions><aslo:Asynchronous xmlns:aslo="{ASYNC_NAMESPACE}" xmlns:xsi="{XSI}" {attributes}/></samlp:Extensions>"#
+        )
+    };
+    let receive = |attributes: &str| -> Result<_, Box<dyn std::error::Error>> {
+        let xml = xml.replacen(
+            "<saml:NameID>",
+            &format!("{}<saml:NameID>", marker(attributes)),
+            1,
+        );
+        Ok(idp.receive_slo_with_async(
+            &sp_descriptor,
+            signed_logout_request_input(&xml, binding)?,
+            validation(),
+        )?)
+    };
+    for attributes in [
+        r#"xsi:schemaLocation="urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo saml-async-slo-v1.0.xsd""#,
+        r#"xsi:noNamespaceSchemaLocation="extension.xsd""#,
+        r#"xsi:type="aslo:AsynchronousType""#,
+    ] {
+        assert!(
+            matches!(receive(attributes)?, IdpLogoutAction::CompleteLocally(_)),
+            "{attributes}"
+        );
+    }
+    for attributes in [
+        r#"xsi:nil="true""#,
+        r#"xsi:other="value""#,
+        r#"xmlns:other="urn:example:unrelated" other:schemaLocation="extension.xsd""#,
+    ] {
+        assert!(
+            matches!(receive(attributes)?, IdpLogoutAction::Respond(_)),
+            "{attributes}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn async_slo_requires_authentication_and_refuses_newer_versions_locally(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;

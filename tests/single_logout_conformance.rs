@@ -288,6 +288,65 @@ fn session_participant_response_requires_https_unless_that_recommendation_is_rel
 }
 
 #[test]
+fn session_participant_sends_to_an_https_endpoint_listed_after_an_http_one(
+) -> Result<(), Box<dyn std::error::Error>> {
+    const POST: &str = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
+    const IDP_SLO_RESPONSE_HTTPS: &str = "https://idp.example.com/slo/post/response";
+    let sp = sp(SP_SLO_HTTPS, SpValidationPolicy::default())?;
+    let idp = idp(IDP_SLO_HTTPS, IdpValidationPolicy::default())?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let published =
+        format!(r#"<SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTPS}"/>"#);
+    let idp_metadata = idp.metadata_xml();
+    if !idp_metadata.contains(&published) {
+        return Err("identity provider metadata does not publish the expected endpoint".into());
+    }
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        &idp_metadata.replace(
+            &published,
+            &format!(
+                r#"<SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTP}"/><SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTPS}" ResponseLocation="{IDP_SLO_RESPONSE_HTTPS}"/>"#
+            ),
+        ),
+        MetadataTrustPolicy::Unverified,
+    )?;
+
+    for (options, expected) in [
+        (StartSlo::post(), IDP_SLO_HTTPS),
+        (StartSlo::post().allow_http(), IDP_SLO_HTTP),
+    ] {
+        let started = sp.start_slo(&idp_descriptor, subject_with_session()?, options)?;
+        assert_eq!(started.outbound.post_form()?.action().as_str(), expected);
+        let xml = post_xml(&started.outbound)?;
+        assert!(
+            xml.contains(&format!("Destination=\"{expected}\"")),
+            "{xml}"
+        );
+    }
+
+    let started = idp.start_slo(&sp_descriptor, subject_with_session()?, StartSlo::post())?;
+    let received = sp.receive_slo(
+        &idp_descriptor,
+        Inbound::post(post_input(&started.outbound)?),
+        validation(),
+    )?;
+    for (options, expected) in [
+        (RespondSlo::post(), IDP_SLO_RESPONSE_HTTPS),
+        (RespondSlo::post().allow_http(), IDP_SLO_HTTP),
+    ] {
+        let response = sp.respond_slo(&idp_descriptor, &received, &Status::success(), options)?;
+        assert_eq!(response.post_form()?.action().as_str(), expected);
+        let xml = post_xml(&response)?;
+        assert!(
+            xml.contains(&format!("Destination=\"{expected}\"")),
+            "{xml}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn finish_slo_requires_a_logout_response_signature() -> Result<(), Box<dyn std::error::Error>> {
     finish_rejects_unsigned_response(LocalRole::Sp)?;
     finish_rejects_unsigned_response(LocalRole::Idp)?;

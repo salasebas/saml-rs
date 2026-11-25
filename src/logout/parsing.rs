@@ -18,6 +18,8 @@ use std::time::SystemTime;
 
 use super::ASYNC_SLO_NAMESPACE;
 
+const XML_SCHEMA_INSTANCE_NAMESPACE: &str = "http://www.w3.org/2001/XMLSchema-instance";
+
 pub(crate) fn has_async_slo_marker(request: &SamlElement) -> bool {
     request.is(namespace::PROTOCOL, "LogoutRequest")
         && request
@@ -27,10 +29,18 @@ pub(crate) fn has_async_slo_marker(request: &SamlElement) -> bool {
             .flat_map(|extensions| &extensions.children)
             .any(|child| {
                 child.is(ASYNC_SLO_NAMESPACE, "Asynchronous")
-                    && child.attrs.is_empty()
+                    && child.attrs.iter().all(is_schema_instance_hint)
                     && child.children.is_empty()
                     && child.text.is_empty()
             })
+}
+
+fn is_schema_instance_hint((namespace, local_name, _): &(Option<String>, String, String)) -> bool {
+    namespace.as_deref() == Some(XML_SCHEMA_INSTANCE_NAMESPACE)
+        && matches!(
+            local_name.as_str(),
+            "type" | "schemaLocation" | "noNamespaceSchemaLocation"
+        )
 }
 
 #[derive(Debug, Clone, Copy)]

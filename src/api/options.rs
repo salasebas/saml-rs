@@ -458,9 +458,11 @@ impl StartSlo {
     /// Allow a session participant to deliver this LogoutRequest to an `http`
     /// endpoint.
     ///
-    /// This relaxes the Single Logout recommendation to protect the HTTP
-    /// exchange with TLS. It does not remove `SessionIndex`, the request
-    /// signature, or session-authority `NotOnOrAfter`.
+    /// The request then goes to the peer's first `SingleLogoutService` for the
+    /// binding, even when a later one is `https`. This relaxes the Single
+    /// Logout recommendation to protect the HTTP exchange with TLS. It does
+    /// not remove `SessionIndex`, the request signature, or session-authority
+    /// `NotOnOrAfter`.
     pub fn allow_http(mut self) -> Self {
         self.transport = PeerEndpointTransport::AllowHttp;
         self
@@ -520,19 +522,24 @@ impl RespondSlo {
     /// Set the plain-text `StatusMessage` sent to the peer.
     ///
     /// Choose text suitable for the peer to see. The element is omitted by
-    /// default. A later call replaces the previous message.
-    /// The text must contain only XML 1.0 characters.
+    /// default. A later call replaces the previous message, and an empty
+    /// string clears it. The text must contain only XML 1.0 characters.
+    /// Responding with only spaces, tabs, carriage returns, and line feeds
+    /// returns [`SamlError::Invalid`](crate::SamlError::Invalid).
     #[must_use]
     pub fn status_message(mut self, message: impl Into<String>) -> Self {
-        self.status_message = Some(message.into());
+        let message = message.into();
+        self.status_message = (!message.is_empty()).then_some(message);
         self
     }
 
     /// Allow a service provider to deliver this LogoutResponse to an `http`
     /// endpoint.
     ///
-    /// This relaxes the Single Logout recommendation to protect that HTTP
-    /// exchange with TLS. The response remains signed.
+    /// The response then goes to the peer's first `SingleLogoutService` for
+    /// the binding, even when a later one is `https`. This relaxes the Single
+    /// Logout recommendation to protect that HTTP exchange with TLS. The
+    /// response remains signed.
     pub fn allow_http(mut self) -> Self {
         self.transport = PeerEndpointTransport::AllowHttp;
         self

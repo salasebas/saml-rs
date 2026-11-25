@@ -11,6 +11,7 @@ use crate::model::RelayState;
 use crate::sp;
 use std::time::SystemTime;
 
+use super::options::PeerEndpointTransport;
 use super::SamlError;
 
 pub(super) fn idp_engine_at(
@@ -147,11 +148,30 @@ pub(super) fn ensure_entity_id(expected: &EntityId, actual: &EntityId) -> Result
     ))
 }
 
-pub(super) fn ensure_https_endpoint(
-    endpoint: &str,
+pub(super) fn peer_endpoint_for_transport(
+    locations: Vec<String>,
+    transport: PeerEndpointTransport,
     profile: &str,
     service: &str,
-) -> Result<(), SamlError> {
+) -> Result<String, SamlError> {
+    let mut first_error = None;
+    for location in locations {
+        match transport {
+            PeerEndpointTransport::AllowHttp => return Ok(location),
+            PeerEndpointTransport::RequireHttps => {
+                match ensure_https_endpoint(&location, profile, service) {
+                    Ok(()) => return Ok(location),
+                    Err(error) => {
+                        first_error.get_or_insert(error);
+                    }
+                }
+            }
+        }
+    }
+    Err(first_error.unwrap_or_else(|| SamlError::MissingMetadata(service.into())))
+}
+
+fn ensure_https_endpoint(endpoint: &str, profile: &str, service: &str) -> Result<(), SamlError> {
     let url = url::Url::parse(endpoint)
         .map_err(|error| SamlError::Invalid(format!("{service} location is not a URL: {error}")))?;
     if url.scheme() == "https" {

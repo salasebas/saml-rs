@@ -22,7 +22,7 @@ use std::time::SystemTime;
 
 use super::super::options::PeerEndpointTransport;
 use super::super::peer::{
-    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, Peer,
+    ensure_entity_id, ensure_relay_state, peer_endpoint_for_transport, relay_state_from_input, Peer,
 };
 use super::super::{
     IdentityProvider, ReceiveNameIdManagement, RespondNameIdManagement, SamlError, ServiceProvider,
@@ -684,25 +684,12 @@ fn peer_destination(
         Binding::from(NameIdManagementBinding::Redirect),
         direction,
     );
-    let mut first_error = None;
-    for location in locations {
-        match transport {
-            PeerEndpointTransport::AllowHttp => return Ok(location),
-            PeerEndpointTransport::RequireHttps => {
-                match ensure_https_endpoint(
-                    &location,
-                    "name identifier management",
-                    "ManageNameIDService",
-                ) {
-                    Ok(()) => return Ok(location),
-                    Err(error) => {
-                        first_error.get_or_insert(error);
-                    }
-                }
-            }
-        }
-    }
-    Err(first_error.unwrap_or_else(|| SamlError::MissingMetadata("ManageNameIDService".into())))
+    peer_endpoint_for_transport(
+        locations,
+        transport,
+        "name identifier management",
+        "ManageNameIDService",
+    )
 }
 
 fn local_locations(

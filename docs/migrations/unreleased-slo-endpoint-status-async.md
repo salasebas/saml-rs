@@ -1,0 +1,44 @@
+# Handle logout endpoint choice, status messages, and asynchronous markers
+
+This upgrade changes three Single Logout behaviors. No signature changes.
+
+## Logout goes to a later `https` endpoint
+
+If you run a service provider, `ServiceProvider::start_slo`,
+`start_async_slo`, `respond_slo`, and `respond_slo_refusal` on HTTP-Redirect,
+HTTP-POST, and HTTP-POST-SimpleSign now send to the identity provider's first
+`SingleLogoutService` for the binding whose URL is `https`. A request uses
+`Location`. A response uses `ResponseLocation`, or `Location` when the
+endpoint has none. Before, these calls took the first endpoint for the binding
+and returned `SamlError::ProtocolProfile` when it was `http`, even when a later
+one was `https`.
+
+`StartSlo::allow_http` and `RespondSlo::allow_http` still send to the first
+endpoint. The identity provider and SOAP logout still use the first endpoint.
+
+You do not need to change code. If your identity provider's metadata lists an
+`http` endpoint before an `https` one, the message now goes to the `https`
+one. If you selected `allow_http` only to reach such a peer, you can remove it.
+
+## A logout status message needs visible text
+
+`RespondSlo::status_message` with only spaces, tabs, carriage returns, and
+line feeds now makes `respond_slo` and `respond_slo_refusal` on either role
+return `SamlError::Invalid`. Before, the response carried that text. An empty
+string now leaves `StatusMessage` out. Before, the response carried an empty
+`StatusMessage`.
+
+To upgrade, leave the status message unset when you have no text.
+
+## Asynchronous markers with schema hints
+
+If you run an identity provider, `IdentityProvider::receive_slo_with_async`
+now returns `IdpLogoutAction::CompleteLocally` when the `aslo:Asynchronous`
+marker carries `xsi:type`, `xsi:schemaLocation`, or
+`xsi:noNamespaceSchemaLocation`. Before, it returned `IdpLogoutAction::Respond`
+for such a request. A marker with any other attribute, `xsi:nil` included,
+still returns `IdpLogoutAction::Respond`.
+
+You do not need to change code. Such a request now finishes at the identity
+provider, which presents the result to the user and sends no
+`LogoutResponse`.
