@@ -42,31 +42,37 @@ impl AuthnContext {
         &self.authenticating_authorities
     }
 
-    pub(super) fn from_element(element: &SamlElement) -> Self {
-        let reference = |name, kind| {
+    pub(super) fn from_element(element: &SamlElement) -> Result<Self, SamlError> {
+        let children = |name| {
             element
                 .children
                 .iter()
-                .find(|child| child.is(namespace::ASSERTION, name))
+                .filter(move |child| child.is(namespace::ASSERTION, name))
+        };
+        let classes = children("AuthnContextClassRef").count();
+        let declarations =
+            children("AuthnContextDecl").count() + children("AuthnContextDeclRef").count();
+        if classes > 1 || declarations > 1 || classes + declarations == 0 {
+            return Err(SamlError::ProtocolProfile(
+                "AuthnContext needs a class reference, a declaration, or both, with at most one of each".into(),
+            ));
+        }
+        let reference = |name, kind| {
+            children(name)
+                .next()
                 .map(|child| AuthnContextReference::received(kind, &child.text))
         };
-        Self {
+        Ok(Self {
             class_reference: reference("AuthnContextClassRef", AuthnContextReferenceKind::Class),
             declaration_reference: reference(
                 "AuthnContextDeclRef",
                 AuthnContextReferenceKind::Declaration,
             ),
-            has_declaration: element
-                .children
-                .iter()
-                .any(|child| child.is(namespace::ASSERTION, "AuthnContextDecl")),
-            authenticating_authorities: element
-                .children
-                .iter()
-                .filter(|child| child.is(namespace::ASSERTION, "AuthenticatingAuthority"))
+            has_declaration: children("AuthnContextDecl").next().is_some(),
+            authenticating_authorities: children("AuthenticatingAuthority")
                 .map(|child| collapse_whitespace(&child.text))
                 .collect(),
-        }
+        })
     }
 }
 
@@ -107,7 +113,7 @@ impl StatementChildren {
             SamlError::ProtocolProfile("AuthnStatement is missing AuthnContext".into())
         })?;
         Ok(Self {
-            authn_context: AuthnContext::from_element(context),
+            authn_context: AuthnContext::from_element(context)?,
             subject_locality: at_most_one_child(statement, "SubjectLocality")?
                 .map(SubjectLocality::from_element),
         })
