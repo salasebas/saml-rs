@@ -11,36 +11,94 @@ use crate::flow::{
 };
 use crate::metadata::Metadata;
 use crate::model::{ClockSkew, Status, StatusMessage};
+use crate::xml::dom::{is_xml_whitespace_char, push_normalized_namespaces, reader_err};
 use crate::xml::fields;
+use crate::xml::fragment::standalone_element;
+use crate::xml::name::is_ncname;
 use crate::xml::protocol_element::SamlElement;
 use crate::xml::status::read_status;
+use quick_xml::events::Event;
+use quick_xml::name::{Namespace, NamespaceResolver, QName, ResolveResult};
+use quick_xml::Reader;
 use std::time::SystemTime;
 
 use super::ASYNC_SLO_NAMESPACE;
 
 const XML_SCHEMA_INSTANCE_NAMESPACE: &str = "http://www.w3.org/2001/XMLSchema-instance";
 
-pub(crate) fn has_async_slo_marker(request: &SamlElement) -> bool {
-    request.is(namespace::PROTOCOL, "LogoutRequest")
-        && request
-            .children
-            .iter()
-            .filter(|child| child.is(namespace::PROTOCOL, "Extensions"))
-            .flat_map(|extensions| &extensions.children)
-            .any(|child| {
-                child.is(ASYNC_SLO_NAMESPACE, "Asynchronous")
-                    && child.attrs.iter().all(is_schema_instance_hint)
-                    && child.children.is_empty()
-                    && child.text.is_empty()
-            })
+pub(crate) fn has_async_slo_marker(xml: &str, request: &SamlElement) -> Result<bool, SamlError> {
+    if !request.is(namespace::PROTOCOL, "LogoutRequest") {
+        return Ok(false);
+    }
+    let candidates = request
+        .children
+        .iter()
+        .filter(|child| child.is(namespace::PROTOCOL, "Extensions"))
+        .flat_map(|extensions| &extensions.children)
+        .filter(|child| {
+            child.is(ASYNC_SLO_NAMESPACE, "Asynchronous")
+                && child.children.is_empty()
+                && child.text.is_empty()
+        });
+    for marker in candidates {
+        if marker_attributes_allowed(xml, marker)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
-fn is_schema_instance_hint((namespace, local_name, _): &(Option<String>, String, String)) -> bool {
-    namespace.as_deref() == Some(XML_SCHEMA_INSTANCE_NAMESPACE)
-        && matches!(
-            local_name.as_str(),
-            "schemaLocation" | "noNamespaceSchemaLocation"
-        )
+fn marker_attributes_allowed(xml: &str, marker: &SamlElement) -> Result<bool, SamlError> {
+    for (attribute_namespace, local_name, value) in &marker.attrs {
+        if attribute_namespace.as_deref() != Some(XML_SCHEMA_INSTANCE_NAMESPACE) {
+            return Ok(false);
+        }
+        let allowed = match local_name.as_str() {
+            "schemaLocation" | "noNamespaceSchemaLocation" => true,
+            "type" => names_asynchronous_type(xml, marker, value)?,
+            _ => false,
+        };
+        if !allowed {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn names_asynchronous_type(
+    xml: &str,
+    marker: &SamlElement,
+    value: &str,
+) -> Result<bool, SamlError> {
+    let value = value.trim_matches(is_xml_whitespace_char);
+    if !value.splitn(2, ':').all(is_ncname) {
+        return Ok(false);
+    }
+    let marker_xml = standalone_element(xml, marker.start, marker.end)?;
+    let mut reader = Reader::from_str(&marker_xml);
+    let mut resolver = NamespaceResolver::default();
+    loop {
+        match reader.read_event().map_err(reader_err)? {
+            Event::Start(element) | Event::Empty(element) => {
+                push_normalized_namespaces(&mut resolver, &element)?;
+                let (type_namespace, type_name) = resolver.resolve_element(QName(value));
+                return Ok(type_name.into_inner() == "AsynchronousType"
+                    && matches!(
+                        type_namespace,
+                        ResolveResult::Bound(Namespace(uri)) if uri == ASYNC_SLO_NAMESPACE
+                    ));
+            }
+            Event::Eof => return Err(SamlError::xml("asynchronous marker is not an element")),
+            Event::End(_)
+            | Event::Text(_)
+            | Event::CData(_)
+            | Event::Comment(_)
+            | Event::Decl(_)
+            | Event::PI(_)
+            | Event::DocType(_)
+            | Event::GeneralRef(_) => {}
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

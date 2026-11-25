@@ -35,11 +35,13 @@ To upgrade, leave the status message unset when you have no text.
 ## Asynchronous markers with schema hints
 
 If you run an identity provider, `IdentityProvider::receive_slo_with_async`
-now returns `IdpLogoutAction::CompleteLocally` when the `aslo:Asynchronous`
-marker carries `xsi:schemaLocation` or `xsi:noNamespaceSchemaLocation`. Before,
-it returned `IdpLogoutAction::Respond` for such a request. A marker with any
-other attribute, `xsi:type` and `xsi:nil` included, still returns
-`IdpLogoutAction::Respond`.
+on HTTP-Redirect and HTTP-POST now returns `IdpLogoutAction::CompleteLocally`
+when the `aslo:Asynchronous` marker carries `xsi:schemaLocation`,
+`xsi:noNamespaceSchemaLocation`, or an `xsi:type` that names
+`aslo:AsynchronousType`. Before, it returned `IdpLogoutAction::Respond` for
+such a request. A marker with any other attribute still returns
+`IdpLogoutAction::Respond`. That includes `xsi:nil` and an `xsi:type` that
+names another type.
 
 You do not need to change code. Such a request now finishes at the identity
 provider, which presents the result to the user and sends no

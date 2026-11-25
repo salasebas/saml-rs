@@ -816,7 +816,10 @@ fn receive_slo_impl(
     );
     let parse_document = || parse_saml_with_limits(&flow.saml_content, local_setting.xml_limits);
     let async_document = recognizes_async.then(parse_document).transpose()?;
-    let asynchronous = async_document.as_ref().is_some_and(has_async_slo_marker);
+    let asynchronous = match &async_document {
+        Some(document) => has_async_slo_marker(&flow.saml_content, document)?,
+        None => false,
+    };
     if let Some(refusal) =
         RefusedLogoutRequest::for_version(&flow, peer.entity_id, relay_state.as_ref(), binding)?
     {

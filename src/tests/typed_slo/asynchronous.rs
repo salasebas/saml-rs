@@ -159,7 +159,7 @@ fn a_marker_with_schema_instance_hints_selects_local_completion(
     let xml = logout_request_xml("_hinted", SP_ENTITY_ID, Some(IDP_SLO_POST));
     let marker = |attributes: &str| {
         format!(
-            r#"<samlp:Extensions><aslo:Asynchronous xmlns:aslo="{ASYNC_NAMESPACE}" xmlns:xsi="{XSI}" {attributes}/></samlp:Extensions>"#
+            r#"<samlp:Extensions xmlns:inherited="{ASYNC_NAMESPACE}"><aslo:Asynchronous xmlns:aslo="{ASYNC_NAMESPACE}" xmlns:xsi="{XSI}" {attributes}/></samlp:Extensions>"#
         )
     };
     let receive = |attributes: &str| -> Result<_, Box<dyn std::error::Error>> {
@@ -177,6 +177,9 @@ fn a_marker_with_schema_instance_hints_selects_local_completion(
     for attributes in [
         r#"xsi:schemaLocation="urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo saml-async-slo-v1.0.xsd""#,
         r#"xsi:noNamespaceSchemaLocation="extension.xsd""#,
+        r#"xsi:type="aslo:AsynchronousType""#,
+        r#"xsi:type=" inherited:AsynchronousType ""#,
+        r#"xmlns="urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo" xsi:type="AsynchronousType""#,
     ] {
         assert!(
             matches!(receive(attributes)?, IdpLogoutAction::CompleteLocally(_)),
@@ -184,7 +187,10 @@ fn a_marker_with_schema_instance_hints_selects_local_completion(
         );
     }
     for attributes in [
-        r#"xsi:type="aslo:AsynchronousType""#,
+        r#"xsi:type="aslo:OtherType""#,
+        r#"xmlns:xs="http://www.w3.org/2001/XMLSchema" xsi:type="xs:string""#,
+        r#"xsi:type="AsynchronousType""#,
+        r#"xsi:type="unbound:AsynchronousType""#,
         r#"xsi:nil="false""#,
         r#"xsi:other="value""#,
         r#"xmlns:other="urn:example:unrelated" other:schemaLocation="extension.xsd""#,

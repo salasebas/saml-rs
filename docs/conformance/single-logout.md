@@ -44,8 +44,8 @@ session lookup, session termination, and propagation to other participants.
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Recognize an empty `aslo:Asynchronous` element only as a direct child of `samlp:LogoutRequest/samlp:Extensions` in the authenticated request | Mandatory | Async SLO §2.1, `AsynchronousType`, `RequestAbstractType` | `receive_slo_with_async` |
-| Accept `xsi:schemaLocation` and `xsi:noNamespaceSchemaLocation` on the marker | Mandatory | Async SLO §2.1, `AsynchronousType`, XML Schema Part 1 §3.4.4 | `receive_slo_with_async` |
-| Treat a marker with `xsi:type` as absent, and keep the request on the response path | Library policy: the library does not resolve the type, and a type not derived from `AsynchronousType` makes the marker invalid. | XML Schema Part 1 §3.3.4 | Always |
+| Accept `xsi:schemaLocation` and `xsi:noNamespaceSchemaLocation` on the marker, and an `xsi:type` that names `aslo:AsynchronousType` through the namespaces in scope | Mandatory | Async SLO §2.1, `AsynchronousType`, XML Schema Part 1 §3.3.4, §3.4.4 | `receive_slo_with_async` |
+| Treat a marker whose `xsi:type` names another type as absent, and keep the request on the response path | Library policy: the library knows no type derived from `AsynchronousType`, and a type not derived from it makes the marker invalid. | XML Schema Part 1 §3.3.4 | Always |
 | Treat a marker with any other attribute, `xsi:nil` included, as absent, and keep the request on the response path | Library policy: `AsynchronousType` declares no attributes and the element is not nillable, so that element is not the empty marker §2.1 defines. | Async SLO §2.1, XML Schema Part 1 §3.3.4 | Always |
 | Finish at the IdP without a `LogoutResponse` to the initiator. The application presents the outcome on success or failure | Mandatory | Async SLO §2.2, Core §3.7.3.2 | `IdpLogoutAction::CompleteLocally` |
 
@@ -82,7 +82,7 @@ on both roles exposes the received attribute through `LogoutRequest::reason`.
 | --- | --- | --- | --- |
 | Read the peer `SingleLogoutService` from the role descriptor of the peer role, never from the other role of an entity that plays both | Optional | Metadata §2.4.2, Profiles §4.4.3.1, §4.4.5 | Always |
 | Send the response to `ResponseLocation` when present, otherwise `Location`, after `anyURI` whitespace collapse. A request uses `Location` | Recommended | Metadata §2.2.2, E41 | Always |
-| A session authority's browser messages and SOAP requests from either role use the first endpoint for the binding. A session participant's browser messages use the endpoint the participant rows describe | Optional | Metadata §2.2.2 | Always |
+| A session authority's browser messages and SOAP requests from either role use the first endpoint for the binding. A session participant's browser messages use the endpoint the participant rows describe | Library policy: metadata order is the only preference the peer publishes for endpoints of one binding, and OpenSAML 5.2.3 and crewjam/saml v0.4.14 also take the first. | Metadata §2.2.2 | Always |
 
 ## LogoutResponse
 

@@ -307,7 +307,7 @@ fn session_participant_sends_to_an_https_endpoint_listed_after_an_http_one(
         &idp_metadata.replace(
             &published,
             &format!(
-                r#"<SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTP}"/><SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTPS}" ResponseLocation="{IDP_SLO_RESPONSE_HTTP}"/><SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTP}" ResponseLocation="{IDP_SLO_RESPONSE_HTTPS}"/>"#
+                r#"<SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTP}"/><SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTPS}" ResponseLocation="{IDP_SLO_RESPONSE_HTTP}"/><SingleLogoutService Binding="{POST}" Location="{IDP_SLO_HTTP}" ResponseLocation="{IDP_SLO_RESPONSE_HTTPS}"/><SingleLogoutService Binding="{POST}" Location="https://idp.example.com/slo/post/later" ResponseLocation="https://idp.example.com/slo/post/later/response"/>"#
             ),
         ),
         MetadataTrustPolicy::Unverified,
