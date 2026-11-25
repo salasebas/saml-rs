@@ -74,7 +74,6 @@ request that `receive_sso` refuses.
 | Reject a subordinate `StatusCode` `Value` that is not an absolute URI reference, including one read from a received response | Mandatory | Core §1.3.2, §3.2.2.2 | `SsoOutcome::Failure` |
 | Write a `Success` response only with an assertion, and reject `SsoOutcome::Failure` with a top-level `Success` status | Mandatory | Profiles §4.1.4.2, E26 | Always |
 | Write an unsolicited error `Response` for a login the identity provider started | Optional | Profiles §4.1.4.2, §4.1.5 | `initiate_sso`, `initiate_sso_artifact` |
-| Support an error `Response` without `InResponseTo` for a request whose `ID` cannot be determined, sent to the service provider's default `AssertionConsumerService` | Recommended | Core §3.2.2, Profiles §4.1.3.5, E85 | `initiate_sso`, `initiate_sso_artifact` |
 | Sign an error `Response` over HTTP-POST | Library policy: an error carries no assertion to sign, and the signature lets the service provider authenticate its status, `InResponseTo`, and `Destination`. | Profiles §4.1.3.5, §4.1.4.5, E26, E93, Bindings §3.5.5.2 | Always |
 | Over HTTP-POST, sign each assertion when the service provider metadata sets `WantAssertionsSigned`, and sign the `Response` otherwise | Library policy: a `Response` signature also authenticates the status, `InResponseTo`, and `Destination`, and a service provider that asks for assertion signatures gets them. | Profiles §4.1.3.5, §4.1.6, E93 | `RespondSso::sign_response` |
 | Write the issuing identity provider's identifier as `Response` `Issuer`, with `Format` omitted. The `Response` needs it when signed or when an assertion is encrypted, and the crate always writes it | Mandatory | Profiles §4.1.4.2, E17 | Always |
@@ -82,7 +81,7 @@ request that `receive_sso` refuses.
 | Write every time value in UTC, and never a leap second | Mandatory | Core §1.3.3 | Always |
 | Match `InResponseTo`, on the `Response` and on the bearer `SubjectConfirmationData`, to the `AuthnRequest` `ID` | Mandatory | Core §3.2.2, Profiles §4.1.4.2, E26 | Always |
 | Reject a response to a request whose `ID` is not an `xs:NCName`, because `InResponseTo` cannot carry it | Mandatory | Core §1.3.4, `StatusResponseType`, `SubjectConfirmationDataType` | Always |
-| Omit `InResponseTo` from an unsolicited `Response` | Mandatory | Core §3.2.2, Profiles §4.1.5 | Always |
+| Omit `InResponseTo` from an unsolicited `Response`, including an error for a request whose `ID` cannot be determined | Mandatory | Core §3.2.2, Profiles §4.1.5 | Always |
 | Omit `InResponseTo` from the bearer `SubjectConfirmationData` of an unsolicited response | Recommended | Profiles §4.1.5 | Always |
 | Write a bearer assertion that has an `AuthnStatement` | Mandatory | Profiles §4.1.4.2, E26 | Always |
 | Write `Issuer` on the assertion as the responding identity provider, with `Format` omitted (the profile also permits `entity`) | Mandatory | Profiles §4.1.4.2, E26 | Always |
