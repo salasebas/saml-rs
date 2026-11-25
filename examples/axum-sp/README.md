@@ -111,6 +111,7 @@ curl -sf http://127.0.0.1:8080/realms/saml-rs/protocol/saml/descriptor \
 | Each pending login and logout finishes once and expires after ten minutes | The in-memory stores in `src/store.rs` |
 | One replay cache for every ACS request | `main.rs` builds one `InMemoryReplayCache` and passes it to `router` |
 | Login returns only to this origin | `src/return_url.rs` resolves `return` with `Url::join` |
+| Only a page on this origin can log the user out | The logout handler compares the `Origin` header with `SP_PUBLIC_BASE_URL` |
 | A session ends at the maximum lifetime, or at an earlier `SessionNotOnOrAfter` | The ACS handler in `src/handlers.rs` |
 | TLS, and limits on how many logins one client may start | The deployment |
 
