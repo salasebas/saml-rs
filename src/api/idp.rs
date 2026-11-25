@@ -111,6 +111,7 @@ impl IdentityProvider {
     /// #     sp: &SpDescriptor,
     /// #     fields: Vec<FormField>,
     /// #     name_id: NameId,
+    /// #     authenticated_at: SystemTime,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
@@ -118,7 +119,7 @@ impl IdentityProvider {
     /// );
     /// let input = Inbound::post(fields);
     /// let request = idp.receive_sso(sp, input, validation)?;
-    /// let assertion = SsoAssertion::new(name_id, SystemTime::now());
+    /// let assertion = SsoAssertion::new(name_id, authenticated_at);
     /// let response = idp.respond_sso(sp, &request, assertion, RespondSso::post())?;
     ///
     /// let form = response.post_form()?;
@@ -415,12 +416,13 @@ impl IdentityProvider {
     /// #     sp_descriptor: &SpDescriptor,
     /// #     idp_descriptor: &IdpDescriptor,
     /// #     name_id: NameId,
+    /// #     authenticated_at: SystemTime,
     /// #     form_fields: Vec<FormField>,
     /// #     replay_cache: &mut dyn saml_rs::ReplayCache,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let response = idp.initiate_sso(
     ///     sp_descriptor,
-    ///     SsoAssertion::new(name_id, SystemTime::now()),
+    ///     SsoAssertion::new(name_id, authenticated_at),
     ///     RespondSso::post(),
     /// )?;
     /// let form = response.post_form()?;
