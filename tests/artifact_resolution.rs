@@ -305,7 +305,7 @@ fn web_browser_sso_round_trip_returns_the_stored_response() -> Result<(), Box<dy
             ("Content-Type", "text/xml; charset=utf-8"),
             (
                 "SOAPAction",
-                "http://www.oasis-open.org/committees/security"
+                "\"http://www.oasis-open.org/committees/security\""
             ),
             ("Cache-Control", "no-cache, no-store"),
             ("Pragma", "no-cache"),

@@ -39,5 +39,6 @@ additions.
 - [Sign encrypted assertions for the response they arrive in](unreleased-decrypted-assertion-signatures.md)
 - [Read metadata endpoints only in the metadata namespace](unreleased-metadata-endpoint-namespace.md)
 - [Require a `validUntil` on the metadata root](unreleased-root-valid-until.md)
+- [Send the quoted `SOAPAction` value](unreleased-quoted-soapaction.md)
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

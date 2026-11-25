@@ -52,11 +52,10 @@ for its clarification of the signature input when RelayState is absent.
   lets the HTTP requester send the OASIS URI as `SOAPAction` and forbids the
   SAML responder from depending on its value.
   [SOAP 1.1 §6.1.1](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/#_Toc478383528)
-  requires the header on requests and quotes a URI value in its grammar.
-  saml-rs defaults to the bare URI for interoperability. The SAML examples
-  use that form, and
-  [Keycloak 26.6.0](https://github.com/keycloak/keycloak/blob/26.6.0/services/src/main/java/org/keycloak/protocol/saml/SamlProtocol.java#L829-L842)
-  sends it when the IdP makes a back-channel logout request to an SP.
+  requires the header on requests, and its grammar puts a URI value in
+  double quotes. The Bindings §3.2.3 example writes the URI bare, but an
+  example does not change the header grammar. saml-rs sends the quoted URI.
+  WS-I R1109 requires quotes, and R1119 lets a receiver fault on a bare value.
 
 ## Classify the rule
 

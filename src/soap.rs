@@ -26,7 +26,7 @@ const REQUEST_HEADERS: &[HttpHeader] = &[
     CONTENT_TYPE,
     HttpHeader::new(
         "SOAPAction",
-        "http://www.oasis-open.org/committees/security",
+        "\"http://www.oasis-open.org/committees/security\"",
     ),
     CACHE_CONTROL,
     PRAGMA,
@@ -163,6 +163,10 @@ impl SoapRequest {
 
     /// HTTP headers to send with the POST: `Content-Type`, `SOAPAction`,
     /// `Cache-Control`, and `Pragma`.
+    ///
+    /// The `SOAPAction` value is the OASIS URI
+    /// `http://www.oasis-open.org/committees/security` in double quotes, as
+    /// the SOAP 1.1 header grammar requires. Send the value unchanged.
     pub fn headers(&self) -> &[HttpHeader] {
         REQUEST_HEADERS
     }
