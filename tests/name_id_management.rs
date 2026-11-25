@@ -932,6 +932,18 @@ fn a_request_without_destination_is_accepted() -> TestResult {
         matches!(addressed, Err(SamlError::RecipientEndpointAmbiguous)),
         "{addressed:?}"
     );
+
+    let unpublished = two_services.receive_name_id_management(
+        &sp,
+        &envelope,
+        authenticated(),
+        validation()
+            .with_recipient_endpoint(EndpointUrl::try_new("https://idp.example.com/unpublished")?),
+    );
+    assert!(
+        matches!(unpublished, Err(SamlError::RecipientEndpointNotPublished)),
+        "{unpublished:?}"
+    );
     Ok(())
 }
 
