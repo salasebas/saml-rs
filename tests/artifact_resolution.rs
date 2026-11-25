@@ -1477,9 +1477,16 @@ fn namespaces_declared_on_the_soap_envelope_reach_the_protocol_message(
         1,
     );
     let soap = r#" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/""#;
+    let escaped_xml = r#" xmlns:xml="&#x68;ttp://www.w3.org/XML/1998/namespace""#;
+    let escaped_response =
+        hoisted_response.replacen("<soap:Envelope", &format!("<soap:Envelope{escaped_xml}"), 1);
     for (envelope, in_scope) in [
         (inherited_payload, format!("{soap}{declarations}")),
         (hoisted_response, format!("{declarations}{soap}")),
+        (
+            escaped_response,
+            format!("{escaped_xml}{declarations}{soap}"),
+        ),
     ] {
         let resolved = resolution.finish(&envelope)?;
         assert_eq!(

@@ -1,9 +1,9 @@
 use crate::constants::namespace;
 use crate::error::SamlError;
-use crate::xml::dom::reader_err;
+use crate::xml::dom::{push_normalized_namespaces, reader_err};
 use quick_xml::events::Event;
-use quick_xml::name::{Namespace, ResolveResult};
-use quick_xml::reader::NsReader;
+use quick_xml::name::{Namespace, NamespaceResolver, ResolveResult};
+use quick_xml::Reader;
 
 fn is_protocol_response_name(local_name: &str) -> bool {
     matches!(
@@ -16,33 +16,23 @@ fn is_protocol_response_name(local_name: &str) -> bool {
     )
 }
 
-fn document_element_name(xml: &str) -> Result<(String, String), SamlError> {
-    let mut reader = NsReader::from_str(xml);
-    let mut buffer = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buffer) {
-            Ok(Event::Start(element) | Event::Empty(element)) => {
-                let (resolved, local_name) = reader.resolver().resolve_element(element.name());
-                let local_name = local_name.as_ref().to_string();
-                let resolved = match resolved {
-                    ResolveResult::Bound(Namespace(uri)) => uri.to_string(),
-                    ResolveResult::Unbound | ResolveResult::Unknown(_) => String::new(),
-                };
-                return Ok((resolved, local_name));
-            }
-            Ok(Event::Eof) => {
-                return Err(SamlError::xml("no document element"));
-            }
-            Ok(_) => {}
-            Err(error) => return Err(reader_err(error)),
-        }
-        buffer.clear();
-    }
-}
-
 pub(crate) fn root_uses_protocol_response_rules(xml: &str) -> Result<bool, SamlError> {
-    let (element_namespace, local_name) = document_element_name(xml)?;
-    Ok(element_namespace == namespace::PROTOCOL && is_protocol_response_name(&local_name))
+    let mut reader = Reader::from_str(xml);
+    loop {
+        match reader.read_event().map_err(reader_err)? {
+            Event::Start(element) | Event::Empty(element) => {
+                let mut resolver = NamespaceResolver::default();
+                push_normalized_namespaces(&mut resolver, &element)?;
+                let (resolved, local_name) = resolver.resolve_element(element.name());
+                return Ok(matches!(
+                    resolved,
+                    ResolveResult::Bound(Namespace(namespace::PROTOCOL))
+                ) && is_protocol_response_name(local_name.as_ref()));
+            }
+            Event::Eof => return Err(SamlError::xml("no document element")),
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]
@@ -76,6 +66,9 @@ mod tests {
             "<?xml version=\"1.0\"?><!-- before --><samlp:Response xmlns:samlp=\"{protocol}\"/>"
         );
         assert!(root_uses_protocol_response_rules(&prologue)?);
+        assert!(root_uses_protocol_response_rules(
+            r#"<samlp:LogoutResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protoco&#108;"/>"#
+        )?);
         assert!(!root_uses_protocol_response_rules(
             r#"<samlp:Response xmlns:samlp="urn:example:not-saml"/>"#
         )?);

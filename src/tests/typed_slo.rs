@@ -3738,13 +3738,15 @@ fn a_soap_requester_without_a_soap_endpoint_checks_only_a_present_destination(
         &Status::success(),
         RespondSlo::soap(),
     )?;
+    let response_envelope = response.soap_response()?.envelope().replacen(
+        "<soap:Envelope",
+        r#"<soap:Envelope xmlns:xml="&#x68;ttp://www.w3.org/XML/1998/namespace""#,
+        1,
+    );
     let completed = sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        Inbound::soap(
-            response.soap_response()?.envelope(),
-            SoapChannel::unattested(),
-        ),
+        Inbound::soap(response_envelope, SoapChannel::unattested()),
         validation(),
     )?;
     assert_eq!(completed.response().destination(), None);

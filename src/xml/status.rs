@@ -1,12 +1,11 @@
 use quick_xml::events::{BytesStart, Event};
-use quick_xml::name::{Namespace, ResolveResult};
-use quick_xml::reader::NsReader;
-use quick_xml::XmlVersion;
+use quick_xml::name::{Namespace, NamespaceResolver, ResolveResult};
+use quick_xml::{Reader, XmlVersion};
 
 use crate::constants::namespace;
 use crate::error::{xml_err, SamlError};
 use crate::model::Status;
-use crate::xml::dom::{reader_err, XmlLimits};
+use crate::xml::dom::{push_normalized_namespaces, reader_err, XmlLimits};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Position {
@@ -28,22 +27,25 @@ struct Shape {
 
 pub(crate) fn read_status(xml: &str, limits: XmlLimits) -> Result<Status, SamlError> {
     limits.check_input_bytes(xml.len())?;
-    let mut reader = NsReader::from_str(xml);
-    reader
-        .resolver_mut()
-        .set_max_namespace_bindings(limits.max_attributes_per_element);
+    let mut reader = Reader::from_str(xml);
+    let mut resolver = NamespaceResolver::default();
+    resolver.set_max_namespace_bindings(limits.max_attributes_per_element);
     let mut open = Vec::new();
     let mut shape = Shape::default();
     loop {
         match reader.read_event().map_err(reader_err)? {
             Event::Start(element) => {
-                let position = shape.observe(&reader, &element, open.last().copied())?;
+                push_normalized_namespaces(&mut resolver, &element)?;
+                let position = shape.observe(&resolver, &element, open.last().copied())?;
                 open.push(position);
             }
             Event::Empty(element) => {
-                shape.observe(&reader, &element, open.last().copied())?;
+                push_normalized_namespaces(&mut resolver, &element)?;
+                shape.observe(&resolver, &element, open.last().copied())?;
+                resolver.pop();
             }
             Event::End(_) => {
+                resolver.pop();
                 open.pop();
             }
             Event::DocType(_) => return Err(SamlError::xml("DOCTYPE is not allowed")),
@@ -63,31 +65,35 @@ pub(crate) fn read_status(xml: &str, limits: XmlLimits) -> Result<Status, SamlEr
 impl Shape {
     fn observe(
         &mut self,
-        reader: &NsReader<&[u8]>,
+        resolver: &NamespaceResolver,
         element: &BytesStart<'_>,
         parent: Option<Position>,
     ) -> Result<Position, SamlError> {
-        let (resolved, local_name) = reader.resolver().resolve_element(element.name());
+        let (resolved, local_name) = resolver.resolve_element(element.name());
         let Some(parent) = parent else {
             self.root = local_name.as_ref().to_owned();
             return Ok(Position::Root);
         };
-        let is_protocol = |name: &str| -> Result<bool, SamlError> {
-            Ok(local_name.as_ref() == name && is_protocol_namespace(&resolved)?)
+        let is_protocol = |name: &str| {
+            local_name.as_ref() == name
+                && matches!(
+                    resolved,
+                    ResolveResult::Bound(Namespace(namespace::PROTOCOL))
+                )
         };
         match parent {
-            Position::Root if is_protocol("Status")? => {
+            Position::Root if is_protocol("Status") => {
                 self.statuses = self.statuses.saturating_add(1);
                 at_most_one(self.statuses, &self.root, "Status")?;
                 Ok(Position::Status)
             }
-            Position::Status if is_protocol("StatusCode")? => {
+            Position::Status if is_protocol("StatusCode") => {
                 self.top_level_codes = self.top_level_codes.saturating_add(1);
                 at_most_one(self.top_level_codes, "Status", "StatusCode")?;
                 self.top_level = value(element)?;
                 Ok(Position::TopLevelCode)
             }
-            Position::TopLevelCode if is_protocol("StatusCode")? => {
+            Position::TopLevelCode if is_protocol("StatusCode") => {
                 self.subordinate_codes = self.subordinate_codes.saturating_add(1);
                 at_most_one(self.subordinate_codes, "StatusCode", "StatusCode")?;
                 self.subordinate = Some(value(element)?.ok_or_else(|| {
@@ -111,15 +117,6 @@ fn at_most_one(count: usize, parent: &str, child: &str) -> Result<(), SamlError>
         )));
     }
     Ok(())
-}
-
-fn is_protocol_namespace(resolved: &ResolveResult<'_>) -> Result<bool, SamlError> {
-    match resolved {
-        ResolveResult::Bound(Namespace(uri)) => {
-            Ok(quick_xml::escape::unescape(uri).map_err(xml_err)? == namespace::PROTOCOL)
-        }
-        ResolveResult::Unbound | ResolveResult::Unknown(_) => Ok(false),
-    }
 }
 
 fn value(element: &BytesStart<'_>) -> Result<Option<String>, SamlError> {

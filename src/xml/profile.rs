@@ -642,7 +642,7 @@ pub(crate) fn validate_protocol_profile(
     let mut resolver = NamespaceResolver::default();
     resolver.set_max_namespace_bindings(limits.max_attributes_per_element);
     let namespace_values = match parser_type {
-        ParserType::SamlRequest => NamespaceValues::Normalized,
+        ParserType::SamlRequest | ParserType::LogoutResponse => NamespaceValues::Normalized,
         _ => NamespaceValues::Raw,
     };
     let mut stack = Vec::new();
