@@ -203,12 +203,9 @@ pub(crate) fn encrypt_assertion_elements(
 
 pub(crate) fn encrypt_logout_request_name_id(
     xml: &str,
-    encrypt_cert: &str,
-    data_alg: &str,
-    key_alg: KeyTransport<'_>,
+    recipient: &EncryptionRecipient<'_>,
 ) -> Result<String, SamlError> {
-    let recipient = EncryptionRecipient::new([encrypt_cert], data_alg, key_alg);
-    encrypt_selected(xml, &recipient, |document| {
+    encrypt_selected(xml, recipient, |document| {
         let [name_id] = root_children(document, namespace::ASSERTION, "NameID")?[..] else {
             return Err(SamlError::ProtocolProfile(
                 "LogoutRequest must carry one NameID to encrypt".into(),
@@ -278,12 +275,9 @@ fn own_prefix_declaration<'d>(document: &'d XmlDocument<'_>, element: NodeId) ->
 pub(crate) fn encrypt_root_children(
     xml: &str,
     kinds: &[EncryptedElementKind],
-    encrypt_cert: &str,
-    data_alg: &str,
-    key_alg: KeyTransport<'_>,
+    recipient: &EncryptionRecipient<'_>,
 ) -> Result<String, SamlError> {
-    let recipient = EncryptionRecipient::new([encrypt_cert], data_alg, key_alg);
-    encrypt_selected(xml, &recipient, |document| {
+    encrypt_selected(xml, recipient, |document| {
         let mut selected = Vec::new();
         for kind in kinds {
             for element in root_children(document, kind.namespace, kind.plaintext)? {

@@ -55,19 +55,12 @@ fn decrypted(
 
 #[cfg(crypto)]
 fn encrypt(xml: &str, setting: &EntitySetting, peer: &Metadata) -> Result<String, SamlError> {
-    use crate::constants::CertUse;
-    use crate::crypto::enc::{encrypt_root_children, MANAGED_NAME_ID, NEW_ID};
+    use crate::crypto::enc::{encrypt_root_children, EncryptionRecipient, MANAGED_NAME_ID, NEW_ID};
 
-    let certificate = peer
-        .x509_certificates(CertUse::Encryption)
-        .first()
-        .ok_or_else(|| SamlError::MissingMetadata("encryption certificate".into()))?;
     encrypt_root_children(
         xml,
         &[MANAGED_NAME_ID, NEW_ID],
-        certificate,
-        &setting.data_encryption_algorithm,
-        crate::crypto::enc::KeyTransport::from_setting(setting),
+        &EncryptionRecipient::from_setting(peer.encryption_key_certificates(), setting),
     )
 }
 

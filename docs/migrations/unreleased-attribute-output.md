@@ -70,4 +70,6 @@ needs an encryption certificate in the service provider metadata. Before,
 the response failed with `SamlError::MissingMetadata`.
 
 You do not need to change code for these two changes. Logout and name
-identifier management requests still use the first encryption certificate.
+identifier management requests choose their key the same way, as
+[Encrypt for a usable key and write its certificate](unreleased-outbound-encryption-keys.md)
+describes.

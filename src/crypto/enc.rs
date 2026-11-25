@@ -26,7 +26,7 @@ pub(crate) use decrypt::{decrypt_assertion_with_limits, AssertionDecryptionOptio
 pub(crate) use encrypt::encrypt_assertion;
 pub(crate) use encrypt::{
     encrypt_assertion_elements, encrypt_assertion_with_key_transport,
-    encrypt_logout_request_name_id, encrypt_root_children, EncryptionRecipient, KeyTransport,
+    encrypt_logout_request_name_id, encrypt_root_children, EncryptionRecipient,
 };
 pub(crate) use policy::response_uses_cbc_encrypted_assertion;
 
@@ -509,8 +509,10 @@ mod tests {
             r#"<n:NameID xmlns:n="urn:oasis:names:tc:SAML:2.0:assertion">alice</n:NameID>"#,
             r#"</samlp:LogoutRequest>"#,
         );
-        let encrypted =
-            encrypt_logout_request_name_id(request, SP_CERT, AES_256, RSA_OAEP_MGF1P.into())?;
+        let encrypted = encrypt_logout_request_name_id(
+            request,
+            &EncryptionRecipient::new([SP_CERT], AES_256, RSA_OAEP_MGF1P.into()),
+        )?;
         let document = uppsala::parse(&encrypted)?;
         if root_children(&document, namespace::ASSERTION, "EncryptedID")?.len() != 1 {
             return Err(format!("no assertion-namespace EncryptedID: {encrypted}").into());

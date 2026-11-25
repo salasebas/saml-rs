@@ -48,6 +48,7 @@ const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pe
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
 const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
+const EC_CERT: &str = include_str!("fixtures/key/prime256v1/cert.pem");
 
 const BINDINGS: [LogoutBinding; 4] = [
     LogoutBinding::Post,
@@ -426,6 +427,64 @@ fn identity_provider_decrypts_an_encrypted_id_made_for_either_published_certific
             request_input(&sent.outbound, LogoutBinding::Post)?,
         )?;
         assert_eq!(received.message().name_id(), Some(&principal()));
+    }
+    Ok(())
+}
+
+fn with_unusable_encryption_key_first(
+    metadata: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let first_encryption_key = metadata
+        .find("<KeyDescriptor use=\"encryption\"")
+        .ok_or("metadata publishes no encryption key")?;
+    let mut metadata = metadata.to_string();
+    metadata.insert_str(
+        first_encryption_key,
+        &format!(
+            "<KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><ds:X509Data><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>",
+            EC_CERT
+                .lines()
+                .filter(|line| !line.starts_with("-----"))
+                .collect::<String>()
+        ),
+    );
+    Ok(metadata)
+}
+
+#[test]
+fn encrypted_id_is_encrypted_for_a_later_peer_key_the_key_transport_can_use(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Parties { sp, idp, .. } = parties()?;
+    let parties = Parties {
+        sp_descriptor: SpDescriptor::from_metadata_xml(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            &with_unusable_encryption_key_first(sp.metadata_xml())?,
+            MetadataTrustPolicy::Unverified,
+        )?,
+        idp_descriptor: IdpDescriptor::from_metadata_xml(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            &with_unusable_encryption_key_first(idp.metadata_xml())?,
+            MetadataTrustPolicy::Unverified,
+        )?,
+        sp,
+        idp,
+    };
+    for initiator in INITIATORS {
+        let options =
+            StartSlo::post().identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
+        let sent = start(&parties, initiator, options)?;
+        assert!(request_xml(&sent.outbound)?.contains("<saml:EncryptedID>"));
+
+        let received = receive(
+            &parties,
+            initiator,
+            request_input(&sent.outbound, LogoutBinding::Post)?,
+        )?;
+        assert_eq!(
+            received.message().name_id(),
+            Some(&principal()),
+            "{initiator:?}"
+        );
     }
     Ok(())
 }
