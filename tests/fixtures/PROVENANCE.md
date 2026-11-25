@@ -67,6 +67,24 @@ with `genpkey -algorithm ED25519`. Each certificate uses
 | `secp521r1` | `fd595f10b4e4d05b964907ea90ca67012c3422389922363d5de6ed23b2d0b555` | `4e8451ff843a31401143ed329dc8d443c0982a73b392c1df0b85409204b720b0` |
 | `ed25519` | `aabc699aac6c1d6867f9adda98c84271a3bde7b5a2fe006ae71d63789ebe6cdc` | `1131d0dfc20134fac033ddccf9707a92795dbc6905240b02c4255ebe51ebfdfe` |
 
+## Service provider certificate chain
+
+`key/sp-chain/ca.pem` is a test-only self-signed CA certificate with
+`basicConstraints=critical,CA:TRUE`. `key/sp-chain/cert.pem` is a leaf
+certificate that this CA issued for the public key of
+`key/sp/privkey.unencrypted.pkcs8.pem`, with `basicConstraints=critical,CA:FALSE`.
+`src/tests/encryption_key_selection.rs` publishes both in one `X509Data`.
+OpenSSL `4.1.0` generated them with
+`genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048`,
+`req -new -x509 -sha256 -days 36500 -subj "/CN=saml-rs test SP CA"`, and
+`x509 -req -sha256 -days 36500 -set_serial 2` over a request for
+`/CN=saml-rs test SP leaf`. The CA private key was not kept.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `key/sp-chain/ca.pem` | `2be277eb6a04d6fb0ab66ea41ccce2b792c36479ce7a0785cec771ac03001ac5` |
+| `key/sp-chain/cert.pem` | `ad117f542437c9ae8554e5223b2278546d756e66f8b2fbf0bc5a2a946dea37d3` |
+
 ## DSA signing fixture
 
 `key/dsa/privkey.pkcs8.pem` and `key/dsa/cert.pem` are a test-only DSA key and

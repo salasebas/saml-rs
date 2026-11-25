@@ -1,6 +1,6 @@
 use crate::browser::SsoResponseBinding;
 use crate::constants::Binding;
-use crate::metadata::SpMetadata;
+use crate::metadata::{AcsMetadataEndpoint, SpMetadata};
 use crate::model::AuthnRequest;
 
 use super::{SamlError, SsoOutcome};
@@ -10,7 +10,7 @@ pub(super) fn resolve_response_acs(
     request: Option<&AuthnRequest>,
     binding: SsoResponseBinding,
     outcome: &SsoOutcome,
-) -> Result<String, SamlError> {
+) -> Result<AcsMetadataEndpoint, SamlError> {
     let acs_url = request.and_then(AuthnRequest::acs_url);
     let acs_index = request.and_then(AuthnRequest::acs_index);
     if acs_url.is_some() && acs_index.is_some() {
@@ -26,15 +26,16 @@ pub(super) fn resolve_response_acs(
     }
 
     if let Some(url) = acs_url {
-        if !metadata.has_assertion_consumer_service(Binding::from(binding), url.as_str()) {
-            return Err(SamlError::destination_mismatch(
-                url.as_str(),
-                metadata
-                    .assertion_consumer_location(Binding::from(binding))
-                    .as_deref(),
-            ));
-        }
-        return Ok(url.as_str().to_string());
+        return metadata
+            .assertion_consumer_service_at(Binding::from(binding), url.as_str())
+            .ok_or_else(|| {
+                SamlError::destination_mismatch(
+                    url.as_str(),
+                    metadata
+                        .assertion_consumer_location(Binding::from(binding))
+                        .as_deref(),
+                )
+            });
     }
 
     if let Some(index) = acs_index {
@@ -44,7 +45,7 @@ pub(super) fn resolve_response_acs(
                     "response binding conflicts with AuthnRequest ACS index".into(),
                 ));
             }
-            return Ok(endpoint.location);
+            return Ok(endpoint);
         }
         if protocol_binding.is_some() || !matches!(outcome, SsoOutcome::Failure(_)) {
             return Err(SamlError::MissingMetadata(
@@ -65,5 +66,5 @@ pub(super) fn resolve_response_acs(
             "response binding conflicts with default AssertionConsumerService".into(),
         ));
     }
-    Ok(endpoint.location)
+    Ok(endpoint)
 }

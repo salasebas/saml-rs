@@ -6,8 +6,8 @@
 `StartNameIdManagement::identifier_encryption` with
 `IdentifierEncryptionPolicy::EncryptIdentifiers` now encrypt for the first
 peer encryption key that the configured algorithms can use. They read the
-keys from the peer metadata the same way an identity provider does for an
-SSO response. Before, they used the first encryption certificate in the peer
+keys of the first peer role that publishes an encryption certificate, the
+same way an identity provider reads the keys of a role for an SSO response. Before, they used the first encryption certificate in the peer
 metadata and failed with `SamlError::Crypto` when it did not load or the
 crypto provider could not encrypt for it, such as an EC key or an RSA key
 too small for the key transport. Now they try the next key.

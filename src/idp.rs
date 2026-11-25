@@ -5,7 +5,7 @@ use crate::entity::{
 };
 use crate::error::SamlError;
 use crate::flow::{FlowOptions, FlowResultWithSignatureEvidence, HttpRequest, SignatureCheck};
-use crate::metadata::{generate_idp_metadata, IdpMetadata, IdpMetadataInput};
+use crate::metadata::{generate_idp_metadata, AcsMetadataEndpoint, IdpMetadata, IdpMetadataInput};
 use crate::model::{
     validate_issued_entity_name_id, validate_issued_name_id_length, validate_name_id_format,
     Attribute, AuthnContextReference, ClockSkew, NameIdPolicy, RequestedAuthnContext,
@@ -33,7 +33,7 @@ pub struct LoginResponseOptions<'a> {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct LoginResponseOverrides<'a> {
-    pub(crate) acs: Option<&'a str>,
+    pub(crate) acs: Option<&'a AcsMetadataEndpoint>,
     pub(crate) name_id_format: Option<&'a str>,
     pub(crate) name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     pub(crate) issuance_lifetime: Option<time::Duration>,
@@ -308,17 +308,17 @@ impl Engine {
             return Err(SamlError::UnsupportedBinding { binding });
         }
         let acs = match overrides.acs {
-            Some(acs) => acs.to_string(),
+            Some(acs) => acs.clone(),
             None => sp
                 .metadata
-                .assertion_consumer_location(binding)
+                .assertion_consumer_service_endpoint(binding)
                 .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
         };
         let rendered = self.render_login_response(
             sp,
             options.in_response_to,
             user,
-            &acs,
+            &acs.location,
             LoginResponseRendering {
                 name_id_format: overrides.name_id_format,
                 name_id_qualifiers: overrides.name_id_qualifiers,
@@ -350,6 +350,7 @@ impl Engine {
                 .unwrap_or_else(|| ResponseMessageSignature::requested_by(sp));
             self.finalize_login_response(
                 sp,
+                &acs,
                 binding,
                 &rendered.xml,
                 response_signature,
@@ -358,13 +359,13 @@ impl Engine {
         };
         let relay = options.relay_state.map(str::to_string);
         let (context, signature, sig_alg) =
-            self.bind_response(binding, &signed, &acs, relay.as_deref())?;
+            self.bind_response(binding, &signed, &acs.location, relay.as_deref())?;
         Ok(IssuedLoginResponse {
             context: BindingContext {
                 id: rendered.id,
                 context,
                 relay_state: relay,
-                entity_endpoint: acs,
+                entity_endpoint: acs.location,
                 binding,
                 request_type: "SAMLResponse",
                 signature,
@@ -454,6 +455,7 @@ impl Engine {
     pub(crate) fn finalize_login_response(
         &self,
         sp: &sp::Engine,
+        acs: &AcsMetadataEndpoint,
         binding: Binding,
         raw: &str,
         response_signature: ResponseMessageSignature,
@@ -480,7 +482,7 @@ impl Engine {
             };
 
         let recipient = EncryptionRecipient::from_setting(
-            sp.metadata.as_metadata().encryption_key_certificates(),
+            sp.metadata.encryption_key_certificates(acs),
             &self.setting,
         );
         let element_encryption = self.setting.assertion_element_encryption;
@@ -513,6 +515,7 @@ impl Engine {
     pub(crate) fn finalize_login_response(
         &self,
         _sp: &sp::Engine,
+        _acs: &AcsMetadataEndpoint,
         _binding: Binding,
         _raw: &str,
         _response_signature: ResponseMessageSignature,

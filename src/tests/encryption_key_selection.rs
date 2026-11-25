@@ -18,6 +18,8 @@ use saml_rs::{
 };
 
 const EC_CERT: &str = include_str!("../../tests/fixtures/key/prime256v1/cert.pem");
+const CHAIN_CA_CERT: &str = include_str!("../../tests/fixtures/key/sp-chain/ca.pem");
+const CHAIN_LEAF_CERT: &str = include_str!("../../tests/fixtures/key/sp-chain/cert.pem");
 const UNREADABLE_CERT: &str = "AAAA";
 const RSA_1024_CERT: &str = include_str!("../../tests/fixtures/key/rsa1024/cert.pem");
 const RSA_KEY_VALUE: &str = "<ds:KeyValue><ds:RSAKeyValue><ds:Modulus>AQAB</ds:Modulus><ds:Exponent>AQAB</ds:Exponent></ds:RSAKeyValue></ds:KeyValue>";
@@ -106,6 +108,7 @@ fn exchange_with_encryption_keys_first(
     encryption: XmlEncryptionPolicy,
     key_infos: &[String],
     own_key: &str,
+    encrypted_for: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(XmlEncryptionPolicy::default())?;
     let (_, idp_descriptor) = descriptors(&sp, idp)?;
@@ -123,7 +126,7 @@ fn exchange_with_encryption_keys_first(
     );
     let exchange = exchange_between(&sp, &sp_descriptor(&metadata)?, idp, &idp_descriptor)?;
     assert_encrypted(encryption, &exchange.xml);
-    assert_each_encrypted_key_names(&exchange.xml, CERT);
+    assert_each_encrypted_key_names(&exchange.xml, encrypted_for);
     let session = exchange.session?;
     assert_eq!(session.name_id(), Some(&alice()));
     assert_eq!(session.attributes(), &attributes());
@@ -137,45 +140,68 @@ fn identity_provider_encrypts_for_a_later_certificate_its_key_transport_can_use(
         vec![x509_data(&[EC_CERT])],
         vec![x509_data(&[UNREADABLE_CERT])],
         vec![x509_data(&[EC_CERT, UNKNOWN_CERT])],
-        vec![x509_data(&[EC_CERT]), x509_data(&[UNKNOWN_CERT, CERT])],
-        vec![
-            x509_data(&[EC_CERT]),
-            x509_data(&[EC_CERT]) + &x509_data(&[UNKNOWN_CERT]),
-        ],
-        vec![
-            x509_data(&[EC_CERT]),
-            format!("{RSA_KEY_VALUE}{}", x509_data(&[UNKNOWN_CERT])),
-        ],
-        vec![
-            x509_data(&[EC_CERT]),
-            format!(
-                "<ds:X509Data><ds:X509SubjectName>CN=sp</ds:X509SubjectName><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data>",
-                normalize_cert_string(UNKNOWN_CERT)
-            ),
-        ],
     ];
     for encryption in each_encrypted_element() {
         for key_infos in &first_keys {
-            exchange_with_encryption_keys_first(&idp(encryption)?, encryption, key_infos, CERT)?;
+            exchange_with_encryption_keys_first(
+                &idp(encryption)?,
+                encryption,
+                key_infos,
+                CERT,
+                CERT,
+            )?;
         }
     }
     Ok(())
 }
 
 #[test]
-fn identity_provider_encrypts_for_a_later_key_with_a_key_name(
+fn identity_provider_encrypts_for_the_sole_certificate_of_a_later_x509_data(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let named = format!(
-        "<ds:KeyName>sp-encryption</ds:KeyName>{}",
-        x509_data(&[CERT])
-    );
+    let later_keys = [
+        format!(
+            "<ds:KeyName>sp-encryption</ds:KeyName>{}",
+            x509_data(&[CERT])
+        ),
+        format!("{RSA_KEY_VALUE}{}", x509_data(&[CERT])),
+        format!(
+            "<ds:X509Data><ds:X509SubjectName>CN=sp</ds:X509SubjectName><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data>",
+            normalize_cert_string(CERT)
+        ),
+        x509_data(&[EC_CERT]) + &x509_data(&[CERT]),
+    ];
     for encryption in each_encrypted_element() {
-        exchange_with_encryption_keys_first(
-            &idp(encryption)?,
-            encryption,
-            &[x509_data(&[EC_CERT]), named.clone()],
-            EC_CERT,
-        )?;
+        for later_key in &later_keys {
+            exchange_with_encryption_keys_first(
+                &idp(encryption)?,
+                encryption,
+                &[x509_data(&[EC_CERT]), later_key.clone()],
+                EC_CERT,
+                CERT,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn identity_provider_encrypts_for_the_entity_certificate_of_a_chain_in_either_order(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for encryption in each_encrypted_element() {
+        for chain in [
+            &[CHAIN_CA_CERT, CHAIN_LEAF_CERT][..],
+            &[CHAIN_LEAF_CERT, CHAIN_CA_CERT],
+            &[CHAIN_CA_CERT, CHAIN_LEAF_CERT, CHAIN_LEAF_CERT],
+            &[CHAIN_CA_CERT, CHAIN_LEAF_CERT, UNREADABLE_CERT],
+        ] {
+            exchange_with_encryption_keys_first(
+                &idp(encryption)?,
+                encryption,
+                &[x509_data(chain)],
+                EC_CERT,
+                CHAIN_LEAF_CERT,
+            )?;
+        }
     }
     Ok(())
 }
@@ -204,6 +230,7 @@ fn identity_provider_skips_an_rsa_key_too_small_for_the_key_transport(
             &idp,
             encryption,
             &[x509_data(&[RSA_1024_CERT])],
+            CERT,
             CERT,
         )?;
     }
@@ -303,6 +330,30 @@ fn identity_provider_does_not_encrypt_for_a_key_of_another_service_provider_role
             crypto_error(encryption, &metadata)?,
             crypto_error(encryption, &published)?
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn identity_provider_encrypts_for_a_key_of_the_role_that_receives_the_response(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let earlier_role = format!(
+        "<SPSSODescriptor protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\">{}</ds:KeyInfo></KeyDescriptor><AssertionConsumerService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact\" Location=\"https://sp.example.com/artifact-acs\" index=\"7\"/></SPSSODescriptor>",
+        x509_data(&[EC_CERT])
+    );
+    for encryption in each_encrypted_element() {
+        let sp = sp(XmlEncryptionPolicy::default())?;
+        let idp = idp(encryption)?;
+        let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+        let mut metadata = sp.metadata_xml().to_string();
+        let role_start = metadata
+            .find("<SPSSODescriptor")
+            .ok_or("metadata has no SP role")?;
+        metadata.insert_str(role_start, &earlier_role);
+        let exchange = exchange_between(&sp, &sp_descriptor(&metadata)?, &idp, &idp_descriptor)?;
+        assert_encrypted(encryption, &exchange.xml);
+        assert_each_encrypted_key_names(&exchange.xml, CERT);
+        assert_eq!(exchange.session?.name_id(), Some(&alice()));
     }
     Ok(())
 }

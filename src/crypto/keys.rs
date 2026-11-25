@@ -8,6 +8,7 @@ use bergshamra::crypto::sign::key_algorithm_matches_signature_uri;
 #[cfg(test)]
 use bergshamra::keys::keyinfo::build_x509_key_info;
 use bergshamra::keys::loader::{load_hmac_key, load_pem_auto, load_x509_cert_pem};
+use bergshamra::keys::x509::{validate_cert_chain, CertValidationConfig};
 use bergshamra::keys::Key;
 
 pub(crate) fn read_private_key(pem: &str, password: Option<&str>) -> Result<Key, SamlError> {
@@ -149,6 +150,52 @@ pub(crate) fn load_certificate(cert: &str) -> Result<Key, SamlError> {
     let pem =
         to_cert_pem(cert).ok_or_else(|| SamlError::crypto("certificate is not base64 text"))?;
     load_x509_cert_pem(pem.as_bytes()).map_err(crypto_err)
+}
+
+/// Load the entity certificate of one `ds:X509Data`: the first certificate
+/// that issued none of the others, else the first certificate.
+pub(crate) fn load_entity_certificate(certificates: &[&str]) -> Result<Key, SamlError> {
+    let keys: Vec<Result<Key, SamlError>> = certificates
+        .iter()
+        .map(|certificate| load_certificate(certificate))
+        .collect();
+    let ders: Vec<Option<&[u8]>> = keys
+        .iter()
+        .map(|key| {
+            key.as_ref()
+                .ok()
+                .and_then(|key| key.x509_chain.first())
+                .map(Vec::as_slice)
+        })
+        .collect();
+    let issues_another = |issuer: usize| {
+        ders[issuer].is_some_and(|issuer_der| {
+            ders.iter().enumerate().any(|(subject, subject_der)| {
+                subject != issuer && subject_der.is_some_and(|der| issued_by(der, issuer_der))
+            })
+        })
+    };
+    let entity = (0..keys.len())
+        .find(|&index| !issues_another(index))
+        .unwrap_or(0);
+    keys.into_iter()
+        .nth(entity)
+        .unwrap_or_else(|| Err(SamlError::MissingMetadata("encryption certificate".into())))
+}
+
+fn issued_by(subject: &[u8], issuer: &[u8]) -> bool {
+    validate_cert_chain(
+        subject,
+        &[],
+        &CertValidationConfig {
+            trusted_certs: &[issuer.to_vec()],
+            untrusted_certs: &[],
+            crls: &[],
+            verification_time: None,
+            skip_time_checks: true,
+        },
+    )
+    .is_ok()
 }
 
 #[cfg(test)]

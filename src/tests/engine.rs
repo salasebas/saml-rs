@@ -153,23 +153,25 @@ impl IdpMessages for idp::Engine {
     ) -> Result<BindingContext, SamlError> {
         let acs = sp
             .metadata
-            .assertion_consumer_location(binding)
+            .assertion_consumer_service_endpoint(binding)
             .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
         let (id, xml) = render(LOGIN_RESPONSE_TEMPLATE)?;
         let signed = self.finalize_login_response(
             sp,
+            &acs,
             binding,
             &xml,
             ResponseMessageSignature::requested_by(sp),
             &sp.setting.transformation_algorithms,
         )?;
-        let (context, signature, sig_alg) = self.bind_response(binding, &signed, &acs, None)?;
+        let (context, signature, sig_alg) =
+            self.bind_response(binding, &signed, &acs.location, None)?;
         Ok(BindingContext {
             id,
             context,
             signature,
             sig_alg,
-            entity_endpoint: acs,
+            entity_endpoint: acs.location,
             binding,
             relay_state: None,
             request_type: "SAMLResponse",

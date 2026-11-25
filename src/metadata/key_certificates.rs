@@ -6,7 +6,7 @@ pub(super) struct KeyCertificates {
     signing: Vec<String>,
     encryption: Vec<String>,
     #[cfg(crypto)]
-    encryption_keys: Vec<String>,
+    role_encryption_keys: Vec<Vec<Vec<String>>>,
 }
 
 impl KeyCertificates {
@@ -36,18 +36,27 @@ impl KeyCertificates {
         }
         #[cfg(crypto)]
         {
-            certificates.encryption_keys = descriptors
+            certificates.role_encryption_keys = descriptors
                 .iter()
-                .map(|role| role_encryption_keys(role))
-                .find(|keys| !keys.is_empty())
-                .unwrap_or_default();
+                .map(|role| encryption_x509_data(role))
+                .collect();
         }
         certificates
     }
 
     #[cfg(crypto)]
-    pub(super) fn encryption_keys(&self) -> &[String] {
-        &self.encryption_keys
+    pub(super) fn encryption_keys(&self) -> &[Vec<String>] {
+        self.role_encryption_keys
+            .iter()
+            .find(|keys| !keys.is_empty())
+            .map_or(&[], Vec::as_slice)
+    }
+
+    #[cfg(crypto)]
+    pub(super) fn role_encryption_keys(&self, role: usize) -> &[Vec<String>] {
+        self.role_encryption_keys
+            .get(role)
+            .map_or(&[], Vec::as_slice)
     }
 
     pub(super) fn for_use(&self, use_: CertUse) -> &[String] {
@@ -94,41 +103,20 @@ fn x509_certificates(x509_data: &SamlElement) -> impl Iterator<Item = &SamlEleme
 }
 
 #[cfg(crypto)]
-fn role_encryption_keys(role: &SamlElement) -> Vec<String> {
-    let mut keys = Vec::new();
-    let key_descriptors = key_descriptors(role).filter(|key_descriptor| {
-        key_use(key_descriptor).is_none_or(|use_| use_ == CertUse::Encryption.as_str())
-    });
-    for key_descriptor in key_descriptors {
-        let key_infos: Vec<&SamlElement> = key_infos(key_descriptor).collect();
-        let Some(first) = key_infos
-            .iter()
-            .flat_map(|key_info| x509_data(key_info))
-            .find_map(|x509_data| x509_certificates(x509_data).next())
-        else {
-            continue;
-        };
-        if keys.is_empty() || matches!(key_infos[..], [key_info] if names_one_certificate(key_info))
-        {
-            keys.push(first.text.clone());
-        }
-    }
-    keys
-}
-
-#[cfg(crypto)]
-fn names_one_certificate(key_info: &SamlElement) -> bool {
-    let mut declarations = key_info
-        .children
-        .iter()
-        .filter(|child| !child.is(namespace::DSIG, "KeyName"));
-    match (declarations.next(), declarations.next()) {
-        (Some(x509_data), None) => {
-            x509_data.is(namespace::DSIG, "X509Data")
-                && matches!(&x509_data.children[..], [certificate] if certificate.is(namespace::DSIG, "X509Certificate"))
-        }
-        (Some(_), Some(_)) | (None, _) => false,
-    }
+fn encryption_x509_data(role: &SamlElement) -> Vec<Vec<String>> {
+    key_descriptors(role)
+        .filter(|key_descriptor| {
+            key_use(key_descriptor).is_none_or(|use_| use_ == CertUse::Encryption.as_str())
+        })
+        .flat_map(key_infos)
+        .flat_map(x509_data)
+        .map(|x509_data| {
+            x509_certificates(x509_data)
+                .map(|certificate| certificate.text.clone())
+                .collect::<Vec<_>>()
+        })
+        .filter(|certificates| !certificates.is_empty())
+        .collect()
 }
 
 #[cfg(test)]
@@ -195,7 +183,7 @@ mod tests {
                         metadata.x509_certificates(CertUse::Signing).to_vec(),
                         metadata.x509_certificates(CertUse::Encryption).to_vec(),
                         #[cfg(crypto)]
-                        metadata.encryption_key_certificates().to_vec(),
+                        metadata.encryption_key_certificates().concat(),
                     ]
                 })
                 .collect())

@@ -7,7 +7,7 @@ use super::{
 use crate::binding::xml_escape;
 use crate::config::AssertionElementEncryption;
 use crate::constants::namespace;
-use crate::crypto::keys::load_certificate;
+use crate::crypto::keys::load_entity_certificate;
 use crate::entity::EntitySetting;
 use crate::error::{crypto_err, SamlError};
 use crate::xml::dom;
@@ -49,30 +49,37 @@ impl<'a> From<&'a str> for KeyTransport<'a> {
 }
 
 pub(crate) struct EncryptionRecipient<'a> {
-    certificates: Vec<&'a str>,
+    x509_data: Vec<Vec<&'a str>>,
     data_algorithm: &'a str,
     key_transport: KeyTransport<'a>,
 }
 
 impl<'a> EncryptionRecipient<'a> {
+    #[cfg(test)]
     pub(crate) fn new(
         certificates: impl IntoIterator<Item = &'a str>,
         data_algorithm: &'a str,
         key_transport: KeyTransport<'a>,
     ) -> Self {
         Self {
-            certificates: certificates.into_iter().collect(),
+            x509_data: certificates
+                .into_iter()
+                .map(|certificate| vec![certificate])
+                .collect(),
             data_algorithm,
             key_transport,
         }
     }
 
-    pub(crate) fn from_setting(certificates: &'a [String], setting: &'a EntitySetting) -> Self {
-        Self::new(
-            certificates.iter().map(String::as_str),
-            &setting.data_encryption_algorithm,
-            KeyTransport::from_setting(setting),
-        )
+    pub(crate) fn from_setting(x509_data: &'a [Vec<String>], setting: &'a EntitySetting) -> Self {
+        Self {
+            x509_data: x509_data
+                .iter()
+                .map(|certificates| certificates.iter().map(String::as_str).collect())
+                .collect(),
+            data_algorithm: &setting.data_encryption_algorithm,
+            key_transport: KeyTransport::from_setting(setting),
+        }
     }
 
     pub(super) fn encrypt_first(
@@ -80,8 +87,8 @@ impl<'a> EncryptionRecipient<'a> {
         plaintext: &[u8],
     ) -> Result<(EncryptionKey<'a>, String), SamlError> {
         let mut first_error = None;
-        for certificate in &self.certificates {
-            let attempt = load_certificate(certificate).and_then(|key| {
+        for certificates in &self.x509_data {
+            let attempt = load_entity_certificate(certificates).and_then(|key| {
                 let [certificate] = &key.x509_chain[..] else {
                     return Err(SamlError::crypto(
                         "encryption certificate did not load as one X.509 certificate",
