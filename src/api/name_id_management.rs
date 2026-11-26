@@ -170,8 +170,10 @@ impl IdentityProvider {
     /// [`SamlError::RecipientEndpointAmbiguous`] when the request has
     /// `Destination`, several SOAP `ManageNameIDService` locations are
     /// published, and `validation` names none.
-    /// A repeated request `ID` returns [`SamlError::ReplayDetected`]. Returns
-    /// [`SamlError::TimeWindowInvalid`] when
+    /// A repeated request `ID` returns [`SamlError::ReplayDetected`]. A
+    /// request that would be refused returns [`SamlError::Invalid`] instead
+    /// when its `ID` is not an `xs:NCName`, because the response cannot name
+    /// it in `InResponseTo`. Returns [`SamlError::TimeWindowInvalid`] when
     /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
     /// selected and `validation` has no
     /// [`SamlValidationContext::with_replay_retention`]. An envelope that SOAP
@@ -215,7 +217,9 @@ impl IdentityProvider {
     /// from `sp`. Returns [`SamlError::UnsupportedBinding`] when the request
     /// arrived over HTTP-Redirect. Returns [`SamlError::Invalid`] when
     /// `status` has a subordinate code that is not an absolute URI, such as a
-    /// relative code read from a peer's response.
+    /// relative code read from a peer's response, or when the request `ID` is
+    /// not an `xs:NCName`, because the response cannot name it in
+    /// `InResponseTo`.
     ///
     /// # Examples
     ///

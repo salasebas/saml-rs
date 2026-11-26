@@ -20,7 +20,7 @@ use crate::soap::{
     MessageConfidentiality, SoapChannel, SoapRequest, SoapResponse,
 };
 use crate::xml::fragment::standalone_element;
-use crate::xml::name::is_ncname;
+use crate::xml::name::check_in_response_to;
 use crate::xml::protocol_element::{
     issuer, issuer_format_is_entity, parse_saml, parse_saml_with_limits, PartyName, SamlElement,
 };
@@ -531,7 +531,7 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     ) {
         let request_id = match (&error, request.required_attr("ID"), request.attr("Version")) {
             (SamlError::Unsupported(_), _, _) => return Err(error),
-            (_, Ok(id), Some("2.0")) if is_ncname(&id) => id,
+            (_, Ok(id), Some("2.0")) if check_in_response_to(&id).is_ok() => id,
             _ => return Err(error),
         };
         let denied = Status::requester()
@@ -636,6 +636,7 @@ fn answered(
     message_xml: Option<&str>,
     release: ArtifactRelease,
 ) -> Result<AnsweredArtifact, SamlError> {
+    check_in_response_to(in_response_to)?;
     let mut writer = XmlWriter::new();
     writer.start(
         &prefixes.protocol("ArtifactResponse"),

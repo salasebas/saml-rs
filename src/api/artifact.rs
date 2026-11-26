@@ -253,6 +253,10 @@ impl IdentityProvider {
     /// returns [`SamlError::Unsupported`], and a crypto provider that fails
     /// to initialize returns [`SamlError::Crypto`]. The artifact stays
     /// outstanding.
+    /// Returns [`SamlError::Invalid`] when the request `ID` is not an
+    /// `xs:NCName` and the request would otherwise be answered, because the
+    /// answer cannot name it in `InResponseTo`. The artifact stays
+    /// outstanding.
     /// Returns [`SamlError::LimitExceeded`] when the response cannot fit
     /// within the default [`crate::XmlLimits`]. The artifact stays outstanding.
     ///

@@ -152,8 +152,10 @@ impl ServiceProvider {
     /// too low for a SAML 2.0 response, or replay
     /// validation detects a duplicate. Returns the endpoint errors of
     /// [`Self::respond_name_id_management_redirect`], under `options`, when a
-    /// refused request would be answered. Returns
-    /// [`SamlError::TimeWindowInvalid`] when
+    /// refused request would be answered. A request that would be refused
+    /// returns [`SamlError::Invalid`] instead when its `ID` is not an
+    /// `xs:NCName`, because the response cannot name it in `InResponseTo`.
+    /// Returns [`SamlError::TimeWindowInvalid`] when
     /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
     /// selected and `validation` has no
     /// [`SamlValidationContext::with_replay_retention`].
@@ -206,7 +208,9 @@ impl ServiceProvider {
     /// `allow_http`, returns [`SamlError::Invalid`] when the first endpoint is
     /// not an `http` or `https` URL. Returns [`SamlError::Invalid`] when
     /// `status` has a subordinate code that is not an absolute URI, such as a
-    /// relative code read from a peer's response.
+    /// relative code read from a peer's response, or when the request `ID` is
+    /// not an `xs:NCName`, because the response cannot name it in
+    /// `InResponseTo`.
     pub fn respond_name_id_management_redirect(
         &self,
         idp: &IdpDescriptor,

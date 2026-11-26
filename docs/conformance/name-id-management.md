@@ -103,6 +103,8 @@ application.
 | Answer every processed request with a `ManageNameIDResponse` | Mandatory | Core §3.6.2, Profiles §4.5.3.2 | `respond_name_id_management` |
 | Return the SOAP response on the request's HTTP exchange | Mandatory | Profiles §4.5.3.2 | `respond_name_id_management` |
 | For a `2.0` request, write `ID`, `Version` `2.0`, a UTC `IssueInstant`, and `InResponseTo` equal to the request `ID` | Mandatory | `StatusResponseType`, Core §3.2.2, §4.1.3.2 | Always |
+| Write `InResponseTo` only as an `xs:NCName` | Mandatory | `StatusResponseType` | Always |
+| For a request whose `ID` is not an `xs:NCName`, return an error and write no response, also where the receiver would answer a refusal | Library policy: a response without `InResponseTo`, as Core §3.2.2 requires for such a request, names no request, so the requester could not tie it to its pending request. | Core §3.2.1, §3.2.2 | Always |
 | Write the responding entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.2 | Always |
 | Refuse to write a subordinate status code that is not an absolute URI, including one read from a peer's response | Mandatory | Core §1.3.2, `StatusCodeType` | Always |
 | Answer only a request received from the given service provider | Library policy: the receipt records the service provider authenticated on its channel, and a response built for another descriptor would answer for a peer that did not send the request. | — | Always |
@@ -165,6 +167,8 @@ both clock-skew tolerances to cover the full window on either binding.
 | Answer every processed request with a `ManageNameIDResponse` | Mandatory | Core §3.6.2, Profiles §4.5.3.2 | `respond_name_id_management_redirect` |
 | Return the response to a Redirect request through the user agent | Mandatory | Profiles §4.5.3.2 | `respond_name_id_management_redirect` |
 | For a `2.0` request, write `ID`, `Version` `2.0`, a UTC `IssueInstant`, and `InResponseTo` equal to the request `ID` | Mandatory | `StatusResponseType`, Core §3.2.2, §4.1.3.2 | Always |
+| Write `InResponseTo` only as an `xs:NCName` | Mandatory | `StatusResponseType` | Always |
+| For a request whose `ID` is not an `xs:NCName`, return an error and write no response, also where the receiver would answer a refusal | Library policy: a response without `InResponseTo`, as Core §3.2.2 requires for such a request, names no request, so the requester could not tie it to its pending request. | Core §3.2.1, §3.2.2 | Always |
 | Write the responding entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.2 | Always |
 | Refuse to write a subordinate status code that is not an absolute URI, including one read from a peer's response | Mandatory | Core §1.3.2, `StatusCodeType` | Always |
 | Answer only a request received from the given peer | Library policy: no response is built for another party's endpoint. | — | Always |

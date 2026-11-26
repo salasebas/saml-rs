@@ -1245,6 +1245,46 @@ fn the_service_provider_reads_the_artifact_response_in_response_to_after_whitesp
 }
 
 #[test]
+fn an_artifact_resolve_id_that_is_not_an_ncname_gets_no_answer(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
+    let channel = confidential();
+    let resolution = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        &artifact,
+        channel,
+        without_replay_cache(),
+    )?;
+    let request = resolution.request().envelope();
+    let malformed = request.replacen(" ID=\"_", " ID=\"1bad:_", 1);
+    assert_ne!(malformed, request);
+
+    let refused = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &malformed,
+        resolution.request().endpoint(),
+        &mut issued,
+        channel,
+    );
+    assert!(matches!(refused, Err(SamlError::Invalid(_))), "{refused:?}");
+
+    let answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        request,
+        resolution.request().endpoint(),
+        &mut issued,
+        channel,
+    )?;
+    assert!(resolution
+        .finish(answer.response().envelope())?
+        .xml()
+        .contains(WEB_SSO_MARKER));
+    Ok(())
+}
+
+#[test]
 fn the_service_provider_does_not_compare_a_present_artifact_response_destination(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;

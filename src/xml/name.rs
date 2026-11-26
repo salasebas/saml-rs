@@ -3,6 +3,7 @@
 //! Both use the XML 1.0 Fifth Edition name characters.
 
 use crate::error::SamlError;
+use crate::xml::dom::is_xml_whitespace_char;
 
 fn is_name_start_char(value: char) -> bool {
     matches!(
@@ -41,6 +42,17 @@ fn is_name_char(value: char) -> bool {
 pub(crate) fn is_ncname(value: &str) -> bool {
     let mut chars = value.chars();
     chars.next().is_some_and(is_name_start_char) && chars.all(is_name_char)
+}
+
+/// Check that a request `ID` can be written as `InResponseTo`, whose type is
+/// `xs:NCName`: an NCName once surrounding XML whitespace is removed.
+pub(crate) fn check_in_response_to(request_id: &str) -> Result<(), SamlError> {
+    if is_ncname(request_id.trim_matches(is_xml_whitespace_char)) {
+        return Ok(());
+    }
+    Err(SamlError::Invalid(
+        "the request ID is not an xs:NCName, so it cannot be written as InResponseTo".into(),
+    ))
 }
 
 /// Check that `prefix` can be declared for a generated element: an NCName
