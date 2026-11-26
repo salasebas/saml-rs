@@ -6,11 +6,10 @@ use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
 use crate::flow::MessageAuthentication;
 use crate::idp::{self, LoginResponseOptions, LoginResponseOverrides};
 use crate::model::{
-    repeats_name_id_policy, AuthnRequest, AuthnRequestRefusalReason, ContentFault, EndpointUrl,
-    ReadAuthnRequest, Received, RefusedAuthnRequest, RelayState, ReplayKey, RequestAge,
-    SamlValidationContext, SsoResponse,
+    later_request_version, repeats_name_id_policy, AuthnRequest, EndpointUrl, ReadAuthnRequest,
+    Received, Refusal, RefusedAuthnRequest, RelayState, ReplayKey, RequestAge,
+    RequestVersionMismatch, SamlValidationContext, SsoResponse,
 };
-use std::sync::Arc;
 use std::time::SystemTime;
 
 use super::peer::{ensure_entity_id, relay_state_from_input, sp_engine_at};
@@ -67,10 +66,13 @@ impl IdentityProvider {
     /// It returns [`SamlError::AuthnRequestRefused`] for a request it will not
     /// fulfil: an unsigned request when the SP declares `AuthnRequestsSigned`
     /// or this identity provider requires signed requests, a request whose
-    /// `ProtocolBinding` the response cannot use or whose content it cannot
-    /// read (see [`AuthnRequestRefusalReason`]), a request with more than one
-    /// `NameIDPolicy`, and a request outside an enabled
-    /// [`crate::RequestAgePolicy`] window.
+    /// `Version` is later than `2.0`, a request whose `ProtocolBinding` the
+    /// response cannot use or whose content it cannot read (see
+    /// [`AuthnRequestRefusalReason`](crate::AuthnRequestRefusalReason)), a
+    /// request with more than one `NameIDPolicy`, and a request outside an
+    /// enabled [`crate::RequestAgePolicy`] window. The content of a request
+    /// whose `Version` is later than `2.0` is not read, whatever the reason
+    /// for its refusal.
     /// [`RefusedAuthnRequest::reason`](crate::RefusedAuthnRequest::reason)
     /// names the first of these that applies. Send the refusal as a
     /// correlated error response with [`Self::respond_sso_refusal`] or
@@ -107,7 +109,10 @@ impl IdentityProvider {
     /// attribute or an element in a foreign namespace, returns
     /// [`SamlError::ProtocolProfile`] before its signature is checked, and a
     /// request whose `ID`, `IssueInstant`, `Issuer`, or `Destination` cannot
-    /// be read returns its parsing error.
+    /// be read returns its parsing error. [`SamlError::ProtocolProfile`] is
+    /// also the error for a `Version` that is not `major.minor` or declares a
+    /// major version below 2, which no SAML 2.0 response can answer, and for
+    /// an unsigned request of a later major version that must be signed.
     ///
     /// # Examples
     ///
@@ -160,15 +165,23 @@ impl IdentityProvider {
             && (peer_sp.metadata.authn_requests_signed()
                 || self.engine().metadata.want_authn_requests_signed());
         let flow = received.into_flow_result();
-        let (flow, subject_fault) = if unsigned_refusal {
-            (flow, None)
-        } else {
-            decrypt_requested_subject(flow, &self.engine().setting, authentication)?
+        let later_version = later_request_version(&flow)?;
+        let (authn, content_refusal) = match later_version {
+            Some(_) => (AuthnRequest::from_flow_without_content(&flow)?, None),
+            None => {
+                let (flow, subject_fault) = if unsigned_refusal {
+                    (flow, None)
+                } else {
+                    decrypt_requested_subject(flow, &self.engine().setting, authentication)?
+                };
+                let ReadAuthnRequest { request, fault } = AuthnRequest::from_flow(&flow)?;
+                let refusal = match fault.or(subject_fault) {
+                    Some(fault) => Some(Refusal::Content(fault)),
+                    None => repeats_name_id_policy(&flow).then_some(Refusal::RepeatedNameIdPolicy),
+                };
+                (request, refusal)
+            }
         };
-        let ReadAuthnRequest {
-            request: authn,
-            fault,
-        } = AuthnRequest::from_flow(&flow)?;
         if authn.destination().is_some() || authentication == MessageAuthentication::Authenticated {
             let locations = self
                 .engine()
@@ -184,28 +197,26 @@ impl IdentityProvider {
             }
         }
         let mut validation = validation;
-        let refusal = if unsigned_refusal {
-            Some((AuthnRequestRefusalReason::Unsigned, None))
-        } else if let Some(ContentFault { reason, error }) = fault.or(subject_fault) {
-            Some((reason, Some(Arc::new(error))))
-        } else if repeats_name_id_policy(&flow) {
-            Some((AuthnRequestRefusalReason::RepeatedNameIdPolicy, None))
-        } else {
-            match validation.authn_request_issue_instant_age(authn.issue_instant())? {
-                RequestAge::WithinWindow => None,
-                RequestAge::OutsideWindow => {
-                    Some((AuthnRequestRefusalReason::OutsideAgeWindow, None))
-                }
+        let refusal = match (unsigned_refusal, later_version) {
+            (true, Some(RequestVersionMismatch::NewerMajor)) => {
+                return Err(SamlError::ProtocolProfile(
+                    "AuthnRequest declares a later SAML major version and is not signed as required"
+                        .into(),
+                ));
             }
+            (true, Some(RequestVersionMismatch::SameMajor) | None) => Some(Refusal::Unsigned),
+            (false, Some(mismatch)) => Some(Refusal::Version(mismatch)),
+            (false, None) => match content_refusal {
+                Some(refusal) => Some(refusal),
+                None => match validation.authn_request_issue_instant_age(authn.issue_instant())? {
+                    RequestAge::WithinWindow => None,
+                    RequestAge::OutsideWindow => Some(Refusal::OutsideAgeWindow),
+                },
+            },
         };
-        if let Some((reason, content_error)) = refusal {
+        if let Some(refusal) = refusal {
             return Err(SamlError::AuthnRequestRefused {
-                refusal: Box::new(RefusedAuthnRequest {
-                    request: authn,
-                    relay_state,
-                    reason,
-                    content_error,
-                }),
+                refusal: Box::new(RefusedAuthnRequest::new(authn, relay_state, refusal)),
             });
         }
         if authentication == MessageAuthentication::Authenticated {
@@ -335,17 +346,23 @@ impl IdentityProvider {
         )
     }
 
-    /// Send a signed, correlated `Requester` response for a refused AuthnRequest.
+    /// Send a signed, correlated error response for a refused AuthnRequest.
     ///
     /// Pass the refusal from [`SamlError::AuthnRequestRefused`] and the same
     /// SP descriptor used to receive the request. The response carries the
-    /// original RelayState and has no assertion. For
-    /// [`AuthnRequestRefusalReason::UnsupportedProtocolBinding`], the status
-    /// also carries the subordinate code `UnsupportedBinding`. When the
+    /// original RelayState and has no assertion. Its status is `Requester`,
+    /// with the subordinate code `UnsupportedBinding` for
+    /// [`UnsupportedProtocolBinding`](crate::AuthnRequestRefusalReason::UnsupportedProtocolBinding).
+    /// For [`VersionMismatch`](crate::AuthnRequestRefusalReason::VersionMismatch),
+    /// it is `VersionMismatch`, with `RequestVersionTooHigh` for a later major
+    /// version. When the
     /// refused request's `AssertionConsumerServiceURL`, `ProtocolBinding`, or
-    /// `AssertionConsumerServiceIndex` cannot be read, the response goes to
-    /// the default assertion consumer service of the SP metadata, whose
-    /// binding must be the one `options` selects.
+    /// `AssertionConsumerServiceIndex` cannot be read, when the request
+    /// carries both an `AssertionConsumerServiceURL` and an
+    /// `AssertionConsumerServiceIndex`, and when its `Version` is later than
+    /// `2.0`, also for [`Unsigned`](crate::AuthnRequestRefusalReason::Unsigned),
+    /// the response goes to the default assertion consumer service of the SP
+    /// metadata, whose binding must be the one `options` selects.
     ///
     /// # Examples
     ///
@@ -502,7 +519,7 @@ impl IdentityProvider {
                         "a refusal uses only the RelayState of its AuthnRequest".into(),
                     ));
                 }
-                refusal_outcome = SsoOutcome::Failure(refusal.reason.status());
+                refusal_outcome = SsoOutcome::Failure(refusal.status.clone());
                 (
                     Some(&refusal.request),
                     refusal.relay_state.as_ref(),

@@ -497,7 +497,15 @@ fn received_authn_request_collapses_xml_schema_whitespace_in_booleans_and_index(
     let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
         let xml = insert_root_attribute(xml, "ForceAuthn", " true ")?;
         let xml = insert_root_attribute(xml, "IsPassive", "&#9;0&#10;")?;
-        let xml = insert_root_attribute(xml, "AssertionConsumerServiceIndex", " 0 ")?;
+        let acs_url = format!(" AssertionConsumerServiceURL=\"{SP_ACS}\"");
+        if !xml.contains(&acs_url) {
+            return Err("missing AssertionConsumerServiceURL".into());
+        }
+        let xml = insert_root_attribute(
+            xml.replacen(&acs_url, "", 1),
+            "AssertionConsumerServiceIndex",
+            " 0 ",
+        )?;
         if !xml.contains("AllowCreate=\"true\"") {
             return Err("missing AllowCreate".into());
         }

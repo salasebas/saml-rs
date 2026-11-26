@@ -16,10 +16,9 @@ use saml_rs::XmlLimits;
 #[cfg(crypto)]
 use saml_rs::{entity::User, idp::LoginResponseOptions};
 use saml_rs::{
-    AuthnRequest, AuthnRequestRefusalReason, EndpointUrl, EntityId, FormField, Inbound,
-    LogoutRequest, LogoutResponse, MessageId, NameIdCreationRequest, NameIdFormat, NameIdPolicy,
-    Outbound, RelayState, SamlError, SamlInstant, SessionIndex, SsoResponse, SsoResponseBinding,
-    SsoSession, Status,
+    AuthnRequest, EndpointUrl, EntityId, FormField, Inbound, LogoutRequest, LogoutResponse,
+    MessageId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, RelayState, SamlError,
+    SamlInstant, SessionIndex, SsoResponse, SsoResponseBinding, SsoSession, Status,
 };
 
 #[cfg(crypto)]
@@ -950,10 +949,6 @@ fn typed_models_authn_request_from_flow_result_exposes_typed_fields(
                     ("issueInstant", value_str(" \t\n2024-01-01T00:00:00Z\r ")),
                     ("destination", value_str("https://idp.example.com/sso")),
                     (
-                        "assertionConsumerServiceUrl",
-                        value_str("https://sp.example.com/acs"),
-                    ),
-                    (
                         "protocolBinding",
                         value_str("urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"),
                     ),
@@ -985,10 +980,7 @@ fn typed_models_authn_request_from_flow_result_exposes_typed_fields(
         request.destination().map(EndpointUrl::as_str),
         Some("https://idp.example.com/sso")
     );
-    assert_eq!(
-        request.acs_url().map(EndpointUrl::as_str),
-        Some("https://sp.example.com/acs")
-    );
+    assert_eq!(request.acs_url(), None);
     assert_eq!(request.protocol_binding(), Some(SsoResponseBinding::Post));
     assert_eq!(request.acs_index(), Some(3));
     assert_eq!(
@@ -1026,10 +1018,7 @@ fn typed_models_authn_request_refuses_invalid_name_id_policy_allow_create(
     let read = AuthnRequest::from_flow(&flow)?;
     assert!(matches!(
         read.fault,
-        Some(ContentFault {
-            reason: AuthnRequestRefusalReason::MalformedRequest,
-            error: SamlError::Invalid(_),
-        })
+        Some(ContentFault::Malformed(SamlError::Invalid(_)))
     ));
     assert_eq!(read.request.name_id_policy(), None);
     Ok(())

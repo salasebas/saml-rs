@@ -126,9 +126,11 @@ impl IdentityProvider {
         )
     }
 
-    /// Store a signed, correlated `Requester` response and deliver its HTTP-Artifact.
+    /// Store a signed, correlated error response and deliver its HTTP-Artifact.
     ///
-    /// Pass the refusal from [`SamlError::AuthnRequestRefused`]. Send the
+    /// Pass the refusal from [`SamlError::AuthnRequestRefused`]. The response
+    /// has the status and the assertion consumer service that
+    /// [`Self::respond_sso_refusal`] describes. Send the
     /// returned browser action and use `issued` to answer the artifact
     /// resolution request, as for [`Self::respond_sso_artifact`].
     ///

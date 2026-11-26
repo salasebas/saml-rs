@@ -24,7 +24,9 @@ mod subject;
 mod subject_identifier;
 mod validation;
 
-pub(crate) use authn::{repeats_name_id_policy, ContentFault, ReadAuthnRequest};
+pub(crate) use authn::{
+    later_request_version, repeats_name_id_policy, ContentFault, ReadAuthnRequest, Refusal,
+};
 pub(crate) use authn_statement::earliest_authn_session_expiration;
 pub(crate) use extract::authn_statement_not_on_or_after_values;
 pub(crate) use subject::{

@@ -413,7 +413,7 @@ fn validate_root(
     )?;
     if !matches!(
         parser_type,
-        ParserType::LogoutRequest | ParserType::ManageNameIdRequest
+        ParserType::SamlRequest | ParserType::LogoutRequest | ParserType::ManageNameIdRequest
     ) {
         require_version_2(&attributes, element)?;
     }

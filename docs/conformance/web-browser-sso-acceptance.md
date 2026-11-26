@@ -173,16 +173,19 @@ passes normalized DOM names to its HTTP-POST message reader.
 
 - **Supported:** `receive_sso` returns refusal data for a request that
   passed its signature, `Issuer`, and `Destination` checks and that the
-  identity provider refuses for its signature policy, a `ProtocolBinding`
-  the `Response` cannot use, content it cannot read, a repeated
-  `NameIDPolicy`, or its age. `respond_sso_refusal` and
-  `respond_sso_refusal_artifact` build the error `Response` and return the
-  browser action that the application sends.
+  identity provider refuses for its signature policy, a `Version` later than
+  `2.0`, a `ProtocolBinding` the `Response` cannot use, content it cannot
+  read, an `AssertionConsumerServiceURL` next to an
+  `AssertionConsumerServiceIndex`, a repeated `NameIDPolicy`, or its age.
+  `respond_sso_refusal` and `respond_sso_refusal_artifact` build the error
+  `Response` and return the browser action that the application sends.
 - **Not supported:** an error `Response` to a request that fails a check made
   before its signature is verified: the `XmlPolicy` schema check and the
-  protocol profile, which covers qualified attributes, elements in a
-  foreign namespace, and a `Version` other than `2.0`. Nor to a request
-  whose decrypted requested `Subject` the `XmlPolicy` schema check refuses.
+  protocol profile, which covers qualified attributes and elements in a
+  foreign namespace. Nor to an unsigned request of a later major version
+  that must be signed, or to a request whose `Version` is not
+  `major.minor`. Nor to a request whose decrypted requested `Subject` the
+  `XmlPolicy` schema check refuses.
   Nor to a request whose signature does not verify: Core §3.2.1 recommends
   an error but forbids relying on the content that names the requester and
   the `ID` to answer. `receive_sso` returns the error, and the identity provider
@@ -385,7 +388,7 @@ identifier management, and artifact resolution.
 
 ### Identity provider: `receive_sso` signatures and refusals
 
-Code: `src/api/idp.rs`, `src/idp.rs`, `src/flow.rs`, `src/flow/embedded.rs`, `src/flow/detached.rs`, `src/browser/input.rs`, `src/model/authn.rs`
+Code: `src/api/idp.rs`, `src/idp.rs`, `src/flow.rs`, `src/flow/embedded.rs`, `src/flow/detached.rs`, `src/browser/input.rs`, `src/model/authn.rs`, `src/model/status.rs`
 
 `receive_sso` reads `IdpValidationPolicy::authn_request_signatures` and
 `IdpValidationPolicy::xml_signatures`.
@@ -396,7 +399,11 @@ Code: `src/api/idp.rs`, `src/idp.rs`, `src/flow.rs`, `src/flow/embedded.rs`, `sr
 | Refuse an unsigned `AuthnRequest` when any SAML 2.0 `SPSSODescriptor` for the service provider sets `AuthnRequestsSigned` to true. Return only refusal data for an otherwise valid request | Mandatory | Metadata §2.4.4, E7 | Always |
 | Verify a signature on an `AuthnRequest` against the SP's signing credentials. The request has at most one direct `ds:Signature`. Redirect also verifies the query signature, and SimpleSign the detached signature when present, even when the request also carries an XML signature | Mandatory | Core §3.2.1, Bindings §3.4.4.1, CS-01 §2.4 to §2.6, §2.10 | Always |
 | Parse a SimpleSign `AuthnRequest` with neither `Signature` nor `SigAlg` as HTTP-POST and apply the same request signature policy. Use the original binding to select the endpoint for the `Destination` check | Optional | CS-01 §2.10 | Always |
-| Return refusal data, with its `AuthnRequestRefusalReason`, for an otherwise valid request refused for its signature, its `ProtocolBinding`, content it cannot read, a repeated `NameIDPolicy`, or its age, so the caller can send the error `Response` | Mandatory | Profiles §4.1.4.1, Core §3.4.1.4 | Always |
+| Return refusal data, with its `AuthnRequestRefusalReason`, for an otherwise valid request refused for its signature, its `Version`, its `ProtocolBinding`, content it cannot read, a repeated `NameIDPolicy`, or its age, so the caller can send the error `Response` | Mandatory | Profiles §4.1.4.1, Core §3.4.1.4 | Always |
+| Reject a request whose major version is not 2 | Mandatory | Core §4.1.3.1 | Always |
+| Reject a request of a later minor version, such as 2.1 | Optional | Core §4.1.3.1 | Always |
+| Return refusal data for a request of a later version after its signature and `Destination` checks, and read none of its other content, also when it is refused as `Unsigned` | Mandatory | Core §4.1.3.1, §4.1.3.2, Profiles §4.1.4.1 | `AuthnRequestRefusalReason::VersionMismatch` |
+| Return an error, and no refusal data, for a request whose `Version` declares a major version below 2, also when it is unsigned and must be signed, because no SAML 2.0 `Response` may answer it | Mandatory | Core §4.1.3.2 | Always |
 | Refuse a `ProtocolBinding` that is HTTP-Redirect, SOAP, or a URI other than HTTP-POST, HTTP-POST-SimpleSign, and HTTP-Artifact, because the `Response` cannot use it | Mandatory | Profiles §4.1.3.5, §4.1.4.1, Core §3.4.1 | Always |
 | Return no refusal data for a request whose present `Destination` names another location | Mandatory | Core §3.2.1 | Always |
 
@@ -568,7 +575,7 @@ HTTP-POST-SimpleSign `Response`, as the error response rules do.
 
 ### Identity provider: `receive_sso` signatures and refusals
 
-Code: `src/api/idp.rs`, `src/browser/input.rs`, `src/model/authn.rs`, `src/model/validation.rs`
+Code: `src/api/idp.rs`, `src/browser/input.rs`, `src/model/authn.rs`, `src/model/status.rs`, `src/model/validation.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
@@ -576,6 +583,19 @@ Code: `src/api/idp.rs`, `src/browser/input.rs`, `src/model/authn.rs`, `src/model
 | Refuse an `AuthnRequest` with more than one `NameIDPolicy` | Core §3.4.1.1 binds the identity provider to the requested policy, and reading one of two policies, or neither, could issue an identifier that the other excludes. | `AuthnRequestType`, Core §3.2.1, §3.4.1.1 | Always |
 | Return no refusal data for an authenticated request that passes every refusal check and whose `ID` the replay cache already holds | `receive_sso` already returned the first copy for the application to answer, and Core §3.4.1.4 asks for one reply to a request. | Core §3.4.1.4 | `ReplayPolicy::RequireCache` |
 | Accept an `AuthnRequest` `IssueInstant` from now − `max_age` − past tolerance through now + future tolerance, inclusive. A positive `NotOnOrAfter` skew supplies the past tolerance, and a negative `NotBefore` skew supplies the future tolerance | Reason not recorded. | Core §1.3.3 | `SamlValidationContext::with_authn_request_age`, `RequestAgePolicy::Bounded` |
+| Return an error, and no refusal data, for an unsigned request of a later major version that must be signed | Core §4.1.3.2 forbids the `Unsigned` refusal's `Requester` answer to a later major version, and a `VersionMismatch` answer would give refusal data for the content of a request that fails the signature policy. | Core §4.1.3.2, Profiles §4.1.4.1 | Always |
+| Return an error, and no refusal data, for a `Version` that is not `major.minor` | Such a value names no version, so the identity provider cannot tell whether a SAML 2.0 `Response` may answer it. | Core §4.1.3, §4.1.3.2 | Always |
+
+[Shibboleth IdP 5.2.3](https://codeberg.org/Shibboleth/java-identity-provider/src/tag/5.2.3/idp-conf-impl/src/main/resources/net/shibboleth/idp/flows/saml/saml-abstract-flow.xml#L17)
+rejects a major version other than 2 before it verifies the signature, with
+a local error page, and processes a later minor version, and
+[SimpleSAMLphp 2.5.5](https://github.com/simplesamlphp/saml2-legacy/blob/v4.20.10/src/SAML2/Message.php#L159-L162)
+throws on any `Version` other than `2.0`.
+[crewjam/saml v0.6.3](https://github.com/crewjam/saml/blob/v0.6.3/identity_provider_error_response.go#L208-L245)
+answers `VersionMismatch`, when `SendErrorResponses` is set, only to a
+request that passes its signature checks, and
+[PySAML2 v7.5.5](https://github.com/IdentityPython/pysaml2/blob/v7.5.5/src/saml2/entity.py#L1029-L1044)
+raises `VersionMismatch` after the signature check.
 
 ### Identity provider: `receive_sso` request fields
 
@@ -585,6 +605,15 @@ Code: `src/api/idp.rs`, `src/model/validation.rs`, `src/model/authn.rs`, `src/mo
 | --- | --- | --- | --- |
 | When checking `Destination` in `receive_sso`, reject a supplied receiving URL that is not published for the incoming binding, and several published URLs without an explicit one | The URL is caller input, and the restriction keeps a value derived from the request from naming an endpoint this identity provider does not operate for that binding. | Core §3.2.1 | `SamlValidationContext::with_recipient_endpoint` |
 | Refuse an `AssertionConsumerServiceURL` that is not an absolute HTTP(S) URL | The browser bindings deliver the `Response` to an HTTP endpoint, so another URI cannot receive it. | Core §3.4.1, Bindings §3.5.4, §3.6.3 | Always |
+| Refuse a request that carries both `AssertionConsumerServiceURL` and `AssertionConsumerServiceIndex` | Core §3.4.1 makes them mutually exclusive, and the two can name different endpoints, so the request does not say which consumer receives the `Response`. | Core §3.4.1 | Always |
+
+[Shibboleth IdP 5.2.3](https://codeberg.org/Shibboleth/java-opensaml/src/tag/5.2.3/opensaml-saml-impl/src/main/java/org/opensaml/saml/common/binding/impl/DefaultEndpointResolver.java#L122-L145)
+and [SimpleSAMLphp 2.5.5](https://github.com/simplesamlphp/simplesamlphp/blob/v2.5.5/modules/saml/src/IdP/SAML2.php#L215-L295)
+accept the pair when one endpoint has both values,
+[crewjam/saml v0.6.3](https://github.com/crewjam/saml/blob/v0.6.3/identity_provider.go#L1207-L1222)
+uses the index, and
+[PySAML2 v7.5.5](https://github.com/IdentityPython/pysaml2/blob/v7.5.5/src/saml2/entity.py#L331-L345)
+the URL.
 
 ### Identity provider: `RequestedAuthnContext`
 

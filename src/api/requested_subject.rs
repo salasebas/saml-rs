@@ -36,7 +36,7 @@ pub(super) fn decrypt_requested_subject(
     ) {
         Ok(()) => {}
         Err(error @ SamlError::ProtocolProfile(_)) => {
-            return Ok((flow, Some(ContentFault::malformed(error))));
+            return Ok((flow, Some(ContentFault::Malformed(error))));
         }
         Err(error) => return Err(error),
     }

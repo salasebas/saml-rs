@@ -4,7 +4,7 @@ use super::extract::{
     required_str, subject_confirmations_at,
 };
 use super::identifiers::{MessageId, SamlInstant};
-use super::status::{Status, SubordinateStatusCode};
+use super::status::{RequestVersionMismatch, Status, SubordinateStatusCode};
 use super::subject::{NameId, NameIdPolicy, RequestedSubject, RequestedSubjectIdentifier};
 use super::EndpointUrl;
 use crate::browser::SsoResponseBinding;
@@ -24,6 +24,16 @@ pub(crate) fn repeats_name_id_policy(raw_flow: &FlowResult) -> bool {
         raw_flow.extract.get(authn_request::NAME_ID_POLICY),
         Some(Value::Array(policies)) if policies.len() > 1
     )
+}
+
+/// How the request's `Version` differs from `2.0`, or `None` for `2.0`.
+///
+/// A declared major version below 2 and a `Version` that is not `major.minor`
+/// return an error, because no SAML 2.0 response can answer them.
+pub(crate) fn later_request_version(
+    raw_flow: &FlowResult,
+) -> Result<Option<RequestVersionMismatch>, SamlError> {
+    RequestVersionMismatch::for_request(required_str(&raw_flow.extract, authn_request::VERSION)?)
 }
 
 /// `ForceAuthn` on an `<AuthnRequest>` (Core §3.4.1).
@@ -117,10 +127,57 @@ pub struct RefusedAuthnRequest {
     pub(crate) request: AuthnRequest,
     pub(crate) relay_state: Option<super::RelayState>,
     pub(crate) reason: AuthnRequestRefusalReason,
+    pub(crate) status: Status,
     pub(crate) content_error: Option<Arc<SamlError>>,
 }
 
 impl RefusedAuthnRequest {
+    pub(crate) fn new(
+        request: AuthnRequest,
+        relay_state: Option<super::RelayState>,
+        refusal: Refusal,
+    ) -> Self {
+        let (reason, status, content_error) = match refusal {
+            Refusal::Unsigned => (
+                AuthnRequestRefusalReason::Unsigned,
+                Status::requester(),
+                None,
+            ),
+            Refusal::Version(mismatch) => (
+                AuthnRequestRefusalReason::VersionMismatch,
+                mismatch.status(),
+                None,
+            ),
+            Refusal::Content(ContentFault::UnsupportedProtocolBinding(error)) => (
+                AuthnRequestRefusalReason::UnsupportedProtocolBinding,
+                Status::requester().with_subordinate(SubordinateStatusCode::unsupported_binding()),
+                Some(Arc::new(error)),
+            ),
+            Refusal::Content(ContentFault::Malformed(error)) => (
+                AuthnRequestRefusalReason::MalformedRequest,
+                Status::requester(),
+                Some(Arc::new(error)),
+            ),
+            Refusal::RepeatedNameIdPolicy => (
+                AuthnRequestRefusalReason::RepeatedNameIdPolicy,
+                Status::requester(),
+                None,
+            ),
+            Refusal::OutsideAgeWindow => (
+                AuthnRequestRefusalReason::OutsideAgeWindow,
+                Status::requester(),
+                None,
+            ),
+        };
+        Self {
+            request,
+            relay_state,
+            reason,
+            status,
+            content_error,
+        }
+    }
+
     /// Why the identity provider refuses the request.
     pub fn reason(&self) -> AuthnRequestRefusalReason {
         self.reason
@@ -171,29 +228,23 @@ pub enum AuthnRequestRefusalReason {
     /// one identifier, a `RequestedAuthnContext` without references or with
     /// both kinds, a `Comparison`, `ForceAuthn`, `IsPassive`, `AllowCreate`, or
     /// `AssertionConsumerServiceIndex` outside its schema type, an
-    /// `AssertionConsumerServiceURL` that is not an absolute HTTP(S) URL, or a
-    /// decrypted requested `NameID` that breaks the protocol profile. The
+    /// `AssertionConsumerServiceURL` that is not an absolute HTTP(S) URL, both
+    /// an `AssertionConsumerServiceURL` and an `AssertionConsumerServiceIndex`,
+    /// or a decrypted requested `NameID` that breaks the protocol profile. The
     /// status is `Requester`.
     /// [`RefusedAuthnRequest::content_error`] says what was wrong.
     ///
     /// When the fault is in `AssertionConsumerServiceURL` or
-    /// `AssertionConsumerServiceIndex`, the response goes to the service
-    /// provider's default assertion consumer service.
+    /// `AssertionConsumerServiceIndex`, or the request carries both, the
+    /// response goes to the service provider's default assertion consumer
+    /// service.
     MalformedRequest,
-}
-
-impl AuthnRequestRefusalReason {
-    pub(crate) fn status(self) -> Status {
-        match self {
-            Self::UnsupportedProtocolBinding => {
-                Status::requester().with_subordinate(SubordinateStatusCode::unsupported_binding())
-            }
-            Self::Unsigned
-            | Self::OutsideAgeWindow
-            | Self::RepeatedNameIdPolicy
-            | Self::MalformedRequest => Status::requester(),
-        }
-    }
+    /// The request's `Version` is later than `2.0`, such as `2.1` or `3.0`.
+    /// The status is `VersionMismatch`, with `RequestVersionTooHigh` for a
+    /// later major version, and the response goes to the service provider's
+    /// default assertion consumer service, as every response to a request of
+    /// a later version does.
+    VersionMismatch,
 }
 
 impl std::fmt::Display for AuthnRequestRefusalReason {
@@ -208,22 +259,24 @@ impl std::fmt::Display for AuthnRequestRefusalReason {
                 f.write_str("the request ProtocolBinding cannot carry the response")
             }
             Self::MalformedRequest => f.write_str("the request content is malformed"),
+            Self::VersionMismatch => f.write_str("the request Version is later than 2.0"),
         }
     }
 }
 
-pub(crate) struct ContentFault {
-    pub(crate) reason: AuthnRequestRefusalReason,
-    pub(crate) error: SamlError,
+/// Why `receive_sso` refuses a request, with what its answer needs.
+pub(crate) enum Refusal {
+    Unsigned,
+    Version(RequestVersionMismatch),
+    Content(ContentFault),
+    RepeatedNameIdPolicy,
+    OutsideAgeWindow,
 }
 
-impl ContentFault {
-    pub(crate) fn malformed(error: SamlError) -> Self {
-        Self {
-            reason: AuthnRequestRefusalReason::MalformedRequest,
-            error,
-        }
-    }
+/// Request content that the identity provider cannot read or answer.
+pub(crate) enum ContentFault {
+    UnsupportedProtocolBinding(SamlError),
+    Malformed(SamlError),
 }
 
 pub(crate) struct ReadAuthnRequest {
@@ -301,16 +354,34 @@ impl AuthnRequest {
 }
 
 impl AuthnRequest {
-    pub(crate) fn from_flow(raw_flow: &FlowResult) -> Result<ReadAuthnRequest, SamlError> {
+    /// The request with only its `ID`, `IssueInstant`, `Issuer`, and
+    /// `Destination` read, for a request whose other content is not relied on.
+    pub(crate) fn from_flow_without_content(raw_flow: &FlowResult) -> Result<Self, SamlError> {
         let extract = &raw_flow.extract;
-        let id = MessageId::try_new(collapse_whitespace(required_str(extract, request::ID)?))?;
-        let issue_instant = required_saml_utc_instant(
-            extract.get_str(request::ISSUE_INSTANT),
-            "AuthnRequest",
-            "IssueInstant",
-        )?;
-        let issuer = EntityId::try_new(required_str(extract, ISSUER)?)?;
-        let destination = optional_endpoint(extract, request::DESTINATION)?;
+        Ok(Self {
+            id: MessageId::try_new(collapse_whitespace(required_str(extract, request::ID)?))?,
+            issue_instant: required_saml_utc_instant(
+                extract.get_str(request::ISSUE_INSTANT),
+                "AuthnRequest",
+                "IssueInstant",
+            )?,
+            issuer: EntityId::try_new(required_str(extract, ISSUER)?)?,
+            destination: optional_endpoint(extract, request::DESTINATION)?,
+            acs_url: None,
+            protocol_binding: None,
+            acs_index: None,
+            name_id_policy: None,
+            force_authn: None,
+            passive: None,
+            provider_name: None,
+            requested_subject: None,
+            requested_authn_context: None,
+        })
+    }
+
+    pub(crate) fn from_flow(raw_flow: &FlowResult) -> Result<ReadAuthnRequest, SamlError> {
+        let addressed = Self::from_flow_without_content(raw_flow)?;
+        let extract = &raw_flow.extract;
         let (endpoint, mut fault) = match RequestedEndpoint::read(extract) {
             Ok(endpoint) => (endpoint, None),
             Err(endpoint_fault) => (RequestedEndpoint::default(), Some(endpoint_fault)),
@@ -331,10 +402,6 @@ impl AuthnRequest {
             readable(&mut fault, requested_authn_context_from_extract(extract));
         Ok(ReadAuthnRequest {
             request: Self {
-                id,
-                issue_instant,
-                issuer,
-                destination,
                 acs_url: endpoint.acs_url,
                 protocol_binding: endpoint.protocol_binding,
                 acs_index: endpoint.acs_index,
@@ -344,6 +411,7 @@ impl AuthnRequest {
                 provider_name: extract.get_str(request::PROVIDER_NAME).map(str::to_string),
                 requested_subject,
                 requested_authn_context,
+                ..addressed
             },
             fault,
         })
@@ -360,14 +428,16 @@ struct RequestedEndpoint {
 impl RequestedEndpoint {
     fn read(extract: &crate::util::Value) -> Result<Self, ContentFault> {
         let acs_url = optional_endpoint(extract, request::ASSERTION_CONSUMER_SERVICE_URL)
-            .map_err(ContentFault::malformed)?;
+            .map_err(ContentFault::Malformed)?;
         let protocol_binding =
-            optional_response_binding(extract).map_err(|error| ContentFault {
-                reason: AuthnRequestRefusalReason::UnsupportedProtocolBinding,
-                error,
-            })?;
+            optional_response_binding(extract).map_err(ContentFault::UnsupportedProtocolBinding)?;
         let acs_index = optional_u16(extract, request::ASSERTION_CONSUMER_SERVICE_INDEX)
-            .map_err(ContentFault::malformed)?;
+            .map_err(ContentFault::Malformed)?;
+        if acs_url.is_some() && acs_index.is_some() {
+            return Err(ContentFault::Malformed(SamlError::Invalid(
+                "AuthnRequest must not carry both AssertionConsumerServiceURL and AssertionConsumerServiceIndex".into(),
+            )));
+        }
         Ok(Self {
             acs_url,
             protocol_binding,
@@ -378,7 +448,7 @@ impl RequestedEndpoint {
 
 fn readable<T>(fault: &mut Option<ContentFault>, read: Result<Option<T>, SamlError>) -> Option<T> {
     read.unwrap_or_else(|error| {
-        fault.get_or_insert(ContentFault::malformed(error));
+        fault.get_or_insert(ContentFault::Malformed(error));
         None
     })
 }
