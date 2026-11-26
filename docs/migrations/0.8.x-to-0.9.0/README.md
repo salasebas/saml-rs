@@ -69,7 +69,7 @@ Check the topics that affect your integration.
 - [Handle SSO responses with alternative assertions and confirmations](bearer-alternatives.md)
 - [Read requested formats without surrounding whitespace](requested-format-whitespace.md)
 - [Select assertion consumer services within one SP role](acs-index-per-role.md)
-- [Handle logout endpoint choice, status messages, and asynchronous markers](slo-endpoint-status-async.md)
+- [Handle logout endpoint choice and status messages](slo-endpoint-status-async.md)
 - [Encrypt for a usable key and write its certificate](outbound-encryption-keys.md)
 - [Handle SSO sessions without a NameID](sso-without-name-id.md)
 - [Replace calls to `constants::digest_for_signature`](remove-digest-for-signature.md)
