@@ -252,7 +252,6 @@ TLS, and HTTP authentication. The IdP application handles
 - Setting `NotOnOrAfter` at or after the latest assertion `NotOnOrAfter`. Recommended, Core §3.7.3.2. Typed `start_slo` receives no assertion, and [ADR 0001](https://samlrs.vercel.app/explanation/logout-expiration/) records the choice.
 - Adding `RelayState` in `respond_slo` when the request carried none. Optional for the responder, Bindings §3.4.3, §3.5.3, CD-04 §2.3.
 - An `https` check on a session authority's `LogoutRequest`. Profiles §4.4.3.3 does not repeat the §4.4.3.1 recommendation.
-- TLS and HTTP authentication of the SOAP exchange. Deployment duty, Conformance Requirements §3.5. `allow_http` has no effect on SOAP.
+- TLS and HTTP authentication of the SOAP exchange. See [SOAP and URI security models](idp-sp-operational-modes.md#soap-and-uri-security-models). `allow_http` has no effect on SOAP.
 - An unsigned SOAP message that relies on another binding-supported mechanism when generating. Optional, Profiles §4.4.4.1, §4.4.4.2.
-- HTTP-Artifact logout. Optional, Profiles §4.4.3.1, §4.4.3.4.
-- The IdP Lite and SP Lite SOAP cells of Conformance Requirements Table 2. Optional.
+- Exchanges the crate does not implement, and the operational modes it does not claim: [IdP and SP operational modes](idp-sp-operational-modes.md#exchanges-not-implemented).

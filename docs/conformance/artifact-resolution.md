@@ -188,8 +188,6 @@ their protocol flow.
 ## Outside this flow
 
 - Browser delivery of an artifact: [HTTP-Artifact response](web-browser-sso-artifact.md).
-- `AuthnRequest` over HTTP-Artifact. Optional, Bindings §3.6.
 - Signing outbound `ArtifactResponse`. Optional, Profiles §5.3.2.
 - Adding SOAP header entries, such as WS-Security, to an outgoing message. Optional, Bindings §3.2.2.2. Received header entries follow the [SOAP envelope rules](#soap-envelope-rules).
-- The assertion query/request profile over SOAP. Requirements vary by query and operational mode. Profiles §6, Conformance §3.2 Table 4.
-- The IdP operational mode and the SP operational mode: [IdP and SP operational modes](idp-sp-operational-modes.md).
+- Exchanges the crate does not implement, and the operational modes it does not claim: [IdP and SP operational modes](idp-sp-operational-modes.md#exchanges-not-implemented).

@@ -16,7 +16,7 @@ description: "`ServiceProvider` and `IdentityProvider` implement this surface."
 | Artifact resolution | SOAP `ArtifactResolve` and `ArtifactResponse` through `resolve_artifact` and `answer_artifact_resolve`. The deployment sends the HTTP request |
 | Name identifier management | The identity provider and the service provider change or end a `NameID` over HTTP-Redirect through the `_redirect` operations, and the identity provider also over SOAP through `start_name_id_management`, `receive_name_id_management`, and `respond_name_id_management`. Each binding turns on with a `ManageNameIDService`. The service provider has no SOAP name identifier management |
 | Validation | Issuer, audience, destination, recipient, bearer confirmation, status, time windows, and request correlation |
-| Crypto | XML-DSig, XML-Enc, detached signatures, and metadata key pinning through bergshamra. The Conformance §4 algorithms, with SHA-1, Triple DES, and RSA-v1.5 used only when selected |
+| Crypto | XML-DSig, XML-Enc, detached signatures, and metadata key pinning through bergshamra. On RustCrypto with `crypto-legacy-algorithms`, which the default build enables, the Conformance §4 algorithms and the SHA-1 `SigAlg` methods of HTTP-Redirect and HTTP-POST-SimpleSign, with SHA-1, Triple DES, and RSA-v1.5 used only when selected. The other builds lack some of them, as [signature algorithms by build](conformance/xml-security-algorithms.md#signature-algorithms-by-build) and [encryption algorithms by provider](conformance/xml-security-algorithms.md#encryption-algorithms-by-provider) show |
 | Parsing | `quick-xml` DOM with local-name extraction, bounded before authentication |
 
 ## Supported SOAP exchanges
@@ -35,7 +35,7 @@ description: "`ServiceProvider` and `IdentityProvider` implement this surface."
 - Metadata federation
 - Enhanced Client/Proxy SSO and its PAOS binding
 
-The crate does not claim the [IdP or SP operational mode](conformance/idp-sp-operational-modes.md).
+The crate does not claim the [IdP or SP operational mode](conformance/idp-sp-operational-modes.md). That record lists each [exchange that is not implemented](conformance/idp-sp-operational-modes.md#exchanges-not-implemented).
 
 A request for one of the remaining profiles needs the profile, the binding, the peer product, and a minimal expected flow on [an issue](https://github.com/salasebas/saml-rs/issues).
 

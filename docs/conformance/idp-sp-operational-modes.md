@@ -7,8 +7,11 @@ profiles. Each supported exchange links to its record.
 The crate claims individual exchanges. [Conformance Requirements Table 2](https://docs.oasis-open.org/security/saml/v2.0/saml-conformance-2.0-os.pdf#page=9)
 requires Enhanced Client/Proxy SSO over PAOS for all four IdP and SP modes.
 [ECP was removed](https://github.com/salasebas/saml-rs/blob/main/docs/migrations/0.8.x-to-0.9.0/ecp-removal.md),
-so the crate claims none of those modes. The HTTP-Redirect claims apply to
-the default build only.
+so the crate claims none of those modes. The HTTP-Redirect and
+HTTP-POST-SimpleSign claims apply to RustCrypto with
+`crypto-legacy-algorithms`, which the default build enables. The
+[§4 rows](#xml-signature-and-xml-encryption-algorithms) name the builds
+that implement each algorithm.
 
 Normative text is Conformance Requirements as corrected by Approved Errata 05. E11 relabels the name identifier management rows. E25 adds the Metadata Structures and Metadata Interoperation rows and §§3.6 and 3.7. E29 adds the Request for Assertion by Identifier and SAML URI Binding rows. E42 replaces the `OPTIONAL` cells of an authority for another authority's query with `N/A`. E50 says the §4 and §5 lists are minimal sets.
 
@@ -17,7 +20,6 @@ A disposition is one of:
 - **Claimed feature**: implemented, with its rules on the linked record.
 - **Prohibited**: a `MUST NOT` cell. The column does not use the feature.
 - **Not implemented, off**: an `OPTIONAL` cell the crate does not implement.
-- **Open issue**: a `MUST` cell the crate does not meet yet.
 - **Exclusion**: not implemented, because the deployment is the obligated actor or the mode is not claimed.
 
 Table 2 lists the enhanced client as a separate operational mode.
@@ -26,7 +28,7 @@ Table 2 lists the enhanced client as a separate operational mode.
 
 | Feature | IdP | IdP Lite | SP | SP Lite | Disposition |
 | --- | --- | --- | --- | --- | --- |
-| Web SSO, `<AuthnRequest>`, HTTP Redirect | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature: `start_sso`, `receive_sso`. [SSO generation](web-browser-sso-generation.md), [SSO acceptance](web-browser-sso-acceptance.md). HTTP-POST and HTTP-POST-SimpleSign are claimed too. HTTP-Artifact is not implemented, and Table 2 does not require it |
+| Web SSO, `<AuthnRequest>`, HTTP Redirect | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature: `start_sso`, `receive_sso`. [SSO generation](web-browser-sso-generation.md), [SSO acceptance](web-browser-sso-acceptance.md). HTTP-POST and HTTP-POST-SimpleSign are claimed too. [HTTP-Artifact is not implemented](#exchanges-not-implemented), and Table 2 does not require it |
 | Web SSO, `<Response>`, HTTP POST | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature: `respond_sso`, `initiate_sso`, `finish_sso`, `accept_unsolicited_sso`. Same records. Profiles §4.1.2 prohibits HTTP-Redirect for a `<Response>`, and the typed API has no such input. HTTP-POST-SimpleSign is also claimed for responses |
 | Web SSO, `<Response>`, HTTP Artifact | `MUST` | `MUST` | `MUST` | `MUST` | The IdP issues an artifact for the SSO response. The SP resolves it and requires an XML signature on the response or each assertion to establish a session. [HTTP-Artifact response](web-browser-sso-artifact.md) |
 | Artifact Resolution, SOAP | `MUST` | `MUST` | `MUST` | `MUST` | For an IdP-issued artifact, the SP builds `ArtifactResolve` and validates the reply. The IdP reads the request and builds `ArtifactResponse`. The application carries the SOAP HTTP exchange. [Artifact resolution](artifact-resolution.md) |
@@ -36,16 +38,30 @@ Table 2 lists the enhanced client as a separate operational mode.
 | Name Identifier Management (SP-Initiated), HTTP Redirect | `MUST` | `MUST NOT` | `MUST` | `MUST NOT` | Claimed feature for the IdP and SP. Prohibited for IdP Lite and SP Lite |
 | Name Identifier Management (SP-Initiated), SOAP | `MUST` | `MUST NOT` | `OPTIONAL` | `MUST NOT` | Claimed feature for the IdP: `receive_name_id_management`, `respond_name_id_management`. Not implemented, off, for the SP. Prohibited for IdP Lite and SP Lite |
 | Single Logout (IdP-Initiated), HTTP Redirect | `MUST` | `MUST` | `MUST` | `MUST` | The IdP requests logout from one SP and validates its reply. HTTP-POST and HTTP-POST-SimpleSign also support this exchange. [Single Logout](single-logout.md) |
-| Single Logout (IdP-Initiated), SOAP | `MUST` | `OPTIONAL` | `MUST` | `OPTIONAL` | The IdP requests logout from one SP over application-provided HTTP. The SP replies on the same SOAP exchange. [SOAP binding](single-logout.md#soap-binding) |
+| Single Logout (IdP-Initiated), SOAP | `MUST` | `OPTIONAL` | `MUST` | `OPTIONAL` | The IdP requests logout from one SP over application-provided HTTP. The SP replies on the same SOAP exchange. IdP Lite and SP Lite can use it too. [SOAP binding](single-logout.md#soap-binding) |
 | Single Logout (SP-Initiated), HTTP Redirect | `MUST` | `MUST` | `MUST` | `MUST` | The SP requests logout and validates the IdP's reply. HTTP-POST and HTTP-POST-SimpleSign also support this exchange. The IdP application owns propagation and aggregation. [Application duties](single-logout.md#session-authority-application-duties) |
-| Single Logout (SP-Initiated), SOAP | `MUST` | `OPTIONAL` | `MUST` | `OPTIONAL` | The SP requests logout over application-provided HTTP. The IdP replies on the same SOAP exchange. Its application owns propagation and aggregation. [SOAP binding](single-logout.md#soap-binding) |
+| Single Logout (SP-Initiated), SOAP | `MUST` | `OPTIONAL` | `MUST` | `OPTIONAL` | The SP requests logout over application-provided HTTP. The IdP replies on the same SOAP exchange. Its application owns propagation and aggregation. IdP Lite and SP Lite can use it too. [SOAP binding](single-logout.md#soap-binding) |
 | Identity Provider Discovery (cookie) | `MUST` | `MUST` | `OPTIONAL` | `OPTIONAL` | Claimed feature for the IdP and IdP Lite: `common_domain_cookie`. [Identity Provider Discovery](identity-provider-discovery.md). Not implemented, off, for the SP and SP Lite |
 | Metadata Structures | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. E25, [§3.6](#metadata) |
 | Metadata Interoperation | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. E25, [§3.7](#metadata) |
 | Request for Assertion by Identifier | `OPTIONAL` | N/A | N/A | N/A | Not implemented, off. E29. [Extended, authority, and requester modes](#extended-authority-and-requester-modes) |
 | SAML URI Binding | `OPTIONAL` | N/A | N/A | N/A | Not implemented, off. E29. [Extended, authority, and requester modes](#extended-authority-and-requester-modes) |
 
-The HTTP Redirect rows are claimed for the default build. Bindings §3.4.4.1 signature rule 5 makes DSAwithSHA1 and RSAwithSHA1 mandatory for the HTTP-Redirect `SigAlg`. `crypto-aws-lc`, `crypto-fips`, RustCrypto without `crypto-legacy-algorithms`, and a verifier with `XmlSignatureProfile::StrictRsaSha2` do not meet it. See [XML Signature and XML Encryption algorithms](#xml-signature-and-xml-encryption-algorithms).
+The HTTP-Redirect and HTTP-POST-SimpleSign claims hold on RustCrypto with `crypto-legacy-algorithms`, which the default build enables. Bindings §3.4.4.1 signature rule 5, and SimpleSign CS-01 §2.5 for HTTP-POST-SimpleSign, make DSAwithSHA1 and RSAwithSHA1 mandatory for the `SigAlg`. `crypto-aws-lc`, `crypto-fips`, RustCrypto without `crypto-legacy-algorithms`, and a verifier with `XmlSignatureProfile::StrictRsaSha2` do not meet it. Each build is in [signature algorithms by build](xml-security-algorithms.md#signature-algorithms-by-build).
+
+## Exchanges not implemented
+
+The crate claims no operational mode, as the opening of this record
+explains. These exchanges are optional, and Table 2 requires none of them.
+The [feature matrix](#feature-matrix) marks the Table 2 cells the crate does not
+implement, such as SOAP name identifier management at the service provider.
+The exchanges of the unclaimed Extended and authority modes are under
+[Extended, authority, and requester modes](#extended-authority-and-requester-modes).
+
+- `<AuthnRequest>` over HTTP-Artifact. Optional, Bindings §3.6.
+- Single Logout over HTTP-Artifact. Optional, Profiles §4.4.3.1, §4.4.3.4.
+- Name identifier management over HTTP-POST and HTTP-Artifact. Optional,
+  Profiles §4.5.3.1.
 
 ## SAML-defined identifiers
 
@@ -108,6 +124,7 @@ Conformance §4. Rules, including what each backend supports, are in [XML Signat
 | --- | --- | --- |
 | §5: the server authenticates with an X.509 v3 certificate, and the client checks its identity | The deployment's TLS stack | Exclusion. The crate does not terminate TLS |
 | §§5.1 and 5.2: `TLS_RSA_WITH_3DES_EDE_CBC_SHA` and the SSL and FIPS counterparts | A TLS-capable or SSL-capable deployment | Exclusion, for the same reason |
+| §5.1: `TLS_RSA_AES_128_CBC_SHA` and its FIPS counterpart, optional. E50: any other SSL 3.0 or TLS 1.0 algorithm | A TLS-capable deployment | Exclusion. The deployment chooses its cipher suites |
 
 ## Extended, authority, and requester modes
 
@@ -121,7 +138,7 @@ Table 3.
 
 | Feature | IdP Extended | SP Extended | Disposition |
 | --- | --- | --- | --- |
-| Identity Provider proxy (Core §3.4.1.5) | `MUST` | `MUST` | Open issue. No API reads or writes `<Scoping>`, `ProxyCount`, or `RequesterID`. The IdP accepts a request that carries `<Scoping>` and never proxies, which Core §3.4.1.5.1 leaves to local policy |
+| Identity Provider proxy (Core §3.4.1.5) | `MUST` | `MUST` | Exclusion, mode not claimed. No API reads or writes `<Scoping>`, `ProxyCount`, or `RequesterID`. The IdP accepts a request that carries `<Scoping>` and never proxies, which Core §3.4.1.5.1 leaves to local policy |
 | Name identifier mapping, SOAP (Core §3.8, Profiles §7) | `MUST` | `MUST` | Exclusion, mode not claimed. No `<NameIDMappingRequest>` or `<NameIDMappingResponse>` is generated or processed |
 
 ### SAML authorities and requester
@@ -131,7 +148,7 @@ Table 4, as corrected by E25 and E42. The exchanges use the Assertion Query/Requ
 | Feature | Authentication Authority | Attribute Authority | Authorization Decision Authority | Requester | Disposition |
 | --- | --- | --- | --- | --- | --- |
 | Authentication Query, SOAP (Core §3.3.2.2) | `MUST` | N/A | N/A | `OPTIONAL` | Exclusion, mode not claimed. No `<AuthnQuery>` is generated or answered |
-| Attribute Query, SOAP (Core §3.3.2.3) | N/A | `MUST` | N/A | `OPTIONAL` | Open issue. No `<AttributeQuery>` is generated or answered |
+| Attribute Query, SOAP (Core §3.3.2.3) | N/A | `MUST` | N/A | `OPTIONAL` | Exclusion, mode not claimed. No `<AttributeQuery>` is generated or answered |
 | Authorization Decision Query, SOAP (Core §3.3.2.4) | N/A | N/A | `MUST` | `OPTIONAL` | Exclusion, mode not claimed. No `<AuthzDecisionQuery>` is generated or answered |
 | Request for Assertion by Identifier, SOAP (Core §3.3.1) | `MUST` | `MUST` | `MUST` | `OPTIONAL` | Exclusion, mode not claimed. No `<AssertionIDRequest>` is generated or answered. The same feature is the `OPTIONAL` IdP row of Table 2 (E29) |
 | SAML URI Binding (Bindings §3.7) | `MUST` | `MUST` | `MUST` | `OPTIONAL` | Exclusion, mode not claimed. No assertion is served by URI reference |
