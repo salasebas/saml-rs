@@ -126,8 +126,8 @@ on both roles exposes the received attribute through `LogoutRequest::reason`.
 | Write a top-level `StatusCode` of `Success`, `Requester`, `Responder`, or `VersionMismatch`, with an optional subordinate code | Mandatory | Core §3.2.2.2 | `status` argument |
 | Write caller-supplied plain text as `StatusMessage` after `StatusCode` before signing. Omit the element by default | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType` | `RespondSlo::status_message` |
 | Write a `StatusMessage` only with a character other than XML whitespace. An empty string omits the element, and other text with only XML whitespace is refused | Mandatory | Core §1.3.1, §3.2.2.3 | Always |
-| Write a subordinate `StatusCode` `Value` that is an absolute URI reference | Mandatory | Core §1.3.2 | `SubordinateStatusCode::try_new` |
-| Reject whitespace, `"`, `<`, and `>` in a caller-supplied subordinate code, and whitespace in the outbound response `Issuer` | Library policy: reason not recorded. | Core §1.3.2 | Always |
+| Write a subordinate `StatusCode` `Value` that is an absolute URI reference read as an `xs:anyURI`, as for [identifier formats](identifiers.md#name-identifier-formats), with its XML whitespace collapsed | Mandatory | Core §1.3.2, `StatusCodeType`, XML Schema Part 2 §3.2.17 | `SubordinateStatusCode::try_new` |
+| Refuse whitespace in the outbound response `Issuer`, although the [own entity identifier rule](identifiers.md#entity-identifiers) accepts it inside the value | Library policy: reason not recorded. | Core §8.3.6 | Always |
 | Return the application's local logout status and any required `PartialLogout` in the reply to the initiator | Mandatory for the session authority. See [application duties](#session-authority-application-duties) | Core §3.7.3.2 | `IdentityProvider::respond_slo` `status` |
 | A session participant returns an appropriate status after processing the request or on error. The caller passes the status | Mandatory | Profiles §4.4.3.4, Core §3.7.3.1 | `ServiceProvider::respond_slo` `status` |
 

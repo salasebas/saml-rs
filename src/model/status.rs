@@ -117,27 +117,28 @@ impl SubordinateStatusCode {
         }
     }
 
-    /// Wrap an absolute status-code URI.
+    /// Wrap an absolute status-code URI read as an `xs:anyURI`.
     ///
-    /// Pass the URI as written, including any literal `&` or `'`. The XML
-    /// writer escapes the attribute value when it generates the response.
+    /// Pass the URI as written, including any literal `&`, `'`, `"`, `<`, or
+    /// `>`. The XML writer escapes the attribute value when it generates the
+    /// response. XML whitespace is collapsed: surrounding whitespace is
+    /// removed, and each inner run becomes one space, which
+    /// [`Self::as_uri`] returns.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when `uri` has whitespace, contains
-    /// `"`, `<`, or `>`, or is not an absolute URI reference.
+    /// Returns [`SamlError::Invalid`] when `uri` is not an absolute URI
+    /// reference.
     pub fn try_new(uri: impl Into<String>) -> Result<Self, SamlError> {
         let uri = uri.into();
-        if uri.chars().any(char::is_whitespace)
-            || uri.contains(['"', '<', '>'])
-            || !is_absolute_uri_reference(&uri)
-        {
+        if !is_absolute_uri_reference(&uri) {
             return Err(SamlError::Invalid(
-                "subordinate status code must be an absolute URI without whitespace, double quotes, or angle brackets"
-                    .into(),
+                "subordinate status code must be an absolute URI reference".into(),
             ));
         }
-        Ok(Self { uri })
+        Ok(Self {
+            uri: collapse_whitespace(&uri),
+        })
     }
 
     /// URI carried in the nested `StatusCode/@Value`.
