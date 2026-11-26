@@ -25,15 +25,18 @@ format, length, and whitespace rules, and both bindings use its
 [Browser bindings](browser-bindings.md) has the HTTP-Redirect encoding,
 `RelayState`, signature-input, and cache-header rules, and the HTTP duties of
 the application. The [SOAP envelope rules](artifact-resolution.md#soap-envelope-rules)
-cover the SOAP envelope, its headers, and the transport.
+cover the SOAP envelope and its body, the HTTP headers of a SOAP request and
+response, and the transport.
+
+The statuses hold on builds with a crypto provider. On a build without one,
+`start_name_id_management_redirect` and `respond_name_id_management_redirect`
+return `SamlError::Unsupported`, and the HTTP-Redirect receive operations
+refuse every message, because the build neither signs nor verifies. Over
+SOAP, its identity provider still exchanges unsigned messages on the
+`SoapChannel`, refuses a signed one, returns an error for an identifier it
+would encrypt, and answers a received encrypted one as undecryptable.
 
 ## Support
-
-Statuses describe a build with a crypto provider. A build without one neither
-signs nor verifies, and neither encrypts nor decrypts, so it completes no
-HTTP-Redirect exchange. Over SOAP, its identity provider still exchanges
-unsigned messages on the `SoapChannel`, refuses a signed one, sends no
-encrypted identifier, and answers a received one as undecryptable.
 
 ### Messages and bindings
 
@@ -52,7 +55,11 @@ A status covers the role's part in the feature: sending, receiving, or both.
 | A signature on a SOAP message, sent | Core §3.6.1, §3.6.2, Profiles §4.5.4.1, §4.5.4.2 | Not supported | Not supported |
 | A signature on a SOAP message, verified on receipt | Core §3.2.1, §3.2.2, Profiles §4.5.4.1, §4.5.4.2 | Supported | Not supported |
 | An unsigned SOAP message that the channel authenticates, sent and received | Profiles §4.5.3.1, §4.5.3.2, §4.5.4.1, §4.5.4.2 | Supported | Not supported |
-| `ManageNameIDService` endpoints in the provider's metadata and the peer's, `ResponseLocation` included | Profiles §4.5.3.1, §4.5.3.2, §4.5.5, Metadata §2.4.2, E41 | Supported | Supported |
+| `ManageNameIDService` endpoints of the peer's metadata, `ResponseLocation` included | Profiles §4.5.3.1, §4.5.3.2, §4.5.5, Metadata §2.4.2, E41 | Supported | Supported |
+
+[Metadata documents](metadata-and-replay.md#metadata-documents) has the
+support for publishing `ManageNameIDService`, which the generators write
+without `ResponseLocation`.
 
 ### Requests
 
@@ -65,8 +72,8 @@ both roles, and SOAP at the identity provider.
 | `NewID` from the identity provider, the new `NameID` value | Core §3.6.1, §3.6.3, E12, E55 | Supported | — | — | Supported |
 | `NewID` from the service provider, the new `SPProvidedID` | Core §3.6.1, §3.6.3, E55 | — | Supported | [Partial](#service-provider-requests) | — |
 | `Terminate` | Core §3.6.1, §3.6.3, E8, E14, E55 | Supported | Supported | Supported | Supported |
-| `EncryptedID` in place of `NameID` | Core §3.6.1, §3.6.3, Conformance §3.4 | Supported | Supported | Supported | Supported |
-| `NewEncryptedID` in place of `NewID` | Core §3.6.1, §3.6.3, E12 | Supported | Supported | Supported | Supported |
+| `EncryptedID` in place of `NameID` | Core §3.6.1, §3.6.3, Conformance §3.4 | Supported | Supported | [Partial](#service-provider-requests) | Supported |
+| `NewEncryptedID` in place of `NewID` | Core §3.6.1, §3.6.3, E12 | Supported | Supported | [Partial](#service-provider-requests) | Supported |
 | `EncryptedID` with a plaintext `NewID`, or `NameID` with `NewEncryptedID` | Core §3.6.3 | Not supported | Supported | Not supported | Supported |
 
 ### Responses
@@ -87,9 +94,10 @@ both roles, and SOAP at the identity provider.
 ### Service provider requests
 
 - **Supported:** `ServiceProvider::start_name_id_management_redirect` writes
-  the `NameID` of the `NameId` it is given and refuses a `Format` that is not
-  an absolute URI reference. A `NewID` becomes the `SPProvidedID` that the
-  identity provider sends from then on.
+  the `NameID` of the `NameId` it is given and the new value as `NewID`, in
+  the clear or encrypted, and refuses a `Format` that is not an absolute URI
+  reference. A `NewID` becomes the `SPProvidedID` that the identity provider
+  sends from then on.
 - **Not supported:** it writes a `NameID` value or qualifier, or a `NewID`,
   that is empty or holds only XML whitespace, which Core §1.3.1 forbids, and
   an `entity` `NameID` that breaks Core §8.3.6, unchanged. The `NameID` cases
@@ -109,9 +117,9 @@ Code: `src/name_id_management/xml.rs`, `src/model/subject.rs`, `src/entity.rs`
 | Do not create a request for a transient identifier, including an unformatted `NameId` whose identity-provider default format is transient. Both operations return an error | Mandatory | Core §3.6, E14 | Always |
 | Write `ID`, `Version` `2.0`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §1.3.3 | Always |
 | Write the requesting entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.1 | Always |
-| Write the `NameID` as both providers know it, preserving supplied attributes | Mandatory | Core §3.6.1, §3.6.3 | Always |
-| For a persistent identifier, write each qualifier whose established value differs from `Issuer`. `NameQualifier` identifies the originating IdP and `SPNameQualifier` identifies the SP or affiliation | Mandatory | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
-| Also write each qualifier whose established value equals `Issuer`, which Core §3.6.3 lets the requester omit. The writer fills a missing one with the identity provider's or the service provider's entity ID | Recommended | Core §3.6.3 | Always |
+| Write the value of the `NameId` given as the `NameID`, with its `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` | Mandatory | Core §3.6.1, §3.6.3 | Always |
+| For a persistent identifier, write a missing `NameQualifier` as the identity provider's entity ID and a missing `SPNameQualifier` as the service provider's | Mandatory | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
+| Write each persistent qualifier also when it equals `Issuer`, which Core §3.6.3 lets the requester omit | Recommended | Core §3.6.3 | Always |
 | Write `NewID` with the new value only, or an empty `Terminate` | Mandatory | E12, E55, `TerminateType` | `NameIdChange` |
 
 The identity provider's whitespace, length, and `entity` checks on its
@@ -144,10 +152,8 @@ Code: `src/name_id_management.rs`, `src/soap.rs`
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Send the request over SOAP 1.1 | Optional | Profiles §4.5.3.1, Bindings §3.2.2 | `start_name_id_management` |
-| Put one `ManageNameIDRequest` in the SOAP body | Mandatory | Bindings §3.2.2.1 | Always |
 | Set `Destination` to the `Location` of the service provider's first SOAP `ManageNameIDService` | Optional | Core §3.2.1 | Always |
 | Authenticate the identity provider to the service provider and protect message integrity, by signing or by a binding mechanism. The crate does not sign the request and sends it over a mutually authenticated, integrity-protected `SoapChannel` | Mandatory | Profiles §4.5.3.1, §4.5.4.1 | `SoapChannel` |
-| Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Recommended | Bindings §3.2.3.2 | `SoapRequest::headers` |
 
 <a id="http-redirect-managenameidrequest"></a>
 
@@ -211,7 +217,7 @@ These rows also cover the refusal that `receive_name_id_management` and
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Answer every processed request with a `ManageNameIDResponse` | Mandatory | Core §3.6.2, Profiles §4.5.3.2 | `respond_name_id_management`, `respond_name_id_management_redirect` |
-| Return a SOAP response on the request's HTTP exchange, and the response to an HTTP-Redirect request through the user agent. Each operation refuses a request of the other binding | Mandatory | Profiles §4.5.3.2 | Always |
+| Answer an HTTP-Redirect request over HTTP-Redirect, through the user agent to the requester's response endpoint | Optional | Profiles §4.5.3.2 | Always |
 | For a `2.0` request, write `ID`, `Version` `2.0`, a UTC `IssueInstant`, and `InResponseTo` equal to the request `ID` | Mandatory | `StatusResponseType`, Core §3.2.2, §4.1.3.2 | Always |
 | Write `InResponseTo` only as an `xs:NCName` | Mandatory | `StatusResponseType` | Always |
 | Write the responding entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.2 | Always |
@@ -230,7 +236,6 @@ Code: `src/name_id_management.rs`, `src/soap.rs`
 | --- | --- | --- | --- |
 | Authenticate the identity provider to the service provider and protect message integrity, by signing or by a binding mechanism. The crate does not sign the response and returns it on the request's mutually authenticated, integrity-protected `SoapChannel` | Mandatory | Profiles §4.5.3.2, §4.5.4.2 | `SoapChannel` |
 | Omit `Destination` | Optional | Core §3.2.2 | Always |
-| Send `Cache-Control: no-cache, no-store, must-revalidate, private` and `Pragma: no-cache` | Recommended | Bindings §3.2.3.2 | `SoapResponse::headers` |
 
 <a id="http-redirect-managenameidresponse"></a>
 
@@ -283,8 +288,7 @@ either provider.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Send `NameID` and `NewID` by default, or both encrypted as `EncryptedID` and `NewEncryptedID`. No option encrypts only one, and `Terminate` is never encrypted | Optional | Core §3.6.1, §3.6.3, E12 | `StartNameIdManagement::identifier_encryption`, `IdentifierEncryptionPolicy::EncryptIdentifiers` |
-| Write `NewEncryptedID` as a `NewID` with the new value only | Mandatory | E12 | Always |
+| Send `NameID` and `NewID` by default, or both encrypted as `EncryptedID` and `NewEncryptedID`, whose plaintext is a `NewID` with the new value only. No option encrypts only one, and `Terminate` is never encrypted | Optional | Core §3.6.1, §3.6.3, E12 | `StartNameIdManagement::identifier_encryption`, `IdentifierEncryptionPolicy::EncryptIdentifiers` |
 | Support `EncryptedID` wherever the operational mode requires `NameID` support | Mandatory | Conformance §3.4 | `IdentifierEncryptionPolicy::EncryptIdentifiers`, `Credentials::with_decryption_credential` |
 | Require the `NewEncryptedID` plaintext to be one text-only `NewID` | Mandatory | E12, `NewID` | Always |
 | Require text-only content in a `NameID` that `EncryptedID` carries | Mandatory | `NameIDType` | Always |
@@ -338,8 +342,10 @@ Code: `src/name_id_management.rs`, `src/name_id_management/redirect.rs`, `src/mo
 | Accept a persistent `NameID` without its qualifiers | The receiver preserves the identifier as sent, including absent qualifiers. | Core §3.6.3 | Always |
 | Return a request with a transient `NameID` to the caller, who answers with an error status | E14 binds the requester, and Core §3.6.2 still requires an answer. | E14, Core §3.6.2 | Always |
 
-With an enabled age window, retain request IDs for at least `max_age` plus
-both clock-skew tolerances to cover the full window on either binding.
+With an enabled age window, a `with_replay_retention` longer than `max_age`
+plus both clock-skew tolerances covers the full window on either binding,
+because the window includes both ends and a stored `ID` expires at its
+deadline.
 
 ### Identity provider: `receive_name_id_management`
 
@@ -373,6 +379,7 @@ Code: `src/name_id_management.rs`, `src/api/name_id_management/redirect.rs`, `sr
 | --- | --- | --- | --- |
 | For a request whose `ID` is not an `xs:NCName`, return an error and write no response, also where the receiver would answer a refusal | A response without `InResponseTo`, as Core §3.2.2 requires for such a request, names no request, so the requester could not tie it to its pending request. | Core §3.2.1, §3.2.2 | Always |
 | Answer only a request received from the given peer | The receipt records the peer that sent the request, and a response built for another descriptor would answer for a peer that did not send it, at another party's endpoint on HTTP-Redirect. | — | Always |
+| Answer only a request received over the operation's binding: SOAP for `respond_name_id_management`, and HTTP-Redirect for `respond_name_id_management_redirect` | A SOAP response answers the synchronous exchange of its request. | Profiles §4.5.3.2 | Always |
 
 ### Identity provider and service provider: `StartedNameIdManagement::finish`, `finish_name_id_management_redirect`
 
@@ -435,6 +442,8 @@ that sent or received the request.
 
 | Duty | Level | Section |
 | --- | --- | --- |
+| Requester: pass `start_name_id_management` or `start_name_id_management_redirect` the identifier as most recently established between the providers, with its latest `SPProvidedID`, and, for a persistent identifier established with an affiliation, the affiliation's ID through `NameId::with_sp_name_qualifier` | Mandatory | Core §3.6.3 |
+| Responder: return the `SoapResponse` of `respond_name_id_management`, or of a refusal, as the HTTP response to the SOAP request, and send the `Outbound` of `respond_name_id_management_redirect`, or of a refusal, through the user agent | Mandatory | Profiles §4.5.3.2 |
 | Responder that does not recognize the identifier: answer with an error status, `Status::requester` or `Status::responder`, passed to `respond_name_id_management` or `respond_name_id_management_redirect` | Mandatory | Core §3.6.3 |
 | Responder that does not recognize the identifier: add `SubordinateStatusCode::unknown_principal` to that status | Optional | Core §3.6.3 |
 | Requester that intends logout with a termination: send the `LogoutRequest` before the terminating `ManageNameIDRequest`, never after | Mandatory | E8 |
