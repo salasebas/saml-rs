@@ -566,7 +566,7 @@ Code: `src/api/idp.rs`, `src/browser/input.rs`, `src/model/authn.rs`, `src/model
 | --- | --- | --- | --- |
 | Reject a SimpleSign `AuthnRequest` that carries only one of `Signature` and `SigAlg` | Either field signals a detached signature, which requires both fields to verify. | CS-01 §2.4, §2.5, §2.10 | Always |
 | Refuse an `AuthnRequest` with more than one `NameIDPolicy` | Core §3.4.1.1 binds the identity provider to the requested policy, and reading one of two policies, or neither, could issue an identifier that the other excludes. | `AuthnRequestType`, Core §3.2.1, §3.4.1.1 | Always |
-| Return no refusal data for an authenticated request whose `ID` the replay cache already holds | The first copy of the request got the one reply that Core §3.4.1.4 asks for, so a second `Response` would answer that request twice. | Core §3.4.1.4 | `ReplayPolicy::RequireCache` |
+| Return no refusal data for an authenticated request that passes every refusal check and whose `ID` the replay cache already holds | `receive_sso` already returned the first copy for the application to answer, and Core §3.4.1.4 asks for one reply to a request. | Core §3.4.1.4 | `ReplayPolicy::RequireCache` |
 | Accept an `AuthnRequest` `IssueInstant` from now − `max_age` − past tolerance through now + future tolerance, inclusive. A positive `NotOnOrAfter` skew supplies the past tolerance, and a negative `NotBefore` skew supplies the future tolerance | Reason not recorded. | Core §1.3.3 | `SamlValidationContext::with_authn_request_age`, `RequestAgePolicy::Bounded` |
 
 ### Identity provider: `receive_sso` request fields

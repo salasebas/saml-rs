@@ -182,7 +182,7 @@ difference, these rows also cover the `Response` that `respond_sso_artifact`,
 | Write an error `Response` with the status the caller passes and no assertion | Mandatory | Profiles §4.1.4.1, §4.1.4.2, Core §3.4.1.4 | `SsoOutcome::Failure` |
 | Write a `Success` response only with an assertion, and reject `SsoOutcome::Failure` with a top-level `Success` status | Mandatory | Profiles §4.1.4.2, E26 | Always |
 | Write a correlated SAML error for a refused request when a trusted ACS supports the selected response binding | Mandatory | Profiles §4.1.4.1, Metadata §2.4.4, E7, Core §3.2.2 | Always |
-| Write top-level `Requester` in the error `Response` to a refused request | Mandatory | Core §3.2.1, §3.2.2.2 | Always |
+| Write top-level `Requester` in the error `Response` to a request refused as invalid: unreadable content, a repeated `NameIDPolicy`, a `ProtocolBinding` of HTTP-Redirect or SOAP, or an unsigned request from a service provider whose metadata sets `AuthnRequestsSigned` | Mandatory | Core §3.2.1, Profiles §4.1.2, Metadata §2.4.4, E7 | Always |
 | Support delivery of an error when the user agent remains available and an acceptable response location exists | Recommended | Profiles §4.1.3.5, E85 | Always |
 | Write an unsolicited error `Response` for a login the identity provider started | Optional | Profiles §4.1.4.2, §4.1.5 | `initiate_sso`, `initiate_sso_artifact` |
 | Write caller-supplied plain text as `StatusMessage` after the complete `StatusCode` in a failed login `Response` before signing. Omit empty or unset text | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType` | `RespondSso::status_message` |
@@ -341,6 +341,7 @@ Code: `src/api/idp.rs`, `src/api/response_acs.rs`, `src/metadata/sp.rs`, `src/id
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
+| Write top-level `Requester` for a request refused for its age, for a `ProtocolBinding` URI this identity provider does not support, or for a missing signature that only this identity provider requires | The fault lies in the request, which the service provider can send again fresh, signed, or with another binding. | Core §3.2.2.2, Profiles §4.1.4.1 | Always |
 | Add the subordinate `UnsupportedBinding` to the error `Response` to a request refused for its `ProtocolBinding` | It tells the service provider that the request asked for a response binding this identity provider cannot use. | Core §3.2.2.2 | Always |
 
 [crewjam/saml v0.6.3](https://github.com/crewjam/saml/blob/v0.6.3/identity_provider_error_response.go#L194-L206)

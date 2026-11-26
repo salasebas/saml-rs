@@ -22,8 +22,10 @@ but that it cannot read or answer as asked:
   `MalformedRequest`. In 0.8, `receive_sso` returned the profile or XML error.
 
 SAML Profiles §4.1.4.1 requires an identity provider that cannot satisfy a
-request to answer with an error `Response`, and Core §3.2.1 gives that
-response the status `Requester`. `RefusedAuthnRequest::content_error`
+request to answer with an error `Response`. Core §3.2.1 gives the status
+`Requester` to the answer to a request that breaks SAML syntax or processing
+rules, and the identity provider also uses it for a binding URI it does not
+support. `RefusedAuthnRequest::content_error`
 returns the parsing error behind the refusal, for your logs. The response
 carries only the status.
 

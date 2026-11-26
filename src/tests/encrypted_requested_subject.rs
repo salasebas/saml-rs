@@ -24,7 +24,7 @@ use saml_rs::{
     MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem, Received, ReplayPolicy,
     RequestedSubject, RequestedSubjectIdentifier, SamlError, SamlValidationContext,
     ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso,
-    X509Credential,
+    X509Credential, XmlPolicy,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -300,4 +300,37 @@ fn encrypted_id_whose_name_id_breaks_the_profile_is_refused_as_malformed(
         }
         other => Err(format!("expected refusal data, got {other:?}").into()),
     }
+}
+
+#[test]
+fn a_schema_rejection_of_the_decrypted_request_stays_an_error(
+) -> Result<(), Box<dyn std::error::Error>> {
+    fn reject_decrypted(xml: &str) -> Result<(), String> {
+        if xml.contains("alice@example.com") {
+            return Err("schema rejected the decrypted request".into());
+        }
+        Ok(())
+    }
+    let xml = XmlPolicy {
+        schema_validator: Some(reject_decrypted),
+        ..XmlPolicy::default()
+    };
+    let idp = IdentityProvider::new(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(idp_credentials())
+        .xml(xml)
+        .build()?,
+    );
+    let received = receive_subject(&idp, &encrypted_id(AES128_GCM)?, Signing::Signed)?;
+    assert!(
+        matches!(
+            received,
+            Err(SamlError::Invalid(ref reason)) if reason == "schema rejected the decrypted request"
+        ),
+        "{received:?}"
+    );
+    Ok(())
 }

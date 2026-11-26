@@ -223,6 +223,42 @@ fn an_unusable_protocol_binding_is_answered_at_the_default_acs_with_unsupported_
 }
 
 #[test]
+fn an_unreadable_acs_url_or_index_is_answered_at_the_default_acs_with_requester() -> TestResult {
+    let peers = peers(IdpValidationPolicy::default())?;
+    for (url, binding, index) in [
+        (SP_SECOND_ACS, None, Some(" 1 0 ")),
+        (
+            "urn:example:acs",
+            Some("urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact"),
+            None,
+        ),
+    ] {
+        let started = peers
+            .sp
+            .start_sso(&peers.idp_descriptor, StartSso::post())?;
+        let mut xml =
+            with_root_attribute(&request_xml(&started)?, "AssertionConsumerServiceURL", url)?;
+        if let Some(binding) = binding {
+            xml = with_root_attribute(&xml, "ProtocolBinding", binding)?;
+        }
+        if let Some(index) = index {
+            xml = with_root_attribute(&xml, "AssertionConsumerServiceIndex", index)?;
+        }
+
+        let refusal = refused(&peers, &xml)?;
+        assert_eq!(
+            refusal.reason(),
+            AuthnRequestRefusalReason::MalformedRequest,
+            "{url}"
+        );
+
+        let status = answered_status(&peers, &started, &refusal, SP_ACS)?;
+        assert_eq!(status, Status::requester(), "{url}");
+    }
+    Ok(())
+}
+
+#[test]
 fn malformed_content_is_answered_at_the_requested_acs_with_requester() -> TestResult {
     let peers = peers(IdpValidationPolicy::default())?;
     let started = peers
