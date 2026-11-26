@@ -116,13 +116,15 @@ request that `receive_sso` refuses.
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Encrypt each assertion as an `EncryptedAssertion` | Optional | Core §2.3.4 | `XmlEncryptionPolicy::assertions` |
-| Encrypt each subject `NameID` as an `EncryptedID`, for the encryption certificate in the service provider metadata | Optional | Core §2.2.4, §3.4.1.1 | `XmlEncryptionPolicy::identifiers` |
+| Encrypt each subject `NameID` as an `EncryptedID` | Optional | Core §2.2.4, §3.4.1.1 | `XmlEncryptionPolicy::identifiers` |
 | Encrypt each `Attribute` as an `EncryptedAttribute` | Optional | Core §2.7.3.2 | `XmlEncryptionPolicy::attributes` |
 | Replace `NameID` with `EncryptedID` and `Attribute` with `EncryptedAttribute` in the same location. Each wrapper contains `EncryptedData` for the original element | Mandatory | Core §2.2.4, §2.7.3.2, §6.1, E30 | Always |
-| Include `Type` on `EncryptedData` | Recommended | Core §2.2.4, §2.7.3.2, §6.1 | Always |
-| Set a present `EncryptedData` `Type` to `http://www.w3.org/2001/04/xmlenc#Element` | Mandatory | Core §2.2.4, §2.7.3.2, §6.1 | Always |
+| Include `Type` on `EncryptedData` | Recommended | Core §2.2.4, §2.3.4, §2.7.3.2, §6.1 | Always |
+| Set a present `EncryptedData` `Type` to `http://www.w3.org/2001/04/xmlenc#Element` | Mandatory | Core §2.2.4, §2.3.4, §2.7.3.2, §6.1 | Always |
+| Write different `EncryptedData` ciphertext each time an `EncryptedID` is generated, even for the same `NameID` | Mandatory | Core §2.2.4 | Always |
 | Encrypt the inclusive canonical form of the `NameID` or `Attribute` | Library policy: that form declares every namespace in scope. | Core §6.1 | Always |
-| Embed the `EncryptedKey` in the `ds:KeyInfo` of `EncryptedData`, as `EncryptedAssertion` does | Optional | Core §6.2, E43 | Always |
+| Embed the `EncryptedKey` in the `ds:KeyInfo` of `EncryptedData`, as `EncryptedAssertion` does | Recommended | Core §6.2, E43 | Always |
+| Encrypt each content key for one recipient, and write no `Recipient` on its `EncryptedKey` | Library policy: the message has one receiving entity, Core §2.2.4, §2.3.4, and §2.7.3.2 recommend `Recipient` for an `EncryptedKey` beside `EncryptedData`, and with one embedded key a decrypter has no key to choose between. | Core §2.2.4, §2.3.4, §2.7.3.2, E43 | Always |
 | Encrypt the `NameID` or `Attribute` before the assertion or response is signed | Library policy: the signature then covers the ciphertext, and E43 and E93 replace the original Core §6.2 ordering rule. | Core §6.2, E43, E93 | Always |
 | Encrypt for the first service provider encryption key the configured algorithms can use. Skip a key that does not load or that the crypto provider refuses, such as an EC key or an RSA key too small for the key transport | Library policy: E68 lets the encrypting party use any published key, and OpenSAML 5.2.0 also skips a credential without a usable key transport. | Metadata §2.4.1.1, E62, E68 | Always |
 | Take the keys of the SP role whose `AssertionConsumerService` receives the response. When the request names only its location, and several roles publish that location and binding, take the first such role in document order | Library policy: E68 scopes keys to one role, and roles that publish one location and binding name one recipient, so document order picks one role's keys without mixing roles. | Metadata §2.4.1.1, E62, E68 | Always |

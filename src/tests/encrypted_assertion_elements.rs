@@ -224,7 +224,10 @@ fn encrypted_id_carries_the_name_id_to_the_service_provider(
         identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
         ..XmlEncryptionPolicy::default()
     };
-    let exchange = exchange(encryption, encryption)?;
+    let sp = sp(encryption)?;
+    let idp = idp(encryption)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let exchange = exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)?;
 
     assert!(
         exchange.xml.contains("<saml:EncryptedID>"),
@@ -239,7 +242,46 @@ fn encrypted_id_carries_the_name_id_to_the_service_provider(
     let session = exchange.session?;
     assert_eq!(session.name_id(), Some(&alice()));
     assert_eq!(session.attributes(), &attributes());
+
+    let first = encrypted_id_data(&exchange.xml)?;
+    let second =
+        encrypted_id_data(&exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)?.xml)?;
+    for (data_type, _) in [&first, &second] {
+        assert_eq!(
+            data_type.as_deref(),
+            Some("http://www.w3.org/2001/04/xmlenc#Element")
+        );
+    }
+    assert_ne!(first.1, second.1, "the same NameID encrypted twice");
     Ok(())
+}
+
+/// The `Type` and own `CipherValue` of the one `EncryptedData` in an
+/// `EncryptedID`.
+fn encrypted_id_data(xml: &str) -> Result<(Option<String>, String), Box<dyn std::error::Error>> {
+    const XENC: &str = "http://www.w3.org/2001/04/xmlenc#";
+    fn child<'a, 'input>(
+        node: roxmltree::Node<'a, 'input>,
+        namespace: &str,
+        name: &str,
+    ) -> Option<roxmltree::Node<'a, 'input>> {
+        node.children()
+            .find(|child| child.has_tag_name((namespace, name)))
+    }
+    let document = roxmltree::Document::parse(xml)?;
+    let encrypted_id = document
+        .descendants()
+        .find(|node| node.has_tag_name((saml_rs::constants::namespace::ASSERTION, "EncryptedID")))
+        .ok_or("no EncryptedID")?;
+    let data = child(encrypted_id, XENC, "EncryptedData").ok_or("no EncryptedData")?;
+    let cipher_value = child(data, XENC, "CipherData")
+        .and_then(|cipher_data| child(cipher_data, XENC, "CipherValue"))
+        .and_then(|cipher_value| cipher_value.text())
+        .ok_or("no CipherValue")?;
+    Ok((
+        data.attribute("Type").map(str::to_owned),
+        cipher_value.to_owned(),
+    ))
 }
 
 #[test]

@@ -45,6 +45,7 @@ names to its HTTP-POST message reader. [Namespaces in XML 1.0 §2.3](https://www
 | Require each `Assertion`, a decrypted one included, to be covered by a verified signature that references it. A `Response` or SimpleSign signature alone does not count | Library policy: the service provider enforces the `WantAssertionsSigned` it publishes, and an assertion that only inherits the `Response` signature loses it once taken out of the response. | Metadata §2.4.4, Core §5.3, Profiles §4.1.4.5, E26 | `AssertionSignaturePolicy::RequireSigned` |
 | Require a signature covering every successful `Response`. A SimpleSign detached signature counts, and an error `Response` may be unsigned | Library policy: a `Response` signature also protects the response fields, such as `InResponseTo` and `Destination`, and the set of assertions, which assertion signatures do not. | Profiles §4.1.4.5, E26, E93 | `ResponseSignaturePolicy::RequireSigned` |
 | Require a signature on the `Response` when an `EncryptedAssertion` uses AES-CBC or Triple DES | Recommended | Core §6.2, Profiles §4.1.4.3, E93 | `ResponseSignaturePolicy::AllowUnsignedEncryptedCbc` relaxes it |
+| Reject an `EncryptedAssertion` with a missing or unrecognized data-encryption algorithm | Library policy: the service provider cannot tell whether the ciphertext is CBC. | Core §6.2, E93 | `ResponseSignaturePolicy::RequireForEncryptedCbc` |
 | For HTTP-POST, require an XML signature on the successful `Response` or on each assertion | Mandatory | Profiles §4.1.4.5, E26, E93 | Always |
 | Verify every signature on the `Response` and on its assertions, including decrypted ones, and rely on no `Response` or assertion whose signature fails | Mandatory | Profiles §4.1.4.3, E26, Core §2.3.3, §3.2.2 | Always |
 | Reject the whole response when one of those signatures fails, even when another assertion verifies | Library policy: the service provider does not choose among the assertions of one response by their signature result. | Profiles §4.1.4.3, E26 | Always |
@@ -60,7 +61,6 @@ names to its HTTP-POST message reader. [Namespaces in XML 1.0 §2.3](https://www
 | With several assertions, refuse an `EncryptedID` or `EncryptedAttribute` unless a `Response` signature or a SimpleSign detached signature authenticates the message | Library policy: the nested decryption step learns only whether the `Response` is authenticated, not whether each assertion's own signature covers it. | Core §6.2, Profiles §4.1.4.5, E26, E93 | Always |
 | Reject an `EncryptedAssertion` that holds anything but one `EncryptedData` followed only by `EncryptedKey` elements | Mandatory | Core §2.3.4, `EncryptedElementType` | Always |
 | Reject an `EncryptedAssertion` whose plaintext is not one `Assertion`, and an `EncryptedID` or `EncryptedAttribute` whose plaintext is not one `NameID` or `Attribute` in the assertion namespace | Library policy: the decrypted element takes the place of its wrapper, so the service provider reads it only by the rules of the plaintext element it replaces. | Core §2.3.4, §2.2.4, §2.7.3.2 | Always |
-| Resolve an `EncryptedKey` embedded in `EncryptedData` or named by a `ds:RetrievalMethod` of type `EncryptedKey` | Recommended | Core §6.2, E43 | Always |
 | Reject the selected assertion when a `Conditions` child is not understood | Mandatory | Core §2.5.1.1 | Always |
 | Treat a generic `Condition` as not understood, even when its `xsi:type` names `AudienceRestrictionType`, `OneTimeUseType`, or `ProxyRestrictionType` | Library policy: the audience check reads only `AudienceRestriction` elements, Profiles §4.1.4.2 requires that element, and OpenSAML Java 5.2.3 also rejects this form. | Core §2.5.1, §2.5.1.1, `ConditionsType` | Always |
 | Accept `OneTimeUse` and `ProxyRestriction`. The SP keeps no assertion of its own and issues no later assertion. The [application duties](metadata-and-replay.md#onetimeuse-application-duties) cover the returned session | Mandatory | Core §2.5.1.5, §2.5.1.6 | Always |
@@ -163,9 +163,11 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 
 - Check of the bearer `Address` against the client address. Optional, Profiles §4.1.4.3.
 - Lookup of the identity provider by issuer for an unsolicited HTTP-POST-SimpleSign or HTTP-Artifact response. `accept_unsolicited_sso_with_resolver` accepts HTTP-POST only. Optional, Profiles §4.1.5.
-- Association of an `EncryptedKey` positioned beside `EncryptedData` without a `RetrievalMethod`. Optional, Core §6.2, E43.
-- Multicast reference from `ds:KeyName` to `xenc:CarriedKeyName`. Recommended, Core §6.2, E43.
 - An `EncryptedID` that carries a `BaseID` or an `Assertion`. Optional, Core §2.2.4.
+
+The [key resolution rules](xml-security-algorithms.md#key-resolution) and
+their [limits](xml-security-algorithms.md#not-implemented-in-the-decrypter)
+apply to each encrypted element the service provider receives.
 
 ## Identity provider
 
@@ -200,7 +202,7 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 | Reject a qualified `Format`, `SPNameQualifier`, or `AllowCreate` on `NameIDPolicy`, and a qualified `Format`, `NameQualifier`, `SPNameQualifier`, or `SPProvidedID` on the requested `NameID` | Mandatory | Core §2.2.2, §3.4.1.1, `NameIDType`, `NameIDPolicyType` | Always |
 | Reject a second `Subject`, a second identifier, or an identifier in a foreign namespace in a requested `Subject` | Mandatory | Core §3.4.1, `SubjectType` | Always |
 | Process a requested encrypted `NameID` when decryption succeeds. If the key is absent, the unsigned ciphertext is ineligible, or decryption does not yield one `NameID`, retain the unread `EncryptedID`. Only an error response can answer that request | Mandatory | Conformance §3.4, Core §3.4.1, §3.4.1.4 | Always |
-| Decrypt an unsigned request's `EncryptedID` only when its `EncryptedData` is AES-GCM | Library policy: Errata 05 E93 asks for integrity protection before CBC-encrypted data is processed, and AES-GCM authenticates the ciphertext. | Profiles §4.1.4.1, E93 | Always |
+| Decrypt an unsigned request's `EncryptedID` only when its `EncryptedData` is AES-GCM | Library policy: any sender chooses the ciphertext of an unsigned request, E93 shows that CBC ciphertext without integrity protection is open to chosen-ciphertext attacks, and AES-GCM authenticates the ciphertext. | Profiles §4.1.4.1, E93 | Always |
 
 The message and the detached `Signature` are decoded by the shared [base64 rules](browser-bindings.md#base64).
 
