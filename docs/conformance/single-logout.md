@@ -213,7 +213,9 @@ Typed logout send and receive use HTTP-Redirect, HTTP-POST, and HTTP-POST-Simple
 | Refuse a form `RelayState` with a CR or LF outside a CRLF pair, a received one included | Library policy: HTML form submission sends the character as CRLF, so the form cannot return the exact value. | Bindings §3.1.1, §3.5.4, CD-04 §2.3 | Always |
 | Refuse a form `RelayState` with a character outside the XML `Char` production, such as U+0000, a received one included | Mandatory | Bindings §3.5.4, XML 1.0 §2.2 | Always |
 | HTTP-POST-SimpleSign: sign and verify the raw XML octets, `RelayState` when present, then `SigAlg`, and leave an XML signature in the message intact | Mandatory | CD-04 §2.4, §2.5, §2.6 | Always |
-| Ignore ASCII whitespace in base64 message content and the detached `Signature`, and reject any other character outside the alphabet | Library policy: the sender removes whitespace (Bindings §3.4.4.1) or only wraps lines (§3.5.4), so another character means the value was altered. | Bindings §3.4.4.1, §3.5.4 | Always |
+| Ignore space, tab, LF, FF, and CR in a received base64 message, detached `Signature`, or artifact | Mandatory | Bindings §3.4.4.1, §3.5.4, §3.6.4, CS-01 §2.4, §2.5, RFC 2045 §6.8 | Always |
+| Accept a received base64 value without its final `=` padding | Library policy: RFC 2045 §6.8 binds only the encoder to pad, and OpenSAML 5.2.3 also decodes an unpadded value. | RFC 2045 §6.8 | Always |
+| Reject incomplete padding, a last character whose unused bits are not zero, and any other character outside the base64 alphabet, U+000B and non-ASCII whitespace included | Library policy: RFC 2045 §6.8 lets a decoder reject a value that shows a transmission error, and an RFC 2045 encoder writes neither these characters nor nonzero unused bits. | RFC 2045 §6.8 | Always |
 | Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Recommended | Bindings §3.4.5.1, §3.5.5.1, CD-04 §2.7.1 | `Outbound::headers` |
 
 ## SOAP binding

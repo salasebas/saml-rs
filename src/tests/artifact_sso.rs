@@ -1124,6 +1124,15 @@ fn an_artifact_must_be_delivered_once_and_be_a_saml_v2_artifact(
     let delivered = DeliveredArtifact::from_query(&format!("?SAMLart={ARTIFACT}&other=1"))?;
     assert_eq!(delivered.relay_state(), None);
     assert_eq!(delivered.artifact().endpoint_index(), 0);
+    let wrapped = DeliveredArtifact::from_form(&[FormField::new(
+        "SAMLart",
+        "AAQAAAECAwQFBgcICQoLDA0ODxAREhMU\r\nFRYXGBkaGxwdHh8gISIjJCUmJyg",
+    )])?;
+    assert_eq!(wrapped.artifact(), delivered.artifact());
+    assert_eq!(
+        wrapped.artifact().as_str(),
+        "AAQAAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJyg="
+    );
 
     assert!(matches!(
         DeliveredArtifact::from_query("RelayState=state"),

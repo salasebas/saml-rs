@@ -510,23 +510,58 @@ fn typed_simplesign_requires_the_sig_alg_field() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
-fn typed_simplesign_reports_a_malformed_signature_encoding(
+fn typed_simplesign_reads_a_wrapped_unpadded_signature_and_reports_a_malformed_one(
 ) -> Result<(), Box<dyn std::error::Error>> {
+    const ALPHABET: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let sp = sp_with(signing_sp_validation())?;
     let idp = idp_with(signed_authn_request_idp_validation())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::simple_sign())?;
-    let mut fields = started.outbound.post_form()?.fields().to_vec();
+    let fields = started.outbound.post_form()?.fields().to_vec();
     let signature = fields
-        .iter_mut()
+        .iter()
         .find(|field| field.name() == "Signature")
-        .ok_or("missing Signature")?;
-    *signature = FormField::new("Signature", "invalid base64!");
-    let result = idp.receive_sso(&sp_descriptor, Inbound::simple_sign(fields), validation());
-    assert!(
-        matches!(result, Err(SamlError::Base64 { .. })),
-        "{result:?}"
-    );
+        .ok_or("missing Signature")?
+        .value()
+        .to_string();
+    let unpadded = signature.trim_end_matches('=');
+    assert_ne!(unpadded, signature, "an RSA-2048 signature is padded");
+    let (head, tail) = unpadded.split_at(76);
+    let (data, last) = unpadded.split_at(unpadded.len() - 1);
+    let last_index = ALPHABET
+        .find(last)
+        .ok_or("Signature outside the alphabet")?;
+    let pad_bit_set = ALPHABET
+        .chars()
+        .nth(last_index ^ 1)
+        .ok_or("no such character")?;
+    let nonzero_pad_bits = format!("{data}{pad_bit_set}{}", &signature[unpadded.len()..]);
+    let with_signature = |value: &str| {
+        fields
+            .iter()
+            .map(|field| match field.name() {
+                "Signature" => FormField::new("Signature", value),
+                _ => field.clone(),
+            })
+            .collect::<Vec<_>>()
+    };
+
+    idp.receive_sso(
+        &sp_descriptor,
+        Inbound::simple_sign(with_signature(&format!("{head}\r\n{tail}"))),
+        validation(),
+    )?;
+    for malformed in ["invalid base64!", nonzero_pad_bits.as_str()] {
+        let result = idp.receive_sso(
+            &sp_descriptor,
+            Inbound::simple_sign(with_signature(malformed)),
+            validation(),
+        );
+        assert!(
+            matches!(result, Err(SamlError::Base64 { .. })),
+            "{malformed}: {result:?}"
+        );
+    }
     Ok(())
 }
 
