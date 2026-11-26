@@ -79,7 +79,7 @@ fn a_name_id_without_a_format_meets_a_policy_for_the_first_configured_format(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
         )
-        .name_id_format(NameIdFormat::Persistent)
+        .name_id_formats([NameIdFormat::Persistent, NameIdFormat::Transient])
         .credentials(signing_credentials())
         .validation(signed_authn_request_idp_validation())
         .build()?,

@@ -11,6 +11,7 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use common::signing_credentials;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
+use saml_rs::constants::authn_context_class_ref;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::xml::dom::parse_document;
@@ -747,14 +748,19 @@ fn request_signature_covers_the_requested_context_for_all_bindings(
 }
 
 #[test]
-fn a_received_relative_reference_is_exposed_but_cannot_be_sent_again(
+fn a_received_relative_reference_is_exposed_and_another_reference_answers_the_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
     let started = sp.start_sso(
         &idp_descriptor,
         StartSso::post().requested_authn_context(RequestedAuthnContext::try_new(
             AuthnContextComparison::Exact,
-            vec![AuthnContextReference::class(MFA)?],
+            vec![
+                AuthnContextReference::class(MFA)?,
+                AuthnContextReference::class(
+                    authn_context_class_ref::PASSWORD_PROTECTED_TRANSPORT,
+                )?,
+            ],
         )?),
     )?;
     let xml = request_xml(&started.outbound)?.replace(MFA, "relative-context");
@@ -806,5 +812,12 @@ fn a_received_relative_reference_is_exposed_but_cannot_be_sent_again(
         matches!(response, Err(SamlError::Invalid(_))),
         "{response:?}"
     );
+    idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(NameId::new("alice"), SystemTime::now())
+            .authn_context(requested.references()[1].clone()),
+        RespondSso::post(),
+    )?;
     Ok(())
 }

@@ -396,13 +396,11 @@ fn assert_requester_error(
     idp_descriptor: &IdpDescriptor,
     started: &Started<AuthnRequest>,
     response: &Outbound<saml_rs::SsoResponse>,
+    relay_state: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let form = response.post_form()?;
     assert_eq!(form.action().as_str(), SP_ACS);
-    assert_eq!(
-        form.value("RelayState"),
-        started.pending.relay_state().map(RelayState::as_str)
-    );
+    assert_eq!(form.value("RelayState"), relay_state);
     match sp.finish_sso(
         idp_descriptor,
         &started.pending,
@@ -452,7 +450,13 @@ fn idp_requiring_signed_requests_returns_refusal_data_for_an_unsigned_request(
         };
         assert_eq!(refusal.reason(), AuthnRequestRefusalReason::Unsigned);
         let response = strict.respond_sso_refusal(&sp_descriptor, &refusal, RespondSso::post())?;
-        assert_requester_error(&unsigned_sp, &idp_descriptor, started, &response)?;
+        assert_requester_error(
+            &unsigned_sp,
+            &idp_descriptor,
+            started,
+            &response,
+            started.pending.relay_state().map(RelayState::as_str),
+        )?;
     }
     Ok(())
 }
@@ -479,8 +483,18 @@ fn idp_returns_refusal_data_for_a_request_outside_its_age_window(
         refusal.reason(),
         AuthnRequestRefusalReason::OutsideAgeWindow
     );
-    let response = idp.respond_sso_refusal(&sp_descriptor, &refusal, RespondSso::post())?;
-    assert_requester_error(&unsigned_sp, &idp_descriptor, &started, &response)
+    let response = idp.respond_sso_refusal(
+        &sp_descriptor,
+        &refusal,
+        RespondSso::post().relay_state(RelayState::try_new("idp-chosen")?),
+    )?;
+    assert_requester_error(
+        &unsigned_sp,
+        &idp_descriptor,
+        &started,
+        &response,
+        Some("idp-chosen"),
+    )
 }
 
 fn age_bounded(now: SystemTime, cache: &mut InMemoryReplayCache) -> SamlValidationContext<'_> {

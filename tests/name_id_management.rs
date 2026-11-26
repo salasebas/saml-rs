@@ -701,6 +701,17 @@ fn sp_initiated_termination_is_received_and_answered() -> TestResult {
         validation(),
     )?)?;
     assert_eq!(request.message().change(), &NameIdChange::Terminate);
+    let indented = sp_request(&format!(
+        "{}<samlp:Terminate>\r\n\t  </samlp:Terminate>",
+        current_name_id_xml()
+    ))?;
+    let indented = received_request(idp.receive_name_id_management(
+        &sp,
+        &indented,
+        authenticated(),
+        validation(),
+    )?)?;
+    assert_eq!(indented.message().change(), &NameIdChange::Terminate);
 
     let status = Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal());
     let xml = body(
