@@ -7,8 +7,6 @@ use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
 use crate::xml::dom;
 use crate::xml::{OutboundNameIdQualifiers, XmlLimits};
 
-use super::attributes::is_blank;
-
 const MAX_OPAQUE_NAME_ID_CHARS: usize = 256;
 const ENCRYPTED_NAME_ID_POLICY_FORMAT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:encrypted";
 
@@ -68,7 +66,7 @@ fn validate_issued_name_id_strings(
         ("SPProvidedID", sp_provided_id),
     ]
     .into_iter()
-    .find(|(_, text)| text.is_some_and(is_blank));
+    .find(|(_, text)| text.is_some_and(|text| text.chars().all(dom::is_xml_whitespace_char)));
     match blank {
         Some((name, _)) => Err(SamlError::Invalid(format!(
             "a {name} must contain a character other than XML whitespace"

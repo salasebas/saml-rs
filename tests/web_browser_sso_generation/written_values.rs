@@ -111,11 +111,11 @@ fn a_name_id_and_its_qualifiers_need_a_character_other_than_xml_whitespace(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(SpValidationPolicy::default())?;
     let idp = idp_with(IdpValidationPolicy::default(), false)?;
-    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let respond = |name_id: &NameId| {
         idp.initiate_sso(
             &sp_descriptor,
-            SsoAssertion::new(name_id.clone()),
+            SsoAssertion::new(name_id.clone(), SystemTime::now()),
             RespondSso::post(),
         )
     };
@@ -135,6 +135,22 @@ fn a_name_id_and_its_qualifiers_need_a_character_other_than_xml_whitespace(
     }
     let xml = response_xml(&respond(&NameId::new("\u{a0}"))?)?;
     assert!(xml.contains("<saml:NameID>\u{a0}</saml:NameID>"), "{xml}");
+
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        authn_request_with_id(&sp, &idp_descriptor, "_request")?,
+        validation(),
+    )?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(NameId::new(" "), SystemTime::now()),
+        RespondSso::post(),
+    );
+    assert!(
+        matches!(response, Err(SamlError::Invalid(_))),
+        "{response:?}"
+    );
     Ok(())
 }
 
