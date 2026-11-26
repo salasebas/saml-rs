@@ -42,20 +42,11 @@ The identity provider writes `<Attribute>` elements with `SsoAssertion::attribut
 | Report a received `NameFormat` whether or not it is an absolute URI reference | Library policy: Core §1.3.2 binds the writer. | Core §1.3.2 | Always |
 | Merge `<Attribute>` elements with the same `Name` and `NameFormat` into one `Attribute`, in document order, whatever their `FriendlyName` values. Treat an omitted `NameFormat` as `unspecified`, and report the `NameFormat` and `FriendlyName` of the first element | Library policy: E49 identifies an attribute by `NameFormat` and `Name` together, and the standard does not define how repeated elements combine. | Core §2.7.3.1, E49 | Always |
 
-An `AttributeValue` holds text. Core §2.7.3.1.1 lets a producer declare
-another simple datatype with `xsi:type` and define structured content in an
-extension schema. A null value is also optional, but a producer that sends one
-must write an empty `AttributeValue` with `xsi:nil` set to `true` or `1`. The
-crate implements none of these options:
-
-- `AttributeValue::new` takes a string. The identity provider writes it as
-  escaped text and has no API for another `xsi:type`, a null value, or
-  element content.
-- The service provider reads the direct text of each received
-  `AttributeValue` and ignores `xsi:type` and `xsi:nil`. A typed value reads
-  as its lexical form, a null value as an empty string, and child elements,
-  such as a `NameID` in an `eduPersonTargetedID` value, contribute none of
-  their text.
+Core §2.7.3.1.1 lets a producer declare another simple datatype with
+`xsi:type`, define structured content in an extension schema, or send a null
+value, which must be an empty `AttributeValue` with `xsi:nil` set to `true` or
+`1`. The identity provider writes none of these forms: `AttributeValue::new`
+takes a string, which it writes as escaped text.
 
 ## Subject identifier attributes
 
