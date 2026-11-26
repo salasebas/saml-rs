@@ -136,7 +136,8 @@ value that a crate API returns, name that API in the duty. `Level` is
 
 <!--
 One item per `Not supported` cell whose feature is Mandatory, whose caller
-does something in its place, or that another document defines. Give the
+does something in its place, or that another document defines. One item can
+cover several cells when it names the actor and each missing feature. Give the
 level and section when the specification sets a level, then what the caller
 does instead or which document defines the feature.
 -->

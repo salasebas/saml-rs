@@ -117,11 +117,14 @@ are, in this order:
 6. **Not supported.** What a caller does in place of a feature the crate does
    not implement.
 
-A record with a `## Support` section follows the template. The other records
-move to it one at a time, as
-[Convert an old-form record](#convert-an-old-form-record) describes. Until a
-record moves, it writes `Library policy: <reason>.` in a `Level` cell, and its
-rows keep that form.
+A record that writes `Library policy: <reason>.` in a `Level` cell has not
+moved to the template yet, and its rows keep that form until it does. The
+records move one at a time, as
+[Convert an old-form record](#convert-an-old-form-record) describes.
+[IdP and SP operational modes](conformance/idp-sp-operational-modes.md) is an
+inventory of the level that Conformance Table 2 sets for each operational
+mode, and a status cell cannot hold that level. It keeps its own layout
+until a layout that keeps each mode's level is chosen.
 
 ### Where a behaviour goes
 
@@ -138,7 +141,8 @@ A missing part of a feature that the crate implements goes under
 `Not supported` cell, whatever its level. It also gets an item under
 **Not supported** when the feature is Mandatory, when the caller does
 something in its place, or when another document defines it. The item gives
-the level and section when the specification sets a level.
+the level and section when the specification sets a level. One item can
+cover several cells when it names the actor and each missing feature.
 
 ### Support statuses
 
@@ -257,7 +261,8 @@ keeps caller duties and missing features in lists such as "Outside this
 flow" or "Not implemented", at the end or inside a section. To convert it:
 
 1. Write the Support table from the specification, one row for each feature,
-   before you move any row.
+   before you move any row. Skip this step when no specification defines the
+   record's features.
 2. Sort every table row, list item, and paragraph by who performs it, as
    [Where a behaviour goes](#where-a-behaviour-goes) describes, whatever its
    old section or `Level` says. A row whose old actor is the application,

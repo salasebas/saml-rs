@@ -73,8 +73,8 @@ async function checkCodePaths(record, source, codeDir) {
 			const file = entry.trim().match(/^`([^`]+)`$/)?.[1];
 			if (!file) throw new Error(`${record} has a Code line entry that is not one path in backticks: ${line}`);
 			const target = path.resolve(repoDir, file);
-			if (!target.startsWith(srcDir)) {
-				throw new Error(`${record} lists ${file} in a Code line, which is not under src/`);
+			if (path.isAbsolute(file) || !target.startsWith(srcDir)) {
+				throw new Error(`${record} lists ${file} in a Code line, which is not a repository path under src/`);
 			}
 			const stats = await stat(target).catch((error) => {
 				if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
