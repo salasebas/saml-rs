@@ -140,8 +140,8 @@ Code: `src/browser/artifact.rs`, `src/binding/parameters.rs`, `src/artifact.rs`,
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Require exactly one `SAMLart` | The service provider resolves one artifact, and two values refer to two stored messages. | Bindings §3.6.3 | Always |
-| Accept only an artifact of the SAML V2.0 type `0x0004` | The crate reads the issuer only from the `SourceID` of that type, so it could not resolve another type, and E4 already excludes the formats of earlier SAML versions. | Bindings §3.6.4, §3.6.4.2, E4 | Always |
+| Require exactly one `SAMLart` | The service provider resolves one artifact per delivery. | Bindings §3.6.3 | Always |
+| Accept only an artifact of the SAML V2.0 type `0x0004` | The resolver checks the selected identity provider against the `SourceID` of that type, and E4 already excludes the formats of earlier SAML versions. | Bindings §3.6.4, §3.6.4.2, E4 | Always |
 | Compare the `RelayState` with the pending login when the SP sent one | Nothing protects the pairing of an artifact and its `RelayState`. | Bindings §3.6.5.2 | `ServiceProvider::finish_sso` |
 | Accept only the message that the accepted IdP returned for the delivered artifact | `Inbound::artifact` pairs two caller values, and a mismatched pair would accept a message for another artifact or identity provider. | Profiles §4.1.3.5 | `Inbound::artifact` |
 | Require an XML signature on the `Response` or on each assertion of a `Success` response | `SsoSession` takes the subject, conditions, and attributes only from XML verified against the IdP signing key. | Profiles §4.1.3.5, §4.1.4.4, E93, `StatusResponseType`, `AssertionType` | Always |
