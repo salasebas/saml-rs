@@ -5,9 +5,9 @@ crate's own role, and `SpConfigBuilder::build` and `IdpConfigBuilder::build`
 call them. `IdpDescriptor::from_metadata_xml`, `SpDescriptor::from_metadata_xml`,
 and `MetadataAggregate::from_xml` import a peer's metadata under a
 caller-chosen `MetadataTrustPolicy`. With `ReplayPolicy::RequireCache` in the
-`SamlValidationContext`, a typed receive operation refuses a message,
-assertion, or artifact whose key the cache still retains, and neither policy
-is part of the
+`SamlValidationContext`, a typed receive operation refuses a repeat of each
+message, assertion, or artifact key that the replay rows below store, and
+neither policy is part of the
 [role validation defaults](https://samlrs.vercel.app/explanation/validation-presets/).
 
 Normative text is [SAML Metadata 2.0](https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf)
@@ -481,8 +481,8 @@ application that keeps the session keeps its assertions and owns the
   the Core rules (MDAttr §2.3). A publisher signs each one (MDAttr §2.4) and
   puts none in a group's `EntityAttributes` (MDAttr §2.3), both Mandatory.
 - The algorithm support elements `alg:DigestMethod` and `alg:SigningMethod`,
-  and `EncryptionMethod` in a `KeyDescriptor`, at the publisher and the
-  consumer. Publishing them is Recommended, Algorithm Support §2.3 and §2.4. A
+  and `EncryptionMethod` in a `KeyDescriptor` whose `use` is absent or
+  `encryption`, at the publisher and the consumer. Publishing them is Recommended, Algorithm Support §2.3 and §2.4. A
   consumer that signs or encrypts with knowledge of the peer consults them,
   Mandatory, Algorithm Support §2.5. The generators write none of them, import
   ignores them, and the caller selects algorithms with `AlgorithmPolicy`.
