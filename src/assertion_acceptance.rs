@@ -1,5 +1,5 @@
 use crate::constants::namespace;
-use crate::error::{SamlError, SubjectConfirmationReason, TimeWindowField};
+use crate::error::{xml_err, SamlError, SubjectConfirmationReason, TimeWindowField};
 use crate::flow::FlowOptions;
 use crate::model::{authn_statement_not_on_or_after_values, earliest_authn_session_expiration};
 use crate::util::Value;
@@ -7,12 +7,15 @@ use crate::validator::{conditions_time_window, TimeWindow};
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::dom::{self, reader_err, Node};
 use crate::xml::{extract_with_limits, fields, parse_saml_utc_instant, utf8_bom_len, XmlLimits};
-use quick_xml::events::Event;
+use quick_xml::escape::unescape;
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::name::{NamespaceResolver, ResolveResult};
 use quick_xml::reader::NsReader;
 use std::collections::HashSet;
 use time::{Duration, OffsetDateTime};
 
 const BEARER_SUBJECT_CONFIRMATION_METHOD: &str = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
+const XML_SCHEMA_INSTANCE_NAMESPACE: &str = "http://www.w3.org/2001/XMLSchema-instance";
 
 #[cfg(test)]
 mod tests;
@@ -39,9 +42,7 @@ pub(crate) fn accept_response_assertions(
     let Some(selected) = consumed_assertion(&document.root) else {
         return Err(SamlError::AssertionMissing);
     };
-    if let Some(element) = unrecognized_condition_name(response_xml, selected, opts.xml_limits)? {
-        return Err(SamlError::UnrecognizedCondition { element });
-    }
+    require_understood_conditions(response_xml, selected, opts.xml_limits)?;
     if let [first, _, ..] = assertions.as_slice() {
         let mut ids = HashSet::new();
         if assertions
@@ -225,11 +226,11 @@ struct OpenElement {
     start: usize,
 }
 
-fn unrecognized_condition_name(
+fn require_understood_conditions(
     response_xml: &str,
     assertion: &Node,
     limits: XmlLimits,
-) -> Result<Option<String>, SamlError> {
+) -> Result<(), SamlError> {
     limits.check_input_bytes(response_xml.len())?;
     let mut reader = NsReader::from_str(response_xml);
     reader
@@ -244,10 +245,14 @@ fn unrecognized_condition_name(
         match event {
             Event::Start(element) => {
                 let local = element_local_name(&element);
-                if let Some(element) = unknown_condition_child(&stack, assertion, namespace, &local)
-                {
-                    return Ok(Some(element));
-                }
+                require_understood_element(
+                    &stack,
+                    assertion,
+                    namespace,
+                    &local,
+                    &element,
+                    reader.resolver(),
+                )?;
                 stack.push(OpenElement {
                     namespace,
                     local,
@@ -256,10 +261,14 @@ fn unrecognized_condition_name(
             }
             Event::Empty(element) => {
                 let local = element_local_name(&element);
-                if let Some(element) = unknown_condition_child(&stack, assertion, namespace, &local)
-                {
-                    return Ok(Some(element));
-                }
+                require_understood_element(
+                    &stack,
+                    assertion,
+                    namespace,
+                    &local,
+                    &element,
+                    reader.resolver(),
+                )?;
             }
             Event::End(_) => {
                 stack.pop();
@@ -274,7 +283,7 @@ fn unrecognized_condition_name(
             | Event::GeneralRef(_) => {}
         }
     }
-    Ok(None)
+    Ok(())
 }
 
 fn element_namespace(resolved: &quick_xml::name::ResolveResult<'_>) -> ElementNamespace {
@@ -293,40 +302,88 @@ fn element_namespace(resolved: &quick_xml::name::ResolveResult<'_>) -> ElementNa
     }
 }
 
-fn element_local_name(element: &quick_xml::events::BytesStart<'_>) -> String {
+fn element_local_name(element: &BytesStart<'_>) -> String {
     String::from_utf8_lossy(element.local_name().into_inner().as_bytes()).into_owned()
 }
 
-fn unknown_condition_child(
+fn is_selected_assertion(response: &OpenElement, open: &OpenElement, assertion: &Node) -> bool {
+    response.namespace == ElementNamespace::Protocol
+        && response.local == "Response"
+        && open.namespace == ElementNamespace::Assertion
+        && open.local == "Assertion"
+        && open.start == assertion.start
+}
+
+fn require_understood_element(
     stack: &[OpenElement],
     assertion: &Node,
     namespace: ElementNamespace,
     local: &str,
-) -> Option<String> {
-    let [.., response, open_assertion, conditions] = stack else {
-        return None;
+    element: &BytesStart<'_>,
+    resolver: &NamespaceResolver,
+) -> Result<(), SamlError> {
+    let declared: &[&str] = match stack {
+        [.., response, open_assertion]
+            if is_selected_assertion(response, open_assertion, assertion)
+                && namespace == ElementNamespace::Assertion
+                && local == "Conditions" =>
+        {
+            &["NotBefore", "NotOnOrAfter"]
+        }
+        [.., response, open_assertion, conditions]
+            if is_selected_assertion(response, open_assertion, assertion)
+                && conditions.namespace == ElementNamespace::Assertion
+                && conditions.local == "Conditions" =>
+        {
+            match (namespace, local) {
+                (ElementNamespace::Assertion, "AudienceRestriction" | "OneTimeUse") => &[],
+                (ElementNamespace::Assertion, "ProxyRestriction") => &["Count"],
+                (
+                    ElementNamespace::Assertion
+                    | ElementNamespace::Protocol
+                    | ElementNamespace::Other,
+                    _,
+                ) => {
+                    return Err(SamlError::UnrecognizedCondition {
+                        element: local.to_string(),
+                        attribute: None,
+                    });
+                }
+            }
+        }
+        _ => return Ok(()),
     };
-    if conditions.namespace != ElementNamespace::Assertion
-        || conditions.local != "Conditions"
-        || response.namespace != ElementNamespace::Protocol
-        || response.local != "Response"
-        || open_assertion.namespace != ElementNamespace::Assertion
-        || open_assertion.local != "Assertion"
-        || open_assertion.start != assertion.start
-    {
-        return None;
+    match undeclared_attribute(element, declared, resolver)? {
+        Some(attribute) => Err(SamlError::UnrecognizedCondition {
+            element: local.to_string(),
+            attribute: Some(attribute),
+        }),
+        None => Ok(()),
     }
-    if namespace == ElementNamespace::Assertion && understood_condition(local) {
-        return None;
-    }
-    Some(local.to_string())
 }
 
-fn understood_condition(local: &str) -> bool {
-    matches!(
-        local,
-        "AudienceRestriction" | "OneTimeUse" | "ProxyRestriction"
-    )
+fn undeclared_attribute(
+    element: &BytesStart<'_>,
+    declared: &[&str],
+    resolver: &NamespaceResolver,
+) -> Result<Option<String>, SamlError> {
+    for attribute in element.attributes() {
+        let key = attribute.map_err(xml_err)?.key;
+        if key.as_namespace_binding().is_some() {
+            continue;
+        }
+        let understood = match resolver.resolve_attribute(key) {
+            (ResolveResult::Unbound, local) => declared.contains(&local.into_inner()),
+            (ResolveResult::Bound(namespace), _) => {
+                unescape(namespace.into_inner()).map_err(xml_err)? == XML_SCHEMA_INSTANCE_NAMESPACE
+            }
+            (ResolveResult::Unknown(_), _) => false,
+        };
+        if !understood {
+            return Ok(Some(key.into_inner().to_owned()));
+        }
+    }
+    Ok(None)
 }
 
 enum AudienceCheck {

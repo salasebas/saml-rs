@@ -443,12 +443,20 @@ pub enum SamlError {
         /// Expected SP entity ID.
         expected: String,
     },
-    /// A `<Conditions>` child is not one this service provider can evaluate.
+    /// The selected assertion's `<Conditions>` holds content this service
+    /// provider cannot evaluate: a condition element it does not know, or an
+    /// attribute that `<Conditions>` or a known condition does not declare.
+    /// Namespace declarations and attributes in the XML Schema instance
+    /// namespace, such as `xsi:type`, are not counted.
     #[error("assertion condition is not understood: {element}")]
     #[non_exhaustive]
     UnrecognizedCondition {
-        /// Local name of the unrecognized condition element.
+        /// Local name of the unknown condition element, or of the element
+        /// that carries the attribute.
         element: String,
+        /// The attribute name as written, prefix included, when an attribute
+        /// is what this service provider cannot evaluate.
+        attribute: Option<String>,
     },
     /// None of the consumed assertion's authentication statements matched the
     /// exact authentication context required by the pending request.
