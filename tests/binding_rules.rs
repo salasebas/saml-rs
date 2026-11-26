@@ -1,12 +1,12 @@
 //! Typed HTTP-Redirect and HTTP-POST-SimpleSign binding rules.
 //!
-//! Bindings §3.4.3 and §3.5.3, and HTTP-POST-SimpleSign CD-04 §2.3, prohibit
+//! Bindings §3.4.3 and §3.5.3, and HTTP-POST-SimpleSign CS-01 §2.3, prohibit
 //! the entity creating a message from sending a RelayState longer than 80
 //! bytes, and require a responder to return the exact RelayState it received.
 //! Bindings §3.4.4.1 requires HTTP-Redirect to remove a protocol XML signature
 //! before DEFLATE, recommends against encoding a message with other signed
 //! content, and requires verifying the detached signature over parameters in
-//! a fixed order. CD-04 §2.5 and §2.6 require
+//! a fixed order. CS-01 §2.5 and §2.6 require
 //! SimpleSign to sign the raw XML octets, including RelayState when present.
 #![cfg(crypto)]
 
