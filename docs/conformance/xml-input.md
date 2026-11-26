@@ -48,6 +48,14 @@ Code: `src/xml/dom.rs`, `src/xml/dom/element.rs`, `src/xml/name.rs`
 
 ## Library policies
 
+### Document type declarations
+
+Code: `src/xml/dom.rs`, `src/soap.rs`
+
+| Policy | Reason | Section | Option |
+| --- | --- | --- | --- |
+| Refuse a received document that has a document type declaration, with or without an internal subset, before reading its elements | A DTD can declare entities that expand the input or that load external resources, so refusing it keeps entity expansion and external entity attacks out of the parser. | XML 1.0 §2.8, §5.1 | Always |
+
 ### Resource limits
 
 Code: `src/xml/dom.rs`, `src/xml/dom/element.rs`

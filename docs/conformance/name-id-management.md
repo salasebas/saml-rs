@@ -52,7 +52,7 @@ A status covers the role's part in the feature: sending, receiving, or both.
 | `ManageNameIDResponse` over SOAP, sent and received | Profiles §4.5.3.2, Bindings §3.2 | Supported | Not supported |
 | `ManageNameIDRequest` and `ManageNameIDResponse` over HTTP-POST | Profiles §4.5.3.1, §4.5.3.2, Bindings §3.5 | Not supported | Not supported |
 | `ManageNameIDRequest` and `ManageNameIDResponse` over HTTP-Artifact | Profiles §4.5.3.1, §4.5.3.2, Bindings §3.6 | Not supported | Not supported |
-| A signature on each HTTP-Redirect message sent, and its verification on a received one | Profiles §4.5.3.1, §4.5.3.2 | Supported | Supported |
+| A signature on each HTTP-Redirect message sent, and its verification on a received one | Profiles §4.5.3.1, §4.5.3.2, Bindings §3.4.4.1 | [Partial](browser-bindings.md#detached-signatures) | [Partial](browser-bindings.md#detached-signatures) |
 | A signature on a SOAP message, sent | Core §3.6.1, §3.6.2, Profiles §4.5.4.1, §4.5.4.2 | Not supported | Not supported |
 | A signature on a SOAP message, verified on receipt | Core §3.2.1, §3.2.2, Profiles §4.5.4.1, §4.5.4.2 | Supported | Not supported |
 | An unsigned SOAP message that the channel authenticates, sent and received | Profiles §4.5.3.1, §4.5.3.2, §4.5.4.1, §4.5.4.2 | Supported | Not supported |

@@ -19,11 +19,10 @@ minimal set.
 
 An implementation of a mode implements every feature that the mode's column
 marks `MUST` and none that it marks `MUST NOT` (Conformance §1, §3.1), and
-§§3.3 to 5 add requirements for every relevant mode. Each status below is
-the status that the record in the Record column gives, and that record holds
-the rules. A cell takes the status of the record's row for the message on
-that binding, and drops to `Partial` when a form of the message that a
-Mandatory rule requires of the role is `Partial` or `Not supported` there.
+§§3.3 to 5 add requirements for every relevant mode. Each cell combines the
+rows of the records in its Record column, as
+[Standards conformance](https://github.com/salasebas/saml-rs/blob/main/docs/standards-conformance.md#operational-mode-cells)
+describes, and those records hold the rules.
 
 The statuses hold on builds with a crypto provider. A build without one
 signs, verifies, encrypts, and decrypts nothing, so its identity provider
@@ -86,17 +85,6 @@ variant. The flow records also cover the `AuthnRequest` over HTTP-POST and
 HTTP-POST-SimpleSign, the `Response` over HTTP-POST-SimpleSign, and Single
 Logout over HTTP-POST and HTTP-POST-SimpleSign.
 
-The `SigAlg` methods of HTTP redirect depend on the build, so one
-[requirement row](#requirements-outside-the-matrix) holds them and the HTTP
-redirect rows do not count them.
-[Browser bindings](browser-bindings.md#detached-signatures) marks the
-HTTP-Redirect signature `Partial` for the same reason.
-
-Single Logout marks a `BaseID` principal `Partial` at both roles. No cell
-here drops for it, because Core §3.7.1 lets the requester choose that
-identifier and neither role issues or accepts an assertion whose `Subject`
-names one.
-
 Metadata Structures (§3.6) asks a mode that elects it to make its metadata
 available to each peer that may depend on it, and to use a peer's metadata
 again when the cached copy has expired or is no longer valid, if a copy is
@@ -133,7 +121,9 @@ that the four modes share.
   artifact: Partial. A `Response` whose namespace declaration spells the
   protocol or assertion namespace with an XML character reference can fail,
   as [SSO acceptance](web-browser-sso-acceptance.md#namespace-declarations-with-character-references)
-  records, and an artifact `Response` follows the same rows.
+  records for every binding, and
+  [HTTP-Artifact response](web-browser-sso-artifact.md#support) applies that
+  gap to the resolved `Response`.
 - Enhanced Client/Proxy SSO, PAOS: Not supported, as for IdP.
 - Name Identifier Management (SP-Initiated), HTTP Redirect: Partial. The
   service provider writes an `entity` `NameID` that breaks Core §8.3.6 into

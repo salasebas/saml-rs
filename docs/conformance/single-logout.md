@@ -42,7 +42,8 @@ A status covers the role's part in the feature: sending, receiving, or both.
 | `LogoutRequest` over SOAP, sent and received | Profiles §4.4.3.1, §4.4.3.3, Bindings §3.2 | Supported | Supported |
 | `LogoutResponse` over SOAP, sent and received | Profiles §4.4.3.4, §4.4.3.5, Bindings §3.2 | Supported | Supported |
 | `LogoutRequest` and `LogoutResponse` over HTTP-Artifact | Profiles §4.4.3.1, §4.4.3.4, Bindings §3.6 | Not supported | Not supported |
-| A signature on each sent message, and its verification on a received one | Core §3.7.1, §3.7.2, Profiles §4.4.4.1, §4.4.4.2 | Supported | Supported |
+| An XML signature on each message sent over HTTP-POST or SOAP, and its verification on a received one | Core §3.7.1, §3.7.2, Profiles §4.4.4.1, §4.4.4.2 | Supported | Supported |
+| `SigAlg` and `Signature` on each message sent over HTTP-Redirect or HTTP-POST-SimpleSign, and their verification on a received one | Profiles §4.4.4.1, §4.4.4.2, Bindings §3.4.4.1, CS-01 §2.4 | [Partial](browser-bindings.md#detached-signatures) | [Partial](browser-bindings.md#detached-signatures) |
 | An unsigned SOAP message that the channel authenticates, received | Profiles §4.4.3.1, §4.4.3.4, §4.4.4.1, §4.4.4.2 | Supported | Supported |
 | An unsigned SOAP message that the channel authenticates, sent | Profiles §4.4.3.1, §4.4.3.4, §4.4.4.1, §4.4.4.2 | Not supported | Not supported |
 | `SingleLogoutService` endpoints of the peer's metadata, `ResponseLocation` included | Profiles §4.4.3.1, §4.4.5, Metadata §2.2.2, §2.4.2, E41 | Supported | Supported |
@@ -92,8 +93,8 @@ provider sends it. `Consent`, caller extensions, and `StatusDetail` are in
 
 | Feature | Section | Identity provider | Service provider |
 | --- | --- | --- | --- |
-| Matching a received request with a stored service provider session | Core §3.7.3.1 | — | [Partial](#baseid-principal-identifier) |
-| Applying a received request to an assertion that arrives later | Core §3.7.3.1 | — | [Partial](#baseid-principal-identifier) |
+| Matching a received request with a stored service provider session | Core §3.7.3.1 | — | Supported |
+| Applying a received request to an assertion that arrives later | Core §3.7.3.1 | — | Supported |
 | Propagation to the other session participants, one `LogoutRequest` each | Core §3.7.3.2, Profiles §4.4.3.2, §4.4.3.3 | Supported | — |
 | A `LogoutRequest` to an upstream session authority that the identity provider proxied | Core §3.7.3.2 | Not supported | — |
 
@@ -114,10 +115,15 @@ provider sends it. `Consent`, caller extensions, and `StatusDetail` are in
 
 - **Supported:** both roles accept an authenticated request whose principal
   is a `BaseID`, a decrypted one included, and answer it with `respond_slo`.
-- **Not supported:** neither role returns the `BaseID`, so
-  `LogoutRequest::name_id` is `None`, `matches_sp_session` matches no
-  session, and `OutstandingLogout::try_new`, which takes a `NameId`, cannot
-  record the request. Neither role sends a `BaseID`.
+  Such a request names no session of either role: a `BaseID` strongly
+  matches only an identical `BaseID` (Core §3.3.4, Profiles §4.4.4.1), and
+  neither role issues or accepts an assertion whose `Subject` holds one.
+  `matches_sp_session` matches no session, and `OutstandingLogout::try_new`,
+  which takes a `NameId`, cannot record the request. No later assertion
+  could match it.
+- **Not supported:** neither role sends a `BaseID` or returns the identifier
+  in one, as [identifiers](identifiers.md#not-supported) records, so
+  `LogoutRequest::name_id` is `None`.
 
 ## Rules
 

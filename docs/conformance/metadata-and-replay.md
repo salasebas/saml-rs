@@ -348,7 +348,7 @@ Code: `src/metadata/key_certificates.rs`, `src/flow.rs`, `src/crypto/verify.rs`
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
 | Verify a certificate-based message signature with the signing keys of the peer's role. A certificate embedded in the message neither selects nor restricts the key | The sender chooses what the message embeds, so only keys from the peer's metadata authenticate it. | Metadata §2.4.1.1, E69 | Always |
-| Reject a message signed with a key that only the peer's other role publishes | Reason not recorded. | Metadata §2.4.1 | Always |
+| Reject a message signed with a key that only the peer's other role publishes | Metadata §2.4.1 gives each role the keys the entity uses in that role, so when the two roles run in separate deployments with separate keys, one deployment's key does not authenticate the other's messages. | Metadata §2.4.1 | Always |
 | Ignore a `KeyDescriptor` whose `use` is neither value | `KeyTypes` defines no other purpose, so such a key authorizes neither use, and the rest of the role stays usable. | Metadata §2.4.1.1, `KeyTypes` | Always |
 
 ### Metadata consumer: endpoints

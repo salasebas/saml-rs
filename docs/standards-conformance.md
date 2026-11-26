@@ -129,6 +129,21 @@ requirements of Conformance §§3.3 to 5, and the exchanges not implemented.
 It takes each status from the record that owns the feature and restates
 none of that record's rules.
 
+<a id="operational-mode-cells"></a>
+
+A feature cell of that record combines the owning records' rows for the
+message on that binding. It takes the status of the row for the message, and
+drops to `Partial` only when a form of the message that a Mandatory rule
+requires of the role is `Partial` or `Not supported` there. Two gaps lower
+no feature cell:
+
+- An algorithm that some builds with a crypto provider lack, such as a
+  `SigAlg` method of Bindings §3.4.4.1. One row of the requirements outside
+  the matrix holds it.
+- A `BaseID` logout principal. Core §3.7.1 lets the requester choose the
+  identifier, and neither role issues or accepts an assertion whose
+  `Subject` names one.
+
 ### Where a behaviour goes
 
 A behaviour that the crate performs is a rule, or a library policy when the

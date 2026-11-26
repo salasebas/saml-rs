@@ -150,6 +150,8 @@ Code: `src/browser/endpoints.rs`, `src/metadata/generate.rs`, `src/constants.rs`
 
 ## Library policies
 
+<a id="sending-relaystate-policies"></a>
+
 ### Sender: `RelayState::try_new`, `Outbound`
 
 Code: `src/browser/forms.rs`, `src/browser/outbound.rs`
@@ -157,6 +159,8 @@ Code: `src/browser/forms.rs`, `src/browser/outbound.rs`
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
 | Refuse to send a `RelayState` in a form when it has a CR or LF outside a CRLF pair, a received one included | HTML form submission sends the character as CRLF, so the receiver would get another value and a SimpleSign signature over the sent value would fail. | Bindings §3.1.1, §3.5.4, §3.6.3.3, CS-01 §2.4 | Always |
+
+<a id="returning-relaystate-policies"></a>
 
 ### Responder: `respond_sso`, `respond_sso_artifact`, `respond_slo`, `respond_name_id_management_redirect`
 
@@ -166,6 +170,8 @@ Code: `src/model/relay.rs`, `src/browser/outbound.rs`
 | --- | --- | --- | --- |
 | Return a received `RelayState` longer than 80 bytes unchanged | The exact-return rule keeps working for a requester that exceeded the 80-byte limit, which binds only the entity that creates the value. | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | Always |
 
+<a id="redirect-endpoint-query-policies"></a>
+
 ### Sender: `Outbound::redirect_url`
 
 Code: `src/binding/redirect.rs`, `src/binding/query.rs`
@@ -174,6 +180,8 @@ Code: `src/binding/redirect.rs`, `src/binding/query.rs`
 | --- | --- | --- | --- |
 | Keep the endpoint's own query parameters before the SAML parameters, and refuse an endpoint query that already has `SAMLRequest`, `SAMLResponse`, `SAMLart`, `RelayState`, `SigAlg`, `Signature`, or `SAMLEncoding`, by decoded name | A configured parameter with one of these names could repeat a message field or be read as one by an endpoint that serves several bindings. | Bindings §3.4.4 | Always |
 | Write no `SAMLEncoding` parameter, so the receiver reads DEFLATE | Every HTTP-Redirect endpoint must read DEFLATE, which an absent parameter names, so every receiver reads the message. | Bindings §3.4.4 | Always |
+
+<a id="received-value-policies"></a>
 
 ### Receiver: browser binding receive operations
 
@@ -186,6 +194,8 @@ Code: `src/binding/encoding.rs`, `src/binding/parameters.rs`, `src/model/relay.r
 | Reject a received `RelayState` longer than `MAX_RECEIVED_RELAY_STATE_BYTES`, 4096 bytes | The bound limits the memory that an unauthenticated value can use and still admits a value over the 80-byte limit, which binds only the creator. | Bindings §3.4.3, §3.5.3, §3.6.3.1, CS-01 §2.3 | Always |
 | Reject a second `RelayState`, matched by its decoded name | saml-rs compares, reports, or returns one value, and a caller's framework could read the other one. | Bindings §3.4.3, §3.5.3, §3.6.3.1, CS-01 §2.3 | Always |
 | Reject a received message that also carries the message field of the other kind, such as `SAMLResponse` next to `SAMLRequest` | A typed operation reads one message kind, and with both fields the application and saml-rs could read different messages. | Bindings §3.4.4.1, §3.5.4, CS-01 §2.4 | Always |
+
+<a id="received-query-policies"></a>
 
 ### Receiver: `Inbound::redirect`, `DeliveredArtifact::from_query`
 

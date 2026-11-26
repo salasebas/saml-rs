@@ -19,7 +19,8 @@ schema-invalid message.
 Code: `src/schema.rs`, `src/flow.rs`, `src/encrypted_elements.rs`, `src/logout/encrypted_id.rs`, `src/api/requested_subject.rs`, `src/browser/input.rs`, `src/soap.rs`, `src/artifact.rs`, `src/name_id_management.rs`, `src/name_id_management/encryption.rs`, `src/metadata/read.rs`
 
 The callback receives a document only after the parser accepts it: within the
-[XML input limits](xml-input.md#resource-limits), and without a DOCTYPE.
+[XML input limits](xml-input.md#resource-limits), and without a
+[document type declaration](xml-input.md#document-type-declarations).
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
