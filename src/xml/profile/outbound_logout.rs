@@ -3,6 +3,7 @@ use super::{
     validate_closed_unqualified_attributes, validate_outbound_entity_issuer,
     validate_outbound_stream, NamespaceKind,
 };
+use crate::config::validate_entity_id_syntax;
 use crate::constants::{namespace, status_code};
 use crate::error::SamlError;
 use crate::xml::any_uri::is_absolute_uri_reference;
@@ -201,10 +202,6 @@ fn is_absolute_url(value: &str) -> bool {
 
 fn is_absolute_saml_uri(value: &str) -> bool {
     !value.chars().any(char::is_whitespace) && is_absolute_uri_reference(value)
-}
-
-fn is_entity_identifier(value: &str) -> bool {
-    value.chars().count() <= 1024 && is_absolute_saml_uri(value)
 }
 
 fn validate_outbound_status_code(
@@ -491,9 +488,9 @@ pub(crate) fn validate_logout_response_outbound(
             "LogoutResponse Issuer must identify the responding entity",
         ));
     }
-    if !is_entity_identifier(&issuer.text) {
+    if validate_entity_id_syntax(&issuer.text).is_err() {
         return Err(profile_error(
-            "entity-format LogoutResponse Issuer must be an absolute URI no longer than 1024 characters",
+            "entity-format LogoutResponse Issuer must be an absolute URI no longer than 1024 characters with collapsed whitespace",
         ));
     }
     if issuer.text != expectation.issuer {

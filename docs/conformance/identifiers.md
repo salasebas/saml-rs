@@ -151,8 +151,9 @@ The identity provider and service provider write their own `entityID` and `Issue
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Reject an own entity identifier that is not an absolute URI reference of at most 1024 characters | Mandatory | Core §8.3.6, §1.3.2, Metadata §2.2.1 | `SpConfigBuilder::build`, `IdpConfigBuilder::build`, `generate_sp_metadata`, `generate_idp_metadata` |
-| Reject an own entity identifier that the `anyURI` whitespace collapse would change | Library policy: an `Issuer` is an `xs:string` that a peer reads without collapsing it. | Core §8.3.6 | Always |
+| Reject an own entity identifier that is not an absolute URI reference of at most 1024 characters, read as an `xs:anyURI`, which allows an inner space | Mandatory | Core §8.3.6, §1.3.2, Metadata §2.2.1, `entityIDType` | `SpConfigBuilder::build`, `IdpConfigBuilder::build`, `generate_sp_metadata`, `generate_idp_metadata` |
+| Reject an own entity identifier that the `anyURI` whitespace collapse would change | Library policy: an `Issuer` is an `xs:string` that a peer compares exactly, without collapsing it. | Core §8.3.6, §1.3.1 | Always |
+| Use a URL that contains the entity's own domain name as its entity identifier. The crate accepts any absolute URI, such as a URN, and checks no domain | Recommended | Core §8.3.6 | Caller |
 | Compare a received `Issuer` with the expected entity ID exactly, including in SOAP | Mandatory | Core §1.3.1, `NameIDType` | Always |
 | Read an `Issuer`'s `Format` with [XML Schema whitespace collapse](https://www.w3.org/TR/xmlschema-2/#rf-whiteSpace) where the flow checks that format | Mandatory | `NameIDType`, XML Schema Part 2 §4.3.6 | Always |
 | Accept a peer entity identifier that is not an absolute URI reference or is longer than 1024 characters, in `EntityId::try_new` and as the `Issuer` passed to the IdP resolver | Library policy: Core §8.3.6 and §1.3.2 bind the writer, so the crate rejects only a value with nothing but XML whitespace. | Core §8.3.6, Metadata §2.2.1 | Always |
