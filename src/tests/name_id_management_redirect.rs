@@ -270,13 +270,25 @@ fn identity_provider_changes_and_terminates_an_identifier_with_the_service_provi
             Some("manage")
         );
 
+        let mut cache = RecordingReplayCache::default();
         let relay_state_received = idp.finish_name_id_management_redirect(
             &sp_peer,
             &restored(&started.pending)?,
             response_input(&response)?,
-            validation(),
+            validation_with_cache(&mut cache),
         )?;
         assert_eq!(relay_state_received, Some(relay_state));
+        match idp.finish_name_id_management_redirect(
+            &sp_peer,
+            &restored(&started.pending)?,
+            response_input(&response)?,
+            validation_with_cache(&mut cache),
+        ) {
+            Err(SamlError::ReplayDetected { key }) => {
+                assert_eq!(key.kind(), "manage_name_id_response_id");
+            }
+            other => return Err(format!("expected ReplayDetected, got {other:?}").into()),
+        }
     }
     Ok(())
 }
@@ -1226,19 +1238,21 @@ fn error_status_is_reported_only_for_an_authenticated_matching_response() -> Tes
         ),
         1,
     );
+    let mut cache = RecordingReplayCache::default();
     for xml in [sp_error_response_xml(request_id), padded] {
         let matching = signed_response_input(&xml)?;
         match idp.finish_name_id_management_redirect(
             &sp_peer,
             &started.pending,
             matching,
-            validation(),
+            validation_with_cache(&mut cache),
         ) {
             Err(SamlError::StatusNotSuccess { status, .. })
                 if status.top_level().as_uri() == status_code::REQUESTER => {}
             other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
         }
     }
+    assert!(cache.seen.is_empty(), "{:?}", cache.seen);
     Ok(())
 }
 
@@ -1518,15 +1532,17 @@ fn a_version_other_than_2_0_is_answered_with_version_mismatch() -> TestResult {
         r#"<samlp:StatusCode Value="{}"/>"#,
         status_code::VERSION_MISMATCH
     )));
-    assert!(matches!(
-        sp.receive_name_id_management_redirect(
-            &idp_peer,
-            signed_request_input(&xml)?,
-            ReceiveNameIdManagement::new(),
-            one_hour_request_age(issued_at_plus(0)?, &mut cache),
-        ),
-        Err(SamlError::ReplayDetected { .. })
-    ));
+    let NameIdManagementReceipt::Refused(repeated) = sp.receive_name_id_management_redirect(
+        &idp_peer,
+        signed_request_input(&xml)?,
+        ReceiveNameIdManagement::new(),
+        one_hour_request_age(issued_at_plus(0)?, &mut cache),
+    )?
+    else {
+        return Err("a repeated version mismatch was not refused".into());
+    };
+    assert_eq!(repeated.reason(), NameIdManagementRefusal::VersionMismatch);
+    assert!(cache.seen.is_empty(), "{:?}", cache.seen);
 
     let declared = idp_request_xml(
         r#"<saml:NameID>alice@example.com</saml:NameID>"#,

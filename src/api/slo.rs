@@ -268,6 +268,18 @@ impl ServiceProvider {
     /// `SingleLogoutService` location; a SOAP response without `Destination`
     /// needs no local SOAP endpoint.
     ///
+    /// The pending request is borrowed, so this method does not make it single
+    /// use. With [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache),
+    /// the `ID` of a `Success` response is stored for
+    /// [`SamlValidationContext::with_replay_retention`], and a repeated `ID`
+    /// returns [`SamlError::ReplayDetected`]. A response with another status is
+    /// not stored. [`ReplayPolicy::NoCache`](crate::ReplayPolicy::NoCache)
+    /// skips only that storage. It is enough when your store hands out each
+    /// pending request once, for example by removing it before this call, and
+    /// for a SOAP response, which arrives on the exchange that sent the request.
+    /// Supply a cache when the same pending state can come back, as from a
+    /// client-side session.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the response does not match the pending
@@ -277,8 +289,10 @@ impl ServiceProvider {
     /// SOAP request; when IdP metadata cannot be parsed; when XML,
     /// signature, trust, status, or time validation fails; when the receiving
     /// URL is unpublished or multiple local endpoints have no explicit
-    /// receiving URL; or when replay
-    /// validation detects a duplicate or expired message. Browser responses require a verified signature.
+    /// receiving URL; or when replay validation fails for a `Success`
+    /// response: [`SamlError::ReplayDetected`] for a stored `ID`, and
+    /// [`SamlError::TimeWindowInvalid`] when the context has no positive replay
+    /// retention. Browser responses require a verified signature.
     /// A status other than `Success` returns [`SamlError::StatusNotSuccess`]
     /// after authentication and the issuer, correlation, and recipient checks.
     /// The error carries the peer's operator diagnostic when present.
@@ -610,6 +624,18 @@ impl IdentityProvider {
     /// `SingleLogoutService` location; a SOAP response without `Destination`
     /// needs no local SOAP endpoint.
     ///
+    /// The pending request is borrowed, so this method does not make it single
+    /// use. With [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache),
+    /// the `ID` of a `Success` response is stored for
+    /// [`SamlValidationContext::with_replay_retention`], and a repeated `ID`
+    /// returns [`SamlError::ReplayDetected`]. A response with another status is
+    /// not stored. [`ReplayPolicy::NoCache`](crate::ReplayPolicy::NoCache)
+    /// skips only that storage. It is enough when your store hands out each
+    /// pending request once, for example by removing it before this call, and
+    /// for a SOAP response, which arrives on the exchange that sent the request.
+    /// Supply a cache when the same pending state can come back, as from a
+    /// client-side session.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the response does not match the pending
@@ -619,8 +645,10 @@ impl IdentityProvider {
     /// SOAP request; when SP metadata cannot be parsed; when XML,
     /// signature, trust, status, or time validation fails; when the receiving
     /// URL is unpublished or multiple local endpoints have no explicit
-    /// receiving URL; or when replay
-    /// validation detects a duplicate or expired message. Browser responses require a verified signature.
+    /// receiving URL; or when replay validation fails for a `Success`
+    /// response: [`SamlError::ReplayDetected`] for a stored `ID`, and
+    /// [`SamlError::TimeWindowInvalid`] when the context has no positive replay
+    /// retention. Browser responses require a verified signature.
     /// A status other than `Success` returns [`SamlError::StatusNotSuccess`]
     /// after authentication and the issuer, correlation, and recipient checks.
     /// The error carries the peer's operator diagnostic when present.

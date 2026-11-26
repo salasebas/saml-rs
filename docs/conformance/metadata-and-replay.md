@@ -179,21 +179,43 @@ For the use of declarations after login, see [scoped attributes](web-browser-sso
 
 ## Replay
 
-The service provider requires a caller-owned `ReplayCache` for HTTP-POST SSO responses. Artifact and name identifier management replay rows are in [Artifact resolution](artifact-resolution.md) and [Name identifier management](name-id-management.md).
-The `ReplayCache` contract defines the result when an assertion deadline
-passes before storage.
+`SamlValidationContext::new` takes a `ReplayPolicy`. With
+`ReplayPolicy::RequireCache`, receive operations store message, assertion, and
+artifact keys in a caller-owned `ReplayCache`, and a repeated key is refused.
+`ReplayPolicy::NoCache` skips only that storage. Signature, issuer,
+correlation, destination, and time checks still run. Artifact and name
+identifier management replay rows are in
+[Artifact resolution](artifact-resolution.md) and
+[Name identifier management](name-id-management.md). The `ReplayCache`
+contract defines the result when an assertion deadline passes before storage.
+
+`finish_slo` and `finish_name_id_management_redirect` borrow the pending
+request. Using each pending request once is the caller's storage duty. A
+store that removes it before the call needs no cache for the response. A
+store that can return it again, such as a client-side session, needs one.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Require a caller-owned cache for every HTTP-POST SSO acceptance. The cache must atomically reject duplicate bearer assertion `ID`s across all accepting nodes. A duplicate or storage failure prevents acceptance | Mandatory | Profiles §4.1.4.5 | `ReplayPolicy::RequireCache` |
 | For HTTP-POST, retain each bearer assertion `ID` through its `SubjectConfirmationData@NotOnOrAfter` validity window, including allowed skew | Mandatory | Profiles §4.1.4.3, §4.1.4.5, E26, E92 | `SamlValidationContext::with_clock_skew` |
 | For each direct bearer assertion, use its latest UTC bearer deadline. Ignore an unparseable deadline if another parses. Storage fails when none parses for the selected assertion. Give another assertion the selected assertion's deadline when its own has passed or does not parse | Library policy: it keeps the identifier at least as long as the confirmation that satisfied the checks. | Profiles §4.1.4.3 | Always |
-| Also store the `Response` `ID` until the earliest of `Conditions@NotOnOrAfter`, the bearer confirmation, and each `SessionNotOnOrAfter`, plus skew | Library policy: reason not recorded. | — | `ReplayPolicy::RequireCache` |
+| Also store the `Response` `ID` until the earliest of `Conditions@NotOnOrAfter`, the bearer confirmation, and each `SessionNotOnOrAfter`, plus skew | Library policy: the response follows the [protocol message ID rule](#protocol-message-ids), and the response is not accepted after that deadline. | — | `ReplayPolicy::RequireCache` |
 | Store bearer assertion `ID`s for HTTP-POST-SimpleSign or HTTP-Artifact when a cache is supplied | Library policy: Profiles §4.1.4.5 states the duty for HTTP POST only, and Security considerations §7.1.1.4 defers replay countermeasures to the binding. | Profiles §4.1.4.5 | `ReplayPolicy::RequireCache` |
-| Store the `ID` of an `AuthnRequest` that `receive_sso` accepts, and of a `LogoutResponse` with status `Success` in `finish_slo`, for `with_replay_retention`. A refused request or a response with another status is not stored | Library policy: Web Browser SSO and Single Logout require no identifier cache for these messages. | — | `ReplayPolicy::RequireCache` |
-| Store the `ID` of an authenticated `LogoutRequest` in `receive_slo`, before decrypting its identifier, until its `NotOnOrAfter` plus skew, or for `with_replay_retention` when it has none. A refused newer version or an expired request is not stored | Library policy: Single Logout requires no identifier cache. | — | `ReplayPolicy::RequireCache` |
 | Treat `OneTimeUse` as always valid and never retain the assertion for later use | Mandatory | Core §2.5.1.5 | Always |
 | Use an assertion that carries `OneTimeUse` immediately | Recommended | Core §2.5.1.5 | Always |
+
+### Protocol message IDs
+
+These rows cover `AuthnRequest`, `LogoutRequest`, `LogoutResponse`, and the
+SSO `Response` `ID`. The name identifier management records link here.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Store a request `ID` only after authentication and every check that refuses it before storage. Store a response `ID` only for `Success`. A message refused or failed before storage is not stored, so its repeat is validated again from the start | Library policy: an unsigned `ID` stops no replay because anyone can mint a new one, and a refusal changes no state. | — | `ReplayPolicy::RequireCache` |
+| Store a `LogoutRequest` or `ManageNameIDRequest` `ID` before decrypting its identifier, so an undecryptable request counts as stored. Store the IDs of an SSO response whose assertion matches an `OutstandingLogout` before refusing it | Library policy: the receiver has read the content and acted on it once, so a repeat must not reach decryption or acceptance again. | Core §3.7.3.1 | `ReplayPolicy::RequireCache` |
+| Store the `ID` of an authenticated `AuthnRequest` that `receive_sso` returns, and of a `Success` `LogoutResponse` in `finish_slo`, for `with_replay_retention` | Library policy: Web Browser SSO and Single Logout require no identifier cache for these messages, so the cache is the caller's choice. | — | `ReplayPolicy::RequireCache` |
+| Store the `ID` of an authenticated `LogoutRequest` in `receive_slo` until its `NotOnOrAfter` plus skew, or for `with_replay_retention` when it has none | Library policy: Single Logout requires no identifier cache, so the cache is the caller's choice. | Core §3.7.1 | `ReplayPolicy::RequireCache` |
+| Refuse to store a message without `NotOnOrAfter` when `with_replay_retention` is unset or zero | Library policy: the library has no acceptance deadline for such a message, so a default retention could expire while the message is still accepted. | — | `SamlValidationContext::with_replay_retention` |
 
 ## Typed metadata accessors
 

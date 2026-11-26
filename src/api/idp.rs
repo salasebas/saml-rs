@@ -73,6 +73,11 @@ impl IdentityProvider {
     /// [`MessageAuthentication::Unauthenticated`](crate::MessageAuthentication::Unauthenticated)
     /// request as advice.
     ///
+    /// With [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache),
+    /// the `ID` of an authenticated request that this method returns is stored
+    /// for [`SamlValidationContext::with_replay_retention`]. An unauthenticated
+    /// request and a refused request are not stored.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the inbound message or relay state is invalid, the
@@ -82,8 +87,10 @@ impl IdentityProvider {
     /// binding, the receiving URL is unpublished, multiple local endpoints
     /// have no explicit receiving URL,
     /// an enabled [`crate::RequestAgePolicy`]
-    /// rejects `IssueInstant`, or replay validation detects a duplicate or
-    /// expired request.
+    /// rejects `IssueInstant`, or replay validation fails for an authenticated
+    /// request: [`SamlError::ReplayDetected`] for a stored `ID`, and
+    /// [`SamlError::TimeWindowInvalid`] when the context has no positive replay
+    /// retention.
     ///
     /// # Examples
     ///
@@ -163,7 +170,10 @@ impl IdentityProvider {
                 }),
             });
         }
-        validation.check_and_store_message_replay(ReplayKey::AuthnRequest(authn.id().clone()))?;
+        if authentication == MessageAuthentication::Authenticated {
+            validation
+                .check_and_store_message_replay(ReplayKey::AuthnRequest(authn.id().clone()))?;
+        }
         Ok(Received::new(
             authn,
             binding.into(),

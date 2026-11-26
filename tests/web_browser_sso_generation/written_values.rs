@@ -251,22 +251,15 @@ fn a_request_id_is_written_as_in_response_to_only_as_an_ncname(
     Ok(())
 }
 
-fn replay_checked(cache: &mut saml_rs::InMemoryReplayCache) -> SamlValidationContext<'_> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(cache))
-        .with_replay_retention(Duration::from_secs(300))
-}
-
 #[test]
-fn a_padded_request_id_is_one_id_for_replay_and_correlation(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn a_padded_request_id_is_one_id_for_correlation() -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(SpValidationPolicy::default())?;
     let idp = idp_with(IdpValidationPolicy::default(), false)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let mut cache = saml_rs::InMemoryReplayCache::new();
     let received = idp.receive_sso(
         &sp_descriptor,
         authn_request_with_id(&sp, &idp_descriptor, " _padded ")?,
-        replay_checked(&mut cache),
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache),
     )?;
     assert_eq!(received.message().id().as_str(), "_padded");
     let response = idp.respond_sso(
@@ -278,14 +271,5 @@ fn a_padded_request_id_is_one_id_for_replay_and_correlation(
     let xml = response_xml(&response)?;
     assert_eq!(xml.matches("InResponseTo=\"_padded\"").count(), 2, "{xml}");
 
-    let replayed = idp.receive_sso(
-        &sp_descriptor,
-        authn_request_with_id(&sp, &idp_descriptor, "_padded")?,
-        replay_checked(&mut cache),
-    );
-    assert!(
-        matches!(replayed, Err(SamlError::ReplayDetected { .. })),
-        "{replayed:?}"
-    );
     Ok(())
 }

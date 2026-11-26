@@ -156,7 +156,18 @@ pub trait ReplayCache {
     fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError>;
 }
 
-/// Replay behavior for typed inbound browser flows.
+/// Replay behavior for typed inbound flows.
+///
+/// With [`Self::RequireCache`], a receive operation stores the `ID` of an
+/// authenticated request after every check that refuses it before storage, and
+/// the `ID` of a `Success` response. An accepted SSO response also stores its
+/// assertion IDs. A message refused or failed before storage is not stored, so
+/// a repeat is validated again from the start. A `LogoutRequest` or
+/// `ManageNameIDRequest` is stored before its identifier is decrypted, and an
+/// SSO response that matches an [`crate::OutstandingLogout`] is stored before
+/// it is refused. An artifact is stored when its resolution starts, whatever
+/// the outcome. A repeat that reaches the cache while its stored key is
+/// retained returns [`SamlError::ReplayDetected`].
 ///
 /// `Debug` identifies the selected policy without exposing cache contents.
 ///
@@ -165,10 +176,12 @@ pub trait ReplayCache {
 /// `docs/conformance/metadata-and-replay.md`.
 #[non_exhaustive]
 pub enum ReplayPolicy<'a> {
-    /// Supply no replay cache and skip optional replay checks.
+    /// Supply no replay cache and skip only the storage of message,
+    /// assertion, and artifact keys. Signature, issuer, correlation,
+    /// destination, and time checks still run.
     /// HTTP-POST SSO acceptance returns [`SamlError::ReplayCacheRequired`].
     NoCache,
-    /// Require the caller to provide replay storage.
+    /// Store keys in the caller's replay storage and reject a repeated key.
     RequireCache(&'a mut dyn ReplayCache),
 }
 
@@ -311,10 +324,19 @@ impl<'a> SamlValidationContext<'a> {
     /// Set explicit replay retention for protocol messages that do not carry a
     /// SAML `NotOnOrAfter` value suitable for cache expiry.
     ///
+    /// These messages are an `AuthnRequest`, a `LogoutRequest` without
+    /// `NotOnOrAfter`, a `LogoutResponse`, a `ManageNameIDRequest`, a
+    /// `ManageNameIDResponse`, and an artifact. The library has no acceptance
+    /// deadline for them, so keep each key for as long as you would
+    /// accept the message. With [`Self::with_authn_request_age`], choose a
+    /// retention longer than the maximum age plus the clock skew in both
+    /// directions, because the window includes both ends and an entry expires
+    /// at its deadline.
+    ///
     /// Set a positive duration that can be added to the validation instant
     /// ([`Self::now`]). When a receive operation uses this duration for the
-    /// replay cache, zero or an unrepresentable deadline returns
-    /// [`SamlError::TimeWindowInvalid`] with
+    /// replay cache, a missing or zero retention or an unrepresentable deadline
+    /// returns [`SamlError::TimeWindowInvalid`] with
     /// [`crate::TimeWindowField::ReplayExpiration`].
     pub fn with_replay_retention(mut self, retention: Duration) -> Self {
         self.replay_retention = Some(retention);
