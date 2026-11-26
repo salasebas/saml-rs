@@ -44,6 +44,8 @@ impl ServiceProvider {
     /// this service provider no longer accepts assertions with the
     /// identifier. To end the principal's sessions too, send `LogoutRequest`
     /// first: a `LogoutRequest` must not follow the termination.
+    /// The caller's duties after the exchange, such as which identifier to
+    /// use next, are listed in `docs/conformance/name-id-management.md#after-the-exchange`.
     ///
     /// `name_id` is sent as the identity provider issued it. Its value and
     /// qualifiers are not checked against the length and `entity` rules the
@@ -115,8 +117,10 @@ impl ServiceProvider {
     /// A [`NameIdManagementReceipt::Request`] is ready to apply. Answer it
     /// with [`Self::respond_name_id_management_redirect`]. After a
     /// [`NameIdChange::NewId`], expect the new value as the `NameID` content
-    /// of later assertions. An `EncryptedID` or `NewEncryptedID` is decrypted
-    /// with this service provider's decryption key. A
+    /// of later assertions, and use it wherever the changed identifier would
+    /// have been used with the identity provider. An `EncryptedID` or
+    /// `NewEncryptedID` is decrypted with this service provider's decryption
+    /// key. A
     /// [`NameIdManagementReceipt::Refused`] already carries the browser
     /// action that answers the request. It reports a decryption failure, a
     /// request outside the configured age window, an unsupported newer
@@ -133,6 +137,9 @@ impl ServiceProvider {
     /// returns its error first. The action goes to the identity provider's
     /// `ManageNameIDService` that
     /// [`Self::respond_name_id_management_redirect`] would choose.
+    ///
+    /// The caller's duties after the exchange, such as which identifier to
+    /// use next, are listed in `docs/conformance/name-id-management.md#after-the-exchange`.
     ///
     /// # Errors
     ///
@@ -181,6 +188,9 @@ impl ServiceProvider {
     /// or `Location` when it has none, is `https`. With
     /// [`RespondNameIdManagement::allow_http`], it goes to the first one.
     ///
+    /// The caller's duties after the exchange, such as which identifier to
+    /// use next, are listed in `docs/conformance/name-id-management.md#after-the-exchange`.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError::UnsupportedBinding`] when the request arrived over
@@ -227,6 +237,9 @@ impl ServiceProvider {
     /// returns [`SamlError::ReplayDetected`]. A response with another status is
     /// not stored. [`ReplayPolicy::NoCache`](crate::ReplayPolicy::NoCache) is
     /// enough when your store hands out each pending request once.
+    ///
+    /// The caller's duties after the exchange, such as which identifier to
+    /// use next, are listed in `docs/conformance/name-id-management.md#after-the-exchange`.
     ///
     /// # Errors
     ///
@@ -279,6 +292,8 @@ impl IdentityProvider {
     /// the identifier. To end the principal's sessions too, send
     /// `LogoutRequest` first: a `LogoutRequest` must not follow the
     /// termination.
+    /// The caller's duties after the exchange, such as which identifier to
+    /// use next, are listed in `docs/conformance/name-id-management.md#after-the-exchange`.
     ///
     /// The request goes to the service provider's first HTTP-Redirect
     /// `ManageNameIDService` with an `https` `Location`. With
@@ -350,6 +365,9 @@ impl IdentityProvider {
     /// decrypted with this identity provider's decryption key. A
     /// [`NameIdManagementReceipt::Refused`] already carries the browser
     /// action that answers the request.
+    ///
+    /// The caller's duties after the exchange, such as which identifier to
+    /// use next, are listed in `docs/conformance/name-id-management.md#after-the-exchange`.
     ///
     /// # Errors
     ///
