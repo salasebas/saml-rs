@@ -156,9 +156,12 @@ impl IdpMetadata {
             .unwrap_or_default()
     }
 
-    /// First non-empty `SingleSignOnService` `Location` for `binding`.
+    /// First non-empty `SingleSignOnService` `Location` for `binding`, in
+    /// document order.
     ///
-    /// AuthnRequests are sent to this URL.
+    /// [`ServiceProvider::start_sso`](crate::ServiceProvider::start_sso) sends
+    /// the request to the first `https` location for `binding`, which can be
+    /// a later one.
     pub fn single_sign_on_location(&self, binding: Binding) -> Option<String> {
         super::first_published_location(
             self.inner.meta.get("singleSignOnService"),

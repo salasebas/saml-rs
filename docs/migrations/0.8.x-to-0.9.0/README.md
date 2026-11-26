@@ -102,5 +102,6 @@ Check the topics that affect your integration.
 - [Answer malformed name identifier management requests](name-id-management-malformed-requests.md)
 - [Start reference transform lists with the enveloped-signature transform](enveloped-signature-transform.md)
 - [Handle peer metadata with a malformed indexed endpoint](indexed-endpoint-fields.md)
+- [Send AuthnRequests to a published https sign-on endpoint](sso-https-endpoint.md)
 
 [All migration guides](../README.md)
