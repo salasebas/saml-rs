@@ -28,10 +28,13 @@ feature the crate lacks still has a row.
 
 One status column per actor. Name each column for its actor: "Identity
 provider" and "Service provider", or "Requester" and "Responder", or
-"Signer" and "Verifier".
+"Signer" and "Verifier". Use a second table, under its own
+level-three heading, when part of the record has different actors.
 
-A status is `Supported`, `Partial`, `Not supported`, or `—`. Link a
-`Partial` cell to its entry under "Partial support".
+A status is `Supported`, `Partial`, `Not supported`, or `—`. `Supported`
+covers every build and every form of the feature that the row names. When
+only part of that works, the status is `Partial`. Link a `Partial` cell to
+its entry under "Partial support".
 -->
 
 | Feature | Section | <Actor> | <Actor> |
@@ -84,9 +87,10 @@ row is an open question, not a decision.
 ## Application duties
 
 <!--
-What the specification requires or recommends and the crate cannot do,
-because the application owns the HTTP exchange, the session, or the storage.
-A duty does not make a feature `Partial`.
+What the specification requires, recommends, or permits and the crate cannot
+do, because the application owns the HTTP exchange, the session, or the
+storage. `Level` is `Mandatory`, `Recommended`, or `Optional`. A duty does
+not make a feature `Partial`.
 -->
 
 | Duty | Level | Section |

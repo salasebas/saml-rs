@@ -15,16 +15,25 @@ session-only cookie does not mean the user still has a session there. Core
 
 ## Support
 
+### Common domain cookie
+
 | Feature | Section | Identity provider | Service provider |
 | --- | --- | --- | --- |
 | Build the common domain cookie `_saml_idp` | Profiles §4.3.2 | Supported | — |
-| Keep the identity providers that an existing cookie lists | Profiles §4.3.2 | Supported | — |
+| Append this identity provider to the list in an existing cookie | Profiles §4.3.2 | Supported | — |
 | Choose a session-only or a persistent cookie | Profiles §4.3.2, E63 | Supported | — |
 | Set the cookie after the principal authenticates | Profiles §4.3.3 | Supported | — |
 | Read the cookie to learn which identity providers a principal uses | Profiles §4.3.4 | — | Not supported |
-| Send a discovery request and read the discovery response | SAMLDS §2.4 | — | Not supported |
-| Publish `idpdisc:DiscoveryResponse` endpoints in metadata | SAMLDS §2.5 | — | Not supported |
-| Act as a discovery service | SAMLDS | Not supported | Not supported |
+| Relay the `AuthnRequest` through the HTTP server in the common domain | Profiles §4.3.4 | — | Not supported |
+
+### Discovery service protocol
+
+| Feature | Section | Service provider | Discovery service |
+| --- | --- | --- | --- |
+| HTTP request to the discovery service | SAMLDS §2.4.1 | Not supported | Not supported |
+| Choice of the identity provider | SAMLDS §2.4.2 | — | Not supported |
+| HTTP redirect back to the service provider | SAMLDS §2.4.3 | Not supported | Not supported |
+| `idpdisc:DiscoveryResponse` endpoints in metadata | SAMLDS §2.5 | Not supported | — |
 
 ## Rules
 
@@ -72,7 +81,11 @@ no option to republish invalid identifiers.
 
 | Duty | Level | Section |
 | --- | --- | --- |
-| After the principal authenticates, call `common_domain_cookie` and write the header that `CommonDomainCookie::set_cookie_header` returns | Optional | Profiles §4.3.3 |
+| After the principal authenticates, write the cookie that `common_domain_cookie` returns | Optional | Profiles §4.3.3 |
+
+`CommonDomainCookie::set_cookie_header` is the whole `Set-Cookie` value. A
+caller that builds the cookie with its own framework writes the name, the
+value, the path, the domain, and the lifetime, and marks the cookie `Secure`.
 
 <a id="not-implemented"></a>
 

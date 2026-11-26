@@ -125,14 +125,18 @@ and its rows keep that form until it does.
 Take the features from the specification, so that a feature the crate lacks
 still has a row.
 
-- `Supported`: the crate implements the feature for this actor, and every
+- `Supported`: the crate implements the feature for this actor, on every
+  build and for every form of the feature that the row names, and every
   Mandatory rule for it holds.
-- `Partial`: the crate implements the feature with a gap. A Mandatory rule
-  is unmet, a binding or a form of the message is missing, or a build lacks
-  it. The record says which under **Partial support**.
+- `Partial`: the crate implements only part of what the row names. A
+  Mandatory rule is unmet, a binding or a form of the message is missing, or
+  a build lacks it. The record says which under **Partial support**.
 - `Not supported`: the crate does not implement the feature and claims
   nothing about it.
 - `—`: the specification gives this actor no part in the feature.
+
+A record uses more than one Support table when its exchanges have different
+actors.
 
 A duty that only the application can perform does not make a feature
 `Partial`. Record it under **Application duties**.
