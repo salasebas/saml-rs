@@ -82,5 +82,6 @@ Check the topics that affect your integration.
 - [Repeat unsigned and refused requests without a replay error](replay-storage.md)
 - [Read metadata name identifier formats only in the metadata namespace](metadata-name-id-format-namespace.md)
 - [Give each published contact a detail](contact-person-detail.md)
+- [Use a non-SAML namespace for AuthnRequest extensions](extension-namespaces.md)
 
 [All migration guides](../README.md)

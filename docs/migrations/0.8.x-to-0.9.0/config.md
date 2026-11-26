@@ -493,7 +493,8 @@ and instant, and `SsoOutcome::Failure` for an error status. To carry a custom
 `<AuthnRequest>` extension forward, parse its standalone XML element with
 `ExtensionElement::from_xml` and pass it to `StartSso::extension`. Declare
 the namespaces the element uses in the standalone XML. Its root uses a
-namespace outside the SAML protocol, assertion, and metadata namespaces.
+namespace that SAML does not define; see
+[Use a non-SAML namespace for AuthnRequest extensions](extension-namespaces.md).
 
 ```rust
 use saml_rs::{ExtensionElement, StartSso};

@@ -336,18 +336,26 @@ fn signed_requests_write_extensions_in_schema_order_for_all_bindings(
 }
 
 #[test]
-fn extension_requires_one_xml_element_in_a_foreign_namespace() {
+fn extension_requires_one_xml_element_in_a_foreign_namespace(
+) -> Result<(), Box<dyn std::error::Error>> {
     for xml in [
         "<Hint/>",
         r#"<Hint xmlns="urn:oasis:names:tc:SAML:2.0:protocol"/>"#,
         r#"<Hint xmlns="urn:oasis:names:tc:SAML:2.0:assertion"/>"#,
         r#"<Hint xmlns="urn:oasis:names:tc:SAML:2.0:metadata"/>"#,
+        r#"<Hint xmlns="urn:oasis:names:tc:SAML:2.0:ac"/>"#,
+        r#"<Hint xmlns="urn:oasis:names:tc:SAML:2.0:ac:classes:Password"/>"#,
+        r#"<Hint xmlns="urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp"/>"#,
+        r#"<Hint xmlns="urn:oasis:names:tc:SAML:1.0:assertion"/>"#,
     ] {
         assert!(
             matches!(ExtensionElement::from_xml(xml), Err(SamlError::Invalid(_))),
             "{xml}"
         );
     }
+    ExtensionElement::from_xml(
+        r#"<aslo:Asynchronous xmlns:aslo="urn:oasis:names:tc:SAML:2.0:protocol:ext:async-slo"/>"#,
+    )?;
     let malformed = [
         "<undeclared:Hint/>",
         r#"<Hint xmlns="urn:test"/><Hint xmlns="urn:test"/>"#,
@@ -363,6 +371,7 @@ fn extension_requires_one_xml_element_in_a_foreign_namespace() {
         .filter(|xml| !matches!(ExtensionElement::from_xml(xml), Err(SamlError::Xml { .. })))
         .collect();
     assert!(accepted.is_empty(), "{accepted:?}");
+    Ok(())
 }
 
 #[test]
