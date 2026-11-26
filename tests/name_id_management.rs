@@ -1003,8 +1003,37 @@ fn a_bounded_request_age_rejects_an_old_request_before_replay_storage() -> TestR
     Ok(())
 }
 
+fn assert_refused_as_malformed(received: NameIdManagementReceipt, content: &str) -> TestResult {
+    let NameIdManagementReceipt::Refused(refused) = received else {
+        return Err(format!("{content} was accepted").into());
+    };
+    assert_eq!(
+        refused.reason(),
+        NameIdManagementRefusal::MalformedRequest,
+        "{content}"
+    );
+    assert!(
+        matches!(refused.content_error(), Some(SamlError::ProtocolProfile(_))),
+        "{content}: {:?}",
+        refused.content_error()
+    );
+    let xml = body(refused.response().envelope())?;
+    assert_eq!(
+        attribute(&xml, "InResponseTo"),
+        Some(SP_REQUEST_ID),
+        "{content}"
+    );
+    assert!(
+        xml.contains(&format!(
+            r#"<samlp:Status><samlp:StatusCode Value="{REQUESTER}"/></samlp:Status>"#
+        )),
+        "{content}: {xml}"
+    );
+    Ok(())
+}
+
 #[test]
-fn a_request_without_one_identifier_and_one_change_is_rejected() -> TestResult {
+fn a_request_without_one_identifier_and_one_change_is_answered_with_requester() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;
     let name_id = current_name_id_xml();
@@ -1031,11 +1060,8 @@ fn a_request_without_one_identifier_and_one_change_is_rejected() -> TestResult {
             &sp_request(&content)?,
             authenticated(),
             validation(),
-        );
-        assert!(
-            matches!(received, Err(SamlError::ProtocolProfile(_))),
-            "{content} was accepted"
-        );
+        )?;
+        assert_refused_as_malformed(received, &content)?;
     }
 
     let issuer = format!("<saml:Issuer>{SP_ENTITY_ID}</saml:Issuer>");
@@ -1046,10 +1072,39 @@ fn a_request_without_one_identifier_and_one_change_is_rejected() -> TestResult {
         &format!("{EXTENSIONS}{issuer}{name_id}<samlp:Terminate/>"),
     )?;
     let received =
-        idp.receive_name_id_management(&sp, &extensions_first, authenticated(), validation());
+        idp.receive_name_id_management(&sp, &extensions_first, authenticated(), validation())?;
+    assert_refused_as_malformed(received, "Extensions before Issuer")?;
+
+    let weak = SoapChannel::new(
+        PartyAuthentication::Unattested,
+        MessageIntegrity::Protected,
+        MessageConfidentiality::Protected,
+    );
+    let received = idp.receive_name_id_management(&sp, &sp_request(&name_id)?, weak, validation());
     assert!(
-        matches!(received, Err(SamlError::ProtocolProfile(_))),
-        "Extensions before Issuer was accepted"
+        matches!(received, Err(SamlError::SoapChannelProtection)),
+        "{received:?}"
+    );
+    let from_other = sp_request_with(
+        &attributes,
+        &format!("<saml:Issuer>{OTHER_ENTITY_ID}</saml:Issuer>"),
+        &name_id,
+    )?;
+    let received = idp.receive_name_id_management(&sp, &from_other, authenticated(), validation());
+    assert!(
+        matches!(received, Err(SamlError::IssuerMismatch { .. })),
+        "{received:?}"
+    );
+    let misaddressed = sp_request_with(
+        r#"Version="2.0" Destination="https://idp.example.com/elsewhere""#,
+        &issuer,
+        &name_id,
+    )?;
+    let received =
+        idp.receive_name_id_management(&sp, &misaddressed, authenticated(), validation());
+    assert!(
+        matches!(received, Err(SamlError::DestinationMismatch { .. })),
+        "{received:?}"
     );
 
     let in_order = sp_request(&format!("{EXTENSIONS}{name_id}<samlp:Terminate/>"))?;

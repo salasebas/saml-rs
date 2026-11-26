@@ -119,9 +119,18 @@ impl ServiceProvider {
     /// with this service provider's decryption key. A
     /// [`NameIdManagementReceipt::Refused`] already carries the browser
     /// action that answers the request. It reports a decryption failure, a
-    /// request outside the configured age window, or an unsupported newer
-    /// version. A newer major version adds `RequestVersionTooHigh` to
-    /// `VersionMismatch`. The action goes to the identity provider's
+    /// request outside the configured age window, an unsupported newer
+    /// version, or an identifier and change that do not follow
+    /// `ManageNameIDRequestType`. A newer major version adds
+    /// `RequestVersionTooHigh` to `VersionMismatch`. Only a request whose
+    /// signature verifies, from the identity provider, and at this service
+    /// provider's endpoint is refused this way: any other request returns an
+    /// error. Version, content, and age refusals come before replay detection,
+    /// so a repeated one is refused again. A decryption refusal comes after the
+    /// request `ID` is stored, so a repeated one returns
+    /// [`SamlError::ReplayDetected`]. A configured
+    /// [`SchemaValidator`](crate::SchemaValidator) that rejects the request
+    /// returns its error first. The action goes to the identity provider's
     /// `ManageNameIDService` that
     /// [`Self::respond_name_id_management_redirect`] would choose.
     ///
@@ -131,8 +140,9 @@ impl ServiceProvider {
     /// not the identity provider, `Destination` is missing or is not the
     /// receiving `ManageNameIDService`, this service provider publishes no
     /// HTTP-Redirect `ManageNameIDService` or several without
-    /// [`SamlValidationContext::with_recipient_endpoint`], the message is
-    /// malformed, its version is too low for a SAML 2.0 response, or replay
+    /// [`SamlValidationContext::with_recipient_endpoint`], the message lacks a
+    /// readable `ID`, `Version`, `IssueInstant`, or `Issuer`, its version is
+    /// too low for a SAML 2.0 response, or replay
     /// validation detects a duplicate. Returns the endpoint errors of
     /// [`Self::respond_name_id_management_redirect`], under `options`, when a
     /// refused request would be answered. Returns

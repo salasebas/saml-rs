@@ -115,12 +115,17 @@ pub enum NameIdManagementRefusal {
     /// The request's `NewEncryptedID` does not decrypt, with this provider's
     /// decryption key, to one `NewID`. The status is `Requester`.
     UndecryptableNewIdentifier,
+    /// The authenticated request does not carry one `NameID` or `EncryptedID`
+    /// and one `NewID`, `NewEncryptedID`, or `Terminate`, in schema order and
+    /// with the content their types allow. The status is `Requester`.
+    MalformedRequest,
 }
 
 pub(crate) enum Refusal {
     VersionMismatch(RequestVersionMismatch),
     RequestAgeOutsideWindow,
     Undecryptable(Undecryptable),
+    Malformed(SamlError),
 }
 
 impl Refusal {
@@ -129,6 +134,7 @@ impl Refusal {
             Self::VersionMismatch(_) => NameIdManagementRefusal::VersionMismatch,
             Self::RequestAgeOutsideWindow => NameIdManagementRefusal::RequestAgeOutsideWindow,
             Self::Undecryptable(failure) => failure.reason,
+            Self::Malformed(_) => NameIdManagementRefusal::MalformedRequest,
         }
     }
 
@@ -140,7 +146,9 @@ impl Refusal {
             {
                 Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal())
             }
-            Self::RequestAgeOutsideWindow | Self::Undecryptable(_) => Status::requester(),
+            Self::RequestAgeOutsideWindow | Self::Undecryptable(_) | Self::Malformed(_) => {
+                Status::requester()
+            }
         }
     }
 }
@@ -151,17 +159,22 @@ pub struct RefusedNameIdManagement<Response = SoapResponse> {
     response: Response,
     reason: NameIdManagementRefusal,
     decryption_error: Option<Arc<SamlError>>,
+    content_error: Option<Arc<SamlError>>,
 }
 
 impl<Response> RefusedNameIdManagement<Response> {
     pub(crate) fn new(response: Response, refusal: Refusal) -> Self {
+        let reason = refusal.reason();
+        let (decryption_error, content_error) = match refusal {
+            Refusal::Undecryptable(failure) => (Some(Arc::new(failure.error)), None),
+            Refusal::Malformed(error) => (None, Some(Arc::new(error))),
+            Refusal::VersionMismatch(_) | Refusal::RequestAgeOutsideWindow => (None, None),
+        };
         Self {
             response,
-            reason: refusal.reason(),
-            decryption_error: match refusal {
-                Refusal::Undecryptable(failure) => Some(Arc::new(failure.error)),
-                Refusal::VersionMismatch(_) | Refusal::RequestAgeOutsideWindow => None,
-            },
+            reason,
+            decryption_error,
+            content_error,
         }
     }
 
@@ -183,6 +196,14 @@ impl<Response> RefusedNameIdManagement<Response> {
     /// missing decryption key or an unreadable key is reported here.
     pub fn decryption_error(&self) -> Option<&SamlError> {
         self.decryption_error.as_deref()
+    }
+
+    /// Why the request content was refused, for
+    /// [`NameIdManagementRefusal::MalformedRequest`].
+    ///
+    /// The error stays local: the response carries only the SAML status.
+    pub fn content_error(&self) -> Option<&SamlError> {
+        self.content_error.as_deref()
     }
 }
 
@@ -383,7 +404,10 @@ pub(crate) fn receive(
     if let Some(mismatch) = RequestVersionMismatch::for_request(&version)? {
         return refused(idp, &id, Refusal::VersionMismatch(mismatch));
     }
-    let (identifier, change) = identifier_and_change(&request)?;
+    let (identifier, change) = match identifier_and_change(&request) {
+        Ok(content) => content,
+        Err(error) => return refused(idp, &id, Refusal::Malformed(error)),
+    };
     if validation
         .check_manage_name_id_request_issue_instant(&issue_instant)
         .is_err()

@@ -8,9 +8,9 @@ use saml_rs::tests::signature_relocation::{relocate_signature, Relocation};
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EndpointUrl, EntityId, IdentityProvider, IdpConfig,
     InMemoryReplayCache, ManageNameIdService, MetadataTrustPolicy, NameId, NameIdChange,
-    NameIdManagementReceipt, PrivateKeyPem, ReplayPolicy, SamlError, SamlValidationContext,
-    ServiceProvider, SoapBodyElement, SoapChannel, SoapResponse, SpConfig, SpDescriptor,
-    SsoEndpoint, StartNameIdManagement, X509Credential,
+    NameIdManagementReceipt, NameIdManagementRefusal, PrivateKeyPem, ReplayPolicy, SamlError,
+    SamlValidationContext, ServiceProvider, SoapBodyElement, SoapChannel, SoapResponse, SpConfig,
+    SpDescriptor, SsoEndpoint, StartNameIdManagement, X509Credential,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -180,7 +180,21 @@ fn soap_manage_name_id_request_verifies_the_sp_signature() -> TestResult {
         SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::NoCache),
     );
     assert!(
-        matches!(result, Err(SamlError::ProtocolProfile(_))),
+        matches!(
+            &result,
+            Ok(NameIdManagementReceipt::Refused(refused))
+                if refused.reason() == NameIdManagementRefusal::MalformedRequest
+        ),
+        "{result:?}"
+    );
+    let result = idp.receive_name_id_management(
+        &stale_sp,
+        misplaced.envelope(),
+        channel,
+        SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::NoCache),
+    );
+    assert!(
+        matches!(result, Err(SamlError::SignatureVerification { .. })),
         "{result:?}"
     );
     let request = saml_rs::SoapRequest::try_new(destination, &sign(&xml)?)?;

@@ -980,8 +980,40 @@ fn identifiers_that_do_not_decrypt_are_answered_with_an_error_status() -> TestRe
     Ok(())
 }
 
+fn assert_refused_as_malformed(
+    received: saml_rs::NameIdManagementRedirectReceipt,
+    content: &str,
+) -> TestResult {
+    let NameIdManagementReceipt::Refused(refused) = received else {
+        return Err(format!("{content} was accepted").into());
+    };
+    assert_eq!(
+        refused.reason(),
+        NameIdManagementRefusal::MalformedRequest,
+        "{content}"
+    );
+    assert!(
+        matches!(refused.content_error(), Some(SamlError::ProtocolProfile(_))),
+        "{content}: {:?}",
+        refused.content_error()
+    );
+    let xml = redirect_message_xml(refused.response())?;
+    assert!(
+        xml.contains(r#"InResponseTo="_manage1""#),
+        "{content}: {xml}"
+    );
+    assert!(
+        xml.contains(&format!(
+            r#"<samlp:StatusCode Value="{}"/>"#,
+            status_code::REQUESTER
+        )),
+        "{content}: {xml}"
+    );
+    Ok(())
+}
+
 #[test]
-fn request_must_name_one_identifier_and_one_change() -> TestResult {
+fn a_request_without_one_identifier_and_one_change_is_answered_with_requester() -> TestResult {
     let sp = sp()?;
     let idp = idp()?;
     let idp_peer = idp_descriptor(&idp)?;
@@ -992,16 +1024,13 @@ fn request_must_name_one_identifier_and_one_change() -> TestResult {
         (name_id, "<samlp:NewID>a</samlp:NewID><samlp:Terminate/>"),
     ] {
         let input = signed_request_input(&idp_request_xml(identifier, change))?;
-        match sp.receive_name_id_management_redirect(
+        let received = sp.receive_name_id_management_redirect(
             &idp_peer,
             input,
             ReceiveNameIdManagement::new(),
             validation(),
-        ) {
-            Err(SamlError::ProtocolProfile(message)) if message.contains("requires one NameID") => {
-            }
-            other => return Err(format!("expected a choice error, got {other:?}").into()),
-        }
+        )?;
+        assert_refused_as_malformed(received, &format!("{identifier}{change}"))?;
     }
     for (identifier, change) in [
         (
@@ -1020,14 +1049,8 @@ fn request_must_name_one_identifier_and_one_change() -> TestResult {
             input,
             ReceiveNameIdManagement::new(),
             validation(),
-        );
-        assert!(
-            matches!(
-                received,
-                Err(SamlError::ProtocolProfile(_) | SamlError::Xml { .. })
-            ),
-            "{change} was accepted: {received:?}"
-        );
+        )?;
+        assert_refused_as_malformed(received, &format!("{identifier}{change}"))?;
     }
     let input = signed_request_input(&idp_request_xml(
         name_id,
@@ -1601,7 +1624,8 @@ fn a_request_is_read_under_the_configured_xml_limits() -> TestResult {
 }
 
 #[test]
-fn a_request_out_of_schema_order_or_with_an_extra_element_is_rejected() -> TestResult {
+fn a_request_out_of_schema_order_or_with_an_extra_element_is_answered_with_requester() -> TestResult
+{
     let sp = sp()?;
     let idp = idp()?;
     let idp_peer = idp_descriptor(&idp)?;
@@ -1619,14 +1643,8 @@ fn a_request_out_of_schema_order_or_with_an_extra_element_is_rejected() -> TestR
             input,
             ReceiveNameIdManagement::new(),
             validation(),
-        );
-        assert!(
-            matches!(
-                received,
-                Err(SamlError::ProtocolProfile(_) | SamlError::Xml { .. })
-            ),
-            "{identifier}{change} was accepted: {received:?}"
-        );
+        )?;
+        assert_refused_as_malformed(received, &format!("{identifier}{change}"))?;
     }
     Ok(())
 }
