@@ -259,12 +259,16 @@ impl<'a> SamlValidationContext<'a> {
     }
 
     /// Set the actual receiving URL for `receive_sso`, `finish_sso`,
-    /// `accept_unsolicited_sso`, `receive_slo`, or `finish_slo`.
+    /// `accept_unsolicited_sso`, `receive_slo`, `finish_slo`, or
+    /// `receive_name_id_management`.
     ///
     /// Supply the URL from the HTTP handler, never from the message's
     /// `Destination`. It must be published for the incoming binding and
     /// message direction. For a SOAP `finish_slo`, it selects the local SOAP
-    /// `SingleLogoutService` that a present `Destination` must name. When
+    /// `SingleLogoutService` that a present `Destination` must name. For
+    /// `receive_name_id_management`, it selects the local SOAP
+    /// `ManageNameIDService` that a present `Destination` must name, and a
+    /// request without `Destination` needs no unique local endpoint. When
     /// omitted, `finish_sso` expects the assertion consumer of the pending
     /// request, `accept_unsolicited_sso` expects the default assertion
     /// consumer for the incoming binding, and the other methods infer a
