@@ -88,8 +88,8 @@ impl VerifiedXmlSignature {
 /// Parsed SSO login session.
 ///
 /// The assertion fields come from the first bearer assertion with an
-/// `AuthnStatement`, in document order. If no bearer assertion has one, the
-/// fields come from the first bearer assertion.
+/// `AuthnStatement`, in document order. A response in which no bearer
+/// assertion has one is rejected.
 #[derive(Debug, Clone)]
 pub struct SsoSession {
     response_id: MessageId,
@@ -220,7 +220,7 @@ impl SsoSession {
 
     /// The `<AuthnStatement>` elements of the assertion, in document order.
     ///
-    /// The slice is empty when the assertion has no `AuthnStatement`.
+    /// An accepted session has at least one.
     pub fn authn_statements(&self) -> &[AuthnStatement] {
         &self.authn_statements
     }

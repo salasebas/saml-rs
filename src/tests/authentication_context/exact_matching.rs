@@ -331,22 +331,6 @@ fn exact_authn_context_opt_in_rejects_different_wrong_kind_and_missing_reference
         Err(SamlError::AuthnContextMismatch {
             expected, actual, ..
         }) => {
-            assert_eq!(expected, vec![mfa.clone()]);
-            assert!(actual.is_empty());
-        }
-        other => return Err(format!("expected AuthnContextMismatch, got {other:?}").into()),
-    }
-
-    let no_statement = resign_response_with_statements(&base_response, "")?;
-    match sp.finish_sso(
-        &idp_descriptor,
-        &restored,
-        no_statement,
-        post_validation(&mut replay_cache),
-    ) {
-        Err(SamlError::AuthnContextMismatch {
-            expected, actual, ..
-        }) => {
             assert_eq!(expected, vec![mfa]);
             assert!(actual.is_empty());
         }

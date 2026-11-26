@@ -188,8 +188,9 @@ let attributes = Attributes::new([
 | `session.replay_keys()` | Removed |
 
 `authn_session()` returned an empty `AuthnSession` when the assertion had no
-`AuthnStatement`. `authn_statements().first()` returns `None` instead. The
-renamed `session_not_on_or_after()` is the statement's `SessionNotOnOrAfter`.
+`AuthnStatement`. Such a response is now rejected, as
+[Send an `AuthnStatement` in every successful SSO response](sso-authn-statement.md)
+describes. The renamed `session_not_on_or_after()` is the statement's `SessionNotOnOrAfter`.
 `SsoSession::not_on_or_after()` is still the assertion's
 `Conditions@NotOnOrAfter`.
 

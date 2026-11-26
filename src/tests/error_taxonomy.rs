@@ -1,7 +1,7 @@
 #![cfg(crypto)]
 
 use crate::tests::template::fill_template;
-use crate::tests::template::LOGIN_RESPONSE_TEMPLATE;
+use crate::tests::template::{AUTHN_STATEMENT, LOGIN_RESPONSE_TEMPLATE};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
@@ -48,7 +48,7 @@ impl Default for ResponseShape {
             conditions_not_before: now,
             conditions_not_on_or_after: later,
             additional_conditions: String::new(),
-            authn_statement: String::new(),
+            authn_statement: AUTHN_STATEMENT.to_string(),
         }
     }
 }
