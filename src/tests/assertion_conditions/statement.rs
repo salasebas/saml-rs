@@ -14,6 +14,57 @@ fn repeated_authn_context_is_rejected_without_a_schema_validator(
     })
 }
 
+fn with_authn_context_content(
+    xml: &str,
+    content: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let start = xml
+        .find("<saml:AuthnContext>")
+        .ok_or("missing AuthnContext")?
+        + "<saml:AuthnContext>".len();
+    let end = xml[start..]
+        .find("</saml:AuthnContext>")
+        .ok_or("unterminated AuthnContext")?
+        + start;
+    let mut edited = xml.to_string();
+    edited.replace_range(start..end, content);
+    Ok(edited)
+}
+
+#[test]
+fn authn_context_holds_one_class_reference_and_one_declaration_at_most(
+) -> Result<(), Box<dyn std::error::Error>> {
+    const CLASS: &str =
+        "<saml:AuthnContextClassRef>urn:example:password</saml:AuthnContextClassRef>";
+    const DECLARATION_REFERENCE: &str =
+        "<saml:AuthnContextDeclRef>urn:example:declaration</saml:AuthnContextDeclRef>";
+    const DECLARATION: &str = "<saml:AuthnContextDecl/>";
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
+    let xml = response_xml(&exchange.response_fields)?;
+
+    for content in [
+        String::new(),
+        format!("{CLASS}{CLASS}"),
+        format!("{CLASS}{DECLARATION}{DECLARATION_REFERENCE}"),
+        format!("{DECLARATION_REFERENCE}{DECLARATION_REFERENCE}"),
+    ] {
+        let edited = resigned(&with_authn_context_content(&xml, &content)?)?;
+        expect_error(accept(&exchange, &edited), |err| {
+            matches!(err, SamlError::ProtocolProfile(_))
+        })
+        .map_err(|error| format!("{content}: {error}"))?;
+    }
+
+    for content in [
+        DECLARATION_REFERENCE.to_string(),
+        format!("{CLASS}{DECLARATION}"),
+    ] {
+        let edited = resigned(&with_authn_context_content(&xml, &content)?)?;
+        accept(&exchange, &edited).map_err(|error| format!("{content}: {error}"))?;
+    }
+    Ok(())
+}
+
 #[test]
 fn browser_sso_rejects_a_statement_missing_authn_context_without_a_schema_validator(
 ) -> Result<(), Box<dyn std::error::Error>> {

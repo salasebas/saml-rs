@@ -88,5 +88,6 @@ Check the topics that affect your integration.
 - [Answer requests for a confirmation method other than bearer](requested-subject-confirmations.md)
 - [Pass the authentication time of each SSO assertion](required-authn-instant.md)
 - [Handle strings that hold only non-XML whitespace](xml-whitespace.md)
+- [Handle responses with an invalid `AuthnContext`](authn-context-choice.md)
 
 [All migration guides](../README.md)
