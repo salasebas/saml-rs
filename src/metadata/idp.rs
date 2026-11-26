@@ -78,8 +78,11 @@ impl IdpMetadata {
     /// Returns [`SamlError::MissingMetadata`] when the entity has no such
     /// `IDPSSODescriptor`. Returns [`SamlError::Invalid`] when a signing flag
     /// on a selected descriptor has an invalid `xs:boolean` value or uses the
-    /// SAML metadata namespace. XML parsing, resource limits, and IdP-specific
-    /// metadata extraction can also fail.
+    /// SAML metadata namespace, and when an `ArtifactResolutionService` of a
+    /// selected descriptor has no `Binding`, no `Location` or an empty one, no
+    /// `index` or one that is not an integer, or an `isDefault` that is not an
+    /// `xs:boolean`. XML parsing, resource limits, and IdP-specific metadata
+    /// extraction can also fail.
     pub fn from_xml(xml: &str) -> Result<Self, SamlError> {
         Self::from_xml_with_policy(xml, &crate::XmlPolicy::default())
     }
@@ -97,7 +100,7 @@ impl IdpMetadata {
             super::SsoDescriptorRole::IdentityProvider,
             policy,
         )?;
-        Ok(Self::from_roles(inner, &roles))
+        Self::from_roles(inner, &roles)
     }
 
     pub(crate) fn from_aggregate_entity(
@@ -111,10 +114,13 @@ impl IdpMetadata {
             super::SsoDescriptorRole::IdentityProvider,
             limits,
         )?;
-        Ok(Self::from_roles(inner, &roles))
+        Self::from_roles(inner, &roles)
     }
 
-    fn from_roles(mut inner: Metadata, roles: &[SamlElement]) -> Self {
+    fn from_roles(mut inner: Metadata, roles: &[SamlElement]) -> Result<Self, SamlError> {
+        for role in roles {
+            super::endpoints::check_indexed_endpoints(role, "ArtifactResolutionService")?;
+        }
         let artifact_resolution_roles = roles
             .iter()
             .map(|role| {
@@ -133,10 +139,10 @@ impl IdpMetadata {
                 &["Binding", "Location"],
             ),
         );
-        Self {
+        Ok(Self {
             inner,
             artifact_resolution_roles,
-        }
+        })
     }
 
     /// `WantAuthnRequestsSigned` flag.
@@ -178,9 +184,10 @@ impl IdpMetadata {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when an endpoint is missing `Binding`,
-    /// `Location`, or `index`, when `index` is not a 16-bit integer, or when
-    /// two endpoints of one `IDPSSODescriptor` share an `index`.
+    /// Returns [`SamlError::Invalid`] when the `Binding` or `Location` of an
+    /// endpoint is empty after XML Schema whitespace collapse, when `index` is
+    /// not a 16-bit integer, or when two endpoints of one `IDPSSODescriptor`
+    /// share an `index`.
     pub fn artifact_resolution_services(
         &self,
     ) -> Result<Vec<ArtifactResolutionServiceEndpoint>, SamlError> {

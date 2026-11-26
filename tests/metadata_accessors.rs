@@ -193,3 +193,144 @@ fn endpoint_access_validates_selected_urls_without_rejecting_metadata_on_import(
     }
     Ok(())
 }
+
+const POST: &str = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
+const SOAP: &str = "urn:oasis:names:tc:SAML:2.0:bindings:SOAP";
+
+fn indexed_endpoint_metadata(acs: &str, ars: &str) -> String {
+    format!(
+        r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://peer.example.com">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <ArtifactResolutionService Binding="{SOAP}" Location="https://peer.example.com/ars" index="0"/>
+    {ars}
+    <SingleSignOnService Binding="{POST}" Location="https://peer.example.com/sso"/>
+  </IDPSSODescriptor>
+  <SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <AssertionConsumerService Binding="{POST}" Location="https://peer.example.com/acs" index="0" isDefault="true"/>
+    {acs}
+  </SPSSODescriptor>
+</EntityDescriptor>"#
+    )
+}
+
+fn acs_metadata(fields: &str) -> String {
+    indexed_endpoint_metadata(
+        &format!(
+            "<AssertionConsumerService {}/>",
+            fields.replace("BINDING", POST)
+        ),
+        "",
+    )
+}
+
+fn ars_metadata(fields: &str) -> String {
+    indexed_endpoint_metadata(
+        "",
+        &format!(
+            "<ArtifactResolutionService {}/>",
+            fields.replace("BINDING", SOAP)
+        ),
+    )
+}
+
+#[test]
+fn import_refuses_an_indexed_endpoint_with_a_missing_or_malformed_field(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let entity_id = EntityId::try_new("https://peer.example.com")?;
+    for fields in [
+        r#"Location="https://peer.example.com/e" index="1""#,
+        r#"Binding="BINDING" index="1""#,
+        r#"Binding="BINDING" Location="" index="1""#,
+        r#"Binding="BINDING" Location="https://peer.example.com/e""#,
+        r#"Binding="BINDING" Location="https://peer.example.com/e" index="""#,
+        r#"Binding="BINDING" Location="https://peer.example.com/e" index="one""#,
+        r#"Binding="BINDING" Location="https://peer.example.com/e" index="1" isDefault="yes""#,
+    ] {
+        let sp = SpDescriptor::from_metadata_xml(
+            entity_id.clone(),
+            &acs_metadata(fields),
+            MetadataTrustPolicy::Unverified,
+        );
+        let Err(SamlError::Invalid(detail)) = &sp else {
+            return Err(format!("{fields}: expected an invalid ACS, got {sp:?}").into());
+        };
+        assert!(
+            detail.contains("AssertionConsumerService"),
+            "{fields}: {detail}"
+        );
+        let idp = IdpDescriptor::from_metadata_xml(
+            entity_id.clone(),
+            &ars_metadata(fields),
+            MetadataTrustPolicy::Unverified,
+        );
+        let Err(SamlError::Invalid(detail)) = &idp else {
+            return Err(format!("{fields}: expected an invalid ARS, got {idp:?}").into());
+        };
+        assert!(
+            detail.contains("ArtifactResolutionService"),
+            "{fields}: {detail}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn import_keeps_an_indexed_endpoint_with_a_blank_binding_or_location_or_an_index_out_of_range(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let entity_id = EntityId::try_new("https://peer.example.com")?;
+    for (fields, index) in [
+        (
+            r#"Binding="BINDING" Location="https://peer.example.com/e" index=" 7 " isDefault=" 1 ""#,
+            7,
+        ),
+        (
+            r#"Binding="BINDING" Location="https://peer.example.com/e" index="+1" isDefault="false""#,
+            1,
+        ),
+    ] {
+        SpDescriptor::from_metadata_xml(
+            entity_id.clone(),
+            &acs_metadata(fields),
+            MetadataTrustPolicy::Unverified,
+        )?;
+        let ars = ars_metadata(fields);
+        IdpDescriptor::from_metadata_xml(entity_id.clone(), &ars, MetadataTrustPolicy::Unverified)?;
+        assert_eq!(
+            saml_rs::metadata::IdpMetadata::from_xml(&ars)?
+                .artifact_resolution_services()?
+                .iter()
+                .map(|service| (service.index(), service.location()))
+                .collect::<Vec<_>>(),
+            [
+                (0, "https://peer.example.com/ars"),
+                (index, "https://peer.example.com/e")
+            ],
+            "{fields}"
+        );
+    }
+
+    for fields in [
+        r#"Binding="" Location="https://peer.example.com/e" index="1""#,
+        r#"Binding=" &#x9; " Location="https://peer.example.com/e" index="1""#,
+        r#"Binding="BINDING" Location=" &#x9; " index="1""#,
+        r#"Binding="BINDING" Location="https://peer.example.com/e" index="-1""#,
+        r#"Binding="BINDING" Location="https://peer.example.com/e" index="65536""#,
+    ] {
+        SpDescriptor::from_metadata_xml(
+            entity_id.clone(),
+            &acs_metadata(fields),
+            MetadataTrustPolicy::Unverified,
+        )
+        .map_err(|error| format!("{fields}: {error}"))?;
+        let ars = ars_metadata(fields);
+        IdpDescriptor::from_metadata_xml(entity_id.clone(), &ars, MetadataTrustPolicy::Unverified)
+            .map_err(|error| format!("{fields}: {error}"))?;
+        let services =
+            saml_rs::metadata::IdpMetadata::from_xml(&ars)?.artifact_resolution_services();
+        assert!(
+            matches!(services, Err(SamlError::Invalid(_))),
+            "{fields}: {services:?}"
+        );
+    }
+    Ok(())
+}

@@ -101,5 +101,6 @@ Check the topics that affect your integration.
 - [Set the signature prefix on `TemplatePolicy`](signature-placement.md)
 - [Answer malformed name identifier management requests](name-id-management-malformed-requests.md)
 - [Start reference transform lists with the enveloped-signature transform](enveloped-signature-transform.md)
+- [Handle peer metadata with a malformed indexed endpoint](indexed-endpoint-fields.md)
 
 [All migration guides](../README.md)

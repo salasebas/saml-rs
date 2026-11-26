@@ -226,9 +226,9 @@ Code: `src/metadata/endpoints.rs`, `src/metadata/mod.rs`, `src/metadata/idp.rs`,
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Read an endpoint only from a child of a selected role descriptor in the metadata namespace. A child with the same local name in another namespace is not an endpoint | Mandatory | Metadata §2.4.2, §2.4.3, §2.4.4, `SSODescriptorType`, `IDPSSODescriptorType`, `SPSSODescriptorType`, E37 | Always |
-| Read unqualified `Binding` and `Location` with XML Schema whitespace collapse. Apply the same rule to `ResponseLocation` on logout and name identifier management services, `index` on artifact and assertion consumer services, and `isDefault` on assertion consumer services. A qualified attribute of the same local name is foreign and is not read | Mandatory | Metadata §2.2.2, §2.2.3, XML Schema 1.0 Part 2 §4.3.6 | Always |
+| Read unqualified `Binding` and `Location` with XML Schema whitespace collapse. Apply the same rule to `ResponseLocation` on logout and name identifier management services, and `index` and `isDefault` on artifact and assertion consumer services. A qualified attribute of the same local name is foreign and is not read | Mandatory | Metadata §2.2.2, §2.2.3, XML Schema 1.0 Part 2 §4.3.6 | Always |
 | Choose the default of an indexed set as the first endpoint with `isDefault` true, else the first without `isDefault` false, else the first | Mandatory | Metadata §2.2.3, E37 | Always |
-| Require unqualified `Binding`, `Location`, and an `unsignedShort` `index` on each `ArtifactResolutionService` when the role's artifact resolution endpoints are read. Import does not check them | Mandatory | Metadata §2.2.2, §2.2.3 | `IdpMetadata::artifact_resolution_services` |
+| Require unqualified `Binding`, `Location`, and an `unsignedShort` `index` on each `ArtifactResolutionService` when the role's artifact resolution endpoints are read | Mandatory | Metadata §2.2.2, §2.2.3 | `IdpMetadata::artifact_resolution_services` |
 | Reject duplicate `ArtifactResolutionService` indexes within one `IDPSSODescriptor` | Mandatory | Metadata §2.2.3 | `IdpMetadata::artifact_resolution_services` |
 | For `single_logout_response_location`, use a nonempty `ResponseLocation` on the selected endpoint, falling back to `Location` | Optional | Metadata §2.2.2, E41 | Always |
 
@@ -341,7 +341,7 @@ Code: `src/metadata/read.rs`, `src/metadata/role.rs`, `src/config/metadata_trust
 | Read several such roles of one kind together | A key, an endpoint, or an index that only a later role publishes still works. | Metadata §2.3.2 | Always |
 | Read `AuthnRequestsSigned` as true when any SAML 2.0 `SPSSODescriptor` sets it. The identity provider then [refuses an unsigned request](web-browser-sso-acceptance.md#identity-provider) | E7 makes the identity provider refuse an unsigned request from a service provider whose metadata sets the flag, and the request does not name a role. | Metadata §2.3.2, §2.4.4, E7 | Always |
 | Read `WantAssertionsSigned` as true when any selected `SPSSODescriptor` sets it | An IdP serving these roles together honors each role's request for signed assertions. | Metadata §2.3.2, §2.4.4 | Always |
-| Read `WantAuthnRequestsSigned` from the first SAML 2.0 `IDPSSODescriptor` that specifies it | Reason not recorded. | Metadata §2.4.3 | Always |
+| Read `WantAuthnRequestsSigned` from the first SAML 2.0 `IDPSSODescriptor` that specifies it | When only a later role publishes the flag, it still applies, like a key or an endpoint that only a later role publishes. | Metadata §2.4.3 | Always |
 
 ### Metadata consumer: keys
 
@@ -355,14 +355,15 @@ Code: `src/metadata/key_certificates.rs`, `src/flow.rs`, `src/crypto/verify.rs`
 
 ### Metadata consumer: endpoints
 
-Code: `src/metadata/sp.rs`, `src/metadata/idp.rs`, `src/config/descriptors.rs`
+Code: `src/metadata/sp.rs`, `src/metadata/idp.rs`, `src/metadata/endpoints.rs`, `src/xml/schema_value.rs`, `src/config/descriptors.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
 | Select a default `AssertionConsumerService` within one SAML 2.0 `SPSSODescriptor`: the first one for a lookup without a binding, else the first one that publishes the binding | E37 defines the default within one role, and Metadata §2.3.2 leaves the choice among roles undefined. | Metadata §2.2.3, §2.3.2, E37 | Always |
 | Look up an `AssertionConsumerServiceIndex` in each selected `SPSSODescriptor`, counting endpoints of every binding. Refuse an index that one of them publishes twice or that more than one of them publishes | The request names the index but not the role, so a guessed endpoint could receive an assertion the requester did not route there. | Core §3.4.1, Metadata §2.2.3, §2.3.2 | Always |
-| Import an `AssertionConsumerService` with a malformed field. Read an `index` that is missing or not an `unsignedShort` as no index, an `isDefault` that is not an `xs:boolean` as absent, and an empty `Location` as published | Reason not recorded. | Metadata §2.2.2, §2.2.3 | Always |
-| Skip an `AssertionConsumerService` without a supported `Binding` or a `Location` in a lookup by binding or URL. Refuse the default for a lookup without a binding when the endpoint it selects lacks them | Reason not recorded. | Metadata §2.2.2, §2.2.3, E37 | Always |
+| Refuse the import when an `AssertionConsumerService` of a selected SP role or an `ArtifactResolutionService` of a selected IdP role has no `Binding`, no `Location` or an empty one, no `index` or one that is not an integer, or an `isDefault` that is not an `xs:boolean` | Reading such an endpoint leniently or skipping it could change which endpoint the default and index lookups select. | Metadata §2.2.2, §2.2.3, E37 | Always |
+| Import such an endpoint when its `Binding` is empty, its `Binding` or `Location` holds only whitespace, or its `index` is an integer outside 0 to 65535. An assertion consumer service reads such an `index` as none, and the artifact resolution accessors refuse the endpoint | Such a value does not change which endpoint a lookup selects, so the rest of the peer's metadata stays usable. | Core §1.3.2, Metadata §2.2.2, §2.2.3 | Always |
+| Skip an `AssertionConsumerService` whose `Binding` the crate does not support in a lookup by binding or URL. Refuse the default for a lookup without a binding when the endpoint it selects has such a `Binding` | Reason not recorded. | Metadata §2.2.2, §2.2.3, E37 | Always |
 | Look up an artifact's `EndpointIndex` in each selected `IDPSSODescriptor`, and refuse an index that more than one of them publishes | The artifact names its issuer and index but not the role, so a guessed role could receive an `ArtifactResolve` for an artifact it did not issue. | Metadata §2.2.3, §2.3.2, Bindings §3.6.4 | `IdpMetadata::artifact_resolution_service` |
 | Reject an `ArtifactResolutionService` whose `Binding` or `Location` is empty after whitespace collapse | Reason not recorded. | Core §1.3.2, Metadata §2.2.2 | `IdpMetadata::artifact_resolution_services` |
 | Return a selected endpoint as an `EndpointUrl`. A non-HTTP(S) URL is an error from the accessor, and import accepts it | The typed endpoint contract is absolute HTTP(S), and Metadata §2.2.2 and §2.2.3 use `anyURI` without that restriction. | Metadata §2.2.2, §2.2.3 | Always |

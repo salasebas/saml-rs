@@ -13,6 +13,14 @@ pub(crate) fn xs_boolean(value: Option<&str>) -> Option<bool> {
     }
 }
 
+/// Whether `value` is an `xs:integer` with surrounding XML whitespace: an
+/// optional sign and one or more decimal digits.
+pub(crate) fn is_xs_integer(value: &str) -> bool {
+    let value = value.trim_matches(XML_WHITESPACE);
+    let digits = value.strip_prefix(['+', '-']).unwrap_or(value);
+    !digits.is_empty() && digits.bytes().all(|digit| digit.is_ascii_digit())
+}
+
 /// Value of an `xs:unsignedShort` with surrounding XML whitespace.
 pub(crate) fn xs_unsigned_short(value: &str) -> Option<u16> {
     value.trim_matches(XML_WHITESPACE).parse().ok()

@@ -404,7 +404,10 @@ impl IdpDescriptor {
     /// `validUntil` is not an `xs:dateTime` with a timezone.
     /// Returns [`SamlError::Invalid`] when `WantAuthnRequestsSigned` on a
     /// selected descriptor has an invalid `xs:boolean` value or uses the SAML
-    /// metadata namespace.
+    /// metadata namespace, and when an `ArtifactResolutionService` of a
+    /// selected descriptor has no `Binding`, no `Location` or an empty one, no
+    /// `index` or one that is not an integer, or an `isDefault` that is not an
+    /// `xs:boolean`.
     pub fn from_metadata_xml(
         expected_entity_id: EntityId,
         xml: &str,
@@ -663,7 +666,10 @@ impl SpDescriptor {
     /// `validUntil` is not an `xs:dateTime` with a timezone.
     /// Returns [`SamlError::Invalid`] when `AuthnRequestsSigned` or
     /// `WantAssertionsSigned` on a selected descriptor has an invalid
-    /// `xs:boolean` value or uses the SAML metadata namespace.
+    /// `xs:boolean` value or uses the SAML metadata namespace, and when an
+    /// `AssertionConsumerService` of a selected descriptor has no `Binding`, no
+    /// `Location` or an empty one, no `index` or one that is not an integer, or
+    /// an `isDefault` that is not an `xs:boolean`.
     pub fn from_metadata_xml(
         expected_entity_id: EntityId,
         xml: &str,
