@@ -1,12 +1,13 @@
 # Web Browser SSO generation
 
 `ServiceProvider::start_sso` writes the Web Browser SSO `AuthnRequest` and
-sends it over HTTP-Redirect, HTTP-POST, or HTTP-POST-SimpleSign.
-`IdentityProvider::respond_sso`, `respond_sso_refusal`, and `initiate_sso`
-write the `Response` for HTTP-POST or HTTP-POST-SimpleSign, and
-`respond_sso_artifact`, `respond_sso_refusal_artifact`, and
-`initiate_sso_artifact` write the same `Response` and store it for an
-artifact.
+returns the browser action that carries it over HTTP-Redirect, HTTP-POST, or
+HTTP-POST-SimpleSign. `IdentityProvider::respond_sso`, `respond_sso_refusal`,
+and `initiate_sso` write the `Response` and return its HTTP-POST or
+HTTP-POST-SimpleSign action, and `respond_sso_artifact`,
+`respond_sso_refusal_artifact`, and `initiate_sso_artifact` write the same
+`Response` and store it for an artifact. The application sends each action,
+as [browser bindings](browser-bindings.md#application-duties) describes.
 
 Normative text is [Core §3.4](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf),
 [Profiles §4.1](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf),
@@ -22,6 +23,13 @@ the receiving side. See
 [validation defaults](https://samlrs.vercel.app/explanation/validation-presets/)
 for the initial role policies.
 
+The statuses hold on builds with a crypto provider. A build without one sends
+only an unsigned `AuthnRequest` over HTTP-Redirect or HTTP-POST, because
+`SpConfigBuilder::build` refuses a signing policy and `start_sso` refuses
+HTTP-POST-SimpleSign and an identity provider whose metadata sets
+`WantAuthnRequestsSigned`. Each identity provider operation of this record
+returns `SamlError::Unsupported` there and writes no `Response`.
+
 ## Support
 
 ### `AuthnRequest`
@@ -30,10 +38,11 @@ for the initial role policies.
 | --- | --- | --- |
 | `AuthnRequest` over HTTP-Redirect | Bindings §3.4, Profiles §4.1.3.3 | Supported |
 | `AuthnRequest` over HTTP-POST | Bindings §3.5, Profiles §4.1.3.3 | Supported |
-| `AuthnRequest` over HTTP-POST-SimpleSign | CS-01 §2 | [Partial](#builds-without-a-crypto-provider) |
+| `AuthnRequest` over HTTP-POST-SimpleSign | CS-01 §2 | Supported |
+| `AuthnRequest` over HTTP-POST-SimpleSign without `SigAlg` and `Signature` | CS-01 §2.4 | Not supported |
 | `AuthnRequest` by HTTP-Artifact | Bindings §3.6, Profiles §4.1.3.3 | Not supported |
 | `RelayState` with the request | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | Supported |
-| Signature on the request: an XML signature over HTTP-POST, and `SigAlg` and `Signature` over HTTP-Redirect and SimpleSign | Profiles §4.1.3.3, §4.1.4.1, Bindings §3.4.4.1, §3.5.5.2, CS-01 §2.4 | [Partial](#builds-without-a-crypto-provider) |
+| Signature on the request: an XML signature over HTTP-POST, and `SigAlg` and `Signature` over HTTP-Redirect and SimpleSign | Profiles §4.1.3.3, §4.1.4.1, Bindings §3.4.4.1, §3.5.5.2, CS-01 §2.4 | Supported |
 | `Destination` | Core §3.2.1 | Supported |
 | `Consent` | Core §3.2.1, §8.4 | Not supported |
 | `Extensions` | Core §3.2.1 | Supported |
@@ -47,6 +56,7 @@ for the initial role policies.
 | `IsPassive` | Core §3.4.1 | Supported |
 | `AssertionConsumerServiceURL` with `ProtocolBinding` | Core §3.4.1 | Supported |
 | `AssertionConsumerServiceIndex` | Core §3.4.1 | Supported |
+| `AssertionConsumerServiceURL` without `ProtocolBinding`, `ProtocolBinding` without `AssertionConsumerServiceURL`, or none of the three endpoint attributes | Core §3.4.1 | Not supported |
 | `AttributeConsumingServiceIndex` | Core §3.4.1 | Not supported |
 | `ProviderName` | Core §3.4.1 | Supported |
 
@@ -54,37 +64,38 @@ for the initial role policies.
 
 | Feature | Section | Identity provider |
 | --- | --- | --- |
-| `Response` over HTTP-POST | Bindings §3.5, Profiles §4.1.3.5 | [Partial](#builds-without-a-crypto-provider) |
-| `Response` over HTTP-POST-SimpleSign | CS-01 §2 | [Partial](#builds-without-a-crypto-provider) |
-| `Response` by HTTP-Artifact | Bindings §3.6, Profiles §4.1.3.5 | [Partial](#builds-without-a-crypto-provider) |
-| Error `Response` with no assertion | Core §3.4.1.4, Profiles §4.1.3.5, §4.1.4.1, §4.1.4.2, E85 | [Partial](#builds-without-a-crypto-provider) |
-| `StatusMessage` in an error `Response` | Core §3.2.2.3 | [Partial](#builds-without-a-crypto-provider) |
+| `Response` over HTTP-POST | Bindings §3.5, Profiles §4.1.3.5 | Supported |
+| `Response` over HTTP-POST-SimpleSign | CS-01 §2 | Supported |
+| `Response` over HTTP-POST-SimpleSign without `SigAlg` and `Signature` | CS-01 §2.4 | Not supported |
+| `Response` by HTTP-Artifact | Bindings §3.6, Profiles §4.1.3.5 | Supported |
+| Error `Response` with no assertion | Core §3.4.1.4, Profiles §4.1.3.5, §4.1.4.1, §4.1.4.2, E85 | Supported |
+| `StatusMessage` in an error `Response` | Core §3.2.2.3 | Supported |
 | `StatusDetail` | Core §3.2.2.4 | Not supported |
-| Unsolicited `Response` | Profiles §4.1.5 | [Partial](#builds-without-a-crypto-provider) |
-| `RelayState` with the `Response` | Bindings §3.5.3, CS-01 §2.3, Profiles §4.1.5 | [Partial](#builds-without-a-crypto-provider) |
+| Unsolicited `Response` | Profiles §4.1.5 | Supported |
+| `RelayState` with the `Response` | Bindings §3.5.3, CS-01 §2.3, Profiles §4.1.5 | Supported |
 | `Consent` | Core §3.2.2, §8.4 | Not supported |
 | `Extensions` | Core §3.2.2 | Not supported |
-| XML signature on the `Response` or on each assertion | Profiles §4.1.3.5, §4.1.4.5, E26, E93 | [Partial](#builds-without-a-crypto-provider) |
-| SimpleSign signature on the `Response` | CS-01 §2.4, §2.5 | [Partial](#builds-without-a-crypto-provider) |
-| One bearer assertion with an `AuthnStatement` and an `AudienceRestriction` for the service provider | Profiles §4.1.4.2, E26 | [Partial](#builds-without-a-crypto-provider) |
+| XML signature on the `Response` or on each assertion | Profiles §4.1.3.5, §4.1.4.5, E26, E93 | Supported |
+| SimpleSign signature on the `Response` | CS-01 §2.4, §2.5 | Supported |
+| One bearer assertion with an `AuthnStatement` and an `AudienceRestriction` for the service provider | Profiles §4.1.4.2, E26 | Supported |
 | More than one assertion | Profiles §4.1.4.2, E26 | Not supported |
-| `EncryptedAssertion` | Core §2.3.4, §6.1 | [Partial](#builds-without-a-crypto-provider) |
-| `NameID` in the assertion `Subject`, with `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` | Core §2.2.2, §2.4.1 | [Partial](#builds-without-a-crypto-provider) |
-| `EncryptedID` in the assertion `Subject` | Core §2.2.4, §3.4.1.1 | [Partial](#builds-without-a-crypto-provider) |
+| `EncryptedAssertion` | Core §2.3.4, §6.1 | Supported |
+| `NameID` in the assertion `Subject`, with `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` | Core §2.2.2, §2.4.1 | Supported |
+| `EncryptedID` in the assertion `Subject` | Core §2.2.4, §3.4.1.1 | Supported |
 | An assertion `Subject` with a `BaseID`, or with no identifier | Core §2.4.1 | Not supported |
 | Additional `SubjectConfirmation` elements in a bearer assertion | Profiles §4.1.4.2, E26 | Not supported |
 | `Address` on the bearer `SubjectConfirmationData` | Profiles §4.1.4.2, E26 | Not supported |
-| `Conditions` with `NotBefore` and `NotOnOrAfter` | Core §2.5.1.2 | [Partial](#builds-without-a-crypto-provider) |
+| `Conditions` with `NotBefore` and `NotOnOrAfter` | Core §2.5.1.2 | Supported |
 | Conditions other than the `AudienceRestriction`, and other `Audience` values | Core §2.5.1, Profiles §4.1.4.2, E26 | Not supported |
 | The `Conditions` that the `AuthnRequest` requests | Core §3.4.1, Profiles §4.1.4.2, E26 | Not supported |
 | `Advice` | Core §2.3.3 | Not supported |
-| `SessionIndex` | Core §2.7.2, Profiles §4.1.4.2, E26 | [Partial](#builds-without-a-crypto-provider) |
-| `SessionNotOnOrAfter` | Core §2.7.2, E79 | [Partial](#builds-without-a-crypto-provider) |
-| An authentication context class reference or declaration reference | Core §2.7.2.2 | [Partial](#builds-without-a-crypto-provider) |
+| `SessionIndex` | Core §2.7.2, Profiles §4.1.4.2, E26 | Supported |
+| `SessionNotOnOrAfter` | Core §2.7.2, E79 | Supported |
+| An authentication context class reference or declaration reference | Core §2.7.2.2 | Supported |
 | An authentication context declaration by value, or a class reference together with a declaration | Core §2.7.2.2 | Not supported |
 | `SubjectLocality` and `AuthenticatingAuthority` | Core §2.7.2.1, §2.7.2.2 | Not supported |
-| `AttributeStatement` | Core §2.7.3, Profiles §4.1.4.2 | [Partial](#builds-without-a-crypto-provider) |
-| `EncryptedAttribute` | Core §2.7.3.2 | [Partial](#builds-without-a-crypto-provider) |
+| `AttributeStatement` | Core §2.7.3, Profiles §4.1.4.2 | Supported |
+| `EncryptedAttribute` | Core §2.7.3.2 | Supported |
 | Statements other than the `AuthnStatement` and the `AttributeStatement` | Profiles §4.1.4.2, E26 | Not supported |
 | Holder-of-key Web Browser SSO | Holder-of-Key Web Browser SSO Profile | Not supported |
 
@@ -94,21 +105,6 @@ policies that write no `Consent` and no `StatusDetail`, and
 attribute values that the identity provider writes. Profiles §4.1.4.2, as E26
 amends it, does not oblige the identity provider to honor the `Conditions`
 that an `AuthnRequest` requests.
-
-## Partial support
-
-### Builds without a crypto provider
-
-- **Supported:** on a build with a crypto provider, the service provider
-  signs an `AuthnRequest` on each binding, and the identity provider writes
-  and signs each `Response` that this record lists, and encrypts its parts
-  when the caller selects encryption. A build without a crypto provider still
-  sends an unsigned `AuthnRequest` over HTTP-Redirect and HTTP-POST.
-- **Not supported:** on a build without a crypto provider, the service
-  provider signs no `AuthnRequest`, so it sends none over HTTP-POST-SimpleSign.
-  Its configuration builder refuses a signing policy, and `start_sso` refuses
-  an identity provider whose metadata sets `WantAuthnRequestsSigned`. The
-  identity provider writes no `Response`, success or error.
 
 ## Rules
 
@@ -174,7 +170,8 @@ reference.
 
 Code: `src/api/idp.rs`, `src/api/sso_outcome.rs`, `src/api/response_acs.rs`, `src/idp.rs`, `src/idp/login_response.rs`, `src/model/status.rs`, `src/xml/name.rs`, `src/entity.rs`, `src/metadata/sp.rs`, `src/crypto/sign.rs`
 
-These rows also cover the `Response` that `respond_sso_artifact`,
+Where [HTTP-Artifact response](web-browser-sso-artifact.md) states no
+difference, these rows also cover the `Response` that `respond_sso_artifact`,
 `respond_sso_refusal_artifact`, and `initiate_sso_artifact` store.
 `respond_sso_refusal` answers a request that `receive_sso` refuses.
 
@@ -196,8 +193,9 @@ These rows also cover the `Response` that `respond_sso_artifact`,
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Write the issuing identity provider's identifier as `Response` `Issuer`, with `Format` omitted. The `Response` needs it when signed or when an assertion is encrypted, and the crate always writes it | Mandatory | Profiles §4.1.4.2, E17 | Always |
-| Write `Destination` as the assertion consumer service URL. A signed message needs it, and the crate writes it on every response | Mandatory | Bindings §3.5.5.2, CS-01 §2.4 | Always |
+| Write `ID`, `Version` `2.0`, and `IssueInstant` on the `Response` and on the assertion | Mandatory | Core §2.3.3, §3.2.2, `StatusResponseType`, `AssertionType` | Always |
+| On a successful `Response` that is signed or carries an encrypted assertion, write the issuing identity provider's identifier as `Issuer`, with `Format` omitted | Mandatory | Profiles §4.1.4.2, E17 | Always |
+| On a signed `Response` over HTTP-POST or HTTP-POST-SimpleSign, write `Destination` as the assertion consumer service URL | Mandatory | Bindings §3.5.5.2, CS-01 §2.4 | Always |
 | Write every time value in UTC, and never a leap second | Mandatory | Core §1.3.3 | Always |
 | Match `InResponseTo`, on the `Response` and on the bearer `SubjectConfirmationData`, to the `AuthnRequest` `ID` | Mandatory | Core §3.2.2, Profiles §4.1.4.2, E26 | Always |
 | Reject a response to a request whose `ID` is not an `xs:NCName`, because `InResponseTo` cannot carry it | Mandatory | Core §1.3.4, `StatusResponseType`, `SubjectConfirmationDataType` | Always |
@@ -273,8 +271,8 @@ against the `RequestedAuthnContext`, the `NameIDPolicy`, and the requested
 | Issue the `SPNameQualifier` the `NameIDPolicy` names, under the same condition | Mandatory | Core §3.4.1.1, E15 | Always |
 | Honor the requested `SPNameQualifier` namespace when `NameIDPolicy` omits `Format` or requests `unspecified`. A persistent or pairwise transient identifier can omit the qualifier for the direct SP namespace | Mandatory | Core §3.4.1.1, §8.3.7, §8.3.8 | Always |
 | Write an `EncryptedID` in each issued assertion subject when `NameIDPolicy` names `encrypted` | Mandatory | Core §3.4.1.1, E6, E15, `SubjectType` | `XmlEncryptionPolicy::identifiers` |
-| Issue a `Subject` that strongly matches the requested `NameID` in value, `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`. Compare formats after `xs:anyURI` whitespace collapse, and read an omitted format as `unspecified` | Mandatory | Core §3.4.1.4, §3.3.4, E75 | Always |
-| Allow the `NameIDPolicy` `Format` to differ from the requested `NameID` format | Optional | Core §3.4.1.4, E75 | Always |
+| Issue a `Subject` that strongly matches the requested `NameID` in value, `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`, unless the next row applies. Compare formats after `xs:anyURI` whitespace collapse, and read an omitted format as `unspecified` | Mandatory | Core §3.4.1.4, §3.3.4, E75 | Always |
+| Issue a `NameID` in another format than the requested one when it is the format the `NameIDPolicy` names, without comparing value and qualifiers | Optional | Core §3.4.1.4, E75 | Always |
 | Reject a success response to a requested `BaseID`, which an issued `NameID` cannot strongly match | Mandatory | Core §3.4.1.4, §3.3.4 | Always |
 | Reject a success response to a requested `EncryptedID` that was not decrypted | Mandatory | Core §3.4.1.4, §3.3.4, E75 | Always |
 | Reject a success response when the requested `Subject` has `SubjectConfirmation` elements and none uses the bearer `Method`, the only one the assertion carries. Compare `Method` after `xs:anyURI` whitespace collapse | Mandatory | Core §3.4.1.4, §3.3.4, E75 | Always |
@@ -356,6 +354,8 @@ Code: `src/api/idp.rs`, `src/api/response_acs.rs`, `src/metadata/sp.rs`, `src/id
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
+| Write `Issuer`, with `Format` omitted, on every `Response`, also on an error `Response` and on an unsigned one without an encrypted assertion | Reason not recorded. | Core §3.2.2, Profiles §4.1.4.2, E17 | Always |
+| Write `Destination` as the assertion consumer service URL also on an HTTP-POST `Response` whose only signatures are on its assertions | Core §3.2.2 makes a recipient discard a response whose present `Destination` names another location, which keeps a forwarded response from reaching an unintended recipient. | Core §3.2.2, Bindings §3.5.5.2 | Always |
 | Omit `InResponseTo` from the bearer `SubjectConfirmationData` of an unsolicited response | Profiles §4.1.4.3 has the service provider verify that an unsolicited response carries none, so a value would make it refuse the response. | Profiles §4.1.5 | Always |
 | Write the assertion `IssueInstant` as `Conditions` `NotBefore`, and end `Conditions` and the bearer `SubjectConfirmationData` at `IssueInstant` plus the issuance lifetime, 300 seconds by default | The window starts when the assertion exists and bounds how long a bearer assertion can be delivered and replayed, and five minutes leaves time for the browser to deliver it. | Core §2.5.1.2, Profiles §4.1.4.2, E26 | `IdpConfigBuilder::issuance_lifetime` |
 
@@ -367,7 +367,9 @@ Code: `src/api/idp.rs`, `src/api/response_acs.rs`, `src/metadata/sp.rs`, `src/id
 | In `respond_sso_refusal`, reject every explicit `RespondSso::relay_state`, also when the refused request carried none | Reason not recorded. | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | Always |
 
 [Browser bindings](browser-bindings.md#library-policies) keeps the policy
-that returns a received `RelayState` over 80 bytes unchanged.
+that returns a received `RelayState` over 80 bytes unchanged, and
+[HTTP-Artifact response](web-browser-sso-artifact.md#library-policies) the
+`Destination` of a stored `Response`.
 
 ### Identity provider: `SsoAssertion`
 
@@ -392,7 +394,7 @@ Code: `src/crypto/enc/encrypt.rs`, `src/crypto/enc.rs`, `src/crypto/keys.rs`, `s
 | --- | --- | --- | --- |
 | Encrypt for the first service provider encryption key the configured algorithms can use. Skip a key that does not load or that the crypto provider refuses, such as an EC key or an RSA key too small for the key transport | E68 lets the encrypting party use any published key, and OpenSAML 5.2.0 also skips a credential without a usable key transport. | Metadata §2.4.1.1, E62, E68 | Always |
 | Take the keys of the SP role whose `AssertionConsumerService` receives the response. When the request names only its location, and several roles publish that location and binding, take the first such role in document order | E68 scopes keys to one role, and roles that publish one location and binding name one recipient, so document order picks one role's keys without mixing roles. | Metadata §2.4.1.1, E62, E68 | Always |
-| Read one key from each `ds:X509Data` of a `KeyDescriptor` whose `use` is `encryption` or absent, in document order. Its sole certificate is the entity certificate, whatever else the `KeyInfo` declares. Among several certificates, the entity certificate is the first one that issued none of the others. If each issued another, it is the first certificate. When the crypto provider refuses a certificate signature, such as SHA-1, its signer does not count as having issued that certificate | XML Signature allows the certificates of an `X509Data` in any order, and OpenSAML 5.2.0 `InlineX509DataProvider` also reads one credential per `X509Data`, takes a sole certificate as the entity certificate, and falls back to the first certificate. | XML Signature §4.4, §4.4.4, Metadata §2.4.1.1 | Always |
+| Read one key from each `ds:X509Data` of a `KeyDescriptor` whose `use` is `encryption` or absent, in document order. Its sole certificate is the entity certificate, whatever else the `KeyInfo` declares. Among several certificates, the entity certificate is the first one that issued none of the others. If each issued another, it is the first certificate. When the crypto provider refuses a certificate signature, such as SHA-1, its signer does not count as having issued that certificate | XML Signature allows the certificates of an `X509Data` in any order, and OpenSAML 5.2.0 [`InlineX509DataProvider`](https://codeberg.org/Shibboleth/java-opensaml/src/tag/5.2.0/opensaml-xmlsec-impl/src/main/java/org/opensaml/xmlsec/keyinfo/impl/provider/InlineX509DataProvider.java) also reads one credential per `X509Data`, takes a sole certificate as the entity certificate, and falls back to the first certificate. | XML Signature §4.4, §4.4.4, Metadata §2.4.1.1 | Always |
 | Look up that certificate only when the response has an element to encrypt | A response without such an element uses no encryption key. | Core §2.7.3.2, E68 | Always |
 | Encrypt the inclusive canonical form of the `NameID` or `Attribute` | That form declares every namespace in scope. | Core §6.1 | Always |
 | Encrypt each content key for one recipient, and write no `Recipient` on its `EncryptedKey` | The message has one receiving entity, Core §2.2.4, §2.3.4, and §2.7.3.2 recommend `Recipient` for an `EncryptedKey` beside `EncryptedData`, and with one embedded key a decrypter has no key to choose between. | Core §2.2.4, §2.3.4, §2.7.3.2, E43 | Always |
@@ -402,7 +404,8 @@ The identity provider encrypts with the configured `AlgorithmPolicy`
 algorithms and reads no `md:EncryptionMethod` of a `KeyDescriptor`
 (Metadata §2.4.1.1), so it neither chooses an algorithm from them nor prefers
 a key that lists the configured one. [Metadata and replay](metadata-and-replay.md#not-implemented)
-lists that gap. OpenSAML 5.2.0 `SAMLMetadataEncryptionParametersResolver`
+lists that gap. OpenSAML 5.2.0
+[`SAMLMetadataEncryptionParametersResolver`](https://codeberg.org/Shibboleth/java-opensaml/src/tag/5.2.0/opensaml-saml-impl/src/main/java/org/opensaml/saml/security/impl/SAMLMetadataEncryptionParametersResolver.java)
 also keeps a credential whose listed methods it cannot use and encrypts with
 its configured algorithms.
 
@@ -427,7 +430,7 @@ none of these duties.
 | Pass `SsoOutcome::Failure` when the `NameIDPolicy` cannot be met, optionally with `InvalidNameIDPolicy` | Mandatory | Core §3.4.1.1 |
 | Pass `SsoOutcome::Failure` when `NameIDPolicy` requests both the `entity` format and an `SPNameQualifier`, which no issued entity identifier can satisfy | Mandatory | Core §8.3.6, E15 |
 | Pass `SsoAssertion::new` the time at which the subject authenticated, which only the caller knows | Mandatory | Core §2.7.2 |
-| When the issued `NameID` format differs from the format of the requested `NameID`, establish that both identifiers name the same principal | Mandatory | Core §3.4.1.4, E75 |
+| When the issued `NameID` takes the `NameIDPolicy` format in place of the format of the requested `NameID`, establish that both identifiers name the same principal | Mandatory | Core §3.4.1.4, E75 |
 
 <a id="not-implemented-in-the-service-provider-request"></a>
 
@@ -436,6 +439,10 @@ none of these duties.
 - An `AuthnRequest` by HTTP-Artifact. Optional, Profiles §4.1.3.3.
   [HTTP-Artifact response](web-browser-sso-artifact.md#not-supported) lists
   it for both roles.
+- An `AuthnRequest` or a `Response` over HTTP-POST-SimpleSign without
+  `SigAlg` and `Signature`. Optional, CS-01 §2.4. Send a message that needs
+  no detached signature over HTTP-POST when the peer supports that binding. [Single Logout](single-logout.md) keeps the signing rules of its
+  own messages.
 - `Scoping`, with `IDPList`, `RequesterID`, and `ProxyCount`, in the service
   provider request. Optional, Core §3.4.1.2. An application that proxies the
   request outside the crate applies Core §3.4.1.5 itself.
