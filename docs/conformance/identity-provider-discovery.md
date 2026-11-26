@@ -90,4 +90,6 @@ drops an entry that is not base64 and keeps every decoded one.
   response, and `idpdisc:DiscoveryResponse` endpoints in SP metadata (§2.5).
   The application chooses the identity provider and passes its
   `IdpDescriptor` to `start_sso`.
-- A SAMLDS discovery service.
+- The discovery service side of SAMLDS: receiving the §2.4.1 request,
+  choosing the identity provider (§2.4.2), and the §2.4.3 redirect back to
+  the service provider.
