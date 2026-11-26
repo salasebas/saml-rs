@@ -18,6 +18,7 @@ use crate::assertion_acceptance::{assertion_replays, latest_bearer_not_on_or_aft
 use crate::config::EntityId;
 use crate::error::{SamlError, TimeWindowField};
 use crate::flow::FlowResult;
+use crate::util::Value;
 use crate::xml::fields::{login_response, response};
 use crate::xml::{dom, parse_saml_utc_instant, XmlLimits};
 use std::time::SystemTime;
@@ -108,6 +109,7 @@ pub struct SsoSession {
     not_before: Option<SamlInstant>,
     not_on_or_after: Option<SamlInstant>,
     session_not_on_or_after: Option<SystemTime>,
+    one_time_use: bool,
     binding_signature_algorithm_uri: Option<String>,
     verified_xml_signatures: Vec<VerifiedXmlSignature>,
     raw_flow: FlowResult,
@@ -252,6 +254,18 @@ impl SsoSession {
     /// [`Self::session_not_on_or_after`] for the application session deadline.
     pub fn not_on_or_after(&self) -> Option<&SamlInstant> {
         self.not_on_or_after.as_ref()
+    }
+
+    /// Whether the `Conditions` of the consumed assertion carry `OneTimeUse`.
+    ///
+    /// Other assertions in the response are not consulted.
+    ///
+    /// When it returns `true`, use the assertion for this login and do not
+    /// keep it, or the information it carries in another form, for later
+    /// reuse. The identity provider expects that information to change soon,
+    /// so obtain a fresh assertion when you need it again.
+    pub fn is_one_time_use(&self) -> bool {
+        self.one_time_use
     }
 
     /// The earliest `SessionNotOnOrAfter` in the consumed assertion, before
@@ -507,6 +521,10 @@ impl SsoSession {
         let audience_restrictions = audience_restrictions_from_extract(&raw_flow.extract)?;
         let (not_before, not_on_or_after) = conditions_instants(&raw_flow.extract)?;
         let session_not_on_or_after = earliest_session_not_on_or_after(&authn_statements)?;
+        let one_time_use = !matches!(
+            raw_flow.extract.get(login_response::ONE_TIME_USE),
+            None | Some(Value::Null)
+        );
         let binding_signature_algorithm_uri = raw_flow.sig_alg.clone();
         Ok(Self {
             response_id,
@@ -524,6 +542,7 @@ impl SsoSession {
             not_before,
             not_on_or_after,
             session_not_on_or_after,
+            one_time_use,
             binding_signature_algorithm_uri,
             verified_xml_signatures,
             raw_flow,

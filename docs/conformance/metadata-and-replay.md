@@ -218,8 +218,8 @@ store that can return it again, such as a client-side session, needs one.
 | For each direct bearer assertion, use its latest UTC bearer deadline. Ignore an unparseable deadline if another parses. Storage fails when none parses for the selected assertion. Give another assertion the selected assertion's deadline when its own has passed or does not parse | Library policy: it keeps the identifier at least as long as the confirmation that satisfied the checks. | Profiles §4.1.4.3 | Always |
 | Also store the `Response` `ID` until the earliest of `Conditions@NotOnOrAfter`, the bearer confirmation, and each `SessionNotOnOrAfter`, plus skew | Library policy: the response follows the [protocol message ID rule](#protocol-message-ids), and the response is not accepted after that deadline. | — | `ReplayPolicy::RequireCache` |
 | Store bearer assertion `ID`s for HTTP-POST-SimpleSign or HTTP-Artifact when a cache is supplied | Library policy: Profiles §4.1.4.5 states the duty for HTTP POST only, and Security considerations §7.1.1.4 defers replay countermeasures to the binding. | Profiles §4.1.4.5 | `ReplayPolicy::RequireCache` |
-| Treat `OneTimeUse` as always valid and never retain the assertion for later use | Mandatory | Core §2.5.1.5 | Always |
-| Use an assertion that carries `OneTimeUse` immediately | Recommended | Core §2.5.1.5 | Always |
+| Treat `OneTimeUse` as always valid | Mandatory | Core §2.5.1.5 | Always |
+| Report whether the consumed assertion carries `OneTimeUse` | Optional | Core §2.5.1.5 | `SsoSession::is_one_time_use` |
 
 ### Protocol message IDs
 
@@ -233,6 +233,18 @@ SSO `Response` `ID`. The name identifier management records link here.
 | Store the `ID` of an authenticated `AuthnRequest` that `receive_sso` returns, and of a `Success` `LogoutResponse` in `finish_slo`, for `with_replay_retention` | Library policy: Web Browser SSO and Single Logout require no identifier cache for these messages, so the cache is the caller's choice. | — | `ReplayPolicy::RequireCache` |
 | Store the `ID` of an authenticated `LogoutRequest` in `receive_slo` until its `NotOnOrAfter` plus skew, or for `with_replay_retention` when it has none | Library policy: Single Logout requires no identifier cache, so the cache is the caller's choice. | Core §3.7.1 | `ReplayPolicy::RequireCache` |
 | Refuse to store a message without `NotOnOrAfter` when `with_replay_retention` is unset or zero | Library policy: the library has no acceptance deadline for such a message, so a default retention could expire while the message is still accepted. | — | `SamlValidationContext::with_replay_retention` |
+
+### OneTimeUse application duties
+
+saml-rs keeps no assertion of its own: the `ReplayCache` stores only
+identifiers. The returned `SsoSession` holds the response XML, so an
+application that keeps the session keeps its assertions and owns these duties.
+`SsoSession::is_one_time_use` describes the consumed assertion only.
+
+| Rule | Level | Section | Actor |
+| --- | --- | --- | --- |
+| Do not keep an assertion that carries `OneTimeUse`, or the information it carries in another form, for future use | Mandatory | Core §2.5.1.5 | SP application |
+| Use an assertion that carries `OneTimeUse` immediately | Recommended | Core §2.5.1.5 | SP application |
 
 ## Typed metadata accessors
 
