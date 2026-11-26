@@ -65,6 +65,7 @@ pub(crate) mod login_response {
     pub(crate) const CONDITIONS: &str = "conditions";
     pub(crate) const AUDIENCE: &str = "audience";
     pub(crate) const AUDIENCE_RESTRICTION: &str = "audienceRestriction";
+    pub(crate) const ONE_TIME_USE: &str = "oneTimeUse";
     pub(crate) const SUBJECT_CONFIRMATION: &str = "subjectConfirmation";
     pub(crate) const SUBJECT: &str = "subject";
     pub(crate) const AUTHN_STATEMENTS: &str = "sessionIndex";
@@ -215,6 +216,11 @@ pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
             &["Assertion", "Conditions", "AudienceRestriction"],
         )
         .capture_source()
+        .source_xml(assertion),
+        ExtractorField::new(
+            login_response::ONE_TIME_USE,
+            &["Assertion", "Conditions", "OneTimeUse"],
+        )
         .source_xml(assertion),
         ExtractorField::new(login_response::ASSERTION_ISSUER, &["Assertion", "Issuer"])
             .source_xml(assertion),

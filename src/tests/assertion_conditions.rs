@@ -547,6 +547,7 @@ fn one_time_use_is_accepted_and_a_later_exchange_succeeds() -> Result<(), Box<dy
         session.name_id().ok_or("missing NameID")?.value(),
         "alice@example.com"
     );
+    assert!(session.is_one_time_use());
 
     let later = exchange_for(SpValidationPolicy::default(), false)?;
     let later_session = accept(&later, &response_xml(&later.response_fields)?)?;
@@ -554,6 +555,7 @@ fn one_time_use_is_accepted_and_a_later_exchange_succeeds() -> Result<(), Box<dy
         session.assertion_id().as_str(),
         later_session.assertion_id().as_str()
     );
+    assert!(!later_session.is_one_time_use());
     Ok(())
 }
 
