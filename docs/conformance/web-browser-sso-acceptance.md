@@ -32,7 +32,7 @@ names to its HTTP-POST message reader. [Namespaces in XML 1.0 §2.3](https://www
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | For unsolicited HTTP-POST, select a configured IdP by the direct SAML response issuer. When the response is unsigned and omits its issuer, use the common issuer of its plaintext assertions. Verify the message with the selected IdP | Optional | Profiles §4.1.4.2, §4.1.4.3, §4.1.5, E17 | `accept_unsolicited_sso_with_resolver` |
-| Require an unambiguous entity identifier for IdP lookup | Library policy: the SP needs one usable key to select the credentials for verification. | Core §2.2.5, §8.3.6, Profiles §4.1.4.2, E17 | `accept_unsolicited_sso_with_resolver` |
+| For IdP lookup, require one `Issuer` with an omitted or `entity` `Format` and no qualifier or child element | Library policy: the SP needs one usable key to select the credentials, and only an unqualified entity `Issuer` is that key. | Core §2.2.5, §8.3.6, Profiles §4.1.4.2, E17 | `accept_unsolicited_sso_with_resolver` |
 | Use the first bearer assertion with an `AuthnStatement` for the session | Library policy: `SsoSession` exposes the fields of one assertion. | Profiles §4.1.4.2, §4.1.4.3, E26 | Always |
 | Reject a response in which no bearer assertion has an `AuthnStatement` | Library policy: without one, the identity provider does not state that the principal authenticated, so the assertion cannot start a login session. | Profiles §4.1.4.2, E26 | Always |
 | In the selected bearer assertion, require `AuthnInstant`, exactly one direct SAML `AuthnContext`, and at most one direct SAML `SubjectLocality` in each `AuthnStatement` | Mandatory | Core §2.7.2, `AuthnStatementType` | Always |

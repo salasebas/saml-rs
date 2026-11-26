@@ -21,7 +21,9 @@ pub enum IdpResolutionReason {
     /// More than one issuer element was present where one was expected, or
     /// the plaintext assertions named different issuers.
     AmbiguousIssuer,
-    /// An eligible issuer did not have the form of a SAML entity identifier.
+    /// An eligible issuer had child elements, a `Format` other than
+    /// `entity`, a qualifier attribute, or a value that
+    /// [`EntityId::try_new`](crate::EntityId::try_new) rejects.
     InvalidIssuer,
     /// The configured resolver returned no descriptor for the issuer.
     UnknownEntityId,

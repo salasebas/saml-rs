@@ -469,7 +469,8 @@ impl ServiceProvider {
     /// Accept an IdP-initiated HTTP-POST response from a configured identity provider.
     ///
     /// The resolver receives the exact, unauthenticated entity ID from the
-    /// response issuer. When an unsigned response omits its issuer and contains
+    /// response issuer, also one that is not a URI or is longer than 1024
+    /// characters. When an unsigned response omits its issuer and contains
     /// only plaintext assertions, each assertion must name the same issuer.
     /// Use the ID only to select a descriptor from an existing trust
     /// configuration. The normal unsolicited SSO checks authenticate the response

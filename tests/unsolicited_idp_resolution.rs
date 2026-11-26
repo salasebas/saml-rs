@@ -370,7 +370,6 @@ fn refuses_ineligible_issuers_before_calling_the_resolver() -> TestResult {
             format!("<a:Issuer Format=\"urn:example:other\">{FIRST_IDP}</a:Issuer>"),
             InvalidIssuer,
         ),
-        ("<a:Issuer>relative-id</a:Issuer>".into(), InvalidIssuer),
     ] {
         let xml = format!(
             r#"<p:Response xmlns:p="urn:oasis:names:tc:SAML:2.0:protocol"
@@ -391,6 +390,39 @@ fn refuses_ineligible_issuers_before_calling_the_resolver() -> TestResult {
             "expected {expected:?} for {children}, got {result:?}",
         );
         assert!(!called, "{children}");
+    }
+    Ok(())
+}
+
+#[test]
+fn passes_a_non_uri_or_overlong_issuer_to_the_resolver() -> TestResult {
+    let sp = service_provider()?;
+    let overlong = format!("https://first.example.com/{}", "a".repeat(1000));
+    for peer in ["first.example.com", overlong.as_str()] {
+        let xml = format!(
+            r#"<p:Response xmlns:p="urn:oasis:names:tc:SAML:2.0:protocol"
+                xmlns:a="urn:oasis:names:tc:SAML:2.0:assertion"><a:Issuer>{peer}</a:Issuer></p:Response>"#,
+        );
+        let mut received = None;
+        let result = sp.accept_unsolicited_sso_with_resolver(
+            Inbound::post(vec![FormField::new("SAMLResponse", STANDARD.encode(xml))]),
+            post_validation(&mut Default::default()),
+            |issuer| {
+                received = Some(issuer.to_owned());
+                None
+            },
+        );
+        assert!(
+            matches!(
+                result,
+                Err(SamlError::IdpResolution {
+                    reason: IdpResolutionReason::UnknownEntityId,
+                    ..
+                })
+            ),
+            "{peer}: {result:?}"
+        );
+        assert_eq!(received.as_deref(), Some(peer));
     }
     Ok(())
 }
