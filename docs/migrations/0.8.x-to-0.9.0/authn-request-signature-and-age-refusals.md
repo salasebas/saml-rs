@@ -10,10 +10,10 @@ for two more requests:
   `SamlValidationContext::with_authn_request_age`. Before, it returned
   `SamlError::TimeWindowInvalid` with `TimeWindowField::AuthnRequestIssueInstant`.
 
-The new `RefusedAuthnRequest::reason` returns an `AuthnRequestRefusalReason`:
-`Unsigned` or `OutsideAgeWindow`. An unsigned request from a service provider
-whose metadata sets `AuthnRequestsSigned` still returns the refusal, now with
-`Unsigned` as its reason. When a request is both unsigned and too old, the
+For these two requests, the new `RefusedAuthnRequest::reason` returns an
+`AuthnRequestRefusalReason`: `Unsigned` or `OutsideAgeWindow`. An unsigned
+request from a service provider whose metadata sets `AuthnRequestsSigned`
+still returns the refusal, now with `Unsigned` as its reason. When a request is both unsigned and too old, the
 reason is `Unsigned`.
 
 SAML Profiles §4.1.4.1 requires an identity provider that will not satisfy a

@@ -11,9 +11,18 @@ use crate::config::{EntityId, NameIdFormat};
 use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::flow::FlowResult;
+use crate::util::Value;
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::fields::{authn_request, request, ISSUER};
 use crate::xml::xs_boolean;
+
+/// Whether the request has more than one `NameIDPolicy`.
+pub(crate) fn repeats_name_id_policy(raw_flow: &FlowResult) -> bool {
+    matches!(
+        raw_flow.extract.get(authn_request::NAME_ID_POLICY),
+        Some(Value::Array(policies)) if policies.len() > 1
+    )
+}
 
 /// `ForceAuthn` on an `<AuthnRequest>` (Core §3.4.1).
 ///
@@ -136,6 +145,9 @@ pub enum AuthnRequestRefusalReason {
     /// [`SamlValidationContext::with_authn_request_age`](crate::SamlValidationContext::with_authn_request_age)
     /// sets.
     OutsideAgeWindow,
+    /// The request has more than one `NameIDPolicy`, which `AuthnRequestType`
+    /// allows once.
+    RepeatedNameIdPolicy,
 }
 
 impl std::fmt::Display for AuthnRequestRefusalReason {
@@ -145,6 +157,7 @@ impl std::fmt::Display for AuthnRequestRefusalReason {
             Self::OutsideAgeWindow => {
                 f.write_str("the request IssueInstant is outside the age window")
             }
+            Self::RepeatedNameIdPolicy => f.write_str("the request has more than one NameIDPolicy"),
         }
     }
 }

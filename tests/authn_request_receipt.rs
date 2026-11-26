@@ -16,13 +16,14 @@ use base64::Engine;
 use saml_rs::constants::namespace::ASSERTION;
 use saml_rs::constants::status_code::INVALID_NAME_ID_POLICY;
 use saml_rs::{
-    AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, EntityId, ForceAuthn,
-    FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive,
-    MetadataTrustPolicy, NameId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound,
-    OutboundDelivery, Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier,
-    RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponseBinding, StartSso,
-    Status, SubordinateStatusCode,
+    AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest,
+    AuthnRequestRefusalReason, EntityId, ForceAuthn, FormField, IdentityProvider, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive, MetadataTrustPolicy, NameId,
+    NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, OutboundDelivery, Received,
+    ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponseBinding, StartSso, Status,
+    SubordinateStatusCode,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -554,6 +555,57 @@ fn received_authn_request_rejects_two_identifiers_or_two_subjects() {
         two_subjects,
         Err(error) if error.to_string().contains("Subject must occur once")
     ));
+}
+
+#[test]
+fn received_authn_request_with_two_name_id_policies_is_refused_for_a_requester_response(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp()?;
+    let idp = idp(IdpValidationPolicy::default())?;
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        sp.metadata_xml(),
+        MetadataTrustPolicy::Unverified,
+    )?;
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        idp.metadata_xml(),
+        MetadataTrustPolicy::Unverified,
+    )?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let request_id = started.pending.request_id().as_str();
+    let original = authn_request_xml(&started.outbound)?;
+
+    for second in [
+        format!(r#"<samlp:NameIDPolicy Format="{EMAIL_FORMAT}"/>"#),
+        "<samlp:NameIDPolicy/>".to_string(),
+    ] {
+        let xml = insert_before_name_id_policy(original.clone(), &second)?;
+        let received = idp.receive_sso(
+            &sp_descriptor,
+            Inbound::post(vec![FormField::new(
+                "SAMLRequest",
+                STANDARD.encode(xml.as_bytes()),
+            )]),
+            validation(),
+        );
+        let Err(SamlError::AuthnRequestRefused { refusal, .. }) = received else {
+            return Err(format!("{second}: expected a refusal, got {received:?}").into());
+        };
+        assert_eq!(
+            refusal.reason(),
+            AuthnRequestRefusalReason::RepeatedNameIdPolicy
+        );
+        let response = response_xml(&idp.respond_sso_refusal(
+            &sp_descriptor,
+            &refusal,
+            RespondSso::post(),
+        )?)?;
+        assert!(response.contains(&format!(r#"InResponseTo="{request_id}""#)));
+        assert!(response.contains(saml_rs::constants::status_code::REQUESTER));
+        assert!(!response.contains("<saml:Assertion"));
+    }
+    Ok(())
 }
 
 #[test]

@@ -6,8 +6,9 @@ use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
 use crate::flow::MessageAuthentication;
 use crate::idp::{self, LoginResponseOptions, LoginResponseOverrides};
 use crate::model::{
-    AuthnRequest, AuthnRequestRefusalReason, EndpointUrl, Received, RefusedAuthnRequest,
-    RelayState, ReplayKey, RequestAge, SamlValidationContext, SsoResponse, Status,
+    repeats_name_id_policy, AuthnRequest, AuthnRequestRefusalReason, EndpointUrl, Received,
+    RefusedAuthnRequest, RelayState, ReplayKey, RequestAge, SamlValidationContext, SsoResponse,
+    Status,
 };
 use std::time::SystemTime;
 
@@ -64,11 +65,13 @@ impl IdentityProvider {
     ///
     /// It returns [`SamlError::AuthnRequestRefused`] for a request it will not
     /// fulfil: an unsigned request when the SP declares `AuthnRequestsSigned`
-    /// or this identity provider requires signed requests, and a request
-    /// outside an enabled [`crate::RequestAgePolicy`] window.
+    /// or this identity provider requires signed requests, a request with
+    /// more than one `NameIDPolicy`, and a request outside an enabled
+    /// [`crate::RequestAgePolicy`] window.
     /// [`RefusedAuthnRequest::reason`](crate::RefusedAuthnRequest::reason)
-    /// says which. Send the refusal as a correlated error response with
-    /// [`Self::respond_sso_refusal`] or [`Self::respond_sso_refusal_artifact`].
+    /// names the first of these that applies. Send the refusal as a
+    /// correlated error response with [`Self::respond_sso_refusal`] or
+    /// [`Self::respond_sso_refusal_artifact`].
     /// Show a local error page only when that call fails because no trusted
     /// assertion consumer service can receive the response.
     ///
@@ -95,7 +98,8 @@ impl IdentityProvider {
     /// and [`SamlError::TimeWindowInvalid`] when the context has no positive
     /// replay retention. A request whose `Destination` does not match returns
     /// [`SamlError::DestinationMismatch`], not a refusal, even when it is
-    /// unsigned or outside the age window.
+    /// unsigned, has more than one `NameIDPolicy`, or is outside the age
+    /// window.
     ///
     /// # Examples
     ///
@@ -171,6 +175,8 @@ impl IdentityProvider {
         let mut validation = validation;
         let refusal_reason = if unsigned_refusal {
             Some(AuthnRequestRefusalReason::Unsigned)
+        } else if repeats_name_id_policy(&flow) {
+            Some(AuthnRequestRefusalReason::RepeatedNameIdPolicy)
         } else {
             match validation.authn_request_issue_instant_age(authn.issue_instant())? {
                 RequestAge::WithinWindow => None,
