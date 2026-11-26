@@ -312,8 +312,8 @@ impl SpConfigBuilder {
     /// - generating SP metadata fails: a NameID format or an endpoint URL that
     ///   is not an absolute URI reference, such as a URL with `[` in its path,
     ///   two ACS endpoints with the same index, more ACS endpoints than
-    ///   `unsignedShort` indexes, or a `validUntil` outside the years 0001
-    ///   through 9999.
+    ///   `unsignedShort` indexes, a contact with no detail, or a `validUntil`
+    ///   outside the years 0001 through 9999.
     pub fn build(self) -> Result<SpConfig, SamlError> {
         #[cfg(crypto)]
         crate::crypto::keys::check_credentials(
@@ -659,8 +659,9 @@ impl IdpConfigBuilder {
     /// - the `SignatureConfig` reference uses unsupported path syntax;
     /// - generating IdP metadata fails: a NameID format or an endpoint URL
     ///   that is not an absolute URI reference, such as a URL with `[` in its
-    ///   path, two artifact resolution endpoints with the same index, or a
-    ///   `validUntil` outside the years 0001 through 9999.
+    ///   path, two artifact resolution endpoints with the same index, a
+    ///   contact with no detail, or a `validUntil` outside the years 0001
+    ///   through 9999.
     pub fn build(self) -> Result<IdpConfig, SamlError> {
         let issuance_lifetime = validated_idp_issuance_lifetime(self.issuance_lifetime)?;
         #[cfg(crypto)]

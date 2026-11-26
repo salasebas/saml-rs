@@ -329,7 +329,8 @@ fn bool_str(value: bool) -> &'static str {
 /// `AssertionConsumerService` endpoints set the same [`Endpoint::index`], or
 /// when there are more of them than `unsignedShort` indexes. Also returns [`SamlError::Invalid`] for an
 /// incomplete organization, an invalid XML Schema language tag, a contact with
-/// no detail, a non-`mailto:` email URI, a non-absolute organization or error URI, or text XML cannot carry,
+/// no detail, a non-`mailto:` email URI, a non-absolute organization or error
+/// URI, or text XML cannot carry,
 /// and for an entity attribute whose `Name`, `FriendlyName`, or nonempty
 /// value has no non-whitespace character, whose `NameFormat` is not an absolute URI
 /// reference, whose [`crate::AttributeNameFormat::Basic`] name is not an XML
@@ -393,7 +394,8 @@ fn write_sp_role(w: &mut MetadataWriter, cfg: &SpMetadataInput) -> Result<(), Sa
 /// endpoint `Location` it writes is not an absolute URI reference, or when two
 /// `ArtifactResolutionService` endpoints share an index. Also returns [`SamlError::Invalid`] for an
 /// incomplete organization, an invalid XML Schema language tag, a contact with
-/// no detail, a non-`mailto:` email URI, a non-absolute organization or error URI, or text XML cannot carry,
+/// no detail, a non-`mailto:` email URI, a non-absolute organization or error
+/// URI, or text XML cannot carry,
 /// and for an entity attribute whose `Name`, `FriendlyName`, or nonempty
 /// value has no non-whitespace character, whose `NameFormat` is not an absolute URI
 /// reference, whose [`crate::AttributeNameFormat::Basic`] name is not an XML
