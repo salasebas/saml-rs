@@ -42,7 +42,8 @@ pub enum NameIdChange {
     ///
     /// From the identity provider, it replaces the `NameID` value. From the
     /// service provider, it is the `SPProvidedID` the identity provider sends
-    /// with that identifier from now on.
+    /// with that identifier from now on. Either requester refuses a value that
+    /// is empty or made only of XML whitespace.
     NewId(String),
     /// `<Terminate>`: the requester no longer issues or accepts assertions
     /// that use the identifier.

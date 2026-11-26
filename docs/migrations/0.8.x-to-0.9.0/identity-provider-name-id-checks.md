@@ -60,7 +60,10 @@ persistent `NameId` longer than 256 characters. `ServiceProvider::start_slo`
 never checked the value. Both now send the identifier as the identity
 provider issued it, because the request must name the principal as both
 providers know it. You do not need to change code. If you matched that
-`SamlError::Invalid` error, the request now succeeds instead.
+`SamlError::Invalid` error, the request now succeeds instead. A blank string
+is still refused, as
+[Handle blank NameID strings in service provider requests](service-provider-name-id-strings.md)
+describes.
 
 An `entity` `NameId` must still omit `NameQualifier`, `SPNameQualifier`, and
 `SPProvidedID`. The service provider forwards a received one unchanged so

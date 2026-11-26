@@ -311,6 +311,14 @@ impl SsoSession {
     /// is empty or only XML whitespace (space, tab, carriage return, line
     /// feed).
     ///
+    /// The subject keeps every qualifier as received, so that
+    /// [`Received::matches_sp_session`](crate::Received::matches_sp_session)
+    /// matches the identity provider's request for the session. A
+    /// `NameQualifier`, `SPNameQualifier`, or `SPProvidedID` made only of XML
+    /// whitespace is kept too, and
+    /// [`ServiceProvider::start_slo`](crate::ServiceProvider::start_slo)
+    /// refuses to send it: end such a session locally.
+    ///
     /// # Examples
     ///
     /// ```no_run

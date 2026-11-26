@@ -47,9 +47,8 @@ impl ServiceProvider {
     /// The caller's duties after the exchange, such as which identifier to
     /// use next, are listed in `docs/conformance/name-id-management.md#after-the-exchange`.
     ///
-    /// `name_id` is sent as the identity provider issued it. Its value and
-    /// qualifiers are not checked against the length and `entity` rules the
-    /// identity provider applies.
+    /// `name_id` is sent as the identity provider issued it, without the length
+    /// and `entity` checks the identity provider applies.
     ///
     /// The request goes to the identity provider's first HTTP-Redirect
     /// `ManageNameIDService` with an `https` `Location`. With
@@ -70,8 +69,10 @@ impl ServiceProvider {
     /// URL that is not `https`, [`SamlError::Invalid`] for a value that is not
     /// a URL.
     /// Returns [`SamlError::Invalid`] when the NameID format is not an
-    /// absolute URI reference, or when `allow_http` is selected and the first
-    /// endpoint is not an `http` or `https` URL. With
+    /// absolute URI reference, when the `name_id` value, `NameQualifier`,
+    /// `SPNameQualifier`, or `SPProvidedID`, or a [`NameIdChange::NewId`]
+    /// value, is empty or made only of XML whitespace, or when `allow_http` is
+    /// selected and the first endpoint is not an `http` or `https` URL. With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers),
     /// returns [`SamlError::MissingMetadata`] when the identity provider role
     /// that publishes the receiving `ManageNameIDService` has no encryption

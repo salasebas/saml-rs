@@ -109,5 +109,6 @@ Check the topics that affect your integration.
 - [Answer AuthnRequests with more than one `NameIDPolicy`](repeated-name-id-policy.md)
 - [Handle assertions with a second `Subject`](assertion-second-subject.md)
 - [Send AuthnRequests with signed extension content over HTTP-POST](redirect-signed-content.md)
+- [Handle blank NameID strings in service provider requests](service-provider-name-id-strings.md)
 
 [All migration guides](../README.md)

@@ -3,8 +3,10 @@ use crate::constants::{name_id_format, namespace};
 use crate::entity::now_iso8601;
 use crate::error::SamlError;
 use crate::model::{
-    is_name_id_format, validate_issued_name_id, validate_name_id_format, NameId, Status,
+    is_name_id_format, validate_issued_name_id, validate_name_id_format, validate_name_id_strings,
+    NameId, Status,
 };
+use crate::xml::dom::is_xml_whitespace_char;
 use crate::xml::name::check_in_response_to;
 use crate::xml::write::{Prefixes, XmlWriter};
 use crate::xml::OutboundNameIdQualifiers;
@@ -55,16 +57,26 @@ pub(crate) fn render_request(
         ));
     }
     validate_name_id_format(format)?;
+    let qualifiers = OutboundNameIdQualifiers::from(name_id);
     match request.requester {
         Requester::IdentityProvider => {
-            let qualifiers = OutboundNameIdQualifiers::from(name_id);
             validate_issued_name_id(format, name_id.value(), qualifiers)?;
             match request.change {
                 NameIdChange::NewId(value) => validate_issued_name_id(format, value, qualifiers)?,
                 NameIdChange::Terminate => {}
             }
         }
-        Requester::ServiceProvider => {}
+        Requester::ServiceProvider => {
+            validate_name_id_strings(name_id.value(), qualifiers)?;
+            match request.change {
+                NameIdChange::NewId(value) if value.chars().all(is_xml_whitespace_char) => {
+                    return Err(SamlError::Invalid(
+                        "a NewID must contain a character other than XML whitespace".into(),
+                    ));
+                }
+                NameIdChange::NewId(_) | NameIdChange::Terminate => {}
+            }
+        }
     }
     let persistent = is_name_id_format(format, name_id_format::PERSISTENT);
     let name_qualifier = name_id

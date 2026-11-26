@@ -29,9 +29,12 @@ use super::{IdentityProvider, RespondSlo, SamlError, ServiceProvider, StartSlo};
 impl ServiceProvider {
     /// Start SP-initiated Single Logout.
     ///
-    /// The subject `NameId` is sent as the identity provider issued it. Its
-    /// value and qualifiers are not checked against the length and `entity`
-    /// rules the identity provider applies.
+    /// The subject `NameId` is sent as the identity provider issued it, without
+    /// the length and `entity` checks the identity provider applies. A value or
+    /// qualifier made only of XML whitespace is refused.
+    /// [`SsoSession::logout_subject`](crate::SsoSession::logout_subject) gives
+    /// no subject for such a value, and keeps such a qualifier for matching
+    /// the identity provider's request.
     ///
     /// A browser request goes to the identity provider's first
     /// `SingleLogoutService` for the binding with an `https` `Location`. With
@@ -44,7 +47,9 @@ impl ServiceProvider {
     /// selected binding is unsupported, the subject's NameID format is not an
     /// absolute URI reference, or logout request creation fails.
     /// Returns [`SamlError::Invalid`] when [`StartSlo::reason`] holds a
-    /// timeout reason reserved for the session authority.
+    /// timeout reason reserved for the session authority, or when the
+    /// subject `NameId` value, `NameQualifier`, `SPNameQualifier`, or
+    /// `SPProvidedID` is empty or made only of XML whitespace.
     /// The participant must supply a `SessionIndex`. When no browser endpoint
     /// for the binding is `https` and [`StartSlo::allow_http`] is not
     /// selected, the first endpoint decides the error:

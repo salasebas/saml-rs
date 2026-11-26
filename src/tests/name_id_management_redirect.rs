@@ -824,6 +824,48 @@ fn only_the_identity_provider_applies_the_core_8_3_identifier_rules() -> TestRes
 }
 
 #[test]
+fn service_provider_does_not_send_a_name_id_string_or_new_id_of_only_xml_whitespace() -> TestResult
+{
+    let sp = sp()?;
+    let idp = idp()?;
+    let idp_peer = idp_descriptor(&idp)?;
+    let start = |current: &NameId, change: &NameIdChange| {
+        sp.start_name_id_management_redirect(
+            &idp_peer,
+            current,
+            change,
+            StartNameIdManagement::new(),
+        )
+    };
+
+    start(
+        &alice().with_sp_provided_id("\u{a0}"),
+        &NameIdChange::NewId("\u{2003}".into()),
+    )?;
+    for (current, change) in [
+        (
+            NameId::new(" \n").with_format(NameIdFormat::Persistent),
+            NameIdChange::Terminate,
+        ),
+        (alice().with_name_qualifier(""), NameIdChange::Terminate),
+        (
+            alice().with_sp_name_qualifier("\t"),
+            NameIdChange::Terminate,
+        ),
+        (alice().with_sp_provided_id("\r"), NameIdChange::Terminate),
+        (alice(), NameIdChange::NewId(String::new())),
+        (alice(), NameIdChange::NewId(" \t".into())),
+    ] {
+        let started = start(&current, &change);
+        assert!(
+            matches!(started, Err(SamlError::Invalid(_))),
+            "{current:?} {change:?}: {started:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn unsigned_request_is_rejected() -> TestResult {
     let sp = sp()?;
     let idp = idp()?;
