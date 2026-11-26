@@ -477,8 +477,17 @@ fn create_login_response(binding: Binding) -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
-fn flow_conformance_create_redirect_login_response() -> Result<(), Box<dyn std::error::Error>> {
-    create_login_response(Binding::Redirect)
+fn flow_conformance_redirect_login_response_with_a_signed_assertion_is_refused(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let idp = idp(false)?;
+    let sp = sp(true, false)?;
+    let refused =
+        idp.create_login_response(&sp, Binding::Redirect, &User::new("a@e.com"), &opts("_r"));
+    assert!(
+        matches!(refused, Err(SamlError::SignedContentOnRedirect)),
+        "{refused:?}"
+    );
+    Ok(())
 }
 #[test]
 fn flow_conformance_create_simplesign_login_response() -> Result<(), Box<dyn std::error::Error>> {
@@ -651,10 +660,6 @@ fn flow_conformance_required_response_signature_rejects_assertion_only_post(
     }
 }
 #[test]
-fn flow_conformance_send_signed_assertion_redirect() -> Result<(), Box<dyn std::error::Error>> {
-    send_signed_assertion(Binding::Redirect)
-}
-#[test]
 fn flow_conformance_send_signed_assertion_simplesign() -> Result<(), Box<dyn std::error::Error>> {
     send_signed_assertion(Binding::SimpleSign)
 }
@@ -681,11 +686,6 @@ fn flow_conformance_send_signed_assertion_custom_transforms_post(
     send_signed_assertion_custom_transforms(Binding::Post)
 }
 #[test]
-fn flow_conformance_send_signed_assertion_custom_transforms_redirect(
-) -> Result<(), Box<dyn std::error::Error>> {
-    send_signed_assertion_custom_transforms(Binding::Redirect)
-}
-#[test]
 fn flow_conformance_send_signed_assertion_custom_transforms_simplesign(
 ) -> Result<(), Box<dyn std::error::Error>> {
     send_signed_assertion_custom_transforms(Binding::SimpleSign)
@@ -709,11 +709,6 @@ fn send_custom_signed_assertion(binding: Binding) -> Result<(), Box<dyn std::err
 #[test]
 fn flow_conformance_send_custom_signed_assertion_post() -> Result<(), Box<dyn std::error::Error>> {
     send_custom_signed_assertion(Binding::Post)
-}
-#[test]
-fn flow_conformance_send_custom_signed_assertion_redirect() -> Result<(), Box<dyn std::error::Error>>
-{
-    send_custom_signed_assertion(Binding::Redirect)
 }
 #[test]
 fn flow_conformance_send_custom_signed_assertion_simplesign(
@@ -963,11 +958,6 @@ fn flow_conformance_send_assertion_and_message_post() -> Result<(), Box<dyn std:
     send_assertion_and_message(Binding::Post)
 }
 #[test]
-fn flow_conformance_send_assertion_and_message_redirect() -> Result<(), Box<dyn std::error::Error>>
-{
-    send_assertion_and_message(Binding::Redirect)
-}
-#[test]
 fn flow_conformance_send_assertion_and_message_simplesign() -> Result<(), Box<dyn std::error::Error>>
 {
     send_assertion_and_message(Binding::SimpleSign)
@@ -990,11 +980,6 @@ fn send_custom_assertion_and_message(binding: Binding) -> Result<(), Box<dyn std
 fn flow_conformance_send_custom_assertion_and_message_post(
 ) -> Result<(), Box<dyn std::error::Error>> {
     send_custom_assertion_and_message(Binding::Post)
-}
-#[test]
-fn flow_conformance_send_custom_assertion_and_message_redirect(
-) -> Result<(), Box<dyn std::error::Error>> {
-    send_custom_assertion_and_message(Binding::Redirect)
 }
 #[test]
 fn flow_conformance_send_custom_assertion_and_message_simplesign(

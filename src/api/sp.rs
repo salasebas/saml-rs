@@ -188,7 +188,9 @@ impl ServiceProvider {
     /// [`AuthnRequestSigningPolicy`](crate::AuthnRequestSigningPolicy) is
     /// `DoNotSign`. When the IdP metadata does not set it, returns
     /// [`SamlError::Invalid`] for [`StartSso::simple_sign`] under `DoNotSign`
-    /// and `SignWhenIdpWants`.
+    /// and `SignWhenIdpWants`. Returns [`SamlError::SignedContentOnRedirect`]
+    /// for [`StartSso::redirect`] when a [`StartSso::extension`] element holds
+    /// an XML signature.
     ///
     /// # Examples
     ///
