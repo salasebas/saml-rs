@@ -23,15 +23,16 @@ Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browse
 | Associate a message intended for a specific service provider with that service provider | Mandatory | Core §3.5.3, Profiles §4.1.4.4 | Always |
 | Associate every stored message with the service provider passed to `issue_artifact`, including one that any party may consume | Library policy: the issuer cannot tell from the element whether any party may consume it, and one presenter per artifact never releases a recipient-specific message to another. | Core §3.5.3 | Always |
 | Store only one element in the SAML protocol namespace | Library policy: `ArtifactResolution::finish` rejects any other payload, so another element could never be resolved. | Bindings §3.6 | Always |
-| Reject processing instructions inside the element before issuing an artifact | Library policy: the stored element must be deliverable in a SOAP response when the artifact resolves. | SOAP 1.1 §3 | Always |
+| Refuse an element with processing instructions before issuing an artifact | Library policy: the SOAP response that releases the element [must carry no processing instructions](#soap-envelope-rules), and refusing at issuance keeps the artifact from becoming unresolvable. | SOAP 1.1 §3 | Always |
 | Budget the complete SOAP response before storing the message | Library policy: issue only artifacts whose responses fit the crate's XML limits. | Core §3.5.3, Bindings §3.2.2.1, E19 | Default `XmlLimits` |
 
 ### SOAP response size budget
 
 For a valid artifact, SAML 2.0 Core §3.5.3 requires the IdP responder to
 return the stored message once. Bindings §3.2.2.1, as corrected by E19,
-requires one SAML response in the SOAP body or a SOAP fault. Those clauses
-set the response shape and single-use rule. The XML resource budget is
+says the responder should return a SAML response or a SOAP fault, and forbids
+a second response or another body element. Those clauses set the response
+shape and single-use rule. The XML resource budget is
 library policy. [Core §3.5.3](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf#page=56),
 [Bindings §3.2.2.1](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf#page=10),
 [Approved Errata 05](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/saml-v2.0-errata05-os.html).
@@ -142,18 +143,22 @@ write and read envelopes for artifact resolution,
 | Accept only the SOAP 1.1 envelope namespace | Mandatory | Bindings §3.2.2 | Always |
 | Compare namespace names in a received envelope after normalizing the declaration value. Accept an explicit declaration of the `xml` prefix whose normalized value is the XML namespace | Mandatory | Namespaces in XML 1.0 §2.3, §3 | Always |
 | Resolve names in received `ArtifactResponse`, `ManageNameIDResponse`, and SOAP `LogoutResponse` bodies against normalized namespace declarations, including declarations inherited from the envelope | Mandatory | [Namespaces in XML 1.0 §2.3](https://www.w3.org/TR/REC-xml-names/#NSNameComparison), §3, §6.1 | Always |
-| Carry one SAML request or response in the `Body`, with no other `Body` element, and reject a body with none, several, or extra elements | Mandatory | Bindings §3.2.2.1, E19, SOAP 1.1 §4.3 | Always |
-| Emit requests and responses without processing instructions | Mandatory | [SOAP 1.1 §3](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/#_Toc478383492) | Always |
+| Send one SAML request as the only element in the request `Body` | Mandatory | Bindings §3.2.2.1 | Always |
+| Answer with a SOAP message whose `Body` holds a SAML response or a SOAP fault | Recommended | Bindings §3.2.2.1, E19 | `SoapResponse::try_new`, `SoapFault::new` |
+| Put no second SAML response and no other element in the response `Body` | Mandatory | Bindings §3.2.2.1, E19 | Always |
+| Reject a received `Body` with no element or with several elements | Library policy: SOAP 1.1 §4.3 sets no count and WS-I R9981 allows at most one, and a `Body` without one element does not identify the message to process. | Bindings §3.2.2.1, SOAP 1.1 §4.3, WS-I BP 1.1 R9981 | Always |
+| Emit requests and responses without a `DOCTYPE` or processing instructions | Mandatory | [SOAP 1.1 §3](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/#_Toc478383492) | Always |
+| Refuse a received envelope with a `DOCTYPE` | Library policy: a DTD can declare entities that expand the input, and SOAP 1.1 §3 already forbids one in every SOAP message. | SOAP 1.1 §3, WS-I BP 1.1 R1008 | Always |
+| Accept a received envelope with processing instructions, other than the `xml-stylesheet` ones the XML reader refuses, and act on none | Library policy: SOAP 1.1 §3 forbids them in a message but gives the receiver no rule, and ignoring them changes no SAML processing. | SOAP 1.1 §3 | Always |
 | Treat only attributes in the SOAP 1.1 envelope namespace as `actor` and `mustUnderstand` | Mandatory | SOAP 1.1 §4.2.2, §4.2.3 | Always |
 | Process only header entries addressed to this endpoint: no `actor`, or `http://schemas.xmlsoap.org/soap/actor/next`. Ignore entries for other actors | Mandatory | SOAP 1.1 §4.2.2 | Always |
 | Refuse a local header entry with `mustUnderstand="1"` that the endpoint does not process | Mandatory | SOAP 1.1 §4.2.3 | Always |
 | Require no header to process the SAML message | Mandatory | Bindings §3.2.2.2 | Always |
 | Treat an empty `actor` as local | Library policy: an empty value identifies no other actor, so the receiver keeps responsibility for mandatory headers. | SOAP 1.1 §4.2.2 | Always |
 | Treat a local `mustUnderstand="true"` as mandatory | Library policy: SOAP 1.1 specifies `0` and `1`, and skipping `true` would silently ignore processing the sender asked for. | SOAP 1.1 §4.2.3 | Always |
-| Reject a second `Header` or a `Header` that does not immediately precede `Body` | Library policy: reason not recorded. | SOAP 1.1 §4, §4.3 | Always |
+| Reject a second `Header` or a `Header` that does not immediately precede `Body` | Library policy: SOAP 1.1 §4 allows one `Header`, first in the `Envelope`, so another layout is not a SOAP envelope, and the receiver cannot tell which header entries it must process. | SOAP 1.1 §4, §4.3, WS-I BP 1.1 R9980 | Always |
 | Reject an element after the `Body` | Library policy: SOAP 1.1 permits these trailers, and WS-I Basic Profile 1.1 forbids them, so rejection keeps the crate interoperable. | SOAP 1.1 §4, WS-I BP 1.1 R1011 | Always |
-| Use `http://www.oasis-open.org/committees/security` as the `SOAPAction` value | Optional | Bindings §3.2.3 | `SoapRequest::headers` |
-| Default to a bare `SOAPAction` URI | Library policy for interoperability. SAML's SOAP example uses the bare URI, as does [Keycloak 26.6.0 for IdP-to-SP SOAP logout](https://github.com/keycloak/keycloak/blob/26.6.0/services/src/main/java/org/keycloak/protocol/saml/SamlProtocol.java#L829-L842). SOAP 1.1 quotes the URI in its grammar | [Bindings §3.2.3](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf#page=11), [SOAP 1.1 §6.1.1](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/#_Toc478383528) | `SoapRequest::headers` |
+| Send `http://www.oasis-open.org/committees/security` as the `SOAPAction` value, bare, as Bindings §3.2.3 and its examples write it | Optional | [Bindings §3.2.3](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf#page=11), §3.2.3.5, §3.6.8 | `SoapRequest::headers` |
 | Process the request independently of the `SOAPAction` value | Mandatory | Bindings §3.2.3 | Always |
 | Return a SAML-domain error as a status in a SAML response, not as a SOAP fault | Recommended | Bindings §3.2.2.1, §3.2.3.3, E19 | Always |
 | Report a received `Envelope` outside the SOAP 1.1 namespace as `SamlError::SoapEnvelope` with the `VersionMismatch` fault code | Mandatory | SOAP 1.1 §4.1.2, §4.4.1 | Always |
@@ -165,6 +170,9 @@ write and read envelopes for artifact resolution,
 | Send SOAP entity bodies with the `text/xml` media type | Mandatory | SOAP 1.1 §6 | `SoapRequest::headers`, `SoapResponse::headers` |
 | Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` with a request | Recommended | Bindings §3.2.3.2 | `SoapRequest::headers` |
 | Send `Cache-Control: no-cache, no-store, must-revalidate, private` and `Pragma: no-cache` with a response | Recommended | Bindings §3.2.3.2 | `SoapResponse::headers` |
+| Send no validator, such as `Last-Modified` or `ETag`, with a response. The deployment adds none | Recommended | Bindings §3.2.3.2 | `SoapResponse::headers`, `SoapFault::headers` |
+| Process the SAML message without any HTTP request header. The receive APIs take none | Mandatory | Bindings §3.2.3.1 | Always |
+| Let the deployment add HTTP headers to a request beyond those in `SoapRequest::headers` | Optional | Bindings §3.2.3.1 | `SoapRequest::headers` |
 
 ## SOAP envelope helpers
 
@@ -178,5 +186,6 @@ their protocol flow.
 - Browser delivery of an artifact: [HTTP-Artifact response](web-browser-sso-artifact.md).
 - `AuthnRequest` over HTTP-Artifact. Optional, Bindings §3.6.
 - Signing outbound `ArtifactResponse`. Optional, Profiles §5.3.2.
+- Adding SOAP header entries, such as WS-Security, to an outgoing message. Optional, Bindings §3.2.2.2. Received header entries follow the [SOAP envelope rules](#soap-envelope-rules).
 - The assertion query/request profile over SOAP. Requirements vary by query and operational mode. Profiles §6, Conformance §3.2 Table 4.
 - The IdP operational mode and the SP operational mode: [IdP and SP operational modes](idp-sp-operational-modes.md).
