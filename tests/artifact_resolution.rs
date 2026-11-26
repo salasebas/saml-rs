@@ -606,13 +606,26 @@ fn a_version_mismatch_does_not_consume_the_artifact() -> Result<(), Box<dyn std:
     assert!(!rejected.response().envelope().contains(WEB_SSO_MARKER));
     let artifact_element = format!("<samlp:Artifact>{}</samlp:Artifact>", artifact.as_str());
     assert!(mismatched.contains(&artifact_element));
-    for (case, malformed, writes_in_response_to) in [
+    let later_minor = envelope.replacen("Version=\"2.0\"", "Version=\"2.1\"", 1);
+    for (case, malformed, too_high, writes_in_response_to) in [
         (
-            "no Artifact",
+            "3.0 without Artifact",
             mismatched.replacen(&artifact_element, "", 1),
             true,
+            true,
         ),
-        ("no ID", remove_attribute(&mismatched, "ID")?, false),
+        (
+            "3.0 without ID",
+            remove_attribute(&mismatched, "ID")?,
+            true,
+            false,
+        ),
+        (
+            "2.1 without Artifact",
+            later_minor.replacen(&artifact_element, "", 1),
+            false,
+            true,
+        ),
     ] {
         let rejected = parties.idp.answer_artifact_resolve(
             &parties.sp_metadata,
@@ -627,8 +640,10 @@ fn a_version_mismatch_does_not_consume_the_artifact() -> Result<(), Box<dyn std:
             ArtifactRelease::VersionMismatch,
             "{case}"
         );
-        assert!(
+        assert!(envelope.contains(VERSION_MISMATCH), "{case}: {envelope}");
+        assert_eq!(
             envelope.contains("urn:oasis:names:tc:SAML:2.0:status:RequestVersionTooHigh"),
+            too_high,
             "{case}: {envelope}"
         );
         assert_eq!(

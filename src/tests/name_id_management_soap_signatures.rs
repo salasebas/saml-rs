@@ -269,7 +269,7 @@ fn soap_manage_name_id_request_verifies_the_sp_signature() -> TestResult {
         &stale_sp,
         later_major.envelope(),
         channel,
-        SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::NoCache),
+        validation(&mut cache),
     );
     assert!(
         matches!(result, Err(SamlError::SignatureVerification { .. })),
@@ -283,7 +283,7 @@ fn soap_manage_name_id_request_verifies_the_sp_signature() -> TestResult {
         &stale_sp,
         later_minor.envelope(),
         channel,
-        SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::NoCache),
+        validation(&mut cache),
     )?;
     assert_denied(&result, Some("_request"))?;
     let receipt =

@@ -83,10 +83,12 @@ Two requests that 0.8 answered as usual now get the same `Requester` answer:
 An answer to a request whose `ID` is missing or not an `xs:NCName` has no
 `InResponseTo`.
 
-A request of a later version, such as `2.1` or `3.0`, gets `VersionMismatch`
-whatever else it lacks, with `RequestVersionTooHigh` for a later major
-version. 0.8 returned `SamlError::ProtocolProfile` for such a request when it
-lacked one of the parts above.
+A request of a later version, such as `2.1` or `3.0`, gets `VersionMismatch`,
+with `RequestVersionTooHigh` for a later major version, even when it lacks
+one of the parts above. A configured `SchemaValidator` that rejects the
+request still returns its error first. 0.8 returned
+`SamlError::ProtocolProfile` for such a request when it lacked one of those
+parts.
 
 ## Update matches and derives
 

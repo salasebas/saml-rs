@@ -226,7 +226,9 @@ impl IdentityProvider {
     /// [`AnsweredArtifact::error`] then returns the store error, and the
     /// artifact is not released. A request of a later version gets
     /// `VersionMismatch`, with `RequestVersionTooHigh` for a later major
-    /// version, whatever else it lacks.
+    /// version, also when the rest of it is malformed, once a configured
+    /// [`SchemaValidator`](crate::SchemaValidator) accepts the request and
+    /// its signature checks pass.
     ///
     /// A present XML signature must cover the `ArtifactResolve` and verify
     /// against `presenter`'s signing keys before the request can be

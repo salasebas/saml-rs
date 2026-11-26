@@ -125,16 +125,16 @@ Code: `src/artifact.rs`, `src/artifact/store.rs`, `src/soap.rs`, `src/crypto/ver
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Answer a request without `samlp:Artifact`, with a second direct child named `Artifact` in any namespace, or with a second `Issuer` with status `Requester`, without the message | Mandatory | `RequestAbstractType`, `ArtifactResolveType`, Core §3.2.1, Profiles §5.3.2 | Always |
-| Answer a request without `ID`, `Version`, or a UTC `IssueInstant`, or whose `Version` is not a `major.minor` number, with status `Requester`, without the message | Mandatory | `RequestAbstractType`, Core §3.2.1, §4.1.3, Profiles §5.3.2 | Always |
+| Answer a `2.0` request without `samlp:Artifact`, with a second direct child named `Artifact` in any namespace, or with a second `Issuer` with status `Requester`, without the message | Mandatory | `RequestAbstractType`, `ArtifactResolveType`, Core §3.2.1, Profiles §5.3.2 | Always |
+| Answer a request without `Version`, or whose `Version` is not a `major.minor` number, and a `2.0` request without `ID` or a UTC `IssueInstant`, with status `Requester`, without the message | Mandatory | `RequestAbstractType`, Core §3.2.1, §4.1.3, Profiles §5.3.2 | Always |
 | Verify a present `ArtifactResolve` signature over the SOAP body message with the expected service provider's signing keys before acting on the request | Mandatory | Core §3.2.1, §5.4.1–§5.4.2 | Always |
-| When a present signature does not verify, answer status `Requester` without the message and keep the artifact outstanding | Mandatory | Core §3.2.1, Profiles §5.3.2 | Always |
+| When a present signature does not verify, answer a request that declares no later major version with status `Requester`, without the message, and keep the artifact outstanding | Mandatory | Core §3.2.1, Profiles §5.3.2 | Always |
 | Add the second-level status `RequestDenied` to that answer | Recommended | Bindings §3.6.6, Core §3.2.2.2 | Always |
-| When this build cannot verify a present signature, because it has no crypto provider or the provider fails to start, answer status `Responder` without the message and keep the artifact outstanding | Mandatory | Core §3.2.2.2, Profiles §5.3.2 | Always |
+| When this build cannot verify a present signature, because it has no crypto provider or the provider fails to start, answer a request that declares no later major version with status `Responder`, without the message, and keep the artifact outstanding | Mandatory | Core §3.2.2.2, Profiles §5.3.2 | Always |
 | Answer a request that declares a later major version with neither `Requester` nor `Responder`, also when its signature does not verify or cannot be verified | Mandatory | Core §4.1.3.2 | Always |
 | Reject an unsupported major request version | Mandatory | Core §4.1.3.1 | Always |
 | Reject a higher minor request version | Optional | Core §4.1.3.1 | Always |
-| Answer a newer request version with `VersionMismatch` before reading its other content. Add `RequestVersionTooHigh` for a newer major version and keep the artifact outstanding | Mandatory | Core §4.1.3.2 | Always |
+| Answer a newer request version with `VersionMismatch` once its signature, when present, verifies. Add `RequestVersionTooHigh` for a newer major version and keep the artifact outstanding | Mandatory | Core §4.1.3.2 | Always |
 | Return an error for an older request version that forbids a SAML 2.0 response, also when its signature does not verify or the request is malformed | Mandatory | Core §4.1.3.2 | Always |
 | Answer an understood `ArtifactResolve` with status `Success`, and omit the message for an unauthorized presenter or an artifact that is not outstanding | Mandatory | Bindings §3.6.6, Core §3.5.3, Profiles §5.3.2 | Always |
 | Answer an empty `Artifact` as an artifact that is not outstanding | Mandatory | `ArtifactResolveType`, Core §3.5.3, Bindings §3.6.6 | Always |
