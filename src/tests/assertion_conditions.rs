@@ -7,6 +7,7 @@ mod session_evidence;
 mod sibling_assertions;
 mod statement;
 mod subject_identifier;
+mod text_only_values;
 mod time_values;
 
 use super::common;

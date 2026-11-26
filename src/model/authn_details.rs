@@ -60,19 +60,33 @@ impl AuthnContext {
         let reference = |name, kind| {
             children(name)
                 .next()
-                .map(|child| AuthnContextReference::received(kind, &child.text))
+                .map(|child| {
+                    text_only(child).map(|text| AuthnContextReference::received(kind, text))
+                })
+                .transpose()
         };
         Ok(Self {
-            class_reference: reference("AuthnContextClassRef", AuthnContextReferenceKind::Class),
+            class_reference: reference("AuthnContextClassRef", AuthnContextReferenceKind::Class)?,
             declaration_reference: reference(
                 "AuthnContextDeclRef",
                 AuthnContextReferenceKind::Declaration,
-            ),
+            )?,
             has_declaration: children("AuthnContextDecl").next().is_some(),
             authenticating_authorities: children("AuthenticatingAuthority")
-                .map(|child| collapse_whitespace(&child.text))
-                .collect(),
+                .map(|child| text_only(child).map(collapse_whitespace))
+                .collect::<Result<_, _>>()?,
         })
+    }
+}
+
+fn text_only(element: &SamlElement) -> Result<&str, SamlError> {
+    if element.children.is_empty() {
+        Ok(&element.text)
+    } else {
+        Err(SamlError::ProtocolProfile(format!(
+            "{} must hold text without child elements",
+            element.local_name
+        )))
     }
 }
 

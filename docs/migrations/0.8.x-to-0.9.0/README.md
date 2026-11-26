@@ -105,5 +105,6 @@ Check the topics that affect your integration.
 - [Send AuthnRequests to a published https sign-on endpoint](sso-https-endpoint.md)
 - [Handle responses with undeclared attributes on `Conditions`](conditions-attributes.md)
 - [Handle requests whose `ID` cannot be written as `InResponseTo`](request-id-in-response-to.md)
+- [Handle assertions with child elements inside text values](assertion-text-values.md)
 
 [All migration guides](../README.md)

@@ -43,6 +43,7 @@ pub(crate) fn accept_response_assertions(
         return Err(SamlError::AssertionMissing);
     };
     require_understood_conditions(response_xml, selected, opts.xml_limits)?;
+    require_text_only_values(selected)?;
     if let [first, _, ..] = assertions.as_slice() {
         let mut ids = HashSet::new();
         if assertions
@@ -384,6 +385,28 @@ fn undeclared_attribute(
         }
     }
     Ok(None)
+}
+
+fn require_text_only_values(assertion: &Node) -> Result<(), SamlError> {
+    let issuers = assertion.children_named("Issuer");
+    let name_ids = assertion
+        .children_named("Subject")
+        .flat_map(|subject| subject.children_named("NameID"));
+    let audiences = assertion
+        .children_named("Conditions")
+        .flat_map(|conditions| conditions.children_named("AudienceRestriction"))
+        .flat_map(|restriction| restriction.children_named("Audience"));
+    match issuers
+        .chain(name_ids)
+        .chain(audiences)
+        .find(|value| !value.children.is_empty())
+    {
+        Some(value) => Err(SamlError::ProtocolProfile(format!(
+            "{} must hold text without child elements",
+            value.local_name
+        ))),
+        None => Ok(()),
+    }
 }
 
 enum AudienceCheck {
