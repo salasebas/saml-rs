@@ -13,7 +13,7 @@ use crate::xml::dom::{self, push_normalized_namespaces, reader_err, Node};
 use crate::xml::fragment::standalone_element;
 use crate::xml::protocol_element::{parse_saml_with_limits, SamlElement};
 use crate::xml::write::XmlWriter;
-use crate::xml::XmlLimits;
+use crate::xml::{xs_boolean, XmlLimits};
 
 pub(crate) const SOAP_NAMESPACE: &str = "http://schemas.xmlsoap.org/soap/envelope/";
 pub(crate) const SOAP_ACTOR_NEXT: &str = "http://schemas.xmlsoap.org/soap/actor/next";
@@ -341,7 +341,8 @@ impl SoapBodyElement {
     /// Returns [`SamlError::SoapEnvelope`] with
     /// [`SoapFaultCode::VersionMismatch`] when the `Envelope` is not in the
     /// SOAP 1.1 namespace, and with [`SoapFaultCode::MustUnderstand`] for a
-    /// header entry addressed to this receiver with `mustUnderstand` set.
+    /// header entry addressed to this receiver whose `mustUnderstand` is `1`
+    /// or `true`, with only XML whitespace around it.
     /// Invalid XML under the default [`XmlLimits`], a root other than
     /// `Envelope`, or an envelope structure other than an optional `Header`
     /// followed by one `Body` with exactly one child element returns it with
@@ -727,7 +728,7 @@ fn requires_local_processing(
             {
                 return Ok(false);
             }
-            "mustUnderstand" if matches!(value.trim(), "1" | "true") => {
+            "mustUnderstand" if xs_boolean(Some(&value)) == Some(true) => {
                 must_understand = true;
             }
             _ => {}
@@ -968,6 +969,8 @@ mod tests {
                 r#"s:actor=" http://schemas.xmlsoap.org/soap/actor/next " s:mustUnderstand="1""#,
                 true,
             ),
+            (r#"s:mustUnderstand="&#x9; 1&#xA;""#, true),
+            (r#"s:mustUnderstand="&#xA0;1""#, false),
         ] {
             let envelope = format!(
                 r#"<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ext="urn:example:headers"><Header><ext:Trace {attributes}/></Header><Body><LogoutRequest xmlns="urn:oasis:names:tc:SAML:2.0:protocol"/></Body></Envelope>"#
