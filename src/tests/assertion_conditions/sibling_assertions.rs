@@ -165,3 +165,47 @@ fn a_bearer_confirmation_is_found_when_it_declares_a_prefix_named_method(
     );
     Ok(())
 }
+
+const SECOND_SUBJECT: &str = r#"</saml:Subject><saml:Subject><saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:holder-of-key"/></saml:Subject>"#;
+
+fn second_issuer() -> String {
+    format!("</saml:Issuer><saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>")
+}
+
+#[test]
+fn the_selected_assertion_has_one_issuer_and_at_most_one_subject(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
+    let xml = response_xml(&exchange.response_fields)?;
+
+    let two_subjects = replace_in_last_assertion(&xml, "</saml:Subject>", SECOND_SUBJECT)?;
+    expect_error(accept(&exchange, &resigned(&two_subjects)?), |error| {
+        matches!(error, SamlError::Invalid(_))
+    })
+    .map_err(|error| format!("second Subject: {error}"))?;
+
+    let two_issuers = replace_in_last_assertion(&xml, "</saml:Issuer>", &second_issuer())?;
+    expect_error(accept(&exchange, &resigned(&two_issuers)?), |error| {
+        matches!(error, SamlError::IssuerMismatch { .. })
+    })
+    .map_err(|error| format!("second Issuer: {error}"))?;
+    Ok(())
+}
+
+#[test]
+fn another_assertion_may_repeat_its_issuer_or_subject() -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
+    let pair = duplicate_assertion(
+        &response_xml(&exchange.response_fields)?,
+        "_second_assertion",
+    )?;
+    let other_issuer = format!("</saml:Issuer><saml:Issuer>{OTHER_AUDIENCE}</saml:Issuer>");
+    for edited in [
+        replace_in_last_assertion(&pair, "</saml:Issuer>", &other_issuer)?,
+        replace_in_last_assertion(&pair, "</saml:Subject>", SECOND_SUBJECT)?,
+    ] {
+        let session = accept(&exchange, &resigned(&edited)?)?;
+        assert_ne!(session.assertion_id().as_str(), "_second_assertion");
+    }
+    Ok(())
+}
