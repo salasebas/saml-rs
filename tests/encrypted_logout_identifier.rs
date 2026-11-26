@@ -969,7 +969,7 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
     let sso_response = parties.idp.respond_sso(
         &parties.sp_descriptor,
         &authn_request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
 

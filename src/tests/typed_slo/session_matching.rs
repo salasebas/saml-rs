@@ -6,6 +6,7 @@ use saml_rs::{
     EntityId, Inbound, LogoutBinding, LogoutSubject, NameId, NameIdFormat, RespondSso,
     SessionIndex, SsoAssertion, StartSlo,
 };
+use std::time::SystemTime;
 
 #[test]
 fn authenticated_idp_logout_selects_the_sessions_named_by_the_request(
@@ -21,7 +22,7 @@ fn authenticated_idp_logout_selects_the_sessions_named_by_the_request(
     let name_id = principal("alice@example.com");
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(name_id.clone()),
+        SsoAssertion::new(name_id.clone(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let session = sp.accept_unsolicited_sso(

@@ -6,6 +6,7 @@ use saml_rs::{
     PrivateKeyPem, SignatureConfig, SoapBodyElement, SoapResponse, SpValidationPolicy,
     TemplatePolicy, X509Credential, XmlSignatureProfile,
 };
+use std::time::SystemTime;
 
 use super::*;
 
@@ -100,7 +101,7 @@ fn signed_artifact_resolve_completes_the_protected_soap_exchange() -> TestResult
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let outbound = parties.idp.initiate_sso_artifact(
         &parties.sp_metadata,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -184,7 +185,7 @@ fn artifact_resolve_signature_failure_leaves_the_artifact_outstanding() -> TestR
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let outbound = parties.idp.initiate_sso_artifact(
         &parties.sp_metadata,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -316,7 +317,7 @@ fn soap_artifact_hmac_signatures_use_the_receivers_profile() -> TestResult {
         let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
         let outbound = parties.idp.initiate_sso_artifact(
             &sp_descriptor,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::artifact(ArtifactDelivery::redirect(0)),
             &mut issued,
         )?;

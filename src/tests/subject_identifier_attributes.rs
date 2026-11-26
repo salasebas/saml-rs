@@ -1,6 +1,7 @@
 #![cfg(crypto)]
 
 use std::collections::HashSet;
+use std::time::SystemTime;
 
 use super::identifier_formats::{
     accept_peer_attribute_statement, alice, exchange, respond, values,
@@ -132,7 +133,7 @@ fn identity_provider_issues_and_service_provider_reads_both_identifiers(
     ]);
 
     let exchange = exchange(
-        SsoAssertion::new(alice()).attributes(attributes),
+        SsoAssertion::new(alice(), SystemTime::now()).attributes(attributes),
         RespondSso::post().sign_response(),
     )?;
 
@@ -288,7 +289,8 @@ fn identity_provider_does_not_issue_an_identifier_attribute_that_breaks_the_prof
         ],
     ] {
         match respond(
-            SsoAssertion::new(alice()).attributes(Attributes::new(attributes.clone())),
+            SsoAssertion::new(alice(), SystemTime::now())
+                .attributes(Attributes::new(attributes.clone())),
             RespondSso::post(),
         ) {
             Err(SamlError::Invalid(_)) => {}
@@ -309,7 +311,7 @@ fn identity_provider_does_not_issue_an_identifier_attribute_that_breaks_the_prof
         ],
     ] {
         respond(
-            SsoAssertion::new(alice()).attributes(Attributes::new(attributes)),
+            SsoAssertion::new(alice(), SystemTime::now()).attributes(Attributes::new(attributes)),
             RespondSso::post(),
         )?;
     }

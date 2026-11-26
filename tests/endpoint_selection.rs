@@ -109,7 +109,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
 
     let unsolicited = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     assert_eq!(unsolicited.post_form()?.action().as_str(), DEFAULT_ACS);
@@ -124,7 +124,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
     let response = idp.respond_sso(
         &sp_descriptor,
         &unspecified,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     assert_eq!(response.post_form()?.action().as_str(), DEFAULT_ACS);
@@ -153,7 +153,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         idp.respond_sso(
             &cross_binding_descriptor,
             &unspecified,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post()
         ),
         Err(SamlError::Invalid(_))
@@ -161,21 +161,21 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
     let response = idp.respond_sso(
         &cross_binding_descriptor,
         &unspecified,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::simple_sign(),
     )?;
     assert_eq!(response.post_form()?.action().as_str(), DEFAULT_ACS);
     assert!(matches!(
         idp.initiate_sso(
             &cross_binding_descriptor,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post()
         ),
         Err(SamlError::Invalid(_))
     ));
     let unsolicited = idp.initiate_sso(
         &cross_binding_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::simple_sign(),
     )?;
     assert_eq!(unsolicited.post_form()?.action().as_str(), DEFAULT_ACS);
@@ -198,7 +198,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         idp.respond_sso(
             &unsupported_descriptor,
             &unspecified,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post()
         ),
         Err(SamlError::Invalid(_))
@@ -206,7 +206,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
     assert!(matches!(
         idp.initiate_sso(
             &unsupported_descriptor,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post()
         ),
         Err(SamlError::Invalid(_))
@@ -243,13 +243,13 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         let response = idp.respond_sso(
             &descriptor,
             &unspecified,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post(),
         )?;
         assert_eq!(response.post_form()?.action().as_str(), FIRST_ACS);
         let unsolicited = idp.initiate_sso(
             &descriptor,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post(),
         )?;
         assert_eq!(unsolicited.post_form()?.action().as_str(), FIRST_ACS);
@@ -316,7 +316,7 @@ fn protocol_binding_alone_uses_the_binding_default() -> Result<(), Box<dyn std::
                 let response = idp.respond_sso(
                     &sp_descriptor,
                     &request,
-                    SsoAssertion::new(principal()),
+                    SsoAssertion::new(principal(), SystemTime::now()),
                     options,
                 )?;
                 assert_eq!(response.post_form()?.action().as_str(), FIRST_ACS);
@@ -326,7 +326,7 @@ fn protocol_binding_alone_uses_the_binding_default() -> Result<(), Box<dyn std::
                 let response = idp.respond_sso_artifact(
                     &sp_descriptor,
                     &request,
-                    SsoAssertion::new(principal()),
+                    SsoAssertion::new(principal(), SystemTime::now()),
                     RespondSso::artifact(ArtifactDelivery::redirect(0)),
                     &mut issued,
                 )?;
@@ -371,7 +371,7 @@ fn a_stale_acs_index_allows_a_correlated_error_at_the_current_default(
         idp.respond_sso(
             &updated_descriptor,
             &received,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post(),
         ),
         Err(SamlError::MissingMetadata(_))
@@ -457,7 +457,7 @@ fn conflicting_request_acs_selectors_are_not_answered() -> Result<(), Box<dyn st
         match idp.respond_sso(
             &sp_descriptor,
             &request,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             options,
         ) {
             Err(SamlError::Invalid(message)) => assert_eq!(message, expected),
@@ -482,7 +482,7 @@ fn a_response_is_not_sent_to_an_unpublished_request_acs() -> Result<(), Box<dyn 
     match idp.respond_sso(
         &sp_descriptor,
         &request,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     ) {
         Err(SamlError::DestinationMismatch {
@@ -592,7 +592,12 @@ fn respond_to_request(
     let xml = authn_request(IDP_SSO_FIRST).replace(" Version=", &format!("{selector} Version="));
     let request = idp.receive_sso(sp, post_authn_request(&xml), validation())?;
     Ok(idp
-        .respond_sso(sp, &request, SsoAssertion::new(principal()), options)
+        .respond_sso(
+            sp,
+            &request,
+            SsoAssertion::new(principal(), SystemTime::now()),
+            options,
+        )
         .and_then(|response| Ok(response.post_form()?.action().as_str().to_owned())))
 }
 

@@ -436,7 +436,7 @@ fn unsigned_authn_request_fields_are_accepted_under_default_policy(
     let response = receipt.idp.respond_sso(
         &receipt.sp_descriptor,
         &receipt.received,
-        SsoAssertion::new(NameId::new("alice@example.com")),
+        SsoAssertion::new(NameId::new("alice@example.com"), SystemTime::now()),
         RespondSso::post(),
     )?;
     assert!(response.post_form()?.value("SAMLResponse").is_some());
@@ -819,7 +819,7 @@ fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_reques
     let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
         insert_after_name_id_policy(xml, &requested_authn_context("", &class_ref(SMARTCARD)))
     })?;
-    let assertion = || SsoAssertion::new(NameId::new("alice@example.com"));
+    let assertion = || SsoAssertion::new(NameId::new("alice@example.com"), SystemTime::now());
     let respond = |outcome: SsoOutcome| {
         receipt.idp.respond_sso(
             &receipt.sp_descriptor,
@@ -887,7 +887,7 @@ fn respond_sso_leaves_a_comparison_other_than_exact_to_the_caller(
         &receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
-            SsoAssertion::new(NameId::new("alice@example.com"))
+            SsoAssertion::new(NameId::new("alice@example.com"), SystemTime::now())
                 .authn_context(AuthnContextReference::declaration(DECLARATION)?),
             RespondSso::post(),
         )?,
@@ -905,7 +905,7 @@ fn respond_sso_writes_the_context_when_the_request_specifies_none(
     let response = receipt.idp.respond_sso(
         &receipt.sp_descriptor,
         &receipt.received,
-        SsoAssertion::new(NameId::new("alice@example.com"))
+        SsoAssertion::new(NameId::new("alice@example.com"), SystemTime::now())
             .authn_context(AuthnContextReference::class(SMARTCARD)?),
         RespondSso::post(),
     )?;
@@ -927,7 +927,7 @@ fn respond_sso_enforces_the_requested_name_id_format() -> Result<(), Box<dyn std
         receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
-            SsoAssertion::new(name_id),
+            SsoAssertion::new(name_id, SystemTime::now()),
             RespondSso::post(),
         )
     };
@@ -985,7 +985,7 @@ fn respond_sso_refuses_plaintext_for_an_encrypted_name_id_request(
     let refused = receipt.idp.respond_sso(
         &receipt.sp_descriptor,
         &receipt.received,
-        SsoAssertion::new(NameId::new("alice@example.com")),
+        SsoAssertion::new(NameId::new("alice@example.com"), SystemTime::now()),
         RespondSso::post(),
     );
     assert!(matches!(
@@ -1018,7 +1018,7 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
         receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
-            SsoAssertion::new(name_id),
+            SsoAssertion::new(name_id, SystemTime::now()),
             RespondSso::post(),
         )
     };
@@ -1123,7 +1123,7 @@ fn respond_sso_issues_only_the_requested_subject() -> Result<(), Box<dyn std::er
         receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
-            SsoAssertion::new(name_id),
+            SsoAssertion::new(name_id, SystemTime::now()),
             options,
         )
     };

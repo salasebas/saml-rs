@@ -23,16 +23,18 @@ response status. A browser or HTTP-Artifact error response still needed a
 `initiate_sso` and `initiate_sso_artifact`) is `impl Into<SsoOutcome>`, and
 it says what the response reports:
 
-- `SsoAssertion::new(name_id)` answers with a `Success` response. The method
-  writes the assertion `Subject` with that `NameId` and one bearer
-  `SubjectConfirmation`. `SsoAssertion::new` takes the `NameId` by value, so
-  clone one you only borrow. To re-issue the principal of an accepted session,
-  pass `SsoAssertion::new(session.name_id().clone())`. A `Subject`
+- `SsoAssertion::new(name_id, authenticated_at)` answers with a `Success`
+  response. The method writes the assertion `Subject` with that `NameId` and
+  one bearer `SubjectConfirmation`. `SsoAssertion::new` takes the `NameId` by
+  value, so clone one you only borrow. To re-issue the principal of an
+  accepted session, pass `session.name_id().clone()`. A `Subject`
   with confirmations returned `SamlError::Unsupported`. A caller can no longer
   pass one.
-- `RespondSso::attributes`, `authn_context`, and `authn_instant` become
-  `SsoAssertion::attributes`, `authn_context`, and
-  `authn_instant`. They take the same values and are checked as before.
+- `RespondSso::attributes` and `authn_context` become
+  `SsoAssertion::attributes` and `authn_context`. They take the same values
+  and are checked as before. `RespondSso::authn_instant` becomes the required
+  second argument of `SsoAssertion::new`; see
+  [Pass the authentication time of each SSO assertion](required-authn-instant.md).
 - `RespondSso::status` is removed. Pass `SsoOutcome::Failure(status)` for an
   error response. It needs no `NameId`, and it cannot carry the assertion
   options. Put the authentication context, instant, attributes and NameID
@@ -61,12 +63,13 @@ After the upgrade:
 
 ```rust
 # use saml_rs::{AuthnRequest, Attributes, NameId, NameIdFormat, Received, RespondSso, SamlError, SpDescriptor, SsoAssertion, SsoOutcome, Status, IdentityProvider};
-# fn respond(idp: &IdentityProvider, sp: &SpDescriptor, request: &Received<AuthnRequest>, attributes: Attributes) -> Result<(), SamlError> {
+# use std::time::SystemTime;
+# fn respond(idp: &IdentityProvider, sp: &SpDescriptor, request: &Received<AuthnRequest>, attributes: Attributes, authenticated_at: SystemTime) -> Result<(), SamlError> {
 let name_id = NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress);
 let response = idp.respond_sso(
 	sp,
 	request,
-	SsoAssertion::new(name_id).attributes(attributes),
+	SsoAssertion::new(name_id, authenticated_at).attributes(attributes),
 	RespondSso::post(),
 )?;
 let denied = idp.respond_sso(

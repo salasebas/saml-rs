@@ -159,7 +159,7 @@ fn typed_send_rejects_relay_state_longer_than_80_bytes() -> Result<(), Box<dyn s
         .ok_or("missing RelayState")?;
     match idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post().relay_state(reused.clone()),
     ) {
         Err(SamlError::Invalid(message)) if message.contains("80") => {}
@@ -234,7 +234,7 @@ fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     assert_eq!(
@@ -260,7 +260,7 @@ fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
 
     let unsolicited = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let mut fields = unsolicited.post_form()?.fields().to_vec();
@@ -308,7 +308,7 @@ fn typed_sso_rejects_received_relay_state_above_the_receive_limit(
 
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let mut fields = response.post_form()?.fields().to_vec();
@@ -361,7 +361,7 @@ fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let mut response_fields = response.post_form()?.fields().to_vec();
@@ -378,7 +378,7 @@ fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::
 
     let unsolicited = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let mut unsolicited_fields = unsolicited.post_form()?.fields().to_vec();
@@ -596,7 +596,7 @@ fn typed_form_refuses_a_relay_state_it_cannot_send_unchanged(
         idp.respond_sso(
             &sp_descriptor,
             &received,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post(),
         ),
         Binding::Post,
@@ -611,7 +611,7 @@ fn typed_form_refuses_a_relay_state_it_cannot_send_unchanged(
         idp.respond_sso(
             &sp_descriptor,
             &received,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post(),
         ),
         Binding::Post,
@@ -635,7 +635,7 @@ fn typed_redirect_refuses_a_relay_state_that_is_not_utf8() -> Result<(), Box<dyn
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     assert_eq!(response.post_form()?.value("RelayState"), Some("café"));

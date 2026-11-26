@@ -1749,6 +1749,7 @@ fn typed_models_existing_login_response_flow_preserves_multi_value_attributes(
             },
             crate::idp::LoginResponseOverrides {
                 typed_attributes: &attributes,
+                authn_instant: Some(std::time::SystemTime::now()),
                 ..Default::default()
             },
         )?

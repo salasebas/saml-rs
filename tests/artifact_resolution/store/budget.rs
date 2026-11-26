@@ -4,6 +4,7 @@ use saml_rs::{
     ArtifactDelivery, Attribute, AttributeValue, Attributes, CertificatePem, Credentials, NameId,
     PrivateKeyPem, ResourceLimit, RespondSso, SsoAssertion, X509Credential,
 };
+use std::time::SystemTime;
 
 #[test]
 fn signed_sso_artifact_must_fit_before_the_store_is_written() -> TestResult {
@@ -36,12 +37,12 @@ fn signed_sso_artifact_must_fit_before_the_store_is_written() -> TestResult {
     let post_peer = peer(AcsEndpoint::post(acs)?)?;
     let artifact_peer = peer(AcsEndpoint::artifact(acs)?)?;
     let assertion = |attribute_bytes| {
-        SsoAssertion::new(NameId::new("alice@example.com")).attributes(Attributes::new([
-            Attribute::new(
+        SsoAssertion::new(NameId::new("alice@example.com"), SystemTime::now()).attributes(
+            Attributes::new([Attribute::new(
                 "entitlements",
                 [AttributeValue::new("a".repeat(attribute_bytes))],
-            ),
-        ]))
+            )]),
+        )
     };
     let posted_xml = |attribute_bytes| -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let response =

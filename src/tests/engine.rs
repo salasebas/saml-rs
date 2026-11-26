@@ -140,7 +140,10 @@ impl IdpMessages for idp::Engine {
                 binding,
                 user,
                 options,
-                LoginResponseOverrides::default(),
+                LoginResponseOverrides {
+                    authn_instant: Some(SystemTime::now()),
+                    ..LoginResponseOverrides::default()
+                },
             )?
             .context)
     }

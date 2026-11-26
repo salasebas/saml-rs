@@ -95,12 +95,13 @@ impl IdentityProvider {
     /// #     sp: &SpDescriptor,
     /// #     request: &Received<AuthnRequest>,
     /// #     name_id: NameId,
+    /// #     authenticated_at: std::time::SystemTime,
     /// #     issued: &mut IssuedArtifacts,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let response = idp.respond_sso_artifact(
     ///     sp,
     ///     request,
-    ///     SsoAssertion::new(name_id),
+    ///     SsoAssertion::new(name_id, authenticated_at),
     ///     RespondSso::artifact(ArtifactDelivery::redirect(0)),
     ///     issued,
     /// )?;

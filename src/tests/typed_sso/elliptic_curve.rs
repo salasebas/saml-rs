@@ -1,6 +1,7 @@
 use super::*;
 use saml_rs::tests::elliptic_curve_signatures::SIGNING_FIXTURES;
 use saml_rs::{InMemoryReplayCache, SsoRequestBinding};
+use std::time::SystemTime;
 
 #[test]
 fn elliptic_curve_signatures_round_trip_in_browser_sso() -> Result<(), Box<dyn std::error::Error>> {
@@ -68,7 +69,7 @@ fn elliptic_curve_signatures_round_trip_in_browser_sso() -> Result<(), Box<dyn s
             let response = idp.respond_sso(
                 &sp_descriptor,
                 &received,
-                SsoAssertion::new(principal()),
+                SsoAssertion::new(principal(), SystemTime::now()),
                 respond.sign_response(),
             )?;
             fixture.assert_signature(&response, "SAMLResponse")?;

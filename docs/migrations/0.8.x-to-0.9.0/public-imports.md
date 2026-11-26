@@ -59,8 +59,10 @@ you call `respond_sso` or `initiate_sso`.
 
 ```rust
 use saml_rs::{Attribute, AttributeNameFormat, AttributeValue, Attributes, NameId, SsoAssertion};
+use std::time::SystemTime;
 
-let assertion = SsoAssertion::new(NameId::new("alice@example.com")).attributes(Attributes::new([
+let authenticated_at = SystemTime::now();
+let assertion = SsoAssertion::new(NameId::new("alice@example.com"), authenticated_at).attributes(Attributes::new([
     Attribute::new(
         "urn:oid:0.9.2342.19200300.100.1.3",
         [AttributeValue::new("alice@example.com")],

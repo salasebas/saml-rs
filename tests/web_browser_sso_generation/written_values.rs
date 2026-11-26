@@ -1,4 +1,5 @@
 use super::*;
+use std::time::SystemTime;
 
 const ENTITY_FORMAT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:entity";
 const PARTNER: &str = "https://partner.example.org/metadata";
@@ -115,7 +116,7 @@ fn an_entity_name_id_is_a_uri_of_at_most_1024_characters() -> Result<(), Box<dyn
     let longest = entity_name_id_of_length(1024);
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(longest.clone()),
+        SsoAssertion::new(longest.clone(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
@@ -134,7 +135,7 @@ fn an_entity_name_id_is_a_uri_of_at_most_1024_characters() -> Result<(), Box<dyn
     ] {
         let response = idp.initiate_sso(
             &sp_descriptor,
-            SsoAssertion::new(name_id.clone()),
+            SsoAssertion::new(name_id.clone(), SystemTime::now()),
             RespondSso::post(),
         );
         assert!(
@@ -158,7 +159,7 @@ fn an_entity_name_id_omits_every_qualifier() -> Result<(), Box<dyn std::error::E
     ] {
         let response = idp.initiate_sso(
             &sp_descriptor,
-            SsoAssertion::new(name_id.clone()),
+            SsoAssertion::new(name_id.clone(), SystemTime::now()),
             RespondSso::post(),
         );
         assert!(
@@ -186,7 +187,7 @@ fn a_name_id_without_a_format_follows_the_configured_entity_format(
 
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(NameId::new(PARTNER)),
+        SsoAssertion::new(NameId::new(PARTNER), SystemTime::now()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
@@ -199,7 +200,7 @@ fn a_name_id_without_a_format_follows_the_configured_entity_format(
 
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(NameId::new("partner")),
+        SsoAssertion::new(NameId::new("partner"), SystemTime::now()),
         RespondSso::post(),
     );
     assert!(
@@ -239,7 +240,7 @@ fn a_request_id_is_written_as_in_response_to_only_as_an_ncname(
     )?;
     assert_eq!(received.message().id().as_str(), "1-not-an-ncname");
     for outcome in [
-        SsoOutcome::Success(SsoAssertion::new(principal())),
+        SsoOutcome::Success(SsoAssertion::new(principal(), SystemTime::now())),
         SsoOutcome::Failure(Status::responder()),
     ] {
         let response = idp.respond_sso(&sp_descriptor, &received, outcome, RespondSso::post());
@@ -265,7 +266,7 @@ fn a_padded_request_id_is_one_id_for_correlation() -> Result<(), Box<dyn std::er
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;

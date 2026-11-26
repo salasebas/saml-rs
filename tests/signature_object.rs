@@ -171,7 +171,7 @@ fn post_response_with_object_is_rejected() -> Result<(), Box<dyn std::error::Err
         let response = parties.idp.respond_sso(
             &parties.sp_descriptor,
             &received,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             respond,
         )?;
         let form = form_with_object(response.post_form()?.fields(), "SAMLResponse")?;

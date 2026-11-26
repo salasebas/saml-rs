@@ -196,7 +196,7 @@ pub(super) fn exchange_between(
     let response = idp.respond_sso(
         sp_descriptor,
         &received,
-        SsoAssertion::new(alice()).attributes(attributes()),
+        SsoAssertion::new(alice(), SystemTime::now()).attributes(attributes()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
@@ -297,7 +297,7 @@ fn requested_encrypted_name_id_is_encrypted_in_the_assertion_subject(
     let refused = idp_with_assertion_encryption.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(alice()),
+        SsoAssertion::new(alice(), SystemTime::now()),
         RespondSso::post(),
     );
     assert!(matches!(
@@ -308,7 +308,7 @@ fn requested_encrypted_name_id_is_encrypted_in_the_assertion_subject(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(alice()),
+        SsoAssertion::new(alice(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
@@ -678,7 +678,7 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
         let response = idp.respond_sso(
             &sp_descriptor,
             &received,
-            SsoAssertion::new(alice()).attributes(attributes()),
+            SsoAssertion::new(alice(), SystemTime::now()).attributes(attributes()),
             RespondSso::simple_sign(),
         )?;
         let session = sp.finish_sso(
@@ -807,7 +807,7 @@ fn encrypted_id_outside_the_signed_assertion_is_not_decrypted(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(alice()),
+        SsoAssertion::new(alice(), SystemTime::now()),
         RespondSso::post().allow_unsigned_encrypted_cbc(),
     )?;
     let xml = response_xml(&response)?;
@@ -874,7 +874,7 @@ fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(alice()).attributes(attributes()),
+        SsoAssertion::new(alice(), SystemTime::now()).attributes(attributes()),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;

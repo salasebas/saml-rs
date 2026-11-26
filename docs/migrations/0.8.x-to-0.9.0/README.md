@@ -86,5 +86,6 @@ Check the topics that affect your integration.
 - [Give AuthnRequests a ProviderName with visible text](provider-name-whitespace.md)
 - [Answer AuthnRequests refused for their signature or age](authn-request-signature-and-age-refusals.md)
 - [Answer requests for a confirmation method other than bearer](requested-subject-confirmations.md)
+- [Pass the authentication time of each SSO assertion](required-authn-instant.md)
 
 [All migration guides](../README.md)

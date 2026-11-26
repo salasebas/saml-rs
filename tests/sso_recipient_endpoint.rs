@@ -117,7 +117,7 @@ fn response_input(
     (sender_view, idp_descriptor): (&SpDescriptor, &IdpDescriptor),
     request: Option<&Received<AuthnRequest>>,
 ) -> Result<Inbound<SsoResponse>, Box<dyn std::error::Error>> {
-    let assertion = SsoAssertion::new(principal());
+    let assertion = SsoAssertion::new(principal(), SystemTime::now());
     Ok(match binding {
         SsoResponseBinding::Post | SsoResponseBinding::SimpleSign => {
             let options = if binding == SsoResponseBinding::SimpleSign {

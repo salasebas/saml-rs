@@ -153,7 +153,10 @@
 //! let response = idp.respond_sso(
 //!     sp,
 //!     &request,
-//!     SsoAssertion::new(NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)),
+//!     SsoAssertion::new(
+//!         NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
+//!         SystemTime::now(),
+//!     ),
 //!     RespondSso::post(),
 //! )?;
 //! let form = response.post_form()?;

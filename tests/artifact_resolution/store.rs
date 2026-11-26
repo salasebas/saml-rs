@@ -1175,7 +1175,10 @@ fn web_browser_sso_artifact_flows_work_across_two_idp_nodes_with_a_shared_store(
     let outbound = node_a.respond_sso_artifact(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)),
+        SsoAssertion::new(
+            NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
+            SystemTime::now(),
+        ),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut store_a,
     )?;
@@ -1213,7 +1216,7 @@ fn web_browser_sso_artifact_flows_work_across_two_idp_nodes_with_a_shared_store(
 
     let unsolicited = node_a.initiate_sso_artifact(
         &sp_descriptor,
-        SsoAssertion::new(NameId::new("bob@example.com")),
+        SsoAssertion::new(NameId::new("bob@example.com"), SystemTime::now()),
         RespondSso::artifact(ArtifactDelivery::post_form(0)),
         &mut store_a,
     )?;
@@ -1264,7 +1267,8 @@ fn web_browser_sso_artifact_flows_work_across_two_idp_nodes_with_a_shared_store(
             &sp_descriptor,
             &received,
             SsoAssertion::new(
-                NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)
+                NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
+                SystemTime::now()
             ),
             RespondSso::artifact(ArtifactDelivery::redirect(0)),
             &mut unavailable,
@@ -1274,7 +1278,7 @@ fn web_browser_sso_artifact_flows_work_across_two_idp_nodes_with_a_shared_store(
     assert!(matches!(
         node_a.initiate_sso_artifact(
             &sp_descriptor,
-            SsoAssertion::new(NameId::new("bob@example.com")),
+            SsoAssertion::new(NameId::new("bob@example.com"), SystemTime::now()),
             RespondSso::artifact(ArtifactDelivery::post_form(0)),
             &mut unavailable,
         ),

@@ -498,7 +498,7 @@ fn start_receive_respond() -> Result<SsoExchange, SamlError> {
     let relay_state = RelayState::try_new("state-123")?;
     start_receive_respond_with(
         StartSso::post().relay_state(relay_state),
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )
 }
@@ -1354,7 +1354,7 @@ fn typed_http_post_exposes_verified_response_root_signature_evidence(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post().sign_response(),
     )?;
     let session = sp.finish_sso(
@@ -1421,7 +1421,7 @@ fn typed_required_response_signature_rejects_assertion_only_post(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
 
@@ -1451,7 +1451,7 @@ fn typed_sign_response_satisfies_required_response_signature(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post().sign_response(),
     )?;
     let session = sp.finish_sso(
@@ -1511,7 +1511,7 @@ fn typed_sp_decrypts_an_assertion_whose_key_is_beside_encrypted_data(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let fields = post_fields(&response)?;
@@ -1548,7 +1548,7 @@ fn typed_sp_rejects_explicit_unsigned_encrypted_cbc() -> Result<(), Box<dyn std:
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post().allow_unsigned_encrypted_cbc(),
     )?;
 
@@ -1576,7 +1576,7 @@ fn typed_facade_runs_simplesign_sso_response_binding() -> Result<(), Box<dyn std
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::simple_sign(),
     )?;
     let response_form = response.post_form()?;
@@ -1647,7 +1647,7 @@ fn typed_facade_finish_sso_simplesign_rejects_malformed_assertion_issue_instant(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = start_receive_respond_with(
         StartSso::post().response_binding(SsoResponseBinding::SimpleSign),
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::simple_sign(),
     )?;
     let xml = replace_element_issue_instant(
@@ -1700,7 +1700,7 @@ fn typed_facade_persists_indexed_acs_for_response_validation(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::simple_sign(),
     )?;
     let session = sp.finish_sso(
@@ -1863,7 +1863,7 @@ fn typed_facade_rejects_response_with_wrong_sp_descriptor() -> Result<(), Box<dy
     match exchange.idp.respond_sso(
         &other_descriptor,
         &exchange.received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     ) {
         Err(SamlError::IssuerMismatch { expected, actual }) => {
@@ -1980,7 +1980,7 @@ fn typed_facade_accepts_relay_state_the_idp_adds_to_a_request_without_one(
     for added in [RelayState::try_new("added")?, RelayState::try_new("")?] {
         let exchange = start_receive_respond_with(
             StartSso::post(),
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post().relay_state(added.clone()),
         )?;
 
@@ -2002,7 +2002,7 @@ fn respond_sso_returns_the_relay_state_the_request_carried(
     for received in ["state-123", ""] {
         let exchange = start_receive_respond_with(
             StartSso::post().relay_state(RelayState::try_new(received)?),
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post(),
         )?;
         let echoed: Vec<&str> = exchange
@@ -2016,7 +2016,7 @@ fn respond_sso_returns_the_relay_state_the_request_carried(
         let result = exchange.idp.respond_sso(
             &exchange.sp_descriptor,
             &exchange.received,
-            SsoAssertion::new(principal()),
+            SsoAssertion::new(principal(), SystemTime::now()),
             RespondSso::post().relay_state(RelayState::try_new("override")?),
         );
 
@@ -2267,7 +2267,7 @@ fn typed_finish_sso_requiring_encrypted_assertions_reports_a_response_without_an
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let xml = strip_embedded_signatures(&response_xml_from_fields(&post_fields(&response)?)?)?;
@@ -2548,7 +2548,7 @@ fn typed_facade_rejects_an_empty_in_response_to_as_unsolicited(
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let ruled = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let ruled_fields = post_fields(&ruled)?;
@@ -2639,7 +2639,7 @@ fn typed_facade_accepts_unsolicited_sso_explicitly() -> Result<(), Box<dyn std::
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post().relay_state(RelayState::try_new("")?),
     )?;
     assert!(matches!(
@@ -2677,7 +2677,7 @@ fn typed_facade_accept_unsolicited_sso_post_rejects_missing_assertion_issue_inst
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let fields = post_fields(&response)?;
@@ -2712,7 +2712,7 @@ fn typed_facade_accept_unsolicited_sso_simplesign_rejects_non_utc_response_issue
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::simple_sign(),
     )?;
     let fields = post_fields(&response)?;
@@ -2763,7 +2763,11 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations(
             SsoResponseBinding::SimpleSign => RespondSso::simple_sign(),
             _ => return Err("not a posted response binding".into()),
         };
-        let response = idp.initiate_sso(&sp_descriptor, SsoAssertion::new(principal()), options)?;
+        let response = idp.initiate_sso(
+            &sp_descriptor,
+            SsoAssertion::new(principal(), SystemTime::now()),
+            options,
+        )?;
         let fields = post_fields(&response)?;
         let xml = response_xml_from_fields(&fields)?;
         let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
@@ -2839,7 +2843,7 @@ fn typed_idp_sso_reports_issuance_expiration_overflow() -> Result<(), Box<dyn st
 
     match idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
@@ -2891,7 +2895,7 @@ fn recommended_post_exchange() -> Result<SsoExchange, Box<dyn std::error::Error>
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     Ok(SsoExchange {
@@ -3078,7 +3082,7 @@ fn recommended_sso_accept_accepts_response_signature_without_assertion_signature
 
     let unsolicited = exchange.idp.initiate_sso(
         &exchange.sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let unsolicited_fields = post_fields(&unsolicited)?;
@@ -3248,7 +3252,7 @@ fn recommended_sso_accept_requires_issue_instant_and_accepts_leap_seconds(
 
     let unsolicited = exchange.idp.initiate_sso(
         &exchange.sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(principal(), SystemTime::now()),
         RespondSso::post(),
     )?;
     let unsolicited_fields = post_fields(&unsolicited)?;

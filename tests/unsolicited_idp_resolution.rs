@@ -15,6 +15,7 @@ use saml_rs::{
     PrivateKeyPem, ResourceLimit, RespondSso, SamlError, ServiceProvider, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoAssertion, SsoEndpoint, SubjectId, X509Credential, XmlPolicy,
 };
+use std::time::SystemTime;
 
 use common::signing_credentials;
 use post_validation::post_validation;
@@ -79,7 +80,7 @@ fn response_fields(
     )?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(NameId::new("alice@example.com")),
+        SsoAssertion::new(NameId::new("alice@example.com"), SystemTime::now()),
         options,
     )?;
     Ok(response.post_form()?.fields().to_vec())
@@ -139,7 +140,7 @@ fn scoped_values_are_checked_against_only_the_assertion_issuers_policy() -> Test
         ]);
         let response = idp.initiate_sso(
             &sp_peer,
-            SsoAssertion::new(NameId::new("alice")).attributes(attributes),
+            SsoAssertion::new(NameId::new("alice"), SystemTime::now()).attributes(attributes),
             RespondSso::post(),
         )?;
         let session = sp.accept_unsolicited_sso_with_resolver(
