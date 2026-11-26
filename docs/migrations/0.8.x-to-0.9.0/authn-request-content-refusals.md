@@ -24,8 +24,8 @@ but that it cannot read or answer as asked:
 SAML Profiles §4.1.4.1 requires an identity provider that cannot satisfy a
 request to answer with an error `Response`. Core §3.2.1 gives the status
 `Requester` to the answer to a request that breaks SAML syntax or processing
-rules, and the identity provider also uses it for a binding URI it does not
-support. `RefusedAuthnRequest::content_error`
+rules. The identity provider also uses it for a binding URI it does not
+support and for an `AssertionConsumerServiceURL` that is not HTTP(S). `RefusedAuthnRequest::content_error`
 returns the parsing error behind the refusal, for your logs. The response
 carries only the status.
 
