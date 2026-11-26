@@ -591,10 +591,9 @@ pub enum SamlError {
     /// Required signature is absent.
     #[error("signature missing where required")]
     SignatureMissing,
-    /// The SP declared `AuthnRequestsSigned` and the request arrived unsigned.
-    #[error(
-        "unsigned authentication request from a service provider that declares AuthnRequestsSigned"
-    )]
+    /// The identity provider will not fulfil an authentication request it can
+    /// answer. [`RefusedAuthnRequest::reason`] says why.
+    #[error("authentication request refused: {}", .refusal.reason())]
     #[non_exhaustive]
     AuthnRequestRefused {
         /// Data for a correlated SAML error response.

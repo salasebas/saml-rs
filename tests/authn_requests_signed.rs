@@ -11,17 +11,18 @@ mod tag_prefixes;
 
 use common::signing_credentials;
 
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use base64::Engine;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactResolutionService, AuthnRequest,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, DeliveredArtifact, EndpointUrl,
-    EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    IssuedArtifacts, MessageAuthentication, MetadataTrustPolicy, Outbound, RelayState,
-    ReplayPolicy, RespondSso, SamlError, SamlValidationContext, ServiceProvider,
-    SignatureAlgorithm, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoResponseBinding, StartSso, Status, StatusMessage,
+    AuthnRequestRefusalReason, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
+    DeliveredArtifact, EndpointUrl, EntityId, IdentityProvider, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, IssuedArtifacts, MessageAuthentication, MetadataTrustPolicy,
+    Outbound, RelayState, ReplayPolicy, RequestAgePolicy, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SignatureAlgorithm, SoapChannel, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSso, Started, Status,
+    StatusMessage,
 };
 use url::Url;
 
@@ -324,6 +325,98 @@ fn strict_idp_can_refuse_an_unsigned_request_but_cannot_use_a_removed_acs(
         Err(SamlError::DestinationMismatch { .. })
     ));
     Ok(())
+}
+
+fn assert_requester_error(
+    sp: &ServiceProvider,
+    idp_descriptor: &IdpDescriptor,
+    started: &Started<AuthnRequest>,
+    response: &Outbound<saml_rs::SsoResponse>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let form = response.post_form()?;
+    assert_eq!(form.action().as_str(), SP_ACS);
+    assert_eq!(
+        form.value("RelayState"),
+        started.pending.relay_state().map(RelayState::as_str)
+    );
+    match sp.finish_sso(
+        idp_descriptor,
+        &started.pending,
+        Inbound::post(form.fields().to_vec()),
+        validation(),
+    ) {
+        Err(SamlError::StatusNotSuccess { status, .. }) => {
+            assert_eq!(status, Status::requester());
+            Ok(())
+        }
+        other => Err(format!("expected a correlated requester error, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn idp_requiring_signed_requests_returns_refusal_data_for_an_unsigned_request(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let unsigned_sp = sp(SpValidationPolicy::default().authn_request_signing)?;
+    let permissive = idp(IdpValidationPolicy::default())?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&unsigned_sp, &permissive)?;
+    assert!(!unsigned_sp
+        .metadata_xml()
+        .contains("AuthnRequestsSigned=\"true\""));
+    let mut policy = IdpValidationPolicy::default();
+    policy.authn_request_signatures = AuthnRequestValidationPolicy::RequireSigned;
+    let strict = idp(policy)?;
+
+    let post = unsigned_sp.start_sso(
+        &idp_descriptor,
+        StartSso::post().relay_state(RelayState::try_new("login-44")?),
+    )?;
+    let redirect = unsigned_sp.start_sso(
+        &idp_descriptor,
+        StartSso::redirect().relay_state(RelayState::try_new("login-44")?),
+    )?;
+    for (started, input) in [
+        (&post, post_input(&post.outbound)?),
+        (
+            &post,
+            Inbound::simple_sign(post.outbound.post_form()?.fields().to_vec()),
+        ),
+        (&redirect, redirect_input(&redirect.outbound)?),
+    ] {
+        let refusal = match strict.receive_sso(&sp_descriptor, input, validation()) {
+            Err(SamlError::AuthnRequestRefused { refusal, .. }) => refusal,
+            other => return Err(format!("expected a sendable SAML refusal, got {other:?}").into()),
+        };
+        assert_eq!(refusal.reason(), AuthnRequestRefusalReason::Unsigned);
+        let response = strict.respond_sso_refusal(&sp_descriptor, &refusal, RespondSso::post())?;
+        assert_requester_error(&unsigned_sp, &idp_descriptor, started, &response)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn idp_returns_refusal_data_for_a_request_outside_its_age_window(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let unsigned_sp = sp(SpValidationPolicy::default().authn_request_signing)?;
+    let idp = idp(IdpValidationPolicy::default())?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&unsigned_sp, &idp)?;
+    let started = unsigned_sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let later = SamlValidationContext::new(
+        SystemTime::now() + Duration::from_secs(600),
+        ReplayPolicy::NoCache,
+    )
+    .with_authn_request_age(RequestAgePolicy::Bounded {
+        max_age: Duration::from_secs(60),
+    });
+    let refusal = match idp.receive_sso(&sp_descriptor, post_input(&started.outbound)?, later) {
+        Err(SamlError::AuthnRequestRefused { refusal, .. }) => refusal,
+        other => return Err(format!("expected a sendable SAML refusal, got {other:?}").into()),
+    };
+    assert_eq!(
+        refusal.reason(),
+        AuthnRequestRefusalReason::OutsideAgeWindow
+    );
+    let response = idp.respond_sso_refusal(&sp_descriptor, &refusal, RespondSso::post())?;
+    assert_requester_error(&unsigned_sp, &idp_descriptor, &started, &response)
 }
 
 #[test]

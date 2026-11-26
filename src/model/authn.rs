@@ -94,17 +94,58 @@ pub struct AuthnRequest {
     requested_authn_context: Option<RequestedAuthnContext>,
 }
 
-/// An unsigned authentication request that requires a SAML error response.
+/// An authentication request the identity provider will not fulfil.
+///
+/// Pass it to
+/// [`IdentityProvider::respond_sso_refusal`](crate::IdentityProvider::respond_sso_refusal)
+/// or
+/// [`IdentityProvider::respond_sso_refusal_artifact`](crate::IdentityProvider::respond_sso_refusal_artifact)
+/// to send a correlated SAML error response.
 #[derive(Clone)]
 pub struct RefusedAuthnRequest {
     pub(crate) request: AuthnRequest,
     pub(crate) relay_state: Option<super::RelayState>,
+    pub(crate) reason: AuthnRequestRefusalReason,
+}
+
+impl RefusedAuthnRequest {
+    /// Why the identity provider refuses the request.
+    pub fn reason(&self) -> AuthnRequestRefusalReason {
+        self.reason
+    }
 }
 
 impl std::fmt::Debug for RefusedAuthnRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RefusedAuthnRequest")
+            .field("reason", &self.reason)
             .finish_non_exhaustive()
+    }
+}
+
+/// Why [`IdentityProvider::receive_sso`](crate::IdentityProvider::receive_sso)
+/// refuses an authentication request it could otherwise answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum AuthnRequestRefusalReason {
+    /// No verified signature covers the request, and the service provider's
+    /// metadata sets `AuthnRequestsSigned` or this identity provider requires
+    /// signed requests.
+    Unsigned,
+    /// The request `IssueInstant` is outside the age window that
+    /// [`SamlValidationContext::with_authn_request_age`](crate::SamlValidationContext::with_authn_request_age)
+    /// sets.
+    OutsideAgeWindow,
+}
+
+impl std::fmt::Display for AuthnRequestRefusalReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unsigned => f.write_str("the request is unsigned"),
+            Self::OutsideAgeWindow => {
+                f.write_str("the request IssueInstant is outside the age window")
+            }
+        }
     }
 }
 

@@ -84,5 +84,6 @@ Check the topics that affect your integration.
 - [Give each published contact a detail](contact-person-detail.md)
 - [Use a non-SAML namespace for AuthnRequest extensions](extension-namespaces.md)
 - [Give AuthnRequests a ProviderName with visible text](provider-name-whitespace.md)
+- [Answer AuthnRequests refused for their signature or age](authn-request-signature-and-age-refusals.md)
 
 [All migration guides](../README.md)

@@ -6,8 +6,8 @@ use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
 use crate::flow::MessageAuthentication;
 use crate::idp::{self, LoginResponseOptions, LoginResponseOverrides};
 use crate::model::{
-    AuthnRequest, EndpointUrl, Received, RefusedAuthnRequest, RelayState, ReplayKey,
-    SamlValidationContext, SsoResponse, Status,
+    AuthnRequest, AuthnRequestRefusalReason, EndpointUrl, Received, RefusedAuthnRequest,
+    RelayState, ReplayKey, RequestAge, SamlValidationContext, SsoResponse, Status,
 };
 use std::time::SystemTime;
 
@@ -62,10 +62,15 @@ impl IdentityProvider {
 
     /// Receive an SP AuthnRequest.
     ///
-    /// When the SP declares `AuthnRequestsSigned` and the request is unsigned,
-    /// use the [`SamlError::AuthnRequestRefused`] data to send a correlated
-    /// response with [`Self::respond_sso_refusal`] or
-    /// [`Self::respond_sso_refusal_artifact`].
+    /// It returns [`SamlError::AuthnRequestRefused`] for a request it will not
+    /// fulfil: an unsigned request when the SP declares `AuthnRequestsSigned`
+    /// or this identity provider requires signed requests, and a request
+    /// outside an enabled [`crate::RequestAgePolicy`] window.
+    /// [`RefusedAuthnRequest::reason`](crate::RefusedAuthnRequest::reason)
+    /// says which. Send the refusal as a correlated error response with
+    /// [`Self::respond_sso_refusal`] or [`Self::respond_sso_refusal_artifact`].
+    /// Show a local error page only when that call fails because no trusted
+    /// assertion consumer service can receive the response.
     ///
     /// Unless the identity provider requires signed requests, it also accepts
     /// an unsigned request. [`Received::authentication`] tells you whether a
@@ -85,12 +90,12 @@ impl IdentityProvider {
     /// parsing or signature/trust validation fails, the request destination
     /// does not match the receiving `SingleSignOnService` location for the
     /// binding, the receiving URL is unpublished, multiple local endpoints
-    /// have no explicit receiving URL,
-    /// an enabled [`crate::RequestAgePolicy`]
-    /// rejects `IssueInstant`, or replay validation fails for an authenticated
-    /// request: [`SamlError::ReplayDetected`] for a stored `ID`, and
-    /// [`SamlError::TimeWindowInvalid`] when the context has no positive replay
-    /// retention.
+    /// have no explicit receiving URL, or replay validation fails for an
+    /// authenticated request: [`SamlError::ReplayDetected`] for a stored `ID`,
+    /// and [`SamlError::TimeWindowInvalid`] when the context has no positive
+    /// replay retention. A request whose `Destination` does not match returns
+    /// [`SamlError::DestinationMismatch`], not a refusal, even when it is
+    /// unsigned or outside the age window.
     ///
     /// # Examples
     ///
@@ -138,7 +143,8 @@ impl IdentityProvider {
         )?;
         let authentication = received.authentication();
         let unsigned_refusal = authentication == MessageAuthentication::Unauthenticated
-            && peer_sp.metadata.authn_requests_signed();
+            && (peer_sp.metadata.authn_requests_signed()
+                || self.engine().metadata.want_authn_requests_signed());
         let flow = received.into_flow_result();
         let flow = if unsigned_refusal {
             flow
@@ -161,12 +167,20 @@ impl IdentityProvider {
             }
         }
         let mut validation = validation;
-        validation.check_authn_request_issue_instant(authn.issue_instant())?;
-        if unsigned_refusal {
+        let refusal_reason = if unsigned_refusal {
+            Some(AuthnRequestRefusalReason::Unsigned)
+        } else {
+            match validation.authn_request_issue_instant_age(authn.issue_instant())? {
+                RequestAge::WithinWindow => None,
+                RequestAge::OutsideWindow => Some(AuthnRequestRefusalReason::OutsideAgeWindow),
+            }
+        };
+        if let Some(reason) = refusal_reason {
             return Err(SamlError::AuthnRequestRefused {
                 refusal: Box::new(RefusedAuthnRequest {
                     request: authn,
                     relay_state,
+                    reason,
                 }),
             });
         }
