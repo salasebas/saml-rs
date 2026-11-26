@@ -26,6 +26,14 @@ and [Registration and Publication Information](https://docs.oasis-open.org/secur
 (RPI) specifications. The [saml2int](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html)
 rows name their requirement.
 
+<a id="signature-on-the-document-root"></a>
+
+The statuses hold on builds with a crypto provider. A build without one
+completes no import under a signature-requiring `MetadataTrustPolicy`, so
+only `MetadataTrustPolicy::Unverified` imports metadata. Its service
+provider verifies no XML signature, so it accepts no successful SSO response
+and stores no bearer assertion `ID`.
+
 ## Support
 
 The publisher writes the metadata of the crate's own identity provider or
@@ -61,7 +69,7 @@ descriptor imports and `MetadataAggregate`.
 | `EncryptionMethod` in a `KeyDescriptor` | Metadata §2.4.1.1 | Not supported | Not supported |
 | `validUntil` | Metadata §2.3.1, §2.3.2, §2.4.1, E76, E94 | Supported | Supported |
 | `cacheDuration` and caching by it | Metadata §2.3.2, §4.3.1, E94 | Supported | Not supported |
-| Signature on the document root | Metadata §3, §4.3.3.2 | Not supported | [Partial](#signature-on-the-document-root) |
+| Signature on the document root | Metadata §3, §4.3.3.2 | Not supported | Supported |
 | Signature on an element below the document root | Metadata §3 | Not supported | Not supported |
 | Publication and resolution at the well-known location | Metadata §4.1 | Not supported | Not supported |
 | Publication and resolution through DNS | Metadata §4.2 | Not supported | Not supported |
@@ -90,17 +98,6 @@ descriptor imports and `MetadataAggregate`.
 
 Replay of a protocol message `ID` is library policy. Artifact single use is
 in [Artifact resolution](artifact-resolution.md).
-
-## Partial support
-
-### Signature on the document root
-
-- **Supported:** on a build with a crypto provider, every signature-requiring
-  `MetadataTrustPolicy` verifies the root signature against the caller's
-  pinned certificates.
-- **Not supported:** on a build without a crypto provider, no
-  signature-requiring policy completes an import, so only
-  `MetadataTrustPolicy::Unverified` imports metadata there.
 
 ## Rules
 

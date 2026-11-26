@@ -21,6 +21,10 @@ Normative text is Bindings §§3.4 to 3.6 as corrected by Approved Errata 05
 [Committee Draft 04 §2.5](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cd-04.html)
 states how the SimpleSign signature input omits an absent `RelayState`.
 
+The statuses hold on builds with a crypto provider. A build without one
+neither signs nor verifies, so it sends HTTP-Redirect and
+HTTP-POST-SimpleSign messages unsigned and refuses a signed message.
+
 ## Support
 
 | Feature | Section | Sender | Receiver |
@@ -43,14 +47,11 @@ states how the SimpleSign signature input omits an absent `RelayState`.
 
 ### Detached signatures
 
-- **Supported:** on a build with a crypto provider, the sender signs and the
-  receiver verifies a `SigAlg` signature on HTTP-Redirect and
-  HTTP-POST-SimpleSign.
-- **Not supported:** a build without a crypto provider neither signs nor
-  verifies, so it sends these bindings unsigned and refuses a signed message.
-  RSAwithSHA1 and DSAwithSHA1, which both bindings require, depend on the
-  provider, as [XML Signature](xml-security-algorithms.md#xml-signature)
-  states.
+- **Supported:** the sender signs and the receiver verifies a `SigAlg`
+  signature on HTTP-Redirect and HTTP-POST-SimpleSign.
+- **Not supported:** RSAwithSHA1 and DSAwithSHA1, which both bindings
+  require, depend on the crypto provider and its feature flags, as
+  [XML Signature](xml-security-algorithms.md#xml-signature) states.
 
 ## Rules
 

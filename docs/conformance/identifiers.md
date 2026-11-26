@@ -17,6 +17,13 @@ an `xs:anyURI` (XML Schema 1.0 Part 2 §3.2.17 and §4.3.6) with the escaping
 of [XLink 1.0 §5.4](https://www.w3.org/TR/2001/REC-xlink-20010627/#link-locators),
 RFC 2396, and RFC 2732.
 
+<a id="encrypted-identifiers-and-attributes"></a>
+
+The statuses hold on builds with a crypto provider. A build without one
+neither encrypts nor decrypts identifiers and attributes. Its configuration
+builders refuse `IdentifierEncryptionPolicy::EncryptIdentifiers` and
+`AttributeEncryptionPolicy::EncryptAttributes`.
+
 ## Support
 
 ### Attributes
@@ -32,7 +39,7 @@ in a protocol message.
 | The `unspecified`, `uri`, and `basic` name formats | Conformance §3.3, Core §8.2 | Supported | Supported |
 | Another `NameFormat` URI, or an omitted `NameFormat`, which means `unspecified` | Core §2.7.3.1 | Supported | Supported |
 | `FriendlyName` | Core §2.7.3.1 | Supported | Supported |
-| `EncryptedAttribute` | Core §2.7.3.2 | [Partial](#encrypted-identifiers-and-attributes) | [Partial](#encrypted-identifiers-and-attributes) |
+| `EncryptedAttribute` | Core §2.7.3.2 | Supported | Supported |
 | The `subject-id` attribute | Subject Identifier §3.3 | Supported | Supported |
 | The `pairwise-id` attribute | Subject Identifier §3.4 | Supported | Supported |
 
@@ -73,7 +80,7 @@ states.
 | The `persistent` format | Conformance §3.3, Core §8.3.7 | Supported | Supported | Supported | Supported |
 | The `transient` format | Conformance §3.3, Core §8.3.8 | Supported | Supported | Supported | Supported |
 | Another `Format` URI | Core §2.2.2 | Supported | Supported | Supported | Supported |
-| `EncryptedID` that carries a `NameID` | Core §2.2.4 | [Partial](#encrypted-identifiers-and-attributes) | [Partial](#encrypted-identifiers-and-attributes) | [Partial](#encrypted-identifiers-and-attributes) | [Partial](#encrypted-identifiers-and-attributes) |
+| `EncryptedID` that carries a `NameID` | Core §2.2.4 | Supported | Supported | [Partial](#service-provider-requests) | Supported |
 | The identifier in a `BaseID` | Core §2.2.1 | Not supported | Not supported | Not supported | Not supported |
 | The identifier in an `EncryptedID` that carries a `BaseID` or an `Assertion` | Core §2.2.4 | Not supported | Not supported | Not supported | Not supported |
 
@@ -88,27 +95,12 @@ states.
 
 ## Partial support
 
-### Encrypted identifiers and attributes
-
-- **Supported:** on a build with a crypto provider, the identity provider
-  writes `EncryptedID` and `EncryptedAttribute` in a `Response` and
-  `EncryptedID` in its requests, and the service provider writes `EncryptedID`
-  in its requests, when the caller selects
-  `IdentifierEncryptionPolicy::EncryptIdentifiers` or
-  `AttributeEncryptionPolicy::EncryptAttributes`. Each role decrypts a
-  received one with its decryption credentials, under the conditions of its
-  flow record.
-- **Not supported:** a build without a crypto provider neither encrypts nor
-  decrypts, as
-  [encryption algorithms by provider](xml-security-algorithms.md#encryption-algorithms-by-provider)
-  states. Its configuration builders refuse a policy that selects
-  encryption.
-
 ### Service provider requests
 
 - **Supported:** a service provider `LogoutRequest` or `ManageNameIDRequest`
-  writes the `NameID` of the `NameId` it is given, and refuses a `Format`
-  that is not an absolute URI reference.
+  writes the `NameID` of the `NameId` it is given, in the clear or in an
+  `EncryptedID`, and refuses a `Format` that is not an absolute URI
+  reference.
 - **Not supported:** it writes a value or qualifier that holds only XML
   whitespace, which Core §1.3.1 forbids, and an `entity` `NameID` that breaks
   Core §8.3.6, unchanged. The
