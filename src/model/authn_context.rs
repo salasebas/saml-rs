@@ -18,8 +18,8 @@ pub enum AuthnContextReferenceKind {
 /// [`crate::SsoAssertion::authn_context`] writes it in the assertion's
 /// `AuthnContext`. [`RequestedAuthnContext::references`] lists the ones a
 /// service provider asked for. [`Self::class`] and [`Self::declaration`]
-/// require an absolute URI; a received reference is kept as sent and may not
-/// be one.
+/// require an absolute URI. A received reference is read with its XML
+/// whitespace collapsed and may be relative.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AuthnContextReference {
     kind: AuthnContextReferenceKind,
