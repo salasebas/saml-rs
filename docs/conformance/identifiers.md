@@ -214,7 +214,8 @@ issued `NameId` omits one.
 | Reject a value, `NameQualifier`, `SPNameQualifier`, `SPProvidedID`, or `NewID` with no character other than XML whitespace | Mandatory | Core §1.3.1, XML 1.0 §2.3 | Always |
 | Generate a transient value under the [generated-ID rules](#generated-message-and-assertion-identifiers) | Mandatory | Core §8.3.8, §1.3.4 | `NameId::generate_transient` |
 | Generate a persistent value with no discernible correspondence to the subject, unique among those the identity provider issues for a service provider or affiliation | Mandatory | Core §8.3.7, E86 | `NameId::generate_persistent` |
-| Reject a persistent value of more than 256 characters, a transient one in a `Response` or a `LogoutRequest`, and a persistent one passed to `NameId::persistent` | Mandatory | Core §8.3.7, §8.3.8 | Always |
+| Reject a transient value of more than 256 characters in a `Response` or a `LogoutRequest` | Mandatory | Core §8.3.8 | Always |
+| Reject a persistent value of more than 256 characters, in `NameId::persistent` and in each of these messages | Mandatory | Core §8.3.7 | Always |
 | Reject an `entity` `NameID` whose value or `NewID` is not an absolute URI reference of at most 1024 characters, or that has `NameQualifier`, `SPNameQualifier`, or `SPProvidedID` | Mandatory | Core §8.3.6, §1.3.2 | Always |
 
 A requested `NameIDPolicy` `SPNameQualifier` is checked as in
@@ -294,8 +295,8 @@ Code: `src/model/subject_identifier.rs`, `src/model/attributes.rs`
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
 | Match each attribute by its profile name and the `uri` format. Also accept an omitted or `unspecified` format for that name | Reason not recorded. | Subject Identifier §3.3, §3.4, Core §2.7.3.1 | Always |
-| Require exactly one value across matching attributes, in the profile grammar, when the caller reads the identifier | The typed accessor needs one identifier. | Subject Identifier §3.2, §3.3.1 | Always |
-| Read a received identifier by its text regardless of `xsi:type` | The type requirement applies to the producer. | Subject Identifier §3.3.1 | Always |
+| Require exactly one value across matching attributes, in the profile grammar, when the caller reads the identifier | the typed accessor needs one identifier. | Subject Identifier §3.2, §3.3.1 | Always |
+| Read a received identifier by its text regardless of `xsi:type` | the type requirement applies to the producer. | Subject Identifier §3.3.1 | Always |
 
 [Shibboleth SP 3.5.0](https://codeberg.org/Shibboleth/cpp-sp/src/tag/3.5.0/shibsp/attribute/resolver/impl/XMLAttributeExtractor.cpp#L516-L543)
 maps an attribute with an omitted or `unspecified` `NameFormat` that has no
