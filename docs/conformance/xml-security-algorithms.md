@@ -48,6 +48,7 @@ crypto provider implements is `Partial` and links to
 | ECDSA-SHA256, ECDSA-SHA384, and ECDSA-SHA512 | E50, RFC 9231 §2.3.6 | [Partial](#generation-by-provider) | [Partial](#builds-without-a-crypto-provider) |
 | Ed25519 | E50, RFC 9231 §2.3.12 | [Partial](#generation-by-provider) | [Partial](#provider-supported-set) |
 | Other signature and digest algorithms | E50, E81 | [Partial](#generation-by-provider) | [Partial](#provider-supported-set) |
+| Explicit `HMACOutputLength` on an HMAC `SignatureMethod` | XMLDSig 1.1 §4.4.2, §6.3.1 | Not supported | [Partial](#builds-without-a-crypto-provider) |
 
 ### XML Encryption
 
@@ -119,7 +120,9 @@ The method does not change which bindings a flow supports.
   RustCrypto and `crypto-aws-lc` sign with Ed25519. A
   `SignatureAlgorithm::Custom` URI signs when the provider supports it.
 - **Not supported:** `crypto-fips` does not sign with Ed25519. Other curve
-  and digest combinations depend on the crypto provider.
+  and digest combinations depend on the crypto provider. The signature method
+  selects the reference digest, so the signer writes SHA-1, SHA-256,
+  SHA-384, or SHA-512 and no other digest, such as SHA3-256.
 
 | `SignatureMethod` or `SigAlg` | RustCrypto | `crypto-aws-lc` | `crypto-fips` |
 | --- | --- | --- | --- |
@@ -188,8 +191,7 @@ unless its row or cell says otherwise.
   AES-256, RSA-v1.5, and RSA-OAEP-MGF1P.
 - **Not supported:** `crypto-aws-lc` lacks Triple DES, and implements
   RSA-v1.5 only with `crypto-legacy-algorithms`. `crypto-fips` lacks Triple
-  DES and RSA-v1.5, refuses the SHA-1 digest and MGF1 of RSA-OAEP-MGF1P, and
-  its config builders reject RSA-OAEP-MGF1P. A build without a crypto
+  DES and RSA-v1.5, and refuses the SHA-1 digest and MGF1 of RSA-OAEP-MGF1P. A build without a crypto
   provider neither encrypts nor decrypts. RSA-v1.5 decryption also needs
   `Rsa15KeyTransportPolicy::AllowDecryption`.
 
@@ -314,12 +316,12 @@ the requested `Subject` in
 
 ### Encrypter: `AlgorithmPolicy`
 
-Code: `src/crypto/enc/encrypt.rs`, `src/config/encryption.rs`
+Code: `src/crypto/enc/encrypt.rs`
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Embed the `EncryptedKey` in the `ds:KeyInfo` of `EncryptedData` | Recommended | XML Encryption 1.0 §3.5.1, E43 | Always |
-| Write `ds:DigestMethod` and `xenc11:MGF` under the key's `EncryptionMethod`. With a crypto provider, the config builders reject parameters that it does not support | Optional | E50, XML Encryption 1.1 §5.5.2 | `KeyEncryptionAlgorithm::RsaOaep { digest, mgf }` |
+| Write `ds:DigestMethod` and `xenc11:MGF` under the key's `EncryptionMethod` | Optional | E50, XML Encryption 1.1 §5.5.2 | `KeyEncryptionAlgorithm::RsaOaep { digest, mgf }` |
 
 ### Decrypter: `XmlEncryptionPolicy`
 
@@ -353,13 +355,13 @@ Code: `src/config/algorithms.rs`, `src/crypto/sign.rs`, `src/binding/signed_mess
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Sign with RSA-SHA256 and a SHA-256 reference digest by default | saml2int SDP-ALG01 lists RSA-SHA256, every build signs it, and it needs neither SHA-1 nor an EC key. | E50, saml2int SDP-ALG01 | `AlgorithmPolicy::default()` |
+| Sign with RSA-SHA256 and a SHA-256 reference digest by default | saml2int SDP-ALG01 lists RSA-SHA256, every crypto provider signs it, and it needs neither SHA-1 nor an EC key. | E50, saml2int SDP-ALG01 | `AlgorithmPolicy::default()` |
 | Generate a SHA-1 signature (RSAwithSHA1, DSAwithSHA1, HMAC-SHA1) only when the caller selects it | Conformance §4.1 requires SHA-1 to be implemented, not used, and saml2int SDP-ALG01 calls SHA-1 weakening. | Conformance §4.1, E50 | `SignatureAlgorithm::RsaSha1`, `DsaSha1`, `HmacSha1` |
 | Use SHA-256 for the reference digest of an embedded signature outside the built-in digest mapping | SHA-256 is the existing reference digest default and works independently of the signature method. | XMLDSig §4.4.2, §4.4.3.5 | ECDSA, Ed25519, and unmapped `Custom` methods |
 | Sign `respond_sso_artifact`, `initiate_sso_artifact`, the SOAP `ArtifactResolve`, and SOAP logout messages with the enveloped-signature and exclusive canonicalization transforms only | Canonical XML would put the SOAP envelope's namespace declarations into the digest of a verifier that checks in place. | — | Always |
 | Reject a non-empty `signed_reference_transforms` that does not start with the enveloped-signature transform, in the SP and IdP config builders | The signer fails on that transform after a canonicalization transform, so the builders refuse the order before the first message. | XMLDSig §6.6.4 | Always |
-| Reject an ECDSA or Ed25519 method whose key family does not match the signing key, and Ed25519 on `crypto-fips`, in the SP and IdP config builders | The selected method cannot sign and would otherwise fail when the application sends a message. | — | Always |
-| Accept every other method that the crypto provider cannot sign with the configured key, such as an RSA method with an EC key or RSA-SHA1 on `crypto-aws-lc`. The first signed message fails when it is created | An entity configured this way still completes the flows that sign nothing, such as IdP-initiated SSO at the service provider and artifact resolution at the identity provider. | — | Always |
+| Reject ECDSA-SHA256, ECDSA-SHA384, ECDSA-SHA512, or Ed25519 with a signing key of another family, and Ed25519 on `crypto-fips`, in the SP and IdP config builders | The selected method cannot sign and would otherwise fail when the application sends a message. | — | Always |
+| Accept every other method that the crypto provider cannot sign with the configured signing key or HMAC secret, such as an RSA method with an EC key or RSA-SHA1 on `crypto-aws-lc`. The first signed message fails when it is created | An entity configured this way still completes the flows that sign nothing, such as IdP-initiated SSO at the service provider and artifact resolution at the identity provider. | — | Always |
 
 ### Verifier: `XmlSignatureProfile`, `MetadataTrustPolicy`
 
@@ -440,13 +442,14 @@ the service provider reject the browser SSO response (Profiles §4.1.4.3).
 
 ### Encrypter: `AlgorithmPolicy`
 
-Code: `src/config/algorithms.rs`
+Code: `src/config/algorithms.rs`, `src/config/encryption.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
 | Encrypt with AES-256-CBC unless the caller selects another data-encryption algorithm | Every peer must decrypt AES-CBC under Conformance §4.2 but not AES-GCM, and the identity provider reads no `md:EncryptionMethod` that would show a peer supports AES-GCM. | Conformance §4.2, E50, XML Encryption 1.1 §5.1.1 | `AlgorithmPolicy::data_encryption` |
 | Encrypt with XML Encryption 1.1 RSA-OAEP, SHA-256, and MGF1 with SHA-256 by default on FIPS | The FIPS provider refuses SHA-1 in RSA-OAEP, and SHA-256 with MGF1-SHA-256 is the smallest digest pair it encrypts with. | Conformance §4.2, E50 | `KeyEncryptionAlgorithm::RsaOaep` (FIPS default) |
 | Generate Triple DES and RSA-v1.5 only when the caller selects them | Every peer must also decrypt AES and RSA-OAEP, and XML Encryption 1.1 §5.5.1 recommends RSA-OAEP for AES keys and calls implementing RSA-v1.5 `NOT RECOMMENDED`. | Conformance §4.2, XML Encryption 1.1 §5.1.1, §5.5.1 | `DataEncryptionAlgorithm::TripleDesCbc`, `KeyEncryptionAlgorithm::Rsa15` |
+| Reject in the config builders a key transport that the crypto provider does not encrypt with: RSA-OAEP-MGF1P on `crypto-fips`, and XML Encryption 1.1 RSA-OAEP parameters that the provider does not support | Reason not recorded. | XML Encryption 1.1 §5.5.2 | Always |
 
 ### Decrypter: `XmlEncryptionPolicy`
 
