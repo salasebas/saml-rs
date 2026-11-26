@@ -553,8 +553,10 @@ impl IdentityProvider {
     /// Returns [`SamlError::Invalid`] when the common domain is not a hostname
     /// without a leading period, the persistent lifetime is not a whole number
     /// of seconds, is shorter than one second, or is longer than 2147483647
-    /// seconds, the existing cookie is not a list of base64 entries, or this
-    /// identity provider's entity identifier cannot be stored in that list.
+    /// seconds, the existing cookie is larger than 8192 bytes, is not
+    /// percent-encoded text, or has an empty entry or an entry that is not
+    /// base64, or this identity provider's entity identifier cannot be stored
+    /// in that list.
     ///
     /// # Examples
     ///

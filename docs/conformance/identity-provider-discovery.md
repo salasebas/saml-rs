@@ -25,21 +25,25 @@ session-only cookie does not mean the user still has a session there. Core
 | Set the cookie after the principal authenticates | Optional | Profiles §4.3.3 | `common_domain_cookie` |
 | Reject an IPv4 literal as the common domain | Library policy: an IP address has no subdomains, so it cannot scope a common domain. | Profiles §4.3.2 | Always |
 | Accept a persistent lifetime from 1 to 2147483647 whole seconds | Library policy: other values would be written as `Max-Age=0`, truncated, or overflow a 32-bit cookie parser. | Profiles §4.3.2 | Always |
-| Skip invalid identifiers in a decodable existing list and keep valid identifiers in order | Library policy: skipping individual entries preserves usable discovery history. | Profiles §4.3.2 | Always |
-| Start a new list for an empty existing value and reject a list that does not decode | Library policy: rewriting an undecodable list could erase discovery history. | Profiles §4.3.2 | Always |
+| Skip an existing base64 entry that does not decode to a URI of at most 1024 characters, bytes that are not UTF-8 included, and keep the other entries in order | Library policy: skipping one entry keeps the rest of the history and still appends this identity provider, which Profiles §4.3.2 recommends. | Profiles §4.3.2 | Always |
+| Start a new list for an empty existing value. Reject a value that is not percent-encoded text, or that has an empty entry or an entry that is not base64 | Library policy: the writer cannot tell which entries such a value holds, so rewriting it could erase discovery history. | Profiles §4.3.2 | Always |
 | Reject an existing value over 8192 bytes, and drop the oldest entries until the name and value fit in 4096 bytes | Library policy: a resource limit, and Chromium discards a larger cookie. | — | Always |
 
 A raw `+` in an existing value is read as base64 first. When that list does
-not decode, the `+` is read as a URL-encoded space.
+not decode, or one of its entries is not UTF-8, the `+` is read as a
+URL-encoded space.
 
 Profiles §4.3.2 specifies the value an identity provider writes. It leaves
 recovery from a stored invalid identifier to the writer.
 [SimpleSAMLphp CDC v1.2.0](https://github.com/simplesamlphp/simplesamlphp-module-cdc/blob/v1.2.0/src/Server.php#L211-L227)
 also moves the current identity provider to the end. Its
 [cookie reader](https://github.com/simplesamlphp/simplesamlphp-module-cdc/blob/v1.2.0/src/Server.php#L387-L408)
-throws when a decoded identifier fails its URI check. `saml-rs` skips that
-entry so the write can still remember the current identity provider and
-preserve valid history. There is no option to republish invalid identifiers.
+throws when a decoded identifier fails its URI check.
+[Shibboleth SP 3.5.2](https://codeberg.org/Shibboleth/cpp-sp/src/tag/3.5.2/shibsp/lite/CommonDomainCookie.cpp#L61-L69)
+drops an entry that is not base64 and keeps every decoded one. `saml-rs`
+skips a decoded entry that is not a URI identifier, so the write can still
+remember the current identity provider and preserve valid history. There is
+no option to republish invalid identifiers.
 
 ## Not implemented
 

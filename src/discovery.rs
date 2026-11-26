@@ -60,8 +60,12 @@ impl<'a> RememberIdentityProvider<'a> {
     ///
     /// An empty value starts a new list. Any other value is the cookie value:
     /// percent-encoded, or already decoded with a real space between entries.
-    /// A `+` inside a base64 entry stays a `+`. The writer skips decoded
-    /// entries that are not URI identifiers of at most 1024 characters.
+    /// A `+` inside a base64 entry stays a `+`. The writer skips a decoded
+    /// entry that is not a URI identifier of at most 1024 characters,
+    /// including one whose bytes are not UTF-8. A value that does not decode
+    /// to a list of base64 entries makes
+    /// [`IdentityProvider::common_domain_cookie`](crate::IdentityProvider::common_domain_cookie)
+    /// fail instead.
     pub fn existing_cookie(mut self, value: &'a str) -> Self {
         self.existing_cookie = Some(value);
         self
@@ -136,8 +140,11 @@ pub(crate) fn common_domain_cookie(
     }
     let domain = common_domain_attribute(options.common_domain)?;
     let lifetime = validated_lifetime(options.lifetime)?;
-    let mut entity_ids = entity_ids_from_existing(options.existing_cookie)?;
-    entity_ids.retain(|existing| existing != entity_id && is_entity_identifier(existing));
+    let mut entity_ids: Vec<String> = entries_from_existing(options.existing_cookie)?
+        .into_iter()
+        .filter_map(|entry| String::from_utf8(entry).ok())
+        .filter(|existing| existing != entity_id && is_entity_identifier(existing))
+        .collect();
     entity_ids.push(entity_id.to_string());
     let mut value = encode_cookie_value(&entity_ids);
     while CommonDomainCookie::NAME.len() + value.len() > MAX_COOKIE_NAME_AND_VALUE_BYTES
@@ -210,7 +217,7 @@ fn validated_lifetime(
     Ok(lifetime)
 }
 
-fn entity_ids_from_existing(existing: Option<&str>) -> Result<Vec<String>, SamlError> {
+fn entries_from_existing(existing: Option<&str>) -> Result<Vec<Vec<u8>>, SamlError> {
     let Some(existing) = existing.filter(|value| !value.is_empty()) else {
         return Ok(Vec::new());
     };
@@ -219,33 +226,36 @@ fn entity_ids_from_existing(existing: Option<&str>) -> Result<Vec<String>, SamlE
             "existing common domain cookie is larger than 8192 bytes",
         ));
     }
-    let decoded = decode_percent(existing, PlusSign::Keep)?;
-    match entity_ids_from_decoded(&decoded) {
-        Ok(entity_ids) => Ok(entity_ids),
-        Err(error) if !existing.as_bytes().contains(&b'+') => Err(error),
-        Err(_) => {
-            let form_decoded = decode_percent(existing, PlusSign::Space)?;
-            entity_ids_from_decoded(&form_decoded)
-        }
+    let literal = entries_from_decoded(&decode_percent(existing, PlusSign::Keep)?);
+    let literal_is_text = matches!(
+        &literal,
+        Ok(entries) if entries.iter().all(|entry| str::from_utf8(entry).is_ok())
+    );
+    if literal_is_text || !existing.as_bytes().contains(&b'+') {
+        return literal;
+    }
+    match decode_percent(existing, PlusSign::Space)
+        .and_then(|form_decoded| entries_from_decoded(&form_decoded))
+    {
+        Ok(entries) => Ok(entries),
+        Err(error) => literal.or(Err(error)),
     }
 }
 
-fn entity_ids_from_decoded(decoded: &str) -> Result<Vec<String>, SamlError> {
+fn entries_from_decoded(decoded: &str) -> Result<Vec<Vec<u8>>, SamlError> {
     if decoded.is_empty() {
         return Ok(Vec::new());
     }
-    decoded.split(' ').map(entity_id_from_token).collect()
+    decoded.split(' ').map(entry_from_token).collect()
 }
 
-fn entity_id_from_token(token: &str) -> Result<String, SamlError> {
+fn entry_from_token(token: &str) -> Result<Vec<u8>, SamlError> {
     if token.is_empty() {
         return Err(invalid("existing common domain cookie has an empty entry"));
     }
-    let bytes = STANDARD
+    STANDARD
         .decode(token)
-        .map_err(|_| invalid("existing common domain cookie entry is not base64"))?;
-    String::from_utf8(bytes)
-        .map_err(|_| invalid("existing common domain cookie entry is not an entity identifier"))
+        .map_err(|_| invalid("existing common domain cookie entry is not base64"))
 }
 
 fn encode_cookie_value(entity_ids: &[String]) -> String {
