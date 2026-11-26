@@ -1252,3 +1252,32 @@ fn authn_context_reference_requires_an_absolute_uri() {
         Err(SamlError::Invalid(_))
     ));
 }
+
+#[test]
+fn receive_sso_rejects_a_malformed_xml_declaration() -> Result<(), Box<dyn std::error::Error>> {
+    let with_declaration = |declaration: &'static str| {
+        move |xml: String| -> Result<String, Box<dyn std::error::Error>> {
+            let body = match xml.strip_prefix("<?xml") {
+                Some(rest) => rest.split_once("?>").ok_or("unclosed declaration")?.1,
+                None => xml.as_str(),
+            };
+            Ok(format!("{declaration}{body}"))
+        }
+    };
+    let accepted = receive(
+        IdpValidationPolicy::default(),
+        StartSso::post(),
+        with_declaration(r#"<?xml version="1.0" encoding="UTF-8" standalone="no"?>"#),
+    )?;
+    assert_eq!(accepted.received.message().issuer().as_str(), SP_ENTITY_ID);
+
+    match receive(
+        IdpValidationPolicy::default(),
+        StartSso::post(),
+        with_declaration(r#"<?xml version="1.0" garbage="yes"?>"#),
+    ) {
+        Err(error) if matches!(error.downcast_ref(), Some(SamlError::Xml { .. })) => Ok(()),
+        Err(error) => Err(format!("expected an XML error, got {error}").into()),
+        Ok(_) => Err("a malformed XML declaration was accepted".into()),
+    }
+}

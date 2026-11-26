@@ -19,6 +19,6 @@ See [Standards conformance](https://github.com/salasebas/saml-rs/blob/main/docs/
 | [Metadata and replay](metadata-and-replay.md) | Peer descriptor and aggregate imports, `MetadataTrustPolicy`, and `ReplayPolicy` |
 | [XML security algorithms](xml-security-algorithms.md) | `AlgorithmPolicy`, `XmlSignatureProfile`, and signature coverage |
 | [XML schema validation](xml-schema-validation.md) | `SchemaValidator` on typed flows and explicit metadata imports |
-| [XML input limits and encoding](xml-input.md) | `XmlLimits` and the character encoding of received XML |
+| [XML input limits and encoding](xml-input.md) | `XmlLimits`, the XML declaration, and the character encoding of received XML |
 | [Common message fields](common-message-fields.md) | `Consent`, `StatusDetail`, status code depth, and `Extensions` on every typed message |
 | [IdP and SP operational modes](idp-sp-operational-modes.md) | Supported exchanges, excluded modes, and application duties |

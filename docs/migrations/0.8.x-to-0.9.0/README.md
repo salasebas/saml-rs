@@ -89,5 +89,6 @@ Check the topics that affect your integration.
 - [Pass the authentication time of each SSO assertion](required-authn-instant.md)
 - [Handle strings that hold only non-XML whitespace](xml-whitespace.md)
 - [Handle responses with an invalid `AuthnContext`](authn-context-choice.md)
+- [Handle documents with a malformed XML declaration](xml-declaration.md)
 
 [All migration guides](../README.md)
