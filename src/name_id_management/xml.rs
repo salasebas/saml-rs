@@ -35,7 +35,7 @@ pub(crate) struct ResponseXml<'a> {
     pub(crate) id: &'a str,
     pub(crate) issuer: &'a str,
     pub(crate) destination: Option<&'a str>,
-    pub(crate) in_response_to: &'a str,
+    pub(crate) in_response_to: Option<&'a str>,
     pub(crate) status: &'a Status,
 }
 
@@ -131,7 +131,9 @@ pub(crate) fn render_response(
     prefixes: &Prefixes<'_>,
     response: &ResponseXml<'_>,
 ) -> Result<String, SamlError> {
-    check_in_response_to(response.in_response_to)?;
+    if let Some(in_response_to) = response.in_response_to {
+        check_in_response_to(in_response_to)?;
+    }
     response.status.check_writable()?;
     let root = prefixes.protocol("ManageNameIDResponse");
     let xmlns_protocol = prefixes.xmlns_protocol();
@@ -147,7 +149,9 @@ pub(crate) fn render_response(
     if let Some(destination) = response.destination {
         attributes.push(("Destination", destination));
     }
-    attributes.push(("InResponseTo", response.in_response_to));
+    if let Some(in_response_to) = response.in_response_to {
+        attributes.push(("InResponseTo", in_response_to));
+    }
     let mut writer = XmlWriter::new();
     writer.start(&root, &attributes);
     writer.text_element(&prefixes.assertion("Issuer"), &[], response.issuer);

@@ -1,6 +1,9 @@
 #[path = "artifact_resolution/budget.rs"]
 mod budget;
 
+#[path = "artifact_resolution/refusals.rs"]
+mod refusals;
+
 #[path = "artifact_resolution/role_index.rs"]
 mod role_index;
 
@@ -227,57 +230,6 @@ fn hex(bytes: &[u8]) -> String {
         out.push(DIGITS[(byte & 0x0f) as usize] as char);
     }
     out
-}
-
-#[cfg(not(crypto))]
-#[test]
-fn present_artifact_signatures_require_a_crypto_provider() -> Result<(), Box<dyn std::error::Error>>
-{
-    let parties = parties()?;
-    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
-    let channel = confidential();
-    let resolution = parties.sp.resolve_artifact(
-        &parties.idp_metadata,
-        &artifact,
-        channel,
-        without_replay_cache(),
-    )?;
-    let with_signature = |envelope: &str| {
-        envelope.replacen(
-            "</saml:Issuer>",
-            r#"</saml:Issuer><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"/>"#,
-            1,
-        )
-    };
-    let request = resolution.request().envelope();
-    let answer = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        &with_signature(request),
-        &EndpointUrl::try_new(RESOLUTION_URL)?,
-        &mut issued,
-        channel,
-    );
-    assert!(
-        matches!(answer, Err(SamlError::Unsupported(_))),
-        "{answer:?}"
-    );
-
-    let answer = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        request,
-        &EndpointUrl::try_new(RESOLUTION_URL)?,
-        &mut issued,
-        channel,
-    )?;
-    let envelope = answer.response().envelope();
-    let result = resolution.finish(&with_signature(envelope));
-    assert!(
-        matches!(result, Err(SamlError::Unsupported(_))),
-        "{result:?}"
-    );
-    assert!(resolution.finish(envelope)?.xml().contains(WEB_SSO_MARKER));
-    Ok(())
 }
 
 #[test]
@@ -1245,46 +1197,6 @@ fn the_service_provider_reads_the_artifact_response_in_response_to_after_whitesp
 }
 
 #[test]
-fn an_artifact_resolve_id_that_is_not_an_ncname_gets_no_answer(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let parties = parties()?;
-    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
-    let channel = confidential();
-    let resolution = parties.sp.resolve_artifact(
-        &parties.idp_metadata,
-        &artifact,
-        channel,
-        without_replay_cache(),
-    )?;
-    let request = resolution.request().envelope();
-    let malformed = request.replacen(" ID=\"_", " ID=\"1bad:_", 1);
-    assert_ne!(malformed, request);
-
-    let refused = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        &malformed,
-        resolution.request().endpoint(),
-        &mut issued,
-        channel,
-    );
-    assert!(matches!(refused, Err(SamlError::Invalid(_))), "{refused:?}");
-
-    let answer = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        request,
-        resolution.request().endpoint(),
-        &mut issued,
-        channel,
-    )?;
-    assert!(resolution
-        .finish(answer.response().envelope())?
-        .xml()
-        .contains(WEB_SSO_MARKER));
-    Ok(())
-}
-
-#[test]
 fn the_service_provider_does_not_compare_a_present_artifact_response_destination(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
@@ -1433,45 +1345,6 @@ fn the_service_provider_rejects_an_artifact_response_without_id_or_instant(
 }
 
 #[test]
-fn a_foreign_artifact_sibling_does_not_release_the_message(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let parties = parties()?;
-    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
-    let channel = confidential();
-    let resolution = parties.sp.resolve_artifact(
-        &parties.idp_metadata,
-        &artifact,
-        channel,
-        without_replay_cache(),
-    )?;
-    let foreign = resolution.request().envelope().replacen(
-        "</samlp:Artifact>",
-        "</samlp:Artifact><other:Artifact xmlns:other=\"urn:example:other\">extra</other:Artifact>",
-        1,
-    );
-    let refused = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        &foreign,
-        &EndpointUrl::try_new(RESOLUTION_URL)?,
-        &mut issued,
-        channel,
-    );
-    assert!(matches!(refused, Err(SamlError::ProtocolProfile(_))));
-
-    let accepted = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        resolution.request().envelope(),
-        resolution.request().endpoint(),
-        &mut issued,
-        channel,
-    )?;
-    assert_eq!(accepted.release(), ArtifactRelease::Returned);
-    assert!(accepted.response().envelope().contains(WEB_SSO_MARKER));
-    Ok(())
-}
-
-#[test]
 fn a_non_http_resolution_location_does_not_consume_single_use(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
@@ -1501,43 +1374,6 @@ fn a_non_http_resolution_location_does_not_consume_single_use(
     )?;
     assert!(second.request().envelope().contains("ArtifactResolve"));
     assert!(second.request().envelope().contains(artifact.as_str()));
-    Ok(())
-}
-
-#[test]
-fn a_duplicate_resolve_issuer_is_refused_as_malformed() -> Result<(), Box<dyn std::error::Error>> {
-    let parties = parties()?;
-    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
-    let channel = confidential();
-    let resolution = parties.sp.resolve_artifact(
-        &parties.idp_metadata,
-        &artifact,
-        channel,
-        without_replay_cache(),
-    )?;
-    let duplicated = resolution.request().envelope().replacen(
-        "</saml:Issuer>",
-        &format!("</saml:Issuer><saml:Issuer>{SP_ENTITY_ID}</saml:Issuer>"),
-        1,
-    );
-    let refused = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        &duplicated,
-        &EndpointUrl::try_new(RESOLUTION_URL)?,
-        &mut issued,
-        channel,
-    );
-    assert!(matches!(refused, Err(SamlError::ProtocolProfile(_))));
-
-    let accepted = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        resolution.request().envelope(),
-        resolution.request().endpoint(),
-        &mut issued,
-        channel,
-    )?;
-    assert_eq!(accepted.release(), ArtifactRelease::Returned);
     Ok(())
 }
 

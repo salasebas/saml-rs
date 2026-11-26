@@ -33,8 +33,9 @@ The statuses hold on builds with a crypto provider. On a build without one,
 return `SamlError::Unsupported`, and the HTTP-Redirect receive operations
 refuse every message, because the build neither signs nor verifies. Over
 SOAP, its identity provider still exchanges unsigned messages on the
-`SoapChannel`, refuses a signed one, returns an error for an identifier it
-would encrypt, and answers a received encrypted one as undecryptable.
+`SoapChannel`, refuses a signed one with `Responder`, returns an error for an
+identifier it would encrypt, and answers a received encrypted one as
+undecryptable.
 
 ## Support
 
@@ -183,7 +184,7 @@ the request, and over HTTP-Redirect its verified signature does.
 | Reject an unsupported major request version | Mandatory | Core §4.1.3.1 | Always |
 | Reject a higher minor request version | Optional | Core §4.1.3.1 | Always |
 | Answer a newer request version with `VersionMismatch`. Add `RequestVersionTooHigh` for a newer major version | Mandatory | Core §4.1.3.2, Profiles §4.5.3.2 | `NameIdManagementRefusal::VersionMismatch` |
-| Return an error for an older request version that forbids a SAML 2.0 response | Mandatory | Core §4.1.3.2 | Always |
+| Return an error for an older request version that forbids a SAML 2.0 response, also over SOAP when its signature does not verify | Mandatory | Core §4.1.3.2 | Always |
 | Answer a request that the age window refuses with top-level `Requester` | Mandatory | Core §3.2.1, Profiles §4.5.3.2 | `NameIdManagementRefusal::RequestAgeOutsideWindow` |
 
 <a id="soap-managenameidrequest-from-the-service-provider"></a>
@@ -196,6 +197,9 @@ Code: `src/name_id_management.rs`, `src/soap.rs`, `src/crypto/verify.rs`
 | --- | --- | --- | --- |
 | Verify a present request signature, including on a protected channel, and pass no change from a request whose signature is invalid | Mandatory | Core §3.2.1 | Always |
 | Require the verified signature to cover the request element | Mandatory | Core §3.2.1 | Always |
+| Answer a request from the service provider, on its attested `SoapChannel` and at this identity provider's endpoint, whose present signature does not verify with `Requester`, before replay storage | Mandatory | Core §3.2.1, Profiles §4.5.3.2 | `NameIdManagementRefusal::RequestDenied` |
+| Add the second-level status `RequestDenied` to that answer | Optional | Core §3.2.2.2 | Always |
+| Answer such a request whose present signature this build cannot verify, because it has no crypto provider or the provider fails to start, with `Responder`, before replay storage | Mandatory | Core §3.2.2.2, Profiles §4.5.3.2 | `NameIdManagementRefusal::VerificationUnavailable` |
 | Compare a present `Destination` with the receiving SOAP `ManageNameIDService` after collapsing XML whitespace. Accept an absent value | Mandatory | Core §3.2.1, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 
 <a id="http-redirect-receiving-a-managenameidrequest"></a>
@@ -231,10 +235,11 @@ The application chooses the `status` argument, as the
 
 ### Identity provider: `respond_name_id_management`
 
-Code: `src/name_id_management.rs`, `src/soap.rs`
+Code: `src/name_id_management.rs`, `src/soap.rs`, `src/xml/name.rs`
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
+| Omit `InResponseTo` from the response, a refusal included, to a request whose `ID` is not an `xs:NCName` | Mandatory | Core §3.2.2, Profiles §4.5.3.2 | Always |
 | Authenticate the identity provider to the service provider and protect message integrity, by signing or by a binding mechanism. The crate does not sign the response and returns it on the request's mutually authenticated, integrity-protected `SoapChannel` | Mandatory | Profiles §4.5.3.2, §4.5.4.2 | `SoapChannel` |
 | Omit `Destination` | Optional | Core §3.2.2 | Always |
 
@@ -336,7 +341,7 @@ Code: `src/name_id_management.rs`, `src/name_id_management/redirect.rs`, `src/mo
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
 | Require `ID`, `Version`, and a UTC `IssueInstant` | [Baseline receipt](xml-schema-validation.md#baseline-receipt) gives the reason. | `RequestAbstractType`, Core §1.3.3 | Always |
-| Return an error, with no response, for a request that is not authenticated, not from the peer, or misaddressed, and for a stored request `ID` | Only an authenticated request from the peer identifies the requesting provider that Profiles §4.5.3.2 has the responder answer, Core §3.2.1 discards a misaddressed request, and the first copy of a repeated request was already answered. | Profiles §4.5.3.2, Core §3.2.1 | Always |
+| Return an error, with no response, for a request that is not authenticated as the peer's, by the `SoapChannel` over SOAP and by its signature over HTTP-Redirect, that is not from the peer, or that is misaddressed, and for a stored request `ID` | Only a request authenticated as the peer's identifies the requesting provider that Profiles §4.5.3.2 has the responder answer, Core §3.2.1 discards a misaddressed request, and the first copy of a repeated request was already answered. | Profiles §4.5.3.2, Core §3.2.1 | Always |
 | Refuse an authenticated 2.0 request outside the configured age window, before replay storage and decryption, so its `ID` stays out of the replay cache | The age window limits acceptance after replay storage expires. | Core §1.3.3 | `SamlValidationContext::with_manage_name_id_request_age`. Disabled by default |
 | Add no subordinate code to the `Requester` status of that refusal | Core defines no subordinate code for a stale request, and the caller reads the reason from the refusal. | Core §3.2.2.2 | Always |
 | Reject a repeated request `ID`. Store it as the [protocol message ID rule](metadata-and-replay.md#protocol-message-ids) states | Name identifier management requires no identifier cache, so the cache is the caller's choice. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
@@ -378,7 +383,7 @@ Code: `src/name_id_management.rs`, `src/api/name_id_management/redirect.rs`, `sr
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| For a request whose `ID` is not an `xs:NCName`, return an error and write no response, also where the receiver would answer a refusal | A response without `InResponseTo`, as Core §3.2.2 requires for such a request, names no request, so the requester could not tie it to its pending request. | Core §3.2.1, §3.2.2 | Always |
+| Over HTTP-Redirect, for a request whose `ID` is not an `xs:NCName`, return an error and write no response, also where the receiver would answer a refusal | The response reaches the requester through the user agent, and without the `InResponseTo` that Core §3.2.2 omits for such a request nothing ties it to the pending request. | Core §3.2.1, §3.2.2 | Always |
 | Answer only a request received from the given peer | The receipt records the peer that sent the request, and a response built for another descriptor would answer for a peer that did not send it, at another party's endpoint on HTTP-Redirect. | — | Always |
 | Answer only a request received over the operation's binding: SOAP for `respond_name_id_management`, and HTTP-Redirect for `respond_name_id_management_redirect` | A SOAP response answers the synchronous exchange of its request. | Profiles §4.5.3.2 | Always |
 

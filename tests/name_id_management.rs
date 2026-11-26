@@ -775,7 +775,7 @@ fn a_version_other_than_2_0_is_answered_with_version_mismatch() -> TestResult {
 }
 
 #[test]
-fn a_request_id_that_is_not_an_ncname_is_received_but_not_answered() -> TestResult {
+fn a_request_id_that_is_not_an_ncname_is_answered_without_in_response_to() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;
     let terminate = format!("{}<samlp:Terminate/>", current_name_id_xml());
@@ -789,10 +789,12 @@ fn a_request_id_that_is_not_an_ncname_is_received_but_not_answered() -> TestResu
         validation(),
     )?)?;
     assert_eq!(received.message().id().as_str(), "1bad:id");
-    let answered = idp.respond_name_id_management(&sp, &received, &Status::success());
+    let answered = idp.respond_name_id_management(&sp, &received, &Status::success())?;
+    let xml = body(answered.envelope())?;
+    assert!(!xml.contains("InResponseTo="), "{xml}");
     assert!(
-        matches!(answered, Err(SamlError::Invalid(_))),
-        "{answered:?}"
+        xml.contains(&format!(r#"<samlp:StatusCode Value="{SUCCESS}"/>"#)),
+        "{xml}"
     );
 
     let newer = sp_request_with(
@@ -801,8 +803,14 @@ fn a_request_id_that_is_not_an_ncname_is_received_but_not_answered() -> TestResu
         &terminate,
     )?
     .replace(SP_REQUEST_ID, "1bad:id");
-    let refused = idp.receive_name_id_management(&sp, &newer, authenticated(), validation());
-    assert!(matches!(refused, Err(SamlError::Invalid(_))), "{refused:?}");
+    let NameIdManagementReceipt::Refused(refused) =
+        idp.receive_name_id_management(&sp, &newer, authenticated(), validation())?
+    else {
+        return Err("a newer version was not refused".into());
+    };
+    assert_eq!(refused.reason(), NameIdManagementRefusal::VersionMismatch);
+    let xml = body(refused.response().envelope())?;
+    assert!(!xml.contains("InResponseTo="), "{xml}");
 
     let padded = request.replace(SP_REQUEST_ID, &format!(" {SP_REQUEST_ID}&#9;"));
     let received = received_request(idp.receive_name_id_management(
@@ -1224,7 +1232,7 @@ fn a_request_without_one_identifier_and_one_change_is_answered_with_requester() 
 
 #[test]
 #[cfg(not(crypto))]
-fn a_present_signature_requires_a_crypto_provider_even_on_an_authenticated_channel() -> TestResult {
+fn a_present_signature_without_a_crypto_provider_is_refused_with_responder() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;
     let signature = r#"<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"/>"#;
@@ -1232,11 +1240,25 @@ fn a_present_signature_requires_a_crypto_provider_even_on_an_authenticated_chann
         "{signature}{}<samlp:Terminate/>",
         current_name_id_xml()
     ))?;
-    let result = idp.receive_name_id_management(&sp, &envelope, authenticated(), validation());
-    assert!(
-        matches!(result, Err(SamlError::Unsupported(_))),
-        "{result:?}"
+    let NameIdManagementReceipt::Refused(refused) =
+        idp.receive_name_id_management(&sp, &envelope, authenticated(), validation())?
+    else {
+        return Err("a signed request was accepted without a crypto provider".into());
+    };
+    assert_eq!(
+        refused.reason(),
+        NameIdManagementRefusal::VerificationUnavailable
     );
+    assert!(
+        matches!(refused.signature_error(), Some(SamlError::Unsupported(_))),
+        "{refused:?}"
+    );
+    let xml = body(refused.response().envelope())?;
+    assert!(
+        xml.contains(r#"<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Responder"/></samlp:Status>"#),
+        "{xml}"
+    );
+    assert_eq!(attribute(&xml, "InResponseTo"), Some(SP_REQUEST_ID));
     Ok(())
 }
 

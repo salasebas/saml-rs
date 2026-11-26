@@ -10,22 +10,13 @@ pub(crate) enum RequestVersionMismatch {
 
 impl RequestVersionMismatch {
     pub(crate) fn for_request(version: &str) -> Result<Option<Self>, SamlError> {
-        if version == "2.0" {
-            return Ok(None);
-        }
-        let malformed = || SamlError::ProtocolProfile("invalid request Version".into());
-        let (major, minor) = version.split_once('.').ok_or_else(malformed)?;
-        for part in [major, minor] {
-            if part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_digit()) {
-                return Err(malformed());
+        match DeclaredVersion::of(version) {
+            DeclaredVersion::Saml20 => Ok(None),
+            DeclaredVersion::Newer(mismatch) => Ok(Some(mismatch)),
+            DeclaredVersion::Older => Err(older_request_version()),
+            DeclaredVersion::Malformed => {
+                Err(SamlError::ProtocolProfile("invalid request Version".into()))
             }
-        }
-        match major.trim_start_matches('0') {
-            "" | "1" => Err(SamlError::ProtocolProfile(
-                "request Version is too low for a SAML 2.0 response".into(),
-            )),
-            "2" => Ok(Some(Self::SameMajor)),
-            _ => Ok(Some(Self::NewerMajor)),
         }
     }
 
@@ -37,6 +28,50 @@ impl RequestVersionMismatch {
                 uri: status_code::REQUEST_VERSION_TOO_HIGH.to_string(),
             }),
         }
+    }
+}
+
+enum DeclaredVersion {
+    Saml20,
+    Newer(RequestVersionMismatch),
+    Older,
+    Malformed,
+}
+
+impl DeclaredVersion {
+    fn of(version: &str) -> Self {
+        if version == "2.0" {
+            return Self::Saml20;
+        }
+        let Some((major, minor)) = version.split_once('.') else {
+            return Self::Malformed;
+        };
+        if [major, minor]
+            .iter()
+            .any(|part| part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_digit()))
+        {
+            return Self::Malformed;
+        }
+        match major.trim_start_matches('0') {
+            "" | "1" => Self::Older,
+            "2" => Self::Newer(RequestVersionMismatch::SameMajor),
+            _ => Self::Newer(RequestVersionMismatch::NewerMajor),
+        }
+    }
+}
+
+fn older_request_version() -> SamlError {
+    SamlError::ProtocolProfile("request Version is too low for a SAML 2.0 response".into())
+}
+
+/// Refuse to answer a request whose `Version` declares a major version below
+/// 2, because Core §4.1.3.2 bars a response version above the request
+/// version. A missing or malformed `Version` declares no version.
+pub(crate) fn check_saml2_answer_allowed(version: Option<&str>) -> Result<(), SamlError> {
+    match version.map(DeclaredVersion::of) {
+        Some(DeclaredVersion::Older) => Err(older_request_version()),
+        Some(DeclaredVersion::Saml20 | DeclaredVersion::Newer(_) | DeclaredVersion::Malformed)
+        | None => Ok(()),
     }
 }
 
@@ -104,6 +139,12 @@ impl SubordinateStatusCode {
     pub fn unknown_principal() -> Self {
         Self {
             uri: status_code::UNKNOWN_PRINCIPAL.to_string(),
+        }
+    }
+
+    pub(crate) fn request_denied() -> Self {
+        Self {
+            uri: status_code::REQUEST_DENIED.to_string(),
         }
     }
 

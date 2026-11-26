@@ -55,6 +55,15 @@ pub(crate) fn check_in_response_to(request_id: &str) -> Result<(), SamlError> {
     ))
 }
 
+/// The request `ID` to write as `InResponseTo`, or `None` when it is not an
+/// `xs:NCName`: Core §3.2.2 omits `InResponseTo` when the request `ID`
+/// cannot be determined.
+pub(crate) fn writable_in_response_to(request_id: &str) -> Option<&str> {
+    check_in_response_to(request_id)
+        .is_ok()
+        .then_some(request_id)
+}
+
 /// Check that `prefix` can be declared for a generated element: an NCName
 /// that does not begin with `xml` in any case. Namespaces in XML 1.0 §3
 /// reserves those prefixes, and documents should not declare them. `label`

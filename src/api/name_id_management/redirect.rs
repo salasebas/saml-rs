@@ -679,7 +679,7 @@ fn response_outbound(
             id: &generate_id(),
             issuer: &local.entity_id()?,
             destination: Some(&destination),
-            in_response_to,
+            in_response_to: Some(in_response_to),
             status,
         },
         relay_state,

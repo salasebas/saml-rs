@@ -229,8 +229,22 @@ impl IdentityProvider {
     /// A present XML signature must cover the `ArtifactResolve` and verify
     /// against `presenter`'s signing keys before the request can be
     /// processed. When it does not verify, the answer has status `Requester`
-    /// with `RequestDenied`, [`AnsweredArtifact::error`] returns the
-    /// verification error, and the artifact stays outstanding.
+    /// with `RequestDenied`, and [`AnsweredArtifact::error`] returns the
+    /// verification error. When this identity provider cannot verify it,
+    /// because the build has no crypto provider or the provider fails to
+    /// start, the answer has status `Responder`, and
+    /// [`AnsweredArtifact::error`] returns [`SamlError::Unsupported`] or
+    /// [`SamlError::Crypto`].
+    ///
+    /// A request without exactly one `Artifact` element, with a second
+    /// `Issuer`, or without an `xs:NCName` `ID`, a `major.minor` `Version`,
+    /// or a UTC `IssueInstant` gets status `Requester`:
+    /// [`AnsweredArtifact::release`] returns
+    /// [`ArtifactRelease::MalformedRequest`](crate::ArtifactRelease::MalformedRequest), and
+    /// [`AnsweredArtifact::error`] returns what the request lacks. An answer
+    /// to a request whose `ID` is missing or not an `xs:NCName` has no
+    /// `InResponseTo`. None of these answers carries the message, and the
+    /// artifact stays outstanding.
     ///
     /// # Errors
     ///
@@ -242,21 +256,11 @@ impl IdentityProvider {
     /// is not a published SOAP `ArtifactResolutionService` location. Returns
     /// [`SamlError::SoapEnvelope`] when `request_envelope` cannot be read as a
     /// SOAP 1.1 envelope. Answer each error as
-    /// [`SoapFault`](crate::SoapFault) describes. Returns [`SamlError::ProtocolProfile`] when the body is
-    /// not one `ArtifactResolve`, the request lacks exactly one `Artifact`
-    /// element or has a second `Issuer`, or the required `ID`, `Version`, or UTC
-    /// `IssueInstant` fails validation. A version below 2.0 also returns
-    /// [`SamlError::ProtocolProfile`]. A signature that does not verify on a
-    /// request whose `ID` is not an `xs:NCName` or whose `Version` is not
-    /// `2.0` returns the verification error, because no SAML 2.0 answer can
-    /// correlate with it. A present signature without a crypto provider
-    /// returns [`SamlError::Unsupported`], and a crypto provider that fails
-    /// to initialize returns [`SamlError::Crypto`]. The artifact stays
-    /// outstanding.
-    /// Returns [`SamlError::Invalid`] when the request `ID` is not an
-    /// `xs:NCName` and the request would otherwise be answered, because the
-    /// answer cannot name it in `InResponseTo`. The artifact stays
-    /// outstanding.
+    /// [`SoapFault`](crate::SoapFault) describes. Returns
+    /// [`SamlError::ProtocolProfile`] when the body is not one
+    /// `ArtifactResolve`, and when the request's `Version` has a major
+    /// version below 2, even if its signature does not verify, because a
+    /// SAML 2.0 answer would have a higher version than the request.
     /// Returns [`SamlError::LimitExceeded`] when the response cannot fit
     /// within the default [`crate::XmlLimits`]. The artifact stays outstanding.
     ///

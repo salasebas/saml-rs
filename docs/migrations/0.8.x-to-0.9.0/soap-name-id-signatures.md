@@ -11,7 +11,19 @@ the identity provider. For HMAC signatures, set the shared secret with
 `SpDescriptor::with_hmac_secret`. Use the updated descriptor when you start a new
 exchange. `finish` uses the keys captured by `start_name_id_management`.
 
-An invalid signature now returns a verification error. For example,
-`SamlError::SignatureVerification` can mean that the peer rotated its signing
-key and the descriptor still has the old certificate. Refresh the descriptor
-before starting or retrying the exchange.
+An invalid signature now makes `finish` return a verification error. For
+example, `SamlError::SignatureVerification` can mean that the peer rotated its
+signing key and the descriptor still has the old certificate. Refresh the
+descriptor before starting or retrying the exchange.
+
+`receive_name_id_management` refuses a request from the service provider
+whose signature does not verify: it returns `NameIdManagementReceipt::Refused`
+with `NameIdManagementRefusal::RequestDenied`, and the response has status
+`Requester` with `RequestDenied`. Without a crypto provider, or when the
+provider fails to start, it refuses a signed request with
+`NameIdManagementRefusal::VerificationUnavailable` and status `Responder`.
+Send `refused.response()` as for the other refusals, and log
+`RefusedNameIdManagement::signature_error()` to keep the cause. A request
+refused for its signature is not stored for replay detection, so the service
+provider can retry it. `NameIdManagementRefusal` is `#[non_exhaustive]`, so a `match` on it
+already has a wildcard arm.
