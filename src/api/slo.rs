@@ -427,6 +427,11 @@ impl IdentityProvider {
     ///
     /// The identifier requirement is the same as for [`ServiceProvider::receive_slo`].
     ///
+    /// Before [`Self::respond_slo`], the application propagates the logout to
+    /// the other service providers with [`Self::start_slo`]. A request received over
+    /// SOAP has no browser, so propagate it with [`StartSlo::soap`]. After a
+    /// browser request, choose a binding each service provider supports.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the inbound message or relay state is invalid,

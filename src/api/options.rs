@@ -391,6 +391,11 @@ impl StartSlo {
 
     /// Start SLO over SOAP.
     ///
+    /// A service provider whose user is at the browser should prefer
+    /// [`Self::redirect`] or [`Self::post`]: a SOAP request reaches the
+    /// identity provider without the browser, so it can propagate the logout
+    /// to other service providers only over SOAP.
+    ///
     /// The request carries an XML signature. A service provider includes at
     /// least one `SessionIndex`.
     /// The request carries no RelayState, so a present
@@ -434,6 +439,10 @@ impl StartSlo {
 
     /// Set the RelayState the LogoutRequest carries. The request carries none
     /// by default.
+    ///
+    /// The value travels through the browser and the peer. Send an opaque
+    /// reference to local state rather than the state itself, unless the
+    /// deployment needs no privacy.
     ///
     /// `finish_slo` requires the response to return it unchanged. A value
     /// longer than [`MAX_RELAY_STATE_BYTES`](crate::MAX_RELAY_STATE_BYTES)
