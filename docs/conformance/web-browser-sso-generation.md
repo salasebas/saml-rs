@@ -168,7 +168,7 @@ reference.
 
 ### Identity provider: `respond_sso`, `respond_sso_refusal`, `initiate_sso`
 
-Code: `src/api/idp.rs`, `src/api/sso_outcome.rs`, `src/api/response_acs.rs`, `src/idp.rs`, `src/idp/login_response.rs`, `src/model/status.rs`, `src/xml/name.rs`, `src/entity.rs`, `src/metadata/sp.rs`, `src/crypto/sign.rs`
+Code: `src/api/idp.rs`, `src/api/sso_outcome.rs`, `src/api/response_acs.rs`, `src/idp.rs`, `src/idp/login_response.rs`, `src/model/authn.rs`, `src/model/status.rs`, `src/xml/name.rs`, `src/entity.rs`, `src/metadata/sp.rs`, `src/crypto/sign.rs`
 
 Where [HTTP-Artifact response](web-browser-sso-artifact.md) states no
 difference, these rows also cover the `Response` that `respond_sso_artifact`,
@@ -182,6 +182,7 @@ difference, these rows also cover the `Response` that `respond_sso_artifact`,
 | Write an error `Response` with the status the caller passes and no assertion | Mandatory | Profiles §4.1.4.1, §4.1.4.2, Core §3.4.1.4 | `SsoOutcome::Failure` |
 | Write a `Success` response only with an assertion, and reject `SsoOutcome::Failure` with a top-level `Success` status | Mandatory | Profiles §4.1.4.2, E26 | Always |
 | Write a correlated SAML error for a refused request when a trusted ACS supports the selected response binding | Mandatory | Profiles §4.1.4.1, Metadata §2.4.4, E7, Core §3.2.2 | Always |
+| Write top-level `Requester` in the error `Response` to a request refused as invalid: content that breaks the schema of `AuthnRequestType` or of an element it contains, a repeated `NameIDPolicy`, a `ProtocolBinding` of HTTP-Redirect or SOAP, or an unsigned request from a service provider whose metadata sets `AuthnRequestsSigned` | Mandatory | Core §3.2.1, Profiles §4.1.2, Metadata §2.4.4, E7 | Always |
 | Support delivery of an error when the user agent remains available and an acceptable response location exists | Recommended | Profiles §4.1.3.5, E85 | Always |
 | Write an unsolicited error `Response` for a login the identity provider started | Optional | Profiles §4.1.4.2, §4.1.5 | `initiate_sso`, `initiate_sso_artifact` |
 | Write caller-supplied plain text as `StatusMessage` after the complete `StatusCode` in a failed login `Response` before signing. Omit empty or unset text | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType` | `RespondSso::status_message` |
@@ -334,12 +335,26 @@ for the `RelayState` and the endpoint query of the request.
 
 ### Identity provider: `respond_sso`, `respond_sso_refusal`, `initiate_sso`
 
-Code: `src/api/idp.rs`, `src/api/response_acs.rs`, `src/metadata/sp.rs`, `src/idp.rs`, `src/idp/login_response.rs`, `src/entity.rs`, `src/browser/outbound.rs`
+Code: `src/api/idp.rs`, `src/api/response_acs.rs`, `src/metadata/sp.rs`, `src/idp.rs`, `src/idp/login_response.rs`, `src/model/authn.rs`, `src/entity.rs`, `src/browser/outbound.rs`
+
+#### Status and errors
+
+| Policy | Reason | Section | Option |
+| --- | --- | --- | --- |
+| Write top-level `Requester` for a request refused for its age, for a `ProtocolBinding` URI this identity provider does not support, for an `AssertionConsumerServiceURL` that is not an absolute HTTP(S) URL, or for a missing signature that only this identity provider requires | The fault lies in the request, which the service provider can send again fresh, signed, or with another binding or location. | Core §3.2.2.2, Profiles §4.1.4.1 | Always |
+| Add the subordinate `UnsupportedBinding` to the error `Response` to a request refused for its `ProtocolBinding` | It tells the service provider that the request asked for a response binding this identity provider cannot use. | Core §3.2.2.2 | Always |
+
+[crewjam/saml v0.6.3](https://github.com/crewjam/saml/blob/v0.6.3/identity_provider_error_response.go#L194-L206)
+answers a request for an assertion consumer service it cannot send to with
+the same status, at the default assertion consumer service.
+[Shibboleth IdP 5.2.3](https://codeberg.org/Shibboleth/java-identity-provider/src/tag/5.2.3/idp-conf-impl/src/main/resources/net/shibboleth/idp/module/conf/errors.xml#L24-L29)
+shows a local error page when it cannot resolve the requested endpoint.
 
 #### Assertion consumer service
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
+| Answer a refused request whose `AssertionConsumerServiceURL`, `ProtocolBinding`, or `AssertionConsumerServiceIndex` cannot be read at the default `AssertionConsumerService` of the SP metadata, and fail if its binding is not the selected one | An unreadable field names no location, and the metadata default is one the service provider controls, so the error never goes to a location that only the request names. | Core §3.4.1, Profiles §4.1.4.1 | Always |
 | Use the current metadata default ACS for an absent index mapping only for an error and when its binding matches the chosen delivery | The identity provider honors the requested index for assertions and uses current metadata to authorize the error route. | Core §3.4.1, Profiles §4.1.4.1, E85 | Always |
 | Answer a request that names only a `ProtocolBinding` at the first SAML 2.0 service provider role that publishes that binding, at the endpoint the `isDefault` rule chooses among that role's endpoints of that binding | The role default can use another binding, and the requested binding must be honored, so the default rule applies to that binding's endpoints. | Core §3.4.1, Profiles §4.1.3.5, Metadata §2.2.3 | Always |
 

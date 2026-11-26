@@ -158,6 +158,12 @@ impl SubordinateStatusCode {
         }
     }
 
+    pub(crate) fn unsupported_binding() -> Self {
+        Self {
+            uri: status_code::UNSUPPORTED_BINDING.to_string(),
+        }
+    }
+
     /// Wrap an absolute status-code URI read as an `xs:anyURI`.
     ///
     /// Pass the URI as written, including any literal `&`, `'`, `"`, `<`, or

@@ -119,7 +119,7 @@ applying a logout to an assertion that arrives later.
 | HTTP-Redirect or SimpleSign `SigAlg` and `Signature` on the request | Bindings §3.4.4.1, CS-01 §2.4 to §2.6 | [Partial](#detached-signatures) |
 | `WantAuthnRequestsSigned` in the identity provider's metadata | Metadata §2.4.3, E7 | Supported |
 | `AuthnRequestsSigned` in the service provider's metadata | Metadata §2.4.4, E7 | Supported |
-| Error `Response` to a request that the identity provider refuses | Profiles §4.1.4.1 | Supported |
+| Error `Response` to a request that the identity provider refuses | Profiles §4.1.4.1, Core §3.2.1 | [Partial](#error-response-to-a-refused-request) |
 | `Destination` | Core §3.2.1 | Supported |
 | Namespace names compared after normalizing the declaration value | Namespaces in XML 1.0 §2.3 | Supported |
 | `ForceAuthn`, `IsPassive`, and `ProviderName` | Core §3.4.1 | Supported |
@@ -174,6 +174,23 @@ has how `respond_sso` answers the request.
 defines the comparison.
 [SimpleSAMLphp 6.0.0](https://github.com/simplesamlphp/saml2/blob/v6.0.0/src/Binding/HTTPPost.php#L89-L105)
 passes normalized DOM names to its HTTP-POST message reader.
+
+### Error `Response` to a refused request
+
+- **Supported:** `receive_sso` returns refusal data for a request that
+  passed its signature, `Issuer`, and `Destination` checks and that the
+  identity provider refuses for its signature policy, a `ProtocolBinding`
+  the `Response` cannot use, content it cannot read, a repeated
+  `NameIDPolicy`, or its age. `respond_sso_refusal` and
+  `respond_sso_refusal_artifact` send the error `Response`.
+- **Not supported:** an error `Response` to a request that fails a check made
+  before its signature is verified: the `XmlPolicy` schema check and the
+  protocol profile, which covers qualified attributes, elements in a
+  foreign namespace, and a `Version` other than `2.0`. Nor to a request
+  whose signature does not verify: Core §3.2.1 recommends an error but
+  forbids relying on the content that names the requester and the `ID` to
+  answer. `receive_sso` returns the error, and the identity provider
+  application shows a local error page.
 
 ### `AuthnContextDecl` by value
 
@@ -373,7 +390,9 @@ Code: `src/api/idp.rs`, `src/idp.rs`, `src/flow.rs`, `src/flow/embedded.rs`, `sr
 | Refuse an unsigned `AuthnRequest` when any SAML 2.0 `SPSSODescriptor` for the service provider sets `AuthnRequestsSigned` to true. Return only refusal data for an otherwise valid request | Mandatory | Metadata §2.4.4, E7 | Always |
 | Verify a signature on an `AuthnRequest` against the SP's signing credentials. The request has at most one direct `ds:Signature`. Redirect also verifies the query signature, and SimpleSign the detached signature when present, even when the request also carries an XML signature | Mandatory | Core §3.2.1, Bindings §3.4.4.1, CS-01 §2.4 to §2.6, §2.10 | Always |
 | Parse a SimpleSign `AuthnRequest` with neither `Signature` nor `SigAlg` as HTTP-POST and apply the same request signature policy. Use the original binding to select the endpoint for the `Destination` check | Optional | CS-01 §2.10 | Always |
-| Return refusal data, with its `AuthnRequestRefusalReason`, for an otherwise valid request refused for its signature, a repeated `NameIDPolicy`, or its age, so the caller can send the error `Response` | Mandatory | Profiles §4.1.4.1, Core §3.4.1.4 | Always |
+| Return refusal data, with its `AuthnRequestRefusalReason`, for an otherwise valid request refused for its signature, its `ProtocolBinding`, content it cannot read, a repeated `NameIDPolicy`, or its age, so the caller can send the error `Response` | Mandatory | Profiles §4.1.4.1, Core §3.4.1.4 | Always |
+| Refuse a `ProtocolBinding` that is HTTP-Redirect, SOAP, or a URI other than HTTP-POST, HTTP-POST-SimpleSign, and HTTP-Artifact, because the `Response` cannot use it | Mandatory | Profiles §4.1.3.5, §4.1.4.1, Core §3.4.1 | Always |
+| Return no refusal data for a request whose present `Destination` names another location | Mandatory | Core §3.2.1 | Always |
 
 [XML Signature and XML Encryption algorithms](xml-security-algorithms.md#weak-algorithms-and-keys)
 keeps the weak algorithms and keys that the identity provider rejects in a
@@ -390,7 +409,7 @@ Code: `src/api/idp.rs`, `src/model/authn.rs`, `src/model/extract.rs`, `src/xml/p
 | Compare a present `Destination` with the receiving `SingleSignOnService` `Location` after collapsing XML whitespace. Require it on a signed request. `ResponseLocation` is unused | Mandatory | Core §3.2.1, Bindings §3.4.5.2, §3.5.5.2, CS-01 §2.4, Metadata §2.2.2, E41 | `SamlValidationContext::with_recipient_endpoint` |
 | Expose `ForceAuthn`, `IsPassive`, `RequestedAuthnContext`, the requested `Subject`, and `NameIDPolicy`. Presence never rejects the request, and the caller decides how to authenticate. A `Subject` with no identifier means the presenter | Optional | Core §3.4.1, §3.4.1.1, §3.4.1.4, E45, E75 | Always |
 | Read the `ID` with XML whitespace collapsed. `respond_sso` writes that value as `InResponseTo` | Mandatory | `RequestAbstractType`, Core §3.2.2, XML Schema Part 2 §3.3.8, §4.3.6 | `AuthnRequest::id` |
-| Read `ForceAuthn`, `IsPassive`, and `AllowCreate` as `xs:boolean` and `AssertionConsumerServiceIndex` as `xs:unsignedShort`, with XML whitespace collapsed. Reject another value or a qualified attribute | Mandatory | `AuthnRequestType`, `NameIDPolicyType`, XML Schema Part 2 §3.2.2, §3.3.23, §4.3.6 | Always |
+| Read `ForceAuthn`, `IsPassive`, and `AllowCreate` as `xs:boolean` and `AssertionConsumerServiceIndex` as `xs:unsignedShort`, with XML whitespace collapsed. Refuse another value, and reject a qualified attribute | Mandatory | `AuthnRequestType`, `NameIDPolicyType`, XML Schema Part 2 §3.2.2, §3.3.23, §4.3.6 | Always |
 | Reject a qualified `Format`, `SPNameQualifier`, or `AllowCreate` on `NameIDPolicy`, and a qualified `Format`, `NameQualifier`, `SPNameQualifier`, or `SPProvidedID` on the requested `NameID` | Mandatory | Core §2.2.2, §3.4.1.1, `NameIDType`, `NameIDPolicyType` | Always |
 
 [Baseline receipt](xml-schema-validation.md#baseline-receipt) keeps the policy
@@ -419,10 +438,10 @@ Code: `src/model/authn_context.rs`
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Allow at most one `RequestedAuthnContext` | Mandatory | `AuthnRequestType` | Always |
-| Require one or more assertion-namespace references in `RequestedAuthnContext`, all class or all declaration | Mandatory | `RequestedAuthnContextType` | Always |
+| Refuse a second `RequestedAuthnContext` | Mandatory | `AuthnRequestType` | Always |
+| Refuse a `RequestedAuthnContext` without references or with both class and declaration references, and reject a reference in another namespace | Mandatory | `RequestedAuthnContextType` | Always |
 | Keep the references in request order, most preferred first | Mandatory | Core §3.3.2.2.1, E45 | Always |
-| Read an optional unqualified `Comparison` as `exact`, `minimum`, `maximum`, or `better`, and default it to `exact` | Mandatory | Core §3.3.2.2.1, E45, `RequestedAuthnContextType` | Always |
+| Read an optional unqualified `Comparison` as `exact`, `minimum`, `maximum`, or `better`, and default it to `exact`. Refuse another value | Mandatory | Core §3.3.2.2.1, E45, `RequestedAuthnContextType` | Always |
 
 ### Identity provider: requested `Subject`
 
@@ -430,9 +449,10 @@ Code: `src/model/authn.rs`, `src/model/subject.rs`, `src/api/requested_subject.r
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Reject a second `Subject`, a second identifier, or an identifier in a foreign namespace in a requested `Subject` | Mandatory | Core §3.4.1, `SubjectType` | Always |
+| Refuse a second `Subject` or a second identifier in a requested `Subject`, and reject an identifier in a foreign namespace | Mandatory | Core §3.4.1, `SubjectType` | Always |
 | Permit schema-allowed foreign attributes on `SubjectConfirmationData` in the requested `Subject` | Mandatory | Core §2.4.1.2, §3.4.1, `SubjectConfirmationDataType` | Always |
 | Process a requested encrypted `NameID` when decryption succeeds. If the key is absent, the unsigned ciphertext is ineligible, or decryption does not yield one `NameID`, retain the unread `EncryptedID`. Only an error response can answer that request | Mandatory | Conformance §3.4, Core §3.4.1, §3.4.1.4 | Always |
+| Refuse a request whose decrypted `NameID` breaks the protocol profile | Mandatory | Core §3.4.1.4, Profiles §4.1.4.1 | Always |
 
 ## Library policies
 
@@ -546,15 +566,17 @@ Code: `src/api/idp.rs`, `src/browser/input.rs`, `src/model/authn.rs`, `src/model
 | --- | --- | --- | --- |
 | Reject a SimpleSign `AuthnRequest` that carries only one of `Signature` and `SigAlg` | Either field signals a detached signature, which requires both fields to verify. | CS-01 §2.4, §2.5, §2.10 | Always |
 | Refuse an `AuthnRequest` with more than one `NameIDPolicy` | Core §3.4.1.1 binds the identity provider to the requested policy, and reading one of two policies, or neither, could issue an identifier that the other excludes. | `AuthnRequestType`, Core §3.2.1, §3.4.1.1 | Always |
+| Return no refusal data for an authenticated request that passes every refusal check and whose `ID` the replay cache already holds | `receive_sso` already returned the first copy for the application to answer, and Core §3.4.1.4 asks for one reply to a request. | Core §3.4.1.4 | `ReplayPolicy::RequireCache` |
 | Accept an `AuthnRequest` `IssueInstant` from now − `max_age` − past tolerance through now + future tolerance, inclusive. A positive `NotOnOrAfter` skew supplies the past tolerance, and a negative `NotBefore` skew supplies the future tolerance | Reason not recorded. | Core §1.3.3 | `SamlValidationContext::with_authn_request_age`, `RequestAgePolicy::Bounded` |
 
 ### Identity provider: `receive_sso` request fields
 
-Code: `src/api/idp.rs`, `src/model/validation.rs`
+Code: `src/api/idp.rs`, `src/model/validation.rs`, `src/model/authn.rs`, `src/model/endpoint.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
 | When checking `Destination` in `receive_sso`, reject a supplied receiving URL that is not published for the incoming binding, and several published URLs without an explicit one | The URL is caller input, and the restriction keeps a value derived from the request from naming an endpoint this identity provider does not operate for that binding. | Core §3.2.1 | `SamlValidationContext::with_recipient_endpoint` |
+| Refuse an `AssertionConsumerServiceURL` that is not an absolute HTTP(S) URL | The browser bindings deliver the `Response` to an HTTP endpoint, so another URI cannot receive it. | Core §3.4.1, Bindings §3.5.4, §3.6.3 | Always |
 
 ### Identity provider: `RequestedAuthnContext`
 
