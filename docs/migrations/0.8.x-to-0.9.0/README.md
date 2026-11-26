@@ -106,5 +106,6 @@ Check the topics that affect your integration.
 - [Handle responses with undeclared attributes on `Conditions`](conditions-attributes.md)
 - [Handle requests whose `ID` cannot be written as `InResponseTo`](request-id-in-response-to.md)
 - [Handle assertions with child elements inside text values](assertion-text-values.md)
+- [Answer AuthnRequests with more than one `NameIDPolicy`](repeated-name-id-policy.md)
 
 [All migration guides](../README.md)
