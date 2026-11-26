@@ -42,6 +42,12 @@ The identity provider writes `<Attribute>` elements with `SsoAssertion::attribut
 | Report a received `NameFormat` whether or not it is an absolute URI reference | Library policy: Core §1.3.2 binds the writer. | Core §1.3.2 | Always |
 | Merge `<Attribute>` elements with the same `Name` and `NameFormat` into one `Attribute`, in document order, whatever their `FriendlyName` values. Treat an omitted `NameFormat` as `unspecified`, and report the `NameFormat` and `FriendlyName` of the first element | Library policy: E49 identifies an attribute by `NameFormat` and `Name` together, and the standard does not define how repeated elements combine. | Core §2.7.3.1, E49 | Always |
 
+Core §2.7.3.1.1 lets a producer declare another simple datatype with
+`xsi:type`, define structured content in an extension schema, or send a null
+value, which must be an empty `AttributeValue` with `xsi:nil` set to `true` or
+`1`. The identity provider writes none of these forms: `AttributeValue::new`
+takes a string, which it writes as escaped text.
+
 ## Subject identifier attributes
 
 The [Subject Identifier Attributes Profile](https://docs.oasis-open.org/security/saml-subject-id-attr/v1.0/cs01/saml-subject-id-attr-v1.0-cs01.html)
@@ -159,4 +165,6 @@ Every request, response, and assertion the crate generates takes its `ID` this w
 | --- | --- | --- | --- |
 | Generate an `xs:ID` with a pairwise collision probability of at most 2^-128 | Mandatory | Core §1.3.4 | Always |
 | Keep the pairwise collision probability at most 2^-160 | Recommended | Core §1.3.4 | Always |
-| Use the enclosing assertion's `ID` as the `SessionIndex` when the identity provider publishes Single Logout metadata | Recommended | Core §2.7.2 | Always |
+| Use the enclosing assertion's `ID` as each `SessionIndex`, so that the value cannot correlate the principal's activity across session participants | Recommended | Core §2.7.2 | Always |
+
+Whether the identity provider writes a `SessionIndex` is a [Web Browser SSO generation](web-browser-sso-generation.md#identity-provider-response) rule: Profiles §4.1.4.2 requires one when the identity provider supports Single Logout.
