@@ -4,8 +4,8 @@ use crate::error::SamlError;
 #[cfg(crypto)]
 use crate::error::SignatureVerificationReason;
 use crate::metadata::Metadata;
-use crate::xml::dom;
 use crate::xml::XmlLimits;
+use crate::xml::{dom, protocol_element};
 
 use super::credentials::CertificatePem;
 use super::descriptors::EntityId;
@@ -53,10 +53,12 @@ pub enum MetadataTrustPolicy<'a> {
     /// Require a valid metadata signature from one of the pinned certificates.
     ///
     /// The signature must be an enveloped `#id` signature over the metadata
-    /// root. On a build that verifies MD5 or RIPEMD-160, a signature that uses
-    /// one as its signature or digest algorithm is rejected with
-    /// [`SamlError::AlgorithmUnsupported`]. A pinned RSA certificate shorter
-    /// than 2048 bits is not used to verify.
+    /// root, and the only `ds:Signature` in the document. An element named
+    /// `Signature` or `Object` in another namespace, such as extension
+    /// content, is not an XML signature element. On a build that verifies MD5
+    /// or RIPEMD-160, a signature that uses one as its signature or digest
+    /// algorithm is rejected with [`SamlError::AlgorithmUnsupported`]. A
+    /// pinned RSA certificate shorter than 2048 bits is not used to verify.
     /// See `docs/conformance/metadata-and-replay.md`.
     RequireSignature {
         /// Caller-pinned certificates trusted to sign the metadata.
@@ -174,7 +176,8 @@ fn verify_pinned_metadata_signature(
     limits: XmlLimits,
 ) -> Result<String, SamlError> {
     let document = dom::parse_document(xml, limits)?;
-    ensure_import_signature_shape(&document.root, transforms)?;
+    let namespaced = protocol_element::parse_saml_with_limits(xml, limits)?;
+    ensure_import_signature_shape(&document.root, &namespaced, transforms)?;
     let trusted_certificates: Vec<String> = trusted_certificates
         .iter()
         .map(|certificate| certificate.as_str().to_string())
@@ -199,7 +202,8 @@ fn verify_pinned_metadata_signature(
     limits: XmlLimits,
 ) -> Result<String, SamlError> {
     let document = dom::parse_document(xml, limits)?;
-    ensure_import_signature_shape(&document.root, transforms)?;
+    let namespaced = protocol_element::parse_saml_with_limits(xml, limits)?;
+    ensure_import_signature_shape(&document.root, &namespaced, transforms)?;
     Err(SamlError::Unsupported(
         "signed metadata verification requires a crypto provider feature".into(),
     ))
