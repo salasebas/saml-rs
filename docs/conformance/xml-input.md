@@ -50,11 +50,15 @@ Code: `src/xml/dom.rs`, `src/xml/dom/element.rs`, `src/xml/name.rs`
 
 ### Document type declarations
 
-Code: `src/xml/dom.rs`, `src/soap.rs`
+Code: `src/xml/dom.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Refuse a received document that has a document type declaration, with or without an internal subset, before reading its elements | A DTD can declare entities that expand the input or that load external resources, so refusing it keeps entity expansion and external entity attacks out of the parser. | XML 1.0 §2.8, §5.1 | Always |
+| Refuse a received browser binding message or metadata document that has a document type declaration, with or without an internal subset, before reading its elements | A DTD can declare entities that expand the input or that load external resources, so refusing it keeps entity expansion and external entity attacks out of the parser. | XML 1.0 §2.8, §5.1 | Always |
+
+[Artifact resolution](artifact-resolution.md#soap-receiver-policies) keeps
+the same refusal for a received SOAP envelope, because SOAP 1.1 §3 forbids a
+document type declaration in a SOAP message.
 
 ### Resource limits
 

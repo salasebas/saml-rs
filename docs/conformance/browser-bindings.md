@@ -22,8 +22,9 @@ Normative text is Bindings §§3.4 to 3.6 as corrected by Approved Errata 05
 states how the SimpleSign signature input omits an absent `RelayState`.
 
 The statuses hold on builds with a crypto provider. A build without one
-neither signs nor verifies, so it sends HTTP-Redirect and
-HTTP-POST-SimpleSign messages unsigned and refuses a signed message.
+neither signs nor verifies, so it sends an HTTP-Redirect or HTTP-POST
+message only unsigned and builds no HTTP-POST-SimpleSign form, which needs
+`SigAlg` and `Signature`. It refuses a signed message.
 
 ## Support
 

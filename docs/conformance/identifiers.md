@@ -301,7 +301,7 @@ Code: `src/model/subject_identifier.rs`, `src/model/attributes.rs`
 | --- | --- | --- | --- |
 | Match each attribute by its profile name and the `uri` format. Also accept an omitted or `unspecified` format for that name | An identity provider that sends these attributes with the `unspecified` format, as Okta does by default, or with none, still has its identifiers read. | Subject Identifier §3.3, §3.4, Core §2.7.3.1 | Always |
 | Require exactly one value across matching attributes, in the profile grammar, when the caller reads the identifier | The typed accessor needs one identifier. | Subject Identifier §3.2, §3.3.1 | Always |
-| Read a received identifier by its text regardless of `xsi:type` | The type requirement applies to the producer. | Subject Identifier §3.3.1 | Always |
+| Read a received identifier by its text regardless of `xsi:type` | Reason not recorded. | Subject Identifier §3.3.1 | Always |
 
 [Shibboleth SP 3.5.0](https://codeberg.org/Shibboleth/cpp-sp/src/tag/3.5.0/shibsp/attribute/resolver/impl/XMLAttributeExtractor.cpp#L516-L543)
 maps an attribute with an omitted or `unspecified` `NameFormat` that has no

@@ -125,7 +125,7 @@ applying a logout to an assertion that arrives later.
 | Requested `Subject` with a `NameID` | Core §3.4.1 | Supported |
 | Requested `Subject` with an `EncryptedID` that carries a `NameID` | Core §2.2.4, §3.4.1, Conformance §3.4 | Supported |
 | Requested `Subject` with an `EncryptedID` that carries a `BaseID` or an `Assertion` | Core §2.2.4, §3.4.1 | Not supported |
-| Requested `Subject` with a `BaseID` | Core §2.2.1, §3.4.1 | Not supported |
+| Requested `Subject` with a `BaseID` | Core §2.2.1, §3.4.1 | [Partial](#requested-baseid) |
 | `SubjectConfirmation` in the requested `Subject` | Core §3.4.1, Profiles §4.1.4.1, E75 | Supported |
 | `AssertionConsumerServiceURL`, `AssertionConsumerServiceIndex`, and `ProtocolBinding` | Core §3.4.1, Profiles §4.1.4.1 | Supported |
 | `AttributeConsumingServiceIndex` | Core §3.4.1, Metadata §2.4.4.1 | Not supported |
@@ -138,6 +138,11 @@ applying a logout to an assertion that arrives later.
 has how `respond_sso` answers the request.
 
 ## Partial support
+
+<a id="detached-signatures"></a>
+
+[Browser bindings](browser-bindings.md#detached-signatures) explains the
+`Partial` detached signatures of both roles.
 
 ### Identity provider lookup for an unsolicited `Response`
 
@@ -180,6 +185,16 @@ passes normalized DOM names to its HTTP-POST message reader.
   forbids relying on the content that names the requester and the `ID` to
   answer. `receive_sso` returns the error, and the identity provider
   application shows a local error page.
+
+### Requested `BaseID`
+
+- **Supported:** `receive_sso` accepts a requested `Subject` that holds a
+  `BaseID` and reports it as `RequestedSubjectIdentifier::BaseId`, and the
+  identity provider answers it with an error `Response`.
+- **Not supported:** a successful `Response`, whose assertion `Subject`
+  would need an identical `BaseID` (Core §3.3.4, §3.4.1.4), and the
+  identifier in the `BaseID`, as [identifiers](identifiers.md#not-supported)
+  records.
 
 ### `AuthnContextDecl` by value
 
@@ -544,7 +559,7 @@ HTTP-POST-SimpleSign `Response`, as the error response rules do.
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Report a status other than `Success` as an error after the signature, `Issuer`, correlation, and `Destination` checks | An unrelated or tampered error response then fails the check it breaks, so a reported status is a refusal of this login. | Core §3.2.2.2, Profiles §4.1.4.3 | Always |
+| Report a status other than `Success` as an error after the signature, `Issuer`, correlation, and `Destination` checks | A failed check then takes precedence over the peer's status, so an unrelated or tampered error response reports the check it fails. | Core §3.2.2.2, Profiles §4.1.4.3 | Always |
 | Permit omission of `InResponseTo` on an error `Response`. Compare a present value with the pending request ID after XML whitespace collapse for solicited errors, empty or not. Skip correlation for unsolicited errors | A value for another request indicates a different exchange. | Core §3.2.2 | Always |
 | Expose the diagnostic after issuer and recipient checks only if a response signature or detached SimpleSign signature covers it | The text must be attributable to the peer. | Core §3.2.2, Bindings §3.5.5.2, CS-01 §2.4 | Always |
 | For solicited errors, expose the diagnostic only when `InResponseTo` and any requested `RelayState` match. For unsolicited errors, require an absent `InResponseTo` to expose it | The text is then attached only to an error attributable to the current exchange. | Core §3.2.2, Bindings §3.5.3, CS-01 §2.3 | Always |

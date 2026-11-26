@@ -140,8 +140,9 @@ no feature cell:
 - An algorithm that some builds with a crypto provider lack, such as a
   `SigAlg` method of Bindings §3.4.4.1. One row of the requirements outside
   the matrix holds it.
-- A `BaseID` logout principal. Core §3.7.1 lets the requester choose the
-  identifier, and neither role issues or accepts an assertion whose
+- A `BaseID` that the requester chose, as the principal of a
+  `LogoutRequest` or in the requested `Subject` of an `AuthnRequest` (Core
+  §3.4.1, §3.7.1). Neither role issues or accepts an assertion whose
   `Subject` names one.
 
 ### Where a behaviour goes
