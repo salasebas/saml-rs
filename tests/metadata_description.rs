@@ -52,14 +52,19 @@ fn contacts() -> Vec<ContactPerson> {
     let mut security = ContactPerson::new(ContactType::Security);
     security.given_name = Some("Security Response Team".into());
     security.email_addresses = vec!["mailto:security@example.com".into()];
-    vec![
-        technical,
-        ContactPerson::new(ContactType::Support),
-        ContactPerson::new(ContactType::Administrative),
-        ContactPerson::new(ContactType::Billing),
-        ContactPerson::new(ContactType::Other),
-        security,
-    ]
+    let mut contacts = vec![technical];
+    for (contact_type, detail) in [
+        (ContactType::Support, "Help Desk"),
+        (ContactType::Administrative, "Identity Office"),
+        (ContactType::Billing, "Accounts"),
+        (ContactType::Other, "Partners"),
+    ] {
+        let mut contact = ContactPerson::new(contact_type);
+        contact.given_name = Some(detail.into());
+        contacts.push(contact);
+    }
+    contacts.push(security);
+    contacts
 }
 
 fn raw_sp() -> SpMetadataInput {
@@ -257,6 +262,25 @@ fn generation_validates_localized_values_contacts_and_error_uris() -> TestResult
         generate_idp_metadata(&cfg),
         Err(SamlError::Invalid(_))
     ));
+    for detail in 0..6 {
+        let mut contact = ContactPerson::new(ContactType::Support);
+        match detail {
+            0 => contact.company = Some("Example".into()),
+            1 => contact.given_name = Some("Alice".into()),
+            2 => contact.surname = Some("Smith".into()),
+            3 => contact.email_addresses = vec!["mailto:help@example.com".into()],
+            4 => contact.telephone_numbers = vec!["+1 555 0100".into()],
+            _ => {}
+        }
+        let mut cfg = raw_sp();
+        cfg.contacts = vec![contact];
+        let generated = generate_sp_metadata(&cfg);
+        if detail < 5 {
+            generated?;
+        } else {
+            assert!(matches!(generated, Err(SamlError::Invalid(_))));
+        }
+    }
     let mut invalid_email = ContactPerson::new(ContactType::Technical);
     invalid_email.email_addresses = vec!["invalid".into()];
     let config = SpConfig::builder(
