@@ -61,8 +61,11 @@ impl SpMetadata {
     /// Returns [`SamlError::MissingMetadata`] when the entity has no such
     /// `SPSSODescriptor`. Returns [`SamlError::Invalid`] when a signing flag
     /// on a selected descriptor has an invalid `xs:boolean` value or uses the
-    /// SAML metadata namespace. XML parsing, resource limits, and SP-specific
-    /// metadata extraction can also fail.
+    /// SAML metadata namespace, and when an `AssertionConsumerService` of a
+    /// selected descriptor has no `Binding`, no `Location` or an empty one, no
+    /// `index` or one that is not an integer, or an `isDefault` that is not an
+    /// `xs:boolean`. XML parsing, resource limits, and SP-specific metadata
+    /// extraction can also fail.
     pub fn from_xml(xml: &str) -> Result<Self, SamlError> {
         Self::from_xml_with_policy(xml, &crate::XmlPolicy::default())
     }
@@ -80,7 +83,7 @@ impl SpMetadata {
             super::SsoDescriptorRole::ServiceProvider,
             policy,
         )?;
-        Ok(Self::from_roles(inner, &roles))
+        Self::from_roles(inner, &roles)
     }
 
     pub(crate) fn from_aggregate_entity(
@@ -94,10 +97,13 @@ impl SpMetadata {
             super::SsoDescriptorRole::ServiceProvider,
             limits,
         )?;
-        Ok(Self::from_roles(inner, &roles))
+        Self::from_roles(inner, &roles)
     }
 
-    fn from_roles(inner: Metadata, roles: &[SamlElement]) -> Self {
+    fn from_roles(inner: Metadata, roles: &[SamlElement]) -> Result<Self, SamlError> {
+        for role in roles {
+            super::endpoints::check_indexed_endpoints(role, "AssertionConsumerService")?;
+        }
         let assertion_consumer_service_roles = roles
             .iter()
             .map(|role| {
@@ -108,10 +114,10 @@ impl SpMetadata {
                 )
             })
             .collect();
-        Self {
+        Ok(Self {
             inner,
             assertion_consumer_service_roles,
-        }
+        })
     }
 
     /// `WantAssertionsSigned` flag.
@@ -419,17 +425,40 @@ mod tests {
                 "isDefault={is_default}"
             );
         }
+        Ok(())
+    }
 
-        let unrecognized = sp_with_acs(
-            r#"<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/first" index="0" isDefault="yes"/>
-               <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/second" index="1" isDefault="false"/>"#,
-        )?;
+    #[test]
+    fn imported_endpoint_with_a_blank_field_or_an_index_out_of_range_stays_in_its_role(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let second = r#"<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/second" index="1"/>"#;
+        let out_of_range = sp_with_acs(&format!(
+            r#"<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/first" index="65536" isDefault="true"/>{second}"#
+        ))?;
         assert_eq!(
-            unrecognized
+            out_of_range
+                .assertion_consumer_service_endpoint(Binding::Post)
+                .map(|endpoint| (endpoint.location, endpoint.index)),
+            Some(("https://sp.example.com/first".to_string(), None))
+        );
+
+        let blank_location = sp_with_acs(&format!(
+            r#"<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location=" &#x9; " index="0" isDefault="true"/>{second}"#
+        ))?;
+        assert_eq!(
+            blank_location
                 .assertion_consumer_location(Binding::Post)
                 .as_deref(),
-            Some("https://sp.example.com/first")
+            Some("")
         );
+
+        let blank_binding = sp_with_acs(&format!(
+            r#"<AssertionConsumerService Binding=" " Location="https://sp.example.com/first" index="0" isDefault="true"/>{second}"#
+        ))?;
+        assert!(matches!(
+            blank_binding.default_assertion_consumer_service_endpoint(),
+            Err(crate::error::SamlError::Invalid(_))
+        ));
         Ok(())
     }
 }

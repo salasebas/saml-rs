@@ -25,7 +25,7 @@ pub(crate) use profile::{
     OutboundLogoutExpiration, OutboundLogoutRequestExpectation, OutboundLogoutRequestValidation,
     OutboundLogoutValidation, OutboundNameIdQualifiers,
 };
-pub(crate) use schema_value::{xs_boolean, xs_unsigned_short};
+pub(crate) use schema_value::{is_xs_integer, xs_boolean, xs_unsigned_short};
 
 pub(crate) fn decode_utf8(bytes: Vec<u8>) -> Result<String, crate::error::SamlError> {
     String::from_utf8(bytes).map_err(|error| crate::error::xml_err(error.utf8_error()))
