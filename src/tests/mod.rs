@@ -11,6 +11,8 @@ mod artifact_sso;
 mod assertion_conditions;
 mod authentication_context;
 mod authn_request_options;
+#[cfg(crypto)]
+mod authn_request_version;
 mod binding;
 mod browser_namespace_profile;
 mod browser_signing_bindings;

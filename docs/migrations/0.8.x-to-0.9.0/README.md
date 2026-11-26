@@ -110,6 +110,6 @@ Check the topics that affect your integration.
 - [Handle assertions with a second `Subject`](assertion-second-subject.md)
 - [Send AuthnRequests with signed extension content over HTTP-POST](redirect-signed-content.md)
 - [Handle blank NameID strings in service provider requests](service-provider-name-id-strings.md)
-- [Answer AuthnRequests with an unusable binding or unreadable content](authn-request-content-refusals.md)
+- [Answer AuthnRequests with an unusable binding, unreadable content, or a later version](authn-request-content-refusals.md)
 
 [All migration guides](../README.md)

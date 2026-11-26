@@ -13,11 +13,6 @@ pub(super) fn resolve_response_acs(
 ) -> Result<AcsMetadataEndpoint, SamlError> {
     let acs_url = request.and_then(AuthnRequest::acs_url);
     let acs_index = request.and_then(AuthnRequest::acs_index);
-    if acs_url.is_some() && acs_index.is_some() {
-        return Err(SamlError::Invalid(
-            "AuthnRequest must not specify both ACS URL and ACS index".into(),
-        ));
-    }
     let protocol_binding = request.and_then(AuthnRequest::protocol_binding);
     if protocol_binding.is_some_and(|requested| requested != binding) {
         return Err(SamlError::Invalid(

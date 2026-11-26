@@ -837,14 +837,8 @@ fn foreign_extension_name_collisions_are_not_consumed() -> Result<(), Box<dyn st
 }
 
 #[test]
-fn all_parser_roots_require_version_2() -> Result<(), Box<dyn std::error::Error>> {
+fn response_and_logout_request_roots_require_version_2() -> Result<(), Box<dyn std::error::Error>> {
     let cases = [
-        (
-            ParserType::SamlRequest,
-            format!(
-                r#"<p:AuthnRequest xmlns:p="{PROTOCOL_NS}" ID="_id" Version="1.0" IssueInstant="2024-01-01T00:00:00Z"/>"#
-            ),
-        ),
         (
             ParserType::SamlResponse,
             response_xml(PROTOCOL_NS, ASSERTION_NS, "Version=\"1.0\""),

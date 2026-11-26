@@ -223,10 +223,12 @@ fn an_unusable_protocol_binding_is_answered_at_the_default_acs_with_unsupported_
 }
 
 #[test]
-fn an_unreadable_acs_url_or_index_is_answered_at_the_default_acs_with_requester() -> TestResult {
+fn an_unreadable_or_conflicting_acs_choice_is_answered_at_the_default_acs_with_requester(
+) -> TestResult {
     let peers = peers(IdpValidationPolicy::default())?;
     for (url, binding, index) in [
         (SP_SECOND_ACS, None, Some(" 1 0 ")),
+        (SP_SECOND_ACS, None, Some("1")),
         (
             "urn:example:acs",
             Some("urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact"),

@@ -433,36 +433,23 @@ fn a_stale_acs_index_allows_a_correlated_error_at_the_current_default(
 }
 
 #[test]
-fn conflicting_request_acs_selectors_are_not_answered() -> Result<(), Box<dyn std::error::Error>> {
+fn a_response_binding_that_conflicts_with_the_request_acs_index_is_not_sent(
+) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with_default_acs()?;
     let idp = idp_with_sso(IDP_SSO_FIRST, &[])?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-    for (selector, options, expected) in [
-        (
-            format!(
-                " AssertionConsumerServiceURL=\"{DEFAULT_ACS}\" AssertionConsumerServiceIndex=\"0\""
-            ),
-            RespondSso::post(),
-            "AuthnRequest must not specify both ACS URL and ACS index",
-        ),
-        (
-            " AssertionConsumerServiceIndex=\"0\"".to_string(),
-            RespondSso::simple_sign(),
-            "response binding conflicts with AuthnRequest ACS index",
-        ),
-    ] {
-        let xml =
-            authn_request(IDP_SSO_FIRST).replace(" Version=", &format!("{selector} Version="));
-        let request = idp.receive_sso(&sp_descriptor, post_authn_request(&xml), validation())?;
-        match idp.respond_sso(
-            &sp_descriptor,
-            &request,
-            SsoAssertion::new(principal(), SystemTime::now()),
-            options,
-        ) {
-            Err(SamlError::Invalid(message)) => assert_eq!(message, expected),
-            other => return Err(format!("expected Invalid({expected}), got {other:?}").into()),
-        }
+    let xml = authn_request(IDP_SSO_FIRST)
+        .replace(" Version=", " AssertionConsumerServiceIndex=\"0\" Version=");
+    let request = idp.receive_sso(&sp_descriptor, post_authn_request(&xml), validation())?;
+    let expected = "response binding conflicts with AuthnRequest ACS index";
+    match idp.respond_sso(
+        &sp_descriptor,
+        &request,
+        SsoAssertion::new(principal(), SystemTime::now()),
+        RespondSso::simple_sign(),
+    ) {
+        Err(SamlError::Invalid(message)) => assert_eq!(message, expected),
+        other => return Err(format!("expected Invalid({expected}), got {other:?}").into()),
     }
     Ok(())
 }

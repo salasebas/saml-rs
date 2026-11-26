@@ -38,6 +38,7 @@ pub(crate) mod name_id {
 }
 
 pub(crate) mod authn_request {
+    pub(crate) const VERSION: &str = "version";
     pub(crate) const NAME_ID_POLICY: &str = "nameIDPolicy";
     pub(crate) const NAME_ID_POLICY_FORMAT: &str = "nameIDPolicy.format";
     pub(crate) const NAME_ID_POLICY_SP_NAME_QUALIFIER: &str = "nameIDPolicy.spNameQualifier";
@@ -108,6 +109,9 @@ pub fn login_request_fields() -> Vec<ExtractorField> {
             "IsPassive",
             "ProviderName",
         ]),
+        ExtractorField::new(authn_request::VERSION, &["AuthnRequest"])
+            .attrs(&["Version"])
+            .unqualified_attributes(),
         ExtractorField::new(ISSUER, &["AuthnRequest", "Issuer"]),
         ExtractorField::new(
             authn_request::NAME_ID_POLICY,
