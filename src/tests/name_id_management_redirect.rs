@@ -353,6 +353,74 @@ fn service_provider_changes_and_terminates_an_identifier_with_the_identity_provi
 }
 
 #[test]
+fn redirect_messages_carry_no_xml_signature() -> TestResult {
+    let sp = sp()?;
+    let idp = idp()?;
+    let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
+    let change = NameIdChange::NewId("alice-2".into());
+    let from_idp = idp.start_name_id_management_redirect(
+        &sp_peer,
+        &alice(),
+        &change,
+        StartNameIdManagement::new(),
+    )?;
+    let at_sp = request(sp.receive_name_id_management_redirect(
+        &idp_peer,
+        request_input(&from_idp.outbound)?,
+        ReceiveNameIdManagement::new(),
+        validation(),
+    )?)?;
+    let sp_answer = sp.respond_name_id_management_redirect(
+        &idp_peer,
+        &at_sp,
+        &Status::success(),
+        RespondNameIdManagement::new(),
+    )?;
+    let from_sp = sp.start_name_id_management_redirect(
+        &idp_peer,
+        &alice(),
+        &change,
+        StartNameIdManagement::new(),
+    )?;
+    let at_idp = request(idp.receive_name_id_management_redirect(
+        &sp_peer,
+        request_input(&from_sp.outbound)?,
+        ReceiveNameIdManagement::new(),
+        validation(),
+    )?)?;
+    let idp_answer = idp.respond_name_id_management_redirect(
+        &sp_peer,
+        &at_idp,
+        &Status::success(),
+        RespondNameIdManagement::new(),
+    )?;
+    for (query, xml) in [
+        (
+            redirect_query(&from_idp.outbound)?,
+            redirect_message_xml(&from_idp.outbound)?,
+        ),
+        (
+            redirect_query(&sp_answer)?,
+            redirect_message_xml(&sp_answer)?,
+        ),
+        (
+            redirect_query(&from_sp.outbound)?,
+            redirect_message_xml(&from_sp.outbound)?,
+        ),
+        (
+            redirect_query(&idp_answer)?,
+            redirect_message_xml(&idp_answer)?,
+        ),
+    ] {
+        assert!(url::form_urlencoded::parse(query.as_bytes()).any(|(name, _)| name == "Signature"));
+        assert!(!roxmltree::Document::parse(&xml)?
+            .descendants()
+            .any(|node| node.has_tag_name((saml_rs::constants::namespace::DSIG, "Signature"))));
+    }
+    Ok(())
+}
+
+#[test]
 fn a_soap_manage_name_id_request_cannot_be_answered_over_redirect() -> TestResult {
     let idp = IdentityProvider::new(
         IdpConfig::builder(

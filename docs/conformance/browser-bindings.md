@@ -31,7 +31,7 @@ HTTP-POST-SimpleSign messages unsigned and refuses a signed message.
 | --- | --- | --- | --- |
 | `RelayState` with a message or an artifact | Bindings §3.4.3, §3.5.3, §3.6.3.1, CS-01 §2.3 | Supported | Supported |
 | HTTP-Redirect message in the query, with the DEFLATE encoding | Bindings §3.4.4, §3.4.4.1 | Supported | Supported |
-| Refusing HTTP-Redirect for a message with other signed content | Bindings §3.4.4.1 | Not supported | — |
+| Refusing HTTP-Redirect for a message with other signed content | Bindings §3.4.4.1 | Supported | — |
 | Another URL encoding, named by `SAMLEncoding` | Bindings §3.4.4 | Not supported | Not supported |
 | The URL encodings an endpoint supports, in metadata | Bindings §3.4.4 | — | Not supported |
 | HTTP-Redirect signature in `SigAlg` and `Signature` | Bindings §3.4.4.1 | [Partial](#detached-signatures) | [Partial](#detached-signatures) |
@@ -94,7 +94,8 @@ Code: `src/binding/redirect.rs`, `src/binding/deflate.rs`, `src/binding/signing.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Remove a protocol `ds:Signature`, DEFLATE the rest of the XML, base64-encode it without line breaks or other whitespace, and URL-encode it into `SAMLRequest` or `SAMLResponse`. Keep a signature inside the content, such as a signed extension | Mandatory | Bindings §3.4.4.1 | Always |
+| Remove a protocol `ds:Signature`, DEFLATE the rest of the XML, base64-encode it without line breaks or other whitespace, and URL-encode it into `SAMLRequest` or `SAMLResponse` | Mandatory | Bindings §3.4.4.1 | Always |
+| Refuse to send a message whose content holds an XML signature other than the message's own, such as a `StartSso::extension` element with a `ds:Signature` | Recommended | Bindings §3.4.4.1 | Always |
 | URL-encode a `RelayState` into its own `RelayState` parameter | Mandatory | Bindings §3.4.4.1 | Always |
 | When signing, add `SigAlg`, then sign the URL-encoded `SAMLRequest` or `SAMLResponse`, `RelayState` when present, and `SigAlg`, in that order, and add the base64 `Signature` without whitespace | Mandatory | Bindings §3.4.4.1 | Always |
 
@@ -245,10 +246,6 @@ attack.
 
 ## Not supported
 
-- Refusing HTTP-Redirect for a message with other signed content, such as an
-  `AuthnRequest` extension that holds a signed element. Recommended, Bindings
-  §3.4.4.1. `start_sso` writes `StartSso::extension` content unchanged on
-  every binding, so the caller chooses HTTP-POST for such a request.
 - Advertising the supported URL encodings in metadata. Recommended when
   appropriate, Bindings §3.4.4. saml-rs reads only DEFLATE, which every
   HTTP-Redirect endpoint must support.

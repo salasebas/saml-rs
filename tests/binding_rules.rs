@@ -4,8 +4,9 @@
 //! the entity creating a message from sending a RelayState longer than 80
 //! bytes, and require a responder to return the exact RelayState it received.
 //! Bindings §3.4.4.1 requires HTTP-Redirect to remove a protocol XML signature
-//! before DEFLATE and to verify the detached signature over parameters in a
-//! fixed order. CD-04 §2.5 and §2.6 require
+//! before DEFLATE, recommends against encoding a message with other signed
+//! content, and requires verifying the detached signature over parameters in
+//! a fixed order. CD-04 §2.5 and §2.6 require
 //! SimpleSign to sign the raw XML octets, including RelayState when present.
 #![cfg(crypto)]
 
@@ -14,13 +15,15 @@ mod post_validation;
 use post_validation::post_validation;
 use std::time::SystemTime;
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::constants::Binding;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, Credentials, DeliveredArtifact, EntityId, FormField,
-    IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy,
-    NameId, NameIdFormat, PrivateKeyPem, RelayState, ReplayPolicy, RespondSso, SamlError,
-    SamlValidationContext, ServiceProvider, SpConfig, SpConfigBuilder, SpDescriptor,
+    AuthnRequestValidationPolicy, Credentials, DeliveredArtifact, EntityId, ExtensionElement,
+    FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem, RelayState, ReplayPolicy, RespondSso,
+    SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpConfigBuilder, SpDescriptor,
     SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSso, X509Credential,
     MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
@@ -440,6 +443,43 @@ fn typed_redirect_signs_in_binding_order_and_verifies_reordered_parameters(
         received.relay_state().map(RelayState::as_str),
         Some("ordered-state")
     );
+    Ok(())
+}
+
+#[test]
+fn typed_redirect_refuses_an_authn_request_with_signed_content(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let idp = idp_with(IdpValidationPolicy::default())?;
+    let signed = ExtensionElement::from_xml(
+        r#"<app:Ticket xmlns:app="urn:example:app" ID="ticket-1"><sig:Signature xmlns:sig="http://www.w3.org/2000/09/xmldsig#"><sig:SignatureValue>AA==</sig:SignatureValue></sig:Signature></app:Ticket>"#,
+    )?;
+    let named_signature = ExtensionElement::from_xml(
+        r#"<app:Signature xmlns:app="urn:example:app">approved</app:Signature>"#,
+    )?;
+    for validation in [SpValidationPolicy::default(), signing_sp_validation()] {
+        let sp = sp_with(validation)?;
+        let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+        let refused = sp.start_sso(
+            &idp_descriptor,
+            StartSso::redirect().extension(signed.clone()),
+        );
+        assert!(
+            matches!(refused, Err(SamlError::SignedContentOnRedirect)),
+            "{refused:?}"
+        );
+        sp.start_sso(
+            &idp_descriptor,
+            StartSso::redirect().extension(named_signature.clone()),
+        )?;
+        let post = sp.start_sso(&idp_descriptor, StartSso::post().extension(signed.clone()))?;
+        let request = post
+            .outbound
+            .post_form()?
+            .value("SAMLRequest")
+            .ok_or("missing SAMLRequest")?;
+        let xml = String::from_utf8(STANDARD.decode(request)?)?;
+        assert!(xml.contains("<sig:SignatureValue>AA==</sig:SignatureValue>"));
+    }
     Ok(())
 }
 

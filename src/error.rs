@@ -436,6 +436,14 @@ pub enum SamlError {
         /// HTTP-POST-SimpleSign, or HTTP-Artifact.
         binding: Binding,
     },
+    /// HTTP-Redirect does not send this message, because its content holds
+    /// an XML signature other than the message's own, such as an
+    /// `AuthnRequest` extension element with a `ds:Signature`.
+    ///
+    /// Send the message over HTTP-POST, for example with
+    /// [`crate::StartSso::post`], which carries the content unchanged.
+    #[error("HTTP-Redirect does not send a message whose content holds an XML signature")]
+    SignedContentOnRedirect,
     /// `<Audience>` does not include the expected Service Provider entity ID.
     #[error("audience restriction not satisfied: expected {expected}")]
     #[non_exhaustive]

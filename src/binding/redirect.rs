@@ -33,7 +33,8 @@ pub(crate) fn redirect_binding_query(
 /// `RelayState`, to the query of `base_url`, after any existing query and
 /// before any fragment.
 ///
-/// Rejects a direct child `ds:Signature` on the protocol root. Bindings §3.4.4.1.
+/// Rejects a direct child `ds:Signature` on the protocol root, and a
+/// `ds:Signature` deeper in the message content. Bindings §3.4.4.1.
 pub fn build_redirect_url(
     base_url: &str,
     parser_type: ParserType,
@@ -63,8 +64,8 @@ pub(crate) fn append_redirect_query(base_url: &str, query: &str) -> Result<Strin
 
 /// Build the octet string to sign for a signed HTTP-Redirect message.
 ///
-/// Removes a direct child `ds:Signature` before raw DEFLATE. A nested
-/// signature stays. Bindings §3.4.4.1.
+/// Removes a direct child `ds:Signature` before raw DEFLATE, and rejects a
+/// `ds:Signature` deeper in the message content. Bindings §3.4.4.1.
 #[cfg(any(crypto, test))]
 pub(crate) fn build_redirect_octet(
     parser_type: ParserType,
@@ -82,8 +83,11 @@ pub(crate) fn build_redirect_octet(
 }
 
 fn redirect_message_xml(xml: &str, detach_signature: bool) -> Result<Cow<'_, str>, SamlError> {
-    let spans = protocol_signature_spans(xml)?;
-    if spans.is_empty() {
+    let signatures = redirect_signatures(xml)?;
+    if signatures.in_content {
+        return Err(SamlError::SignedContentOnRedirect);
+    }
+    if signatures.protocol.is_empty() {
         return Ok(Cow::Borrowed(xml));
     }
     if !detach_signature {
@@ -92,10 +96,15 @@ fn redirect_message_xml(xml: &str, detach_signature: bool) -> Result<Cow<'_, str
                 .into(),
         ));
     }
-    Ok(Cow::Owned(remove_spans(xml, &spans)))
+    Ok(Cow::Owned(remove_spans(xml, &signatures.protocol)))
 }
 
-fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError> {
+struct RedirectSignatures {
+    protocol: Vec<(usize, usize)>,
+    in_content: bool,
+}
+
+fn redirect_signatures(xml: &str) -> Result<RedirectSignatures, SamlError> {
     let limits = XmlLimits::default();
     limits.check_input_bytes(xml.len())?;
     let mut reader = NsReader::from_str(xml);
@@ -107,6 +116,7 @@ fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError>
     let mut element_count = 0usize;
     let mut open_signature = None;
     let mut spans = Vec::new();
+    let mut in_content = false;
 
     loop {
         let tag = {
@@ -118,19 +128,21 @@ fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError>
             RedirectTag::DocType => {
                 return Err(SamlError::xml("DOCTYPE is not allowed"));
             }
-            RedirectTag::Start { protocol_signature } => {
+            RedirectTag::Start { signature } => {
                 limits.count_element(&mut element_count)?;
-                if depth == 1 && protocol_signature {
+                if signature && depth == 1 {
                     open_signature = Some(element_start(xml, end)?);
                 }
+                in_content |= signature && depth > 1;
                 depth = limits.checked_depth(depth)?;
             }
-            RedirectTag::Empty { protocol_signature } => {
+            RedirectTag::Empty { signature } => {
                 limits.count_element(&mut element_count)?;
-                if depth == 1 && protocol_signature {
+                if signature && depth == 1 {
                     let start = element_start(xml, end)?;
                     spans.push((start, end));
                 }
+                in_content |= signature && depth > 1;
             }
             RedirectTag::End => {
                 if depth == 0 {
@@ -154,17 +166,20 @@ fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError>
             "HTTP-Redirect XML ended before its elements closed",
         ));
     }
-    Ok(spans)
+    Ok(RedirectSignatures {
+        protocol: spans,
+        in_content,
+    })
 }
 
-fn is_protocol_signature(resolved: &ResolveResult<'_>, local_name: &[u8]) -> bool {
+fn is_xml_signature(resolved: &ResolveResult<'_>, local_name: &[u8]) -> bool {
     local_name == b"Signature"
         && matches!(resolved, ResolveResult::Bound(value) if value.into_inner() == namespace::DSIG)
 }
 
 enum RedirectTag {
-    Start { protocol_signature: bool },
-    Empty { protocol_signature: bool },
+    Start { signature: bool },
+    Empty { signature: bool },
     End,
     DocType,
     Eof,
@@ -176,16 +191,10 @@ impl RedirectTag {
         match event {
             Event::DocType(_) => Self::DocType,
             Event::Start(element) => Self::Start {
-                protocol_signature: is_protocol_signature(
-                    resolved,
-                    element.local_name().into_inner().as_bytes(),
-                ),
+                signature: is_xml_signature(resolved, element.local_name().into_inner().as_bytes()),
             },
             Event::Empty(element) => Self::Empty {
-                protocol_signature: is_protocol_signature(
-                    resolved,
-                    element.local_name().into_inner().as_bytes(),
-                ),
+                signature: is_xml_signature(resolved, element.local_name().into_inner().as_bytes()),
             },
             Event::End(_) => Self::End,
             Event::Eof => Self::Eof,
@@ -317,20 +326,16 @@ mod tests {
     }
 
     #[test]
-    fn redirect_removes_only_a_protocol_signature_before_deflate(
+    fn redirect_removes_a_protocol_signature_before_deflate(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let xml = r#"
             <samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
                 xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
                 xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+                <saml:Issuer>https://sp.example.com</saml:Issuer>
                 <ds:Signature>
                     <ds:SignatureValue>protocol-signature</ds:SignatureValue>
                 </ds:Signature>
-                <saml:Assertion>
-                    <ds:Signature>
-                        <ds:SignatureValue>assertion-signature</ds:SignatureValue>
-                    </ds:Signature>
-                </saml:Assertion>
             </samlp:AuthnRequest>
         "#;
         let unsigned = build_redirect_url(
@@ -353,7 +358,7 @@ mod tests {
             MAX_DEFLATE_RAW_DECODE_BYTES,
         )?)?;
         assert!(!inflated.contains("protocol-signature"));
-        assert!(inflated.contains("assertion-signature"));
+        assert!(inflated.contains("<saml:Issuer>https://sp.example.com</saml:Issuer>"));
         assert!(octet.contains("&RelayState=state&SigAlg=sig-alg"));
 
         let with_bom = format!("\u{feff}{xml}");

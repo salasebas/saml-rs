@@ -174,6 +174,12 @@ impl StartSso {
     /// it omits `<Extensions>`. Exclusive canonicalization in the default
     /// HTTP-POST signature omits a namespace declaration if its prefix
     /// appears only in text or an attribute value.
+    ///
+    /// HTTP-Redirect does not carry an element that holds an XML signature,
+    /// a `ds:Signature` at any depth:
+    /// [`ServiceProvider::start_sso`](crate::ServiceProvider::start_sso)
+    /// returns [`SamlError::SignedContentOnRedirect`](crate::SamlError::SignedContentOnRedirect)
+    /// for [`Self::redirect`]. Send such a request with [`Self::post`].
     pub fn extension(mut self, element: ExtensionElement) -> Self {
         self.extensions.push(element);
         self

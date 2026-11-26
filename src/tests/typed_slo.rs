@@ -955,6 +955,62 @@ fn typed_slo_signs_front_channel_responses() -> Result<(), Box<dyn std::error::E
 }
 
 #[test]
+fn typed_slo_redirect_messages_carry_no_xml_signature() -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let from_sp = sp.start_slo(&idp_descriptor, subject()?, StartSlo::redirect())?;
+    let at_idp = idp.receive_slo(
+        &sp_descriptor,
+        logout_request_input(&from_sp.outbound, LogoutBinding::Redirect)?,
+        validation(),
+    )?;
+    let idp_answer = idp.respond_slo(
+        &sp_descriptor,
+        &at_idp,
+        &Status::success(),
+        RespondSlo::redirect(),
+    )?;
+    let from_idp = idp.start_slo(&sp_descriptor, subject()?, StartSlo::redirect())?;
+    let at_sp = sp.receive_slo(
+        &idp_descriptor,
+        logout_request_input(&from_idp.outbound, LogoutBinding::Redirect)?,
+        validation(),
+    )?;
+    let sp_answer = sp.respond_slo(
+        &idp_descriptor,
+        &at_sp,
+        &Status::success(),
+        RespondSlo::redirect(),
+    )?;
+    for (outbound_url, xml) in [
+        (
+            from_sp.outbound.redirect_url()?,
+            outbound_xml(&from_sp.outbound, "SAMLRequest")?,
+        ),
+        (
+            idp_answer.redirect_url()?,
+            outbound_xml(&idp_answer, "SAMLResponse")?,
+        ),
+        (
+            from_idp.outbound.redirect_url()?,
+            outbound_xml(&from_idp.outbound, "SAMLRequest")?,
+        ),
+        (
+            sp_answer.redirect_url()?,
+            outbound_xml(&sp_answer, "SAMLResponse")?,
+        ),
+    ] {
+        assert!(Url::parse(outbound_url)?
+            .query_pairs()
+            .any(|(name, _)| name == "Signature"));
+        assert!(!roxmltree::Document::parse(&xml)?
+            .descendants()
+            .any(|node| node.has_tag_name((saml_rs::constants::namespace::DSIG, "Signature"))));
+    }
+    Ok(())
+}
+
+#[test]
 fn typed_slo_rejects_peer_without_requested_logout_binding(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::new(sp_config()?);
