@@ -89,8 +89,8 @@ Conformance §3.5 obligates SAML authorities and requesters, for profiles on the
 
 | Obligation | Actor | Disposition |
 | --- | --- | --- |
-| §3.6 Metadata Structures: make metadata available to a peer that may depend on it, and refresh expired or invalid cached peer metadata when it is available and the policy, operation, and exchange permit its use | Each mode that elects the option | Not implemented, off. E25. The caller owns refresh. [Metadata and replay](metadata-and-replay.md) |
-| §3.7 Metadata Interoperation: the well-known location publication and resolution mechanism | Each mode that elects the option | Not implemented, off. E25 |
+| §3.6 Metadata Structures: make metadata available to a peer that may depend on it, and refresh expired or invalid cached peer metadata when it is available and the policy, operation, and exchange permit its use | Each mode that elects the option | Not elected, E25, because no deployment has asked for it. The crate generates and imports metadata documents but does not publish, fetch, or refresh them. The caller owns refresh. [Metadata and replay](metadata-and-replay.md) |
+| §3.7 Metadata Interoperation: the well-known location publication and resolution mechanism | Each mode that elects the option | Not elected, E25, because no deployment has asked for it. Well-known location publication and resolution are not implemented |
 
 ## XML Signature and XML Encryption algorithms
 

@@ -12,18 +12,21 @@ The caller passes `MetadataTrustPolicy` to the descriptor import. The import rea
 | --- | --- | --- | --- |
 | Count the members of a metadata group as its direct `md:EntityDescriptor` children and those of its direct `md:EntitiesDescriptor` groups. `Extensions` content adds none | Mandatory | Metadata §2.3.1, `EntitiesDescriptorType` | Always |
 | Import a document with exactly one entity through the single-entity constructors | Library policy: those constructors require unambiguous input without searching an aggregate. | Metadata §2.3.1 | Use `MetadataAggregate` for several members |
+| Require the expected `EntityId` to equal the whitespace-collapsed `entityID` character for character, with no URI normalization or case folding | Library policy: federations register entity identifiers as opaque strings, so a normalized match could bind the caller to another registered entity. | Metadata §2.3.2, `entityIDType` | Always |
 | Import metadata without a signature | Optional | Metadata §3 | `MetadataTrustPolicy::Unverified` |
 | Leave a signature that is present unverified, and report no signed metadata | Library policy: the caller selected `Unverified` after authenticating the document through another channel. | Metadata §4.3.3.2 | `MetadataTrustPolicy::Unverified` |
 | Have some means to establish trust in metadata before relying on it. The caller supplies it as `MetadataTrustPolicy` | Recommended | Metadata §4 | `MetadataTrustPolicy` |
 | Verify the root signature against caller-pinned certificates, and reject unsigned metadata or a signature that no pinned certificate verifies | Optional | Metadata §4.3.3.2 | `MetadataTrustPolicy::RequireSignature` |
 | Accept an otherwise valid signature without `ds:KeyInfo` | Optional | Core §5.4.6, Metadata §3.1.6, E91 | Always |
-| Verify metadata signatures with caller-pinned certificates. For certificate-based message signatures, verify with the peer role's signing keys. An embedded certificate neither selects nor restricts the key, and a certificate in a `KeyDescriptor` is no trust anchor | Library policy: reason not recorded. | Metadata §3.1.6 (E91), E69 | `MetadataTrustPolicy::RequireSignature` for metadata |
+| Verify a metadata signature only with caller-pinned certificates. A certificate in the document's `ds:KeyInfo` or `KeyDescriptor` is no trust anchor for it | Library policy: a key that the document publishes proves nothing about who published it, so the trust anchor comes from outside the document. | Metadata §3.1.6 (E91), E69 | `MetadataTrustPolicy::RequireSignature` |
+| Verify a certificate-based message signature with the signing keys of the peer's role. A certificate embedded in the message neither selects nor restricts the key | Library policy: the sender chooses what the message embeds, so only keys from the peer's metadata authenticate it. | Metadata §2.4.1.1, E69 | Always |
 | A signed metadata element has an enveloped signature and an `ID`. Its single `ds:Reference` names that `ID` and covers the element and its children | Mandatory | Metadata §3.1.1, §3.1.2 | `MetadataTrustPolicy::RequireSignature` |
 | Import signed metadata only when its single `ds:Signature` is a direct child of the document root and covers that root. An element named `Signature` or `Object` in another namespace is not an XML signature element | Library policy: the import verifies only the root signature against the pinned certificates, so a member signature would otherwise be accepted without being verified. | Metadata §3.1.2 | `MetadataTrustPolicy::RequireSignature` |
 | Reject a transform other than enveloped signature or exclusive canonicalization, with or without comments | Optional | Metadata §3.1.4 | `MetadataTrustPolicy::RequireSignatureAllowingInclusiveCanonicalization` also accepts inclusive canonicalization |
 | Reject a `ds:Object` in a metadata signature | Recommended | Metadata §3.1.5 (E91) | All `RequireSignature` variants. `Unverified` skips the check |
 | Reject an MD5 or RIPEMD-160 signature or digest algorithm and an RSA signing key under 2048 bits. See [weak algorithms and keys](xml-security-algorithms.md#weak-algorithms-and-keys) | Library policy: the certificates a verified document publishes are then trusted for its messages, so the trust root must not use weak algorithms. | Metadata §3.1.1 (E81) | `MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms` |
-| Reject a `ds:Object` in a message signature that authenticates the accepted message | Recommended | Core §5.4.5 (E91) | `XmlSignatureProfile::AllowWeakAlgorithms` |
+
+The `ds:Object` rule for message signatures is in [reference and coverage processing](xml-security-algorithms.md#reference-and-coverage-processing).
 
 ### Federation aggregate import
 
@@ -38,6 +41,7 @@ their enclosing groups, which can publish validity bounds and entity attributes.
 | Refuse a lookup with no match or several members with the requested ID | Library policy: selecting a different member or one of several matches can bind the caller to the wrong keys and endpoints. | Metadata §2.2.1, §2.3.1 | Always |
 | Under a signature-requiring policy, require the signature to cover the aggregate root and reuse that verification for lookups | Library policy: a member signature cannot authenticate its enclosing groups or sibling members. | Metadata §3.1.2 | `MetadataTrustPolicy::Unverified` when the caller already trusts the entire document |
 | Require explicit XML resource limits when loading an aggregate | Library policy: feeds vary in size and callers choose their parsing budget. | — | `XmlLimits` |
+| Require an `md:EntitiesDescriptor` root when loading an aggregate | Library policy: the aggregate looks up members of a group, and a document whose root is one `EntityDescriptor` has the single-entity import. | Metadata §2.3.1 | `IdpDescriptor::from_metadata_xml`, `SpDescriptor::from_metadata_xml` |
 
 ## Reading peer metadata
 
@@ -48,14 +52,14 @@ The peer descriptors read the role the peer acts in. `Metadata::parse` has no ro
 | Read the published `entityID` with XML Schema whitespace collapse during typed peer import. | Mandatory | Metadata §2.3.2, `entityIDType`, [XML Schema 1.0 Part 2 §4.3.6](https://www.w3.org/TR/xmlschema-2/#rf-whiteSpace) | Always |
 | Read keys, signing flags, `NameIDFormat`, endpoints, and role-level `validUntil` only from role descriptors in the metadata namespace that list `urn:oasis:names:tc:SAML:2.0:protocol`. Refuse an entity with none | Library policy: a role published for another protocol must not supply keys, flags, or endpoints for SAML 2.0 messages. | Metadata §2.4.1 | Always |
 | Read several such roles of one kind together | Library policy: Metadata §2.3.2 leaves the choice among role descriptors that share a protocol undefined. | Metadata §2.3.2 | Always |
-| Read `AuthnRequestsSigned` as true when any SAML 2.0 `SPSSODescriptor` sets it | Library policy: reason not recorded. | Metadata §2.4.4 | Always |
+| Read `AuthnRequestsSigned` as true when any SAML 2.0 `SPSSODescriptor` sets it. The identity provider then [refuses an unsigned request](web-browser-sso-acceptance.md#identity-provider) | Library policy: E7 makes the identity provider refuse an unsigned request from a service provider whose metadata sets the flag, and the request does not name a role. | Metadata §2.3.2, §2.4.4, E7 | Always |
 | Read `WantAssertionsSigned` as true when any selected `SPSSODescriptor` sets it | Library policy: an IdP serving these roles together honors each role's request for signed assertions. | Metadata §2.3.2, §2.4.4 | Always |
 | Read `WantAuthnRequestsSigned` from the first SAML 2.0 `IDPSSODescriptor` that specifies it | Library policy: reason not recorded. | Metadata §2.4.3 | Always |
 | Read the keys of a peer from the `KeyDescriptor` elements of the role it acts in. Verify its signatures and encrypt to it with that role's certificates | Mandatory | Metadata §2.4.1 | Always |
 | Reject a message signed with a key that only the peer's other role publishes | Library policy: no OASIS receiver rule names that case. | Metadata §2.4.1 | Always |
 | Verify with the certificates of a `KeyDescriptor` whose `use` is `signing` or absent, and encrypt with those whose `use` is `encryption` or absent | Mandatory | Metadata §2.4.1.1, E62 | Always |
 | Read a certificate only from a `ds:X509Certificate` in a `ds:X509Data` of the `ds:KeyInfo` of a `KeyDescriptor`, each in its own namespace. An element of the same local name in another namespace holds no key | Mandatory | Metadata §2.4.1.1, `KeyDescriptorType`, XML Signature §4.4, §4.4.4 | Always |
-| Ignore a `KeyDescriptor` whose `use` is neither value | Library policy: reason not recorded. | Metadata §2.4.1.1 | Always |
+| Ignore a `KeyDescriptor` whose `use` is neither value | Library policy: `KeyTypes` defines no other purpose, so such a key authorizes neither use, and the rest of the role stays usable. | Metadata §2.4.1.1, `KeyTypes` | Always |
 | Try every certificate published for the same use when verifying | Recommended | E68 | Always |
 | Read `NameIDFormat` only from a child of a selected role descriptor in the metadata namespace, with XML Schema whitespace collapse. A child with the same local name in another namespace is not a format | Mandatory | Metadata §2.4.2, `SSODescriptorType`, XML Schema 1.0 Part 2 §4.3.6 | Always |
 | Read an endpoint only from a child of a selected role descriptor in the metadata namespace. A child with the same local name in another namespace is not an endpoint | Mandatory | Metadata §2.4.2, §2.4.3, §2.4.4, `SSODescriptorType`, `IDPSSODescriptorType`, `SPSSODescriptorType`, E37 | Always |
@@ -108,20 +112,23 @@ The SP and IdP build metadata with `generate_sp_metadata` and
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Write role descriptor children in schema order: `Extensions` (IdP scopes), `KeyDescriptor`, `ArtifactResolutionService` (IdP only), `SingleLogoutService`, `ManageNameIDService`, `NameIDFormat`, then `SingleSignOnService` or `AssertionConsumerService` | Mandatory | Metadata §2.4.1 to §2.4.4 | Always |
-| Keep the configured order of the endpoints in each group | Library policy: reason not recorded. | — | Always |
+| Keep the configured order of the endpoints in each group | Library policy: a peer takes the first suitable endpoint and the first indexed default (Metadata §2.2.3, E37), so the caller's order is its preference. | Metadata §2.2.3, E37 | Always |
 | Write entity-level `Organization`, then `ContactPerson`, after the role descriptors | Mandatory | Metadata §2.3.2 | `organization`, `contact`, `contacts` on `SpConfigBuilder` and `IdpConfigBuilder` |
 | Write at least one name, display name, and URL, each with an `xml:lang` that matches the XML Schema 1.0 [language pattern](https://www.w3.org/TR/xmlschema-2/#language), in an `Organization`. Require an absolute `OrganizationURL` and `errorURL` | Mandatory | Metadata §2.2.4, §2.2.5, §2.3.2.1, Core §1.3.2 | Always |
 | Write a `ContactPerson` with one of the five `contactType` values and only `mailto:` email addresses | Mandatory | Metadata §2.3.2.2 | Always |
 | Publish the [REFEDS security contact](https://wiki.refeds.org/spaces/STAN/pages/44957728/Security%2BContact%2BMetadata%2BExtension%2BSchema) with `ContactType::Security` | Optional | — | `ContactType::Security` |
 | Write `errorURL` on the SSO role descriptor | Optional | Metadata §2.4.1 | `error_url` on `SpConfigBuilder` and `IdpConfigBuilder` |
 | Write each `NameIDFormat` as an absolute URI reference | Mandatory | Metadata §2.4.2, Core §1.3.2 | Always |
-| Write an `emailAddress` `NameIDFormat` when a service provider configures none | Library policy: reason not recorded. | Metadata §2.4.2 | `name_id_format`, `name_id_formats` |
+| Write an `emailAddress` `NameIDFormat` when a service provider configures none | Library policy: the typed service provider requests the first format its metadata lists, so the published format matches the one it requests. | Metadata §2.4.2 | `name_id_format`, `name_id_formats` |
 | Write at least one `SingleSignOnService` in an `IDPSSODescriptor` and one `AssertionConsumerService` in an `SPSSODescriptor` | Mandatory | `IDPSSODescriptorType`, `SPSSODescriptorType`, Metadata §2.4.3, §2.4.4 | Always |
 | Write an absolute URI reference as each endpoint's `Location` | Mandatory | Metadata §2.2.2, Core §1.3.2 | Always |
 | Write a unique `index` on each `AssertionConsumerService` | Mandatory | Metadata §2.2.3 | Always |
+| Give an `AssertionConsumerService` without an explicit index its position as `index`, or the smallest unused value when an explicit index holds that position | Library policy: Metadata §2.2.3 leaves the values open, and positions keep the numbers that peers stored until the caller sets an index. | Metadata §2.2.3 | `Endpoint::index` |
 | Write a unique `index` on each `ArtifactResolutionService` in an `IDPSSODescriptor` | Mandatory | Metadata §2.2.3 | Always |
 | Write `isDefault` only on indexed endpoints. The generator supports the flag on `AssertionConsumerService` | Mandatory | Metadata §2.2.2, §2.2.3 | `Endpoint::is_default` |
-| Write `validUntil`, `cacheDuration`, or both on the root `EntityDescriptor`. `validUntil` is UTC, truncated to whole seconds | Mandatory | Metadata §2.3.2 | `MetadataLifetime` |
+| Write `validUntil`, `cacheDuration`, or both on the root `EntityDescriptor` | Mandatory | Metadata §2.3.2 | `MetadataLifetime` |
+| Write lifetime attributes only on the root element | Recommended | Metadata §2.3.2 | Always |
+| Write `validUntil` in UTC truncated to whole seconds, and refuse one outside the years 0001 to 9999 | Library policy: truncation never extends the validity the caller chose, and the import reads only four-digit years. | Metadata §2.3.2, XML Schema 1.0 Part 2 §3.2.7 | `MetadataLifetime` |
 | Write `cacheDuration="PT86400S"` when no lifetime is configured | Library policy: a daily refresh target without a fixed expiration for metadata generated once at config build. | Metadata §2.3.2, E94 | `metadata_lifetime` on `SpConfigBuilder` and `IdpConfigBuilder` |
 | Publish several signing `KeyDescriptor` elements | Optional | Metadata §2.4.1, E68 | `Credentials::with_additional_signing_certificate` |
 | Publish several encryption `KeyDescriptor` elements | Optional | Metadata §2.4.1, E68 | `Credentials::with_decryption_credential` |
@@ -147,18 +154,26 @@ application's.
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Read the `saml:Attribute` children of every `mdattr:EntityAttributes` in the `Extensions` of the `EntityDescriptor` and of each enclosing `EntitiesDescriptor`, outermost group first, as attributes of the entity, from the document `RequireSignature` verified. Import adds no rejection | Optional | MDAttr §2.2, §2.3 | `Metadata::entity_attributes`, `SpDescriptor::entity_attributes`, `IdpDescriptor::entity_attributes` |
-| Ignore `EntityAttributes` in a role descriptor's `Extensions` or in a foreign element | Library policy: MDAttr §2.3 gives it no meaning there. | MDAttr §2.3 | Always |
-| Write at most one `EntityAttributes` in one `Extensions`, with `saml:Attribute` children only | Mandatory | MDAttr §2.3 | Always |
-| Publish entity attributes as one `Extensions` with one `mdattr:EntityAttributes`, the first child of `EntityDescriptor`. Values have no `xsi:type`, and a set `FriendlyName` is written | Optional | MDAttr §2.3, `EntityDescriptorType` | `SpMetadataInput::entity_attributes`, `IdpMetadataInput::entity_attributes`, the builders' `entity_attribute` and `entity_attributes` |
+| Ignore `EntityAttributes` in a role descriptor's `Extensions` or nested in another extension element | Library policy: MDAttr §2.3 leaves its meaning undefined outside the `Extensions` of an entity or group. | MDAttr §2.3 | Always |
+| Write at most one `EntityAttributes` in one `Extensions` | Mandatory | MDAttr §2.3 | Always |
+| Publish entity attributes as `saml:Attribute` children of one `mdattr:EntityAttributes` in the entity's `Extensions`. Values have no `xsi:type`, and a set `FriendlyName` is written | Optional | MDAttr §2.3 | `SpMetadataInput::entity_attributes`, `IdpMetadataInput::entity_attributes`, the builders' `entity_attribute` and `entity_attributes` |
+| Write that `Extensions` after any `ds:Signature` and before the role descriptors | Mandatory | Metadata §2.3.2, `EntityDescriptorType` | Always |
 | Write them in the entity's `Extensions`, not in the SP role's `Extensions` that saml2int SDP-SP39 uses | Optional | MDAttr §2.3, Subject Identifier §3.5.1 | Always |
 | Reject a generated `NameFormat` that is not an absolute URI reference, a `basic` name that is not an XML name, a `uri` name that is not an absolute URI reference, a `Name`, `FriendlyName`, or nonempty value with no non-whitespace character, or text XML cannot carry | Mandatory | Core §1.3.1, §1.3.2, §8.2.2, §8.2.3 | Always |
 | Match a well-known entity attribute by its `Name` with the URI `NameFormat`, no `NameFormat`, or `unspecified`, and ignore `FriendlyName` | Library policy: Core §2.7.3.1 gives an absent `NameFormat` the unspecified meaning, and the Shibboleth `EntityAttributes` predicate matches such an attribute. | RFC 8409 §§3.1, 4.1, Identity Assurance §3.3, Subject Identifier §3.5.1 | Always |
-| Return entity category and category support values of every matching attribute in order, compared as opaque strings, including those an enclosing group binds | Optional | RFC 8409 §§3.1–3.2, 4.1–4.2, MDAttr §2.3 | `EntityAttributes::entity_categories`, `EntityAttributes::entity_category_support` |
+| Return entity category and category support values in order | Optional | RFC 8409 §3.1, §4.1 | `EntityAttributes::entity_categories`, `EntityAttributes::entity_category_support` |
+| Combine the values of every matching attribute into one list | Recommended | RFC 8409 §3.1, §4.1 | Always |
+| Compare the values as opaque strings, with no order between versions | Mandatory | RFC 8409 §3.2, §4.2 | Always |
+| Include the values that an enclosing `EntitiesDescriptor` binds | Library policy: RFC 8409 §3.1 defines the attribute only in the entity's own `Extensions`, and MDAttr §2.3 binds a group's attributes to each member. | RFC 8409 §3.1, MDAttr §2.3 | Always |
 | Return assurance certification framework URIs in order, such as REFEDS Sirtfi's `https://refeds.org/sirtfi` | Optional | Identity Assurance §§3.2–3.5 | `EntityAttributes::assurance_certifications` |
 | Publish `subject-id:req` with exactly one value: `subject-id`, `pairwise-id`, `none`, or `any`, with the URI `NameFormat` and no `xsi:type` | Mandatory | Subject Identifier §3.5.1, §4.2 | `Attribute::from(SubjectIdRequirement)` |
 | Reject a read `subject-id:req` without exactly one value, with a value outside the four, or repeated with a different requirement. Import does not reject it | Library policy: the profile rules these out, and one requirement cannot be chosen from them. | Subject Identifier §3.5.1 | `EntityAttributes::subject_id_requirement` |
 
-- Signed `saml:Assertion` children of `EntityAttributes` are neither read nor written. Mandatory for a publisher that includes one, MDAttr §2.4.
+Not implemented:
+
+- Read or write `saml:Assertion` children of `EntityAttributes`. Import ignores them. A relying party that reads one must process it by the Core rules, MDAttr §2.3.
+- An assertion published in an entity's `EntityAttributes` must carry its own signature, not only the metadata's, MDAttr §2.4. Mandatory for the publisher.
+- A group's `EntityAttributes` must hold no assertion, MDAttr §2.3. Mandatory for the publisher.
 
 ## IdP scope declarations
 
@@ -169,9 +184,10 @@ subject identifiers it supports. The deployment supplies that list.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Read direct `shibmd:Scope` declarations in the entity's `Extensions` and in the selected SAML 2.0 IdP roles' `Extensions` | Mandatory capability for relying parties that consume metadata under the Subject Identifier Profile. Recommended by saml2int. | Subject Identifier §3.5.2, §4.2, saml2int SDP-SP17 | `IdpMetadata::scopes`, `IdpDescriptor::scopes` |
+| Read direct `shibmd:Scope` declarations in the entity's `Extensions` and in the selected SAML 2.0 IdP roles' `Extensions`, so a relying party can accept scoped values by their authorized scopes | Mandatory | Subject Identifier §3.5.2, §4.2 | `IdpMetadata::scopes`, `IdpDescriptor::scopes` |
 | Preserve the scope text and the `regexp` flag. Treat an omitted flag as false and report malformed declarations when scopes are read | Mandatory | Subject Identifier §3.5.2.1 | Always |
-| Support publishing scopes in the IdP role's `Extensions`. Write `regexp` explicitly on every declaration | Mandatory capability, recommended explicit flag | Subject Identifier §3.5.2, §3.5.2.2, §4.1, `RoleDescriptorType` | `IdpConfigBuilder::scopes`, `IdpMetadataInput::scopes` |
+| Support publishing scopes in the IdP role's `Extensions` | Mandatory | Subject Identifier §3.5.2, §4.1, `RoleDescriptorType` | `IdpConfigBuilder::scopes`, `IdpMetadataInput::scopes` |
+| Write `regexp` explicitly on every declaration, as metadata that is signed needs | Recommended | Subject Identifier §3.5.2.2 | Always |
 | Reject uppercase ASCII letters in literal scopes at publication | Library policy: a case-sensitive literal has to match the lowercase scope the typed IdP issues. | Subject Identifier §3.3.1 and §3.5.2 | Always |
 | Verify a pinned root signature for scope authorization under a certificate the SP pins as a trusted third-party registration authority | Library policy: distinguish the authority's signature from a generic metadata publisher's signature. | Subject Identifier §3.5.2, saml2int SDP-SP17, Metadata §3.1.1–§3.1.6 (E91) | `MetadataTrustPolicy::RequireRegistrationAuthoritySignature` |
 
@@ -223,11 +239,13 @@ SSO `Response` `ID`. The name identifier management records link here.
 | --- | --- | --- | --- |
 | Return a selected endpoint as an `EndpointUrl`. A non-HTTP(S) URL is an error from the accessor, and import accepts it | Library policy: the typed endpoint contract is absolute HTTP(S), and Metadata §2.2.2 and §2.2.3 use `anyURI` without that restriction. | Metadata §2.2.2, §2.2.3 | Always |
 | For `single_logout_response_location`, use a nonempty `ResponseLocation` on the selected endpoint, falling back to `Location` | Optional | Metadata §2.2.2, E41 | Always |
-| Publish an `ArtifactResolutionService` with an `EndpointUrl` and the SOAP binding | Library policy: reason not recorded. | Metadata §2.2.2 | `IdpConfigBuilder::artifact_resolution_service` |
+| Publish an `ArtifactResolutionService` with an `EndpointUrl` and the SOAP binding | Library policy: artifact resolution uses a synchronous binding, and SOAP over HTTP is the one the crate implements for it. | Metadata §2.2.2, Bindings §3.6 | `IdpConfigBuilder::artifact_resolution_service` |
 
 ## Not implemented
 
 - Sign at least the metadata root in the absence of authenticated delivery. Recommended, Metadata §3.
-- For Metadata §4 resolution, publishers must provide document integrity and consumers must validate any XML signature present. Mandatory, Metadata §4.3.3, §4.3.3.2. Server-authenticated transport is recommended, Metadata §4, §4.3.3.3.
+- For Metadata §4 resolution, provide the integrity of a published document. Mandatory for the publisher, Metadata §4.3.3.
+- For Metadata §4 resolution, validate an XML signature present on a resolved document. Mandatory for the consumer, Metadata §4.3.3.2.
+- Protect the retrieval of a resolved document with server-authenticated TLS. Recommended, Metadata §4, §4.3.3.3.
 - Base caching of resolved metadata on `cacheDuration`. Mandatory for a consumer that caches, E94.
 - Check that an `entityID` is unique across a deployment. Mandatory for the publisher, Metadata §2.2.1.
