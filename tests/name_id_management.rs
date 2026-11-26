@@ -1075,6 +1075,38 @@ fn a_request_without_one_identifier_and_one_change_is_answered_with_requester() 
         idp.receive_name_id_management(&sp, &extensions_first, authenticated(), validation())?;
     assert_refused_as_malformed(received, "Extensions before Issuer")?;
 
+    let weak = SoapChannel::new(
+        PartyAuthentication::Unattested,
+        MessageIntegrity::Protected,
+        MessageConfidentiality::Protected,
+    );
+    let received = idp.receive_name_id_management(&sp, &sp_request(&name_id)?, weak, validation());
+    assert!(
+        matches!(received, Err(SamlError::SoapChannelProtection)),
+        "{received:?}"
+    );
+    let from_other = sp_request_with(
+        &attributes,
+        &format!("<saml:Issuer>{OTHER_ENTITY_ID}</saml:Issuer>"),
+        &name_id,
+    )?;
+    let received = idp.receive_name_id_management(&sp, &from_other, authenticated(), validation());
+    assert!(
+        matches!(received, Err(SamlError::IssuerMismatch { .. })),
+        "{received:?}"
+    );
+    let misaddressed = sp_request_with(
+        r#"Version="2.0" Destination="https://idp.example.com/elsewhere""#,
+        &issuer,
+        &name_id,
+    )?;
+    let received =
+        idp.receive_name_id_management(&sp, &misaddressed, authenticated(), validation());
+    assert!(
+        matches!(received, Err(SamlError::DestinationMismatch { .. })),
+        "{received:?}"
+    );
+
     let in_order = sp_request(&format!("{EXTENSIONS}{name_id}<samlp:Terminate/>"))?;
     let request = received_request(idp.receive_name_id_management(
         &sp,

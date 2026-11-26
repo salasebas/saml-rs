@@ -125,8 +125,10 @@ impl ServiceProvider {
     /// `RequestVersionTooHigh` to `VersionMismatch`. Only a request whose
     /// signature verifies, from the identity provider, and at this service
     /// provider's endpoint is refused this way: any other request returns an
-    /// error. A request inside the age window is checked for replay before it
-    /// is refused, and a configured
+    /// error. Version, content, and age refusals come before replay detection,
+    /// so a repeated one is refused again. A decryption refusal comes after the
+    /// request `ID` is stored, so a repeated one returns
+    /// [`SamlError::ReplayDetected`]. A configured
     /// [`SchemaValidator`](crate::SchemaValidator) that rejects the request
     /// returns its error first. The action goes to the identity provider's
     /// `ManageNameIDService` that

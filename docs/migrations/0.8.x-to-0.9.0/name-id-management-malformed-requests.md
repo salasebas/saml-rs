@@ -14,9 +14,10 @@ The refusal carries a `ManageNameIDResponse` with a `Requester` status, as
 Profiles §4.5.3.2 requires for an error. `RefusedNameIdManagement::content_error`
 returns the error that the methods returned before.
 
-To upgrade, send `refused.response()` as you do for the other refusals. If
-you match `refused.reason()` exhaustively, add the `MalformedRequest` arm; the
-enum is `#[non_exhaustive]`, so a wildcard arm already covers it.
+To upgrade, send `refused.response()` as you do for the other refusals.
+`NameIdManagementRefusal` is `#[non_exhaustive]`, so a `match` on
+`refused.reason()` already has a wildcard arm. Add a `MalformedRequest` arm
+if you handle that reason apart from the others.
 
 These requests still return an error:
 
@@ -24,7 +25,6 @@ These requests still return an error:
   endpoint.
 - A request that a configured `SchemaValidator` rejects. The validator runs
   before these checks.
-- A repeated request `ID` that the replay cache holds. Over SOAP, a malformed
-  request is refused before replay detection, so a repeated one is refused
-  again. Over HTTP-Redirect, a request inside the age window is checked for
-  replay before it is refused.
+- A repeated request `ID` that the replay cache holds. A malformed request is
+  refused before replay detection on both bindings, so a repeated one is
+  refused again.

@@ -187,6 +187,16 @@ fn soap_manage_name_id_request_verifies_the_sp_signature() -> TestResult {
         ),
         "{result:?}"
     );
+    let result = idp.receive_name_id_management(
+        &stale_sp,
+        misplaced.envelope(),
+        channel,
+        SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::NoCache),
+    );
+    assert!(
+        matches!(result, Err(SamlError::SignatureVerification { .. })),
+        "{result:?}"
+    );
     let request = saml_rs::SoapRequest::try_new(destination, &sign(&xml)?)?;
     let mut cache = InMemoryReplayCache::with_clock(|| SystemTime::UNIX_EPOCH);
     fn validation(cache: &mut InMemoryReplayCache) -> SamlValidationContext<'_> {
