@@ -204,7 +204,7 @@ difference, these rows also cover the `Response` that `respond_sso_artifact`,
 | Match `InResponseTo`, on the `Response` and on the bearer `SubjectConfirmationData`, to the `AuthnRequest` `ID` | Mandatory | Core §3.2.2, Profiles §4.1.4.2, E26 | Always |
 | Reject a response to a request whose `ID` is not an `xs:NCName`, because `InResponseTo` cannot carry it | Mandatory | Core §1.3.4, `StatusResponseType`, `SubjectConfirmationDataType` | Always |
 | Omit `InResponseTo` from an unsolicited `Response`, including an error for a request whose `ID` cannot be determined | Mandatory | Core §3.2.2, Profiles §4.1.5 | Always |
-| Send a `RelayState` the identity provider chooses, when the request carried none or the response is unsolicited | Optional | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | `RespondSso::relay_state` |
+| Send a `RelayState` the identity provider chooses when the request carried none, a refused request included, or when the response is unsolicited | Optional | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | `RespondSso::relay_state` |
 
 #### Bearer assertion
 
@@ -375,7 +375,7 @@ shows a local error page when it cannot resolve the requested endpoint.
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Write `Issuer` on every `Response`, also on an error `Response` and on an unsigned one without an encrypted assertion | Reason not recorded. | Core §3.2.2, Profiles §4.1.4.2, E17 | Always |
+| Write `Issuer` on every `Response`, also on an error `Response` and on an unsigned one without an encrypted assertion | [OpenSAML C++ 3.3.1](https://codeberg.org/Shibboleth/cpp-opensaml/src/tag/3.3.1/saml/saml2/binding/impl/SAML2MessageDecoder.cpp#L141-L160) and [SimpleSAMLphp 2.5.5](https://github.com/simplesamlphp/simplesamlphp/blob/v2.5.5/modules/saml/src/Controller/ServiceProvider.php#L288-L300) find the identity provider by the `Response` `Issuer`, or else by a plaintext assertion's, so neither can attribute an error `Response` without one. | Core §3.2.2, Profiles §4.1.4.2, E17 | Always |
 | Write `Destination` as the assertion consumer service URL also on an HTTP-POST `Response` whose only signatures are on its assertions | Core §3.2.2 makes a recipient discard a response whose present `Destination` names another location, which keeps a forwarded response from reaching an unintended recipient. | Core §3.2.2, Bindings §3.5.5.2 | Always |
 | Omit `InResponseTo` from the bearer `SubjectConfirmationData` of an unsolicited response | Profiles §4.1.4.3 has the service provider verify that an unsolicited response carries none, so a value would make it refuse the response. | Profiles §4.1.5 | Always |
 | Write the assertion `IssueInstant` as `Conditions` `NotBefore`, and end `Conditions` and the bearer `SubjectConfirmationData` at `IssueInstant` plus the issuance lifetime, 300 seconds by default | The window starts when the assertion exists and bounds how long a bearer assertion can be delivered and replayed, and five minutes leaves time for the browser to deliver it. | Core §2.5.1.2, Profiles §4.1.4.2, E26 | `IdpConfigBuilder::issuance_lifetime` |
@@ -385,7 +385,6 @@ shows a local error page when it cannot resolve the requested endpoint.
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
 | Reject `RespondSso::relay_state` on a request that carried a `RelayState`, even with the same value | The response returns the received value, so a second value from the caller is either the same or a value the response must not send. | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | Always |
-| In `respond_sso_refusal`, reject every explicit `RespondSso::relay_state`, also when the refused request carried none | Reason not recorded. | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | Always |
 
 [Browser bindings](browser-bindings.md#returning-relaystate-policies) keeps
 the policy that returns a received `RelayState` over 80 bytes unchanged, and
@@ -402,7 +401,7 @@ Code: `src/idp.rs`, `src/model/subject.rs`
 | Reject an authentication time later than the moment the response is issued, compared before rounding to the second | An assertion cannot report an authentication after it was issued. | Core §2.7.2 | `SsoAssertion::new` |
 | Reject an `AuthnInstant` before year 1 | The formatter writes a four-digit non-negative year. | Core §1.3.3 | `SsoAssertion::new` |
 | Write the unspecified class as the authentication context when the caller sets none | The schema requires a context, and that class is the Authentication Context class for unspecified means. | Core §2.7.2.2 | `SsoAssertion::authn_context` |
-| When the issued `NameId` has no format, write the first configured NameID format, and omit `Format` when none is configured | Reason not recorded. | Core §2.2.2, E60 | `IdpConfigBuilder::name_id_format`, `IdpConfigBuilder::name_id_formats` |
+| When the issued `NameId` has no format, write the first configured NameID format, and omit `Format` when none is configured | The identifier then has the format that the identity provider metadata advertises first and meets a `NameIDPolicy` that requests it, and with no configured format it stays `unspecified`, which an omitted `Format` means. | Core §2.2.2, E60 | `IdpConfigBuilder::name_id_format`, `IdpConfigBuilder::name_id_formats` |
 | Reject a success response when every bearer `SubjectConfirmation` in the requested `Subject` has an identifier or `SubjectConfirmationData` | Such data can constrain the recipient, time, or address in ways the issued bearer confirmation does not meet, and service providers must not send `SubjectConfirmation` (Profiles §4.1.4.1), so the crate does not compare it. | Core §3.3.4, §2.4.1.2 | Always |
 
 <a id="encryption"></a>
