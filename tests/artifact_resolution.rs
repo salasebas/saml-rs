@@ -837,6 +837,58 @@ fn a_request_addressed_to_another_published_endpoint_is_withheld(
 }
 
 #[test]
+fn an_outstanding_artifact_resolves_after_its_endpoint_index_is_unpublished(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let second = EndpointUrl::try_new("https://idp.example.com/artifact/second")?;
+    let idp_with = |services: Vec<ArtifactResolutionService>| {
+        let builder = IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect("https://idp.example.com/sso")?,
+        );
+        let builder = services.into_iter().fold(builder, |builder, service| {
+            builder.artifact_resolution_service(service)
+        });
+        Ok::<_, Box<dyn std::error::Error>>(IdentityProvider::new(builder.build()?))
+    };
+    let issuer = idp_with(vec![
+        ArtifactResolutionService::new(0, EndpointUrl::try_new(RESOLUTION_URL)?),
+        ArtifactResolutionService::new(1, second.clone()),
+    ])?;
+    let renumbered = idp_with(vec![ArtifactResolutionService::new(0, second.clone())])?;
+    let issuer_metadata = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        issuer.metadata_xml(),
+        MetadataTrustPolicy::Unverified,
+    )?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let artifact =
+        issuer.issue_artifact(&parties.sp_metadata, &web_sso_response(), 1, &mut issued)?;
+    let channel = confidential();
+    let resolution = parties.sp.resolve_artifact(
+        &issuer_metadata,
+        &artifact,
+        channel,
+        without_replay_cache(),
+    )?;
+    assert_eq!(resolution.request().endpoint(), &second);
+
+    let answer = renumbered.answer_artifact_resolve(
+        &parties.sp_metadata,
+        resolution.request().envelope(),
+        &second,
+        &mut issued,
+        channel,
+    )?;
+    assert_eq!(answer.release(), ArtifactRelease::Returned);
+    assert!(resolution
+        .finish(answer.response().envelope())?
+        .xml()
+        .contains(WEB_SSO_MARKER));
+    Ok(())
+}
+
+#[test]
 fn the_service_provider_rejects_a_repeated_artifact() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
