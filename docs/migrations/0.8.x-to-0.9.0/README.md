@@ -97,5 +97,6 @@ Check the topics that affect your integration.
 - [Expect an answer for an empty artifact](empty-artifact.md)
 - [Remove artifacts of a retired resolution endpoint](artifact-endpoint-retirement.md)
 - [Send the ArtifactResponse for store and signature failures](artifact-resolve-answers.md)
+- [Handle relative status codes in name identifier management responses](name-id-management-status.md)
 
 [All migration guides](../README.md)

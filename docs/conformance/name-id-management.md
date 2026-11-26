@@ -93,6 +93,7 @@ application.
 | Return the SOAP response on the request's HTTP exchange | Mandatory | Profiles §4.5.3.2 | `respond_name_id_management` |
 | For a `2.0` request, write `ID`, `Version` `2.0`, a UTC `IssueInstant`, and `InResponseTo` equal to the request `ID` | Mandatory | `StatusResponseType`, Core §3.2.2, §4.1.3.2 | Always |
 | Write the responding entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.2 | Always |
+| Refuse to write a subordinate status code that is not an absolute URI, including one read from a peer's response | Mandatory | Core §1.3.2, `StatusCodeType` | Always |
 | Answer only a request received from the given service provider | Library policy: reason not recorded. | — | Always |
 | Authenticate the sending party and protect message integrity. The crate uses a mutually authenticated, integrity-protected `SoapChannel`, the one the request arrived on | Mandatory | Profiles §4.5.3.2, §4.5.4.2 | `SoapChannel` |
 | Send `Cache-Control: no-cache, no-store, must-revalidate, private` and `Pragma: no-cache` | Recommended | Bindings §3.2.3.2 | Always |
@@ -149,6 +150,7 @@ both clock-skew tolerances to cover the full window on either binding.
 | Return the response to a Redirect request through the user agent | Mandatory | Profiles §4.5.3.2 | `respond_name_id_management_redirect` |
 | For a `2.0` request, write `ID`, `Version` `2.0`, a UTC `IssueInstant`, and `InResponseTo` equal to the request `ID` | Mandatory | `StatusResponseType`, Core §3.2.2, §4.1.3.2 | Always |
 | Write the responding entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.2 | Always |
+| Refuse to write a subordinate status code that is not an absolute URI, including one read from a peer's response | Mandatory | Core §1.3.2, `StatusCodeType` | Always |
 | Answer only a request received from the given peer | Library policy: no response is built for another party's endpoint. | — | Always |
 | Sign the response | Mandatory | Profiles §4.5.3.2 | Always |
 | Take each response endpoint from the peer's HTTP-Redirect `ManageNameIDService`: `ResponseLocation`, else `Location` | Optional | Metadata §2.2.2, E41, Profiles §4.5.3.2 | Always |

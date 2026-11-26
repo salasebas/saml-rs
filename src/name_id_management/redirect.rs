@@ -68,7 +68,7 @@ pub(crate) fn create_response(
     let destination = response.destination.ok_or_else(|| {
         SamlError::Invalid("an HTTP-Redirect ManageNameIDResponse names its Destination".into())
     })?;
-    let xml = render_response(&Prefixes::of(setting)?, response);
+    let xml = render_response(&Prefixes::of(setting)?, response)?;
     bind_signed(
         setting,
         response.id.to_string(),
