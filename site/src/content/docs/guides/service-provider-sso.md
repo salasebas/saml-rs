@@ -67,18 +67,16 @@ The paired [identity provider guide](identity-provider-sso.md) publishes an HTTP
 
 ## Cap the application session
 
-After SSO succeeds, set your local session's expiry to the earlier of your application's deadline and the deadline from `session.session_not_on_or_after()`. The method returns the earliest `SessionNotOnOrAfter` in the consumed assertion before validation clock skew. If the identity provider sent no deadline, use your application's deadline.
+After SSO succeeds, set your local session's expiry to the earlier of your application's deadline and the deadline from `session.session_not_on_or_after()`. The method returns the earliest `SessionNotOnOrAfter` in the consumed assertion as a `SystemTime`, before validation clock skew. If the identity provider sent no deadline, use your application's deadline.
 
 ```rust
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-
 let expires_at = match session.session_not_on_or_after() {
-	Some(bound) => local_deadline.min(OffsetDateTime::parse(bound.as_str(), &Rfc3339)?),
+	Some(bound) => local_deadline.min(bound),
 	None => local_deadline,
 };
 ```
 
-This example uses the `time` crate with the `parsing` feature and an `OffsetDateTime` for `local_deadline`. If `expires_at` has already passed, require a new login before you create a local session. Use `session.not_on_or_after()` for the assertion's `Conditions@NotOnOrAfter`.
+`local_deadline` is a `SystemTime`. End the local session at `expires_at`, and require a new login after it. If `expires_at` has already passed, require a new login before you create a local session. Use `session.not_on_or_after()` for the assertion's `Conditions@NotOnOrAfter`.
 
 ## Replay
 
