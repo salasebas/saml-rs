@@ -1,6 +1,6 @@
 # Identity Provider Discovery
 
-Code: `src/discovery.rs`
+Code: `src/discovery.rs`, `src/xml/any_uri.rs`
 
 `IdentityProvider::common_domain_cookie` builds the common domain cookie, and
 the caller writes it. `respond_sso` does not write the cookie, and no
@@ -77,7 +77,7 @@ drops an entry that is not base64 and keeps every decoded one.
 | Duty | Level | Section |
 | --- | --- | --- |
 | After the principal authenticates, write the cookie that `common_domain_cookie` returns | Optional | Profiles §4.3.3 |
-| Write `CommonDomainCookie::set_cookie_header` as the whole `Set-Cookie` value, or write its `NAME`, `value`, `PATH`, `domain`, and `lifetime` with another cookie API and mark the cookie `Secure` | Mandatory | Profiles §4.3.2 |
+| When the application sets the cookie, write `CommonDomainCookie::set_cookie_header` as the whole `Set-Cookie` value, or write its `NAME`, `value`, `PATH`, `domain`, and `lifetime` with another cookie API and mark the cookie `Secure` | Mandatory | Profiles §4.3.2 |
 
 <a id="not-implemented"></a>
 

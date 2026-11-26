@@ -1,4 +1,4 @@
-import { access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -66,18 +66,21 @@ function recordFiles(entries, recordsDir, pages) {
 }
 
 async function checkCodePaths(record, source, codeDir) {
-	const srcDir = new URL('src/', codeDir);
-	for (const [line] of source.matchAll(/^Code:.*$/gm)) {
-		const files = Array.from(line.matchAll(/`([^`]+)`/g), ([, file]) => file);
-		if (files.length === 0) throw new Error(`${record} has a Code line without a path: ${line}`);
-		for (const file of files) {
-			const target = new URL(file, codeDir);
-			if (!target.href.startsWith(srcDir.href)) {
+	const repoDir = fileURLToPath(codeDir);
+	const srcDir = path.join(repoDir, 'src', path.sep);
+	for (const [line, list] of source.matchAll(/^Code:(.*)$/gm)) {
+		for (const entry of list.split(',')) {
+			const file = entry.trim().match(/^`([^`]+)`$/)?.[1];
+			if (!file) throw new Error(`${record} has a Code line entry that is not one path in backticks: ${line}`);
+			const target = path.resolve(repoDir, file);
+			if (!target.startsWith(srcDir)) {
 				throw new Error(`${record} lists ${file} in a Code line, which is not under src/`);
 			}
-			await access(target).catch(() => {
+			const stats = await stat(target).catch((error) => {
+				if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
 				throw new Error(`${record} lists ${file} in a Code line, which does not exist`);
 			});
+			if (!stats.isFile()) throw new Error(`${record} lists ${file} in a Code line, which is not a file`);
 		}
 	}
 }

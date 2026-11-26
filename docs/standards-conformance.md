@@ -134,13 +134,18 @@ stores it, building the value is a rule and sending it is a duty:
 `common_domain_cookie` builds the cookie, and the application writes it.
 
 A missing part of a feature that the crate implements goes under
-**Partial support**. A feature that the crate does not implement goes under
-**Not supported** with its level and section, whatever that level is.
+**Partial support**. A feature that the crate does not implement has a
+`Not supported` cell, whatever its level. It also gets an item under
+**Not supported** when the feature is Mandatory, when the caller does
+something in its place, or when another document defines it. The item gives
+the level and section when the specification sets a level.
 
 ### Support statuses
 
 Take the features from the specification, so that a feature the crate lacks
-still has a row.
+still has a row. When no specification defines the record's behaviour, as
+for a callback that the crate offers, the record has no Support section, and
+its rows are library policies.
 
 - `Supported`: the crate implements the feature for this actor, on every
   build and for every form of the feature that the row names, and every
@@ -153,7 +158,7 @@ still has a row.
 - `—`: the specification gives this actor no part in the feature.
 
 A record uses more than one Support table when its exchanges have different
-actors.
+actors. Two `Partial` cells can link to one entry when one gap explains both.
 
 A duty that only the application can perform does not make a feature
 `Partial`. Record it under **Application duties**.
@@ -186,9 +191,10 @@ history.
 Group the policies under the same ``### <Actor>: `<public_api>` `` headings as
 Rules. Add a heading of that form for an actor or API that has policies and
 no rules. One table with no heading is enough when the record has one actor
-and one API, or when every policy applies to every actor and API that the
-record's introduction names. Level-three topic headings can split that table
-when readers look up its parts separately, as in
+and one API, or when each policy applies to every operation that handles
+what the policy names, such as every typed response that carries a
+`StatusCode`. Level-three topic headings can split that table when readers
+look up its parts separately, as in
 [XML input limits](conformance/xml-input.md#resource-limits).
 
 A policy without a reason says `Reason not recorded.` Such a row is an open
@@ -210,7 +216,8 @@ sentences, in the section it qualifies.
 
 A note gives no reason for an implementation choice. A policy's reason is its
 `Reason` cell, and the pull request holds the rest. A note does not restate a
-row, its section, or the rustdoc. A behaviour that fits a row gets a row.
+row, its section, or the rustdoc. A behaviour that fits a row gets a row. A
+note links primary sources and code, not issues or pull requests.
 
 ### Code lines
 
@@ -222,12 +229,13 @@ Code: `src/xml/dom.rs`, `src/xml/dom/element.rs`
 ```
 
 Put one line directly under the record title when the same files perform
-every row. Otherwise put one directly under each level-three heading in
+every row of Rules and Library policies. Otherwise put one directly under each level-three heading in
 Rules and Library policies, and directly under `## Library policies` when its
 table has no heading. Find the files by reading the code that performs the
 rows, and leave out a file that only passes a call through. The site build
-fails when a listed path does not exist or is outside `src/`, and the site
-workflow runs on every pull request that changes `src/`.
+fails when an entry is not one path in backticks, or names something other
+than an existing file under `src/`. The site workflow runs on every pull
+request that changes `src/`.
 
 ### Wording and links
 
@@ -244,24 +252,30 @@ new heading.
 
 ### Convert an old-form record
 
-An old-form record mixes rules and policies in one table per section and
-ends with a list such as "Outside this flow" or "Not implemented". To
-convert it:
+An old-form record mixes rules and policies in one table per section. It
+keeps caller duties and missing features in lists such as "Outside this
+flow" or "Not implemented", at the end or inside a section. To convert it:
 
 1. Write the Support table from the specification, one row for each feature,
    before you move any row.
-2. Move each row whose `Level` is `Mandatory`, `Recommended`, or `Optional`
-   to Rules, under the heading of its actor and API.
-3. Move each row whose `Level` is `Library policy: <reason>.` to Library
-   policies. `<reason>` becomes its `Reason`, and `reason not recorded`
-   becomes `Reason not recorded.`
-4. Sort each item of the closing list into Partial support, Application
-   duties, or Not supported, as [Where a behaviour goes](#where-a-behaviour-goes)
-   describes.
+2. Sort every table row, list item, and paragraph by who performs it, as
+   [Where a behaviour goes](#where-a-behaviour-goes) describes, whatever its
+   old section or `Level` says. A row whose old actor is the application,
+   such as `IdP application`, is a duty. Split a row when the crate returns a
+   value and the application acts on it.
+3. Read the clause of each rule and give it a `Level` of `Mandatory`,
+   `Recommended`, or `Optional`. Move a qualifier, such as "capability" or
+   "for the session authority", into the heading or the row.
+4. Move each row whose `Level` starts with `Library policy` to Library
+   policies. Keep its reason, in one sentence, when it says what the policy
+   protects or keeps working. Write `Reason not recorded.` when it does not,
+   such as a reason that only names whom the specification binds.
 5. Turn each prose paragraph into a row when a row can hold it. Keep the rest
-   only as a [note](#notes).
+   only as a [note](#notes): the limitation it observes, its normative
+   citation, and the implementation sources at their versions. Drop issue and
+   pull request links.
 6. Keep the anchor of each heading you rename or remove, with
-   `<a id="old-anchor"></a>` above the heading that now holds its rows.
+   `<a id="old-anchor"></a>` above the first heading that now holds its rows.
 7. Add the [`Code:` lines](#code-lines).
 
 ## Review checklist

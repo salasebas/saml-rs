@@ -3,7 +3,8 @@ Record template.
 
 1. Copy this file to docs/conformance/<record>.md.
 2. Replace every <...>, and delete these comments.
-3. Delete a section that has no content. Keep "Support".
+3. Delete a section that has no content. Keep "Support" unless no
+   specification defines the record's features.
 4. Add the record to docs/conformance/README.md and to
    site/versions/next/conformance.mjs.
 
@@ -15,8 +16,8 @@ a Code line. identity-provider-discovery.md is a record in this layout.
 # <Exchange, binding, or shared layer>
 
 <!--
-Keep this Code line when the same files perform every row of the record,
-and delete the Code lines under the headings below. Otherwise delete this
+Keep this Code line when the same files perform every row of Rules and
+Library policies, and delete the Code lines under the headings below. Otherwise delete this
 one. List the files under src/ that do the work, not a file that only
 passes a call through.
 -->
@@ -24,8 +25,10 @@ passes a call through.
 Code: `<src/file.rs>`
 
 <Two or three sentences. Name the public entry points, the roles, and the
-bindings this record covers. Name the normative documents, and the errata
-that change them.>
+bindings this record covers.>
+
+<Normative text is ... Name the normative documents, and the errata that
+change them.>
 
 ## Support
 
@@ -54,8 +57,9 @@ its entry under "Partial support".
 ## Partial support
 
 <!--
-One entry per `Partial` cell. Say what works, what does not, and for whom.
-Name the builds when support depends on a crypto provider or feature.
+One entry per `Partial` cell, or one for several cells that one gap
+explains. Say what works, what does not, and for whom. Name the builds when
+support depends on a crypto provider or feature.
 -->
 
 ### <Feature>
@@ -99,9 +103,10 @@ Write `Reason not recorded.` for a policy whose reason is unknown. Such a
 row is an open question, not a decision.
 
 Use the actor and API headings of Rules. Use one table with no heading when
-the record has one actor and one API, or when every policy applies to every
-actor and API that the introduction names. That table's Code line goes
-directly under "## Library policies".
+the record has one actor and one API, or when each policy applies to every
+operation that handles what the policy names. That table's Code line goes
+directly under "## Library policies". Level-three topic headings can split
+that table, each with its own Code line.
 -->
 
 ### <Actor>: `<public_api>`
@@ -130,10 +135,10 @@ value that a crate API returns, name that API in the duty. `Level` is
 ## Not supported
 
 <!--
-One item per `Not supported` cell that needs more than its status. A feature
-the crate does not implement goes here at any level. Give the level and
-section when the specification sets a level, then what the caller does
-instead or which document defines the feature.
+One item per `Not supported` cell whose feature is Mandatory, whose caller
+does something in its place, or that another document defines. Give the
+level and section when the specification sets a level, then what the caller
+does instead or which document defines the feature.
 -->
 
 - <Feature>. <Level>, <Section>. <What the caller does instead.>
