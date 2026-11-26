@@ -20,9 +20,11 @@ or `SessionNotOnOrAfter` fails. Before, the response returned
 `SamlError::UnrecognizedCondition`, or `SamlError::TimeWindowInvalid`. The
 `SsoSession` accessors read only the selected assertion.
 
-Each assertion must still name the same issuer and principal, and each
-signature must still verify. Two assertions with the same `ID`, compared after
-XML whitespace collapse, are now rejected with
+Each assertion must still name the same issuer, and each signature must still
+verify. The `Subject` of another assertion is not compared; see
+[Accept SSO responses whose assertions name the principal differently](sso-assertion-subjects.md).
+Two assertions with the same `ID`, compared after XML whitespace collapse, are
+now rejected with
 `SamlError::PotentialWrappingAttack`. Before, only a response with an embedded
 signature was checked. A SimpleSign response signed only through its binding
 signature, or an `ID` repeated only after decryption, could give the session

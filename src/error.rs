@@ -448,12 +448,6 @@ pub enum SamlError {
         /// Local name of the unrecognized condition element.
         element: String,
     },
-    /// Assertions in one response do not share one principal.
-    ///
-    /// The comparison is `NameID` value, `Format`, `NameQualifier`, and
-    /// `SPNameQualifier`. An omitted `Format` is unspecified.
-    #[error("assertions do not refer to one principal")]
-    PrincipalMismatch,
     /// None of the consumed assertion's authentication statements matched the
     /// exact authentication context required by the pending request.
     #[error("authentication context mismatch")]

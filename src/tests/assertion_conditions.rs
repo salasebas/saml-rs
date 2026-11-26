@@ -24,7 +24,7 @@ use std::time::SystemTime;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::constants::name_id_format::{PERSISTENT, UNSPECIFIED};
+use saml_rs::constants::name_id_format::PERSISTENT;
 use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA384, RSA_SHA512};
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
 use saml_rs::error::SignatureVerificationReason;
@@ -699,26 +699,24 @@ fn a_second_assertion_with_another_issuer_is_rejected() -> Result<(), Box<dyn st
 }
 
 #[test]
-fn a_second_assertion_with_another_principal_is_rejected() -> Result<(), Box<dyn std::error::Error>>
-{
-    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
-    let xml = resigned(&replace_in_last_assertion(
-        &duplicate_assertion(
+fn a_second_assertion_may_name_the_principal_with_another_name_id(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for unsolicited in [false, true] {
+        let exchange = exchange_for(SpValidationPolicy::default(), unsolicited)?;
+        let duplicated = duplicate_assertion(
             &response_xml(&exchange.response_fields)?,
             "_second_assertion",
-        )?,
-        "alice@example.com",
-        "mallory@example.com",
-    )?)?;
-    match accept(&exchange, &xml) {
-        Err(error) => match error.downcast_ref::<SamlError>() {
-            Some(SamlError::PrincipalMismatch) => Ok(()),
-            _ => Err(format!("expected PrincipalMismatch, got {error}").into()),
-        },
-        Ok(_) => Err("expected PrincipalMismatch".into()),
+        )?;
+        let other_value =
+            replace_in_last_assertion(&duplicated, "alice@example.com", "a1b2c3@example.com")?;
+        let other_format = set_name_id_format(&duplicated, 1, Some(PERSISTENT))?;
+        for xml in [other_value, other_format] {
+            let session = accept(&exchange, &resigned(&xml)?)?;
+            assert_eq!(session.name_id(), Some(&principal()));
+        }
     }
+    Ok(())
 }
-
 #[test]
 fn one_valid_bearer_confirmation_is_enough() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::default(), false)?;
@@ -928,88 +926,6 @@ fn a_later_sha1_assertion_signature_is_rejected_by_the_rsa_sha2_profile(
             _ => Err(format!("expected AlgorithmUnsupported, got {error}").into()),
         },
         Ok(_) => Err("expected AlgorithmUnsupported".into()),
-    }
-}
-
-#[test]
-fn accept_unsolicited_sso_rejects_a_different_principal() -> Result<(), Box<dyn std::error::Error>>
-{
-    let exchange = exchange_for(SpValidationPolicy::default(), true)?;
-    let xml = resigned(&replace_in_last_assertion(
-        &duplicate_assertion(
-            &response_xml(&exchange.response_fields)?,
-            "_second_assertion",
-        )?,
-        "alice@example.com",
-        "mallory@example.com",
-    )?)?;
-    match accept(&exchange, &xml) {
-        Err(error) => match error.downcast_ref::<SamlError>() {
-            Some(SamlError::PrincipalMismatch) => Ok(()),
-            _ => Err(format!("expected PrincipalMismatch, got {error}").into()),
-        },
-        Ok(_) => Err("expected PrincipalMismatch".into()),
-    }
-}
-
-#[test]
-fn an_omitted_name_id_format_matches_unspecified() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
-    let duplicated = duplicate_assertion(
-        &response_xml(&exchange.response_fields)?,
-        "_second_assertion",
-    )?;
-    let xml = resigned(&set_name_id_format(
-        &set_name_id_format(&duplicated, 0, Some(UNSPECIFIED))?,
-        1,
-        None,
-    )?)?;
-    let session = accept(&exchange, &xml)?;
-    assert_eq!(
-        session.name_id().ok_or("missing NameID")?.value(),
-        "alice@example.com"
-    );
-    Ok(())
-}
-
-#[test]
-fn name_id_formats_that_differ_only_in_xml_whitespace_match(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
-    let duplicated = duplicate_assertion(
-        &response_xml(&exchange.response_fields)?,
-        "_second_assertion",
-    )?;
-    let xml = resigned(&set_name_id_format(
-        &set_name_id_format(&duplicated, 0, Some(PERSISTENT))?,
-        1,
-        Some(&format!("  {PERSISTENT} ")),
-    )?)?;
-    let session = accept(&exchange, &xml)?;
-    assert_eq!(
-        session.name_id().ok_or("missing NameID")?.format(),
-        Some(&NameIdFormat::Persistent)
-    );
-    Ok(())
-}
-
-#[test]
-fn a_different_name_id_format_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
-    let xml = resigned(&set_name_id_format(
-        &duplicate_assertion(
-            &response_xml(&exchange.response_fields)?,
-            "_second_assertion",
-        )?,
-        1,
-        Some(PERSISTENT),
-    )?)?;
-    match accept(&exchange, &xml) {
-        Err(error) => match error.downcast_ref::<SamlError>() {
-            Some(SamlError::PrincipalMismatch) => Ok(()),
-            _ => Err(format!("expected PrincipalMismatch, got {error}").into()),
-        },
-        Ok(_) => Err("expected PrincipalMismatch".into()),
     }
 }
 
