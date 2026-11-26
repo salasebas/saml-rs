@@ -102,13 +102,13 @@ provider sends it. `Consent`, caller extensions, and `StatusDetail` are in
 ### Service provider `NameID`
 
 - **Supported:** `ServiceProvider::start_slo` writes the `NameID` of the
-  `NameId` it is given, in the clear or in an `EncryptedID`, and
-  `SsoSession::logout_subject` gives no subject for a `NameID` value with
-  only XML whitespace.
-- **Not supported:** a `NameId` that the caller builds with a value or
-  qualifier of only XML whitespace, or an `entity` `NameID` that breaks Core
-  §8.3.6, is written unchanged, as
-  [identifiers](identifiers.md#service-provider-requests) records.
+  `NameId` it is given, in the clear or in an `EncryptedID`, and refuses a
+  value or qualifier with only XML whitespace. `SsoSession::logout_subject`
+  gives no subject for such a value, and keeps such a qualifier so that
+  `matches_sp_session` still matches the identity provider's request.
+- **Not supported:** an `entity` `NameID` that breaks Core §8.3.6 is written
+  unchanged, as [identifiers](identifiers.md#service-provider-requests)
+  records.
 
 ### `BaseID` principal identifier
 
@@ -142,15 +142,18 @@ Code: `src/api/slo.rs`, `src/logout/creation.rs`, `src/logout/rendering.rs`, `sr
 
 ### Service provider: `start_slo`
 
-Code: `src/api/slo.rs`, `src/api/peer.rs`, `src/logout/creation.rs`
+Code: `src/api/slo.rs`, `src/api/peer.rs`, `src/logout/creation.rs`, `src/model/subject.rs`
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Omit `Format` when the `NameId` has none | Optional | Core §2.2.2, E60 | Always |
+| Reject a value or qualifier with only XML whitespace, under the [service provider request rule](identifiers.md#service-provider-name-id-strings) | Mandatory | Core §1.3.1, XML 1.0 §2.3 | Always |
 | Include at least one `SessionIndex` | Mandatory | Profiles §4.4.4.1, E38 | Always |
 | Send the user agent to an `https` `SingleLogoutService`. A recipient does not reject an `http` `Destination` | Recommended | Profiles §4.4.3.1 | `StartSlo::allow_http` |
 | Omit `NotOnOrAfter` | Optional | Core §3.7.1, §3.7.3.2 | Always |
 | Refuse the `global-timeout` and `sp-timeout` reasons, which only the session authority sends, after whitespace collapse, on ordinary and asynchronous logout | Mandatory | Core §3.7.3.2, E0 | Always |
+
+<a id="logout-subject"></a>
 
 ### Service provider: `SsoSession::logout_subject`
 
@@ -160,6 +163,7 @@ Code: `src/model/sso.rs`
 | --- | --- | --- | --- |
 | Give no logout subject for an accepted assertion without a `NameID`, because no identifier can strongly match it | Mandatory | Profiles §4.4.4.1, Core §3.3.4 | Always |
 | Give no logout subject when the `NameID` value is empty or only XML whitespace, because the request copies the value and a SAML string needs another character. U+00A0 is not XML whitespace | Mandatory | Core §1.3.1, XML 1.0 §2.3 | Always |
+| Keep each qualifier of the accepted `NameID` as received, one with only XML whitespace included, so that `matches_sp_session` matches the identity provider's request for the session. `start_slo` refuses to send such a qualifier | Mandatory | Core §3.7.3.1, §3.3.4 | Always |
 
 <a id="asynchronous-single-logout"></a>
 

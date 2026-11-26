@@ -70,10 +70,10 @@ both roles, and SOAP at the identity provider.
 | --- | --- | --- | --- | --- | --- |
 | `NameID` of the identifier as both providers know it | Core §3.6.1, §3.6.3 | Supported | Supported | [Partial](#service-provider-requests) | Supported |
 | `NewID` from the identity provider, the new `NameID` value | Core §3.6.1, §3.6.3, E12, E55 | Supported | — | — | Supported |
-| `NewID` from the service provider, the new `SPProvidedID` | Core §3.6.1, §3.6.3, E55 | — | Supported | [Partial](#service-provider-requests) | — |
+| `NewID` from the service provider, the new `SPProvidedID` | Core §3.6.1, §3.6.3, E55 | — | Supported | Supported | — |
 | `Terminate` | Core §3.6.1, §3.6.3, E8, E14, E55 | Supported | Supported | Supported | Supported |
 | `EncryptedID` in place of `NameID` | Core §3.6.1, §3.6.3, Conformance §3.4 | Supported | Supported | [Partial](#service-provider-requests) | Supported |
-| `NewEncryptedID` in place of `NewID` | Core §3.6.1, §3.6.3, E12 | Supported | Supported | [Partial](#service-provider-requests) | Supported |
+| `NewEncryptedID` in place of `NewID` | Core §3.6.1, §3.6.3, E12 | Supported | Supported | Supported | Supported |
 | `EncryptedID` with a plaintext `NewID`, or `NameID` with `NewEncryptedID` | Core §3.6.3 | Not supported | Supported | Not supported | Supported |
 
 ### Responses
@@ -95,13 +95,12 @@ both roles, and SOAP at the identity provider.
 
 - **Supported:** `ServiceProvider::start_name_id_management_redirect` writes
   the `NameID` of the `NameId` it is given and the new value as `NewID`, in
-  the clear or encrypted, and refuses a `Format` that is not an absolute URI
-  reference. A `NewID` becomes the `SPProvidedID` that the identity provider
-  sends from then on.
-- **Not supported:** it writes a `NameID` value or qualifier, or a `NewID`,
-  that is empty or holds only XML whitespace, which Core §1.3.1 forbids, and
-  an `entity` `NameID` that breaks Core §8.3.6, unchanged. The `NameID` cases
-  are those that [identifiers](identifiers.md#service-provider-requests)
+  the clear or encrypted. It refuses a `Format` that is not an absolute URI
+  reference, and a `NameID` value or qualifier, or a `NewID`, that is empty or
+  holds only XML whitespace. A `NewID` becomes the `SPProvidedID` that the
+  identity provider sends from then on.
+- **Not supported:** it writes an `entity` `NameID` that breaks Core §8.3.6
+  unchanged, as [identifiers](identifiers.md#service-provider-requests)
   records for both service provider requests.
 
 ## Rules
@@ -124,7 +123,9 @@ Code: `src/name_id_management/xml.rs`, `src/model/subject.rs`, `src/entity.rs`
 
 The identity provider's whitespace, length, and `entity` checks on its
 `NameID` and `NewID` are in [identifiers](identifiers.md#name-identifier-formats).
-A service provider writes its `NameID` value and qualifiers unchanged, as the
+A service provider refuses a blank `NameID` value, qualifier, or `NewID`, as
+its [identifier rule](identifiers.md#service-provider-name-id-strings) says.
+It writes its `NameID` value and qualifiers otherwise unchanged, as the
 [service provider request policy](identifiers.md#service-provider-request-policy)
 records, and its `NewID` sets an `SPProvidedID`, which has no 256-character
 limit.

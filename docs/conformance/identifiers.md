@@ -99,13 +99,12 @@ states.
 
 - **Supported:** a service provider `LogoutRequest` or `ManageNameIDRequest`
   writes the `NameID` of the `NameId` it is given, in the clear or in an
-  `EncryptedID`, and refuses a `Format` that is not an absolute URI
-  reference.
-- **Not supported:** it writes a value or qualifier that holds only XML
-  whitespace, which Core §1.3.1 forbids, and an `entity` `NameID` that breaks
-  Core §8.3.6, unchanged. The
+  `EncryptedID`. It refuses a `Format` that is not an absolute URI reference,
+  and a value, qualifier, or `NewID` that holds only XML whitespace.
+- **Not supported:** it writes an `entity` `NameID` that breaks Core §8.3.6
+  unchanged, in the clear or in an `EncryptedID`. The
   [service provider policy](#service-provider-request-policy) gives the
-  reason for the `entity` case.
+  reason.
 
 ## Rules
 
@@ -213,6 +212,20 @@ issued `NameId` omits one.
 A requested `NameIDPolicy` `SPNameQualifier` is checked as in
 [Web Browser SSO generation](web-browser-sso-generation.md#identity-provider-response).
 
+<a id="service-provider-name-id-strings"></a>
+
+### Service provider: `NameId` in a `LogoutRequest` or a `ManageNameIDRequest`
+
+Code: `src/model/subject.rs`, `src/logout/creation.rs`, `src/name_id_management/xml.rs`
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Reject a value, `NameQualifier`, `SPNameQualifier`, `SPProvidedID`, or `NewID` with no character other than XML whitespace, also in a `NameId` taken from an accepted assertion | Mandatory | Core §1.3.1, XML 1.0 §2.3 | Always |
+
+[`SsoSession::logout_subject`](single-logout.md#logout-subject) gives no
+subject for an accepted `NameID` with such a value. It keeps such a qualifier,
+so that the identity provider's `LogoutRequest` still matches the session.
+
 ### Identity provider and service provider: `SsoSession::name_id`, `LogoutRequest::name_id`, `RequestedSubject::name_id`, `NameIdPolicy::format`, `ManageNameIdRequest::name_id`
 
 Code: `src/model/extract.rs`, `src/model/authn.rs`, `src/name_id_management.rs`, `src/config/algorithms.rs`
@@ -311,7 +324,16 @@ Code: `src/logout/creation.rs`, `src/name_id_management/xml.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Write a persistent `NameID` value over 256 characters, a transient one in a `LogoutRequest`, and an `entity` `NameID` that breaks Core §8.3.6, unchanged | The request names the principal as the identity provider issued it, so a session accepted with such an identifier can still be logged out or managed. | Conformance §3.3, Core §3.6.1, §8.3.6, Profiles §4.4.4.1 | Always |
+| Write a persistent `NameID` value over 256 characters, a transient one in a `LogoutRequest`, and an `entity` `NameID` that breaks Core §8.3.6, unchanged | A `LogoutRequest` must repeat the identifier the identity provider issued, identical under Core §3.3.4, and a `ManageNameIDRequest` must name it as both providers know it, so a session accepted with such an identifier can still be logged out or managed. | Conformance §3.3, Core §3.3.4, §3.6.1, §8.3.6, Profiles §4.4.4.1 | Always |
+
+In a `LogoutRequest`, [Shibboleth SP 3.6.0](https://codeberg.org/Shibboleth/cpp-sp/src/tag/3.6.0/shibsp/handler/impl/SAML2LogoutInitiator.cpp#L528-L562),
+the [SimpleSAMLphp 2.5.5 service provider](https://github.com/simplesamlphp/simplesamlphp/blob/v2.5.5/modules/saml/src/Auth/Source/SP.php#L1076-L1102),
+and [PySAML2 7.5.5](https://github.com/IdentityPython/pysaml2/blob/v7.5.5/src/saml2/entity.py#L1093-L1160)
+also send the session's `NameID` without these format checks, and PySAML2 writes the
+[`ManageNameIDRequest` `NameID`](https://github.com/IdentityPython/pysaml2/blob/v7.5.5/src/saml2/entity.py#L1278-L1330)
+it is given the same way.
+[simplesamlphp/saml2 6.3.5](https://github.com/simplesamlphp/saml2/blob/v6.3.5/src/XML/saml/NameID.php#L60-L67)
+refuses an `entity` `NameID` with a qualifier when it parses one, so it holds no session that would need it.
 
 ### Identity provider and service provider: `SsoSession::name_id`, `LogoutRequest::name_id`, `RequestedSubject::name_id`, `NameIdPolicy::format`, `ManageNameIdRequest::name_id`
 

@@ -100,6 +100,33 @@ fn a_name_id_of_only_xml_whitespace_signs_in_without_a_logout_subject(
 }
 
 #[test]
+fn a_name_id_qualifier_of_only_xml_whitespace_stays_in_the_logout_subject(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
+    let original = response_xml(&exchange.response_fields)?;
+    for (name_id, issued) in [
+        (
+            r#"<saml:NameID NameQualifier="">alice</saml:NameID>"#,
+            NameId::new("alice").with_name_qualifier(""),
+        ),
+        (
+            r#"<saml:NameID SPNameQualifier=" ">alice</saml:NameID>"#,
+            NameId::new("alice").with_sp_name_qualifier(" "),
+        ),
+        (
+            r#"<saml:NameID SPProvidedID="&#9;&#10;">alice</saml:NameID>"#,
+            NameId::new("alice").with_sp_provided_id("\t\n"),
+        ),
+    ] {
+        let session = accept(&exchange, &resigned(&replace_name_id(&original, name_id)?)?)?;
+
+        let subject = session.logout_subject().ok_or("missing logout subject")?;
+        assert_eq!(subject.name_id(), &issued, "{name_id}");
+    }
+    Ok(())
+}
+
+#[test]
 fn an_outstanding_logout_applies_to_an_empty_or_whitespace_name_id(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::default(), false)?;

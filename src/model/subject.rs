@@ -45,12 +45,12 @@ pub(crate) fn validate_issued_name_id(
     value: &str,
     qualifiers: OutboundNameIdQualifiers<'_>,
 ) -> Result<(), SamlError> {
-    validate_issued_name_id_strings(value, qualifiers)?;
+    validate_name_id_strings(value, qualifiers)?;
     validate_issued_name_id_length(format_uri, value)?;
     validate_issued_entity_name_id(format_uri, value, qualifiers)
 }
 
-fn validate_issued_name_id_strings(
+pub(crate) fn validate_name_id_strings(
     value: &str,
     qualifiers: OutboundNameIdQualifiers<'_>,
 ) -> Result<(), SamlError> {
@@ -111,17 +111,17 @@ fn validate_issued_entity_name_id(
 /// [`Self::generate_transient`], [`Self::generate_persistent`], and
 /// [`Self::persistent`] create the identifiers an identity provider issues in
 /// those two formats. [`Self::new`] takes any value, and
-/// [`Self::with_format`] any format. In a response, a `LogoutRequest`, and a
-/// `ManageNameIDRequest`, an identity provider rejects a value, qualifier, or
-/// `SPProvidedID` made only of XML whitespace (space, tab, carriage return,
-/// and line feed), an empty one included. It also rejects there a persistent
-/// or transient value longer than 256 characters, whichever constructor
-/// created it, an `entity` value that is not
-/// an absolute URI reference of at most 1024 characters with collapsed
-/// whitespace, and an `entity` `NameId` with any qualifier. A service
-/// provider sends the `NameId` it received without these checks. A message
-/// that writes the `NameId` rejects a format that is not an absolute URI
-/// reference.
+/// [`Self::with_format`] any format. A response, a `LogoutRequest`, and a
+/// `ManageNameIDRequest` reject a value, `NameQualifier`, `SPNameQualifier`,
+/// or `SPProvidedID` made only of XML whitespace (space, tab, carriage
+/// return, and line feed), an empty one included, whichever provider writes
+/// them. An identity provider also rejects there a persistent or transient
+/// value longer than 256 characters, whichever constructor created it, an
+/// `entity` value that is not an absolute URI reference of at most 1024
+/// characters with collapsed whitespace, and an `entity` `NameId` with any
+/// qualifier. A service provider sends the `NameId` it received without
+/// these length and `entity` checks. A message that writes the `NameId`
+/// rejects a format that is not an absolute URI reference.
 ///
 /// # Examples
 ///
@@ -227,25 +227,22 @@ impl NameId {
         self
     }
 
-    /// Set the `NameQualifier`. A service provider request writes the value as
-    /// set. An identity provider refuses one made only of XML whitespace, as
-    /// [`NameId`] describes.
+    /// Set the `NameQualifier`. A message that writes the `NameId` refuses one
+    /// made only of XML whitespace, as [`NameId`] describes.
     pub fn with_name_qualifier(mut self, name_qualifier: impl Into<String>) -> Self {
         self.name_qualifier = Some(name_qualifier.into());
         self
     }
 
-    /// Set the `SPNameQualifier`. A service provider request writes the value as
-    /// set. An identity provider refuses one made only of XML whitespace, as
-    /// [`NameId`] describes.
+    /// Set the `SPNameQualifier`. A message that writes the `NameId` refuses one
+    /// made only of XML whitespace, as [`NameId`] describes.
     pub fn with_sp_name_qualifier(mut self, sp_name_qualifier: impl Into<String>) -> Self {
         self.sp_name_qualifier = Some(sp_name_qualifier.into());
         self
     }
 
-    /// Set the `SPProvidedID`. A service provider request writes the value as
-    /// set. An identity provider refuses one made only of XML whitespace, as
-    /// [`NameId`] describes.
+    /// Set the `SPProvidedID`. A message that writes the `NameId` refuses one
+    /// made only of XML whitespace, as [`NameId`] describes.
     pub fn with_sp_provided_id(mut self, sp_provided_id: impl Into<String>) -> Self {
         self.sp_provided_id = Some(sp_provided_id.into());
         self

@@ -12,6 +12,9 @@ mod reason;
 #[path = "typed_slo/status_message.rs"]
 mod status_message;
 
+#[path = "typed_slo/name_id_strings.rs"]
+mod name_id_strings;
+
 mod prefixes;
 mod session_matching;
 
