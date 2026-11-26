@@ -15,6 +15,7 @@ use crate::model::{
     RefusedLogoutRequest, RelayState, ReplayKey, SamlInstant, SamlValidationContext, SessionIndex,
     Status,
 };
+use crate::xml::fields;
 use crate::xml::protocol_element::parse_saml_with_limits;
 use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
@@ -150,8 +151,8 @@ impl ServiceProvider {
     /// `IssueInstant` or optional `NotOnOrAfter` is not conformant,
     /// `NotOnOrAfter` has expired under saml-rs' fail-closed policy, the
     /// destination does not match the receiving `SingleLogoutService` location,
-    /// the receiving URL is unpublished, multiple local endpoints have no
-    /// explicit receiving URL, or replay
+    /// the receiving URL is unpublished, a `Destination` is compared while
+    /// multiple local endpoints have no explicit receiving URL, or replay
     /// validation detects a duplicate or unusable expiration.
     /// Returns [`SamlError::LogoutRequestRefused`] for an authenticated newer
     /// version. Send its refusal with [`Self::respond_slo_refusal`].
@@ -440,8 +441,8 @@ impl IdentityProvider {
     /// optional `NotOnOrAfter` is not conformant, `NotOnOrAfter` has expired
     /// under saml-rs' fail-closed policy, the destination does not match the
     /// receiving `SingleLogoutService` location, the receiving URL is
-    /// unpublished, multiple local endpoints have
-    /// no explicit receiving URL, or replay validation detects
+    /// unpublished, a `Destination` is compared while multiple local
+    /// endpoints have no explicit receiving URL, or replay validation detects
     /// a duplicate or unusable expiration. The identity provider processes an
     /// `<EncryptedID>` as described in [`ServiceProvider::receive_slo`].
     /// Returns [`SamlError::LogoutRequestRefused`] for an authenticated newer
@@ -828,12 +829,28 @@ fn receive_slo_impl(
 ) -> Result<(Received<LogoutRequest>, bool), SamlError> {
     let relay_state = relay_state_from_input(&input)?;
     let binding = LogoutBinding::try_from(input.binding())?;
-    let expected_recipient = logout_recipient_endpoint(
-        local_metadata,
-        binding,
-        EndpointDirection::Request,
-        &validation,
-    )?;
+    let (expected_recipient, unresolved_recipient) = match binding {
+        LogoutBinding::Soap => {
+            let locations =
+                local_logout_locations(local_metadata, binding, EndpointDirection::Request)?;
+            match validation.resolve_recipient_endpoint(&locations) {
+                Ok(recipient) => (Some(recipient), None),
+                Err(SamlError::RecipientEndpointAmbiguous) => {
+                    (None, Some(SamlError::RecipientEndpointAmbiguous))
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign => (
+            Some(logout_recipient_endpoint(
+                local_metadata,
+                binding,
+                EndpointDirection::Request,
+                &validation,
+            )?),
+            None,
+        ),
+    };
     let receipt = LogoutReceipt::of_input(&input)?;
     let request =
         input.into_http_request(local_setting.xml_limits, local_setting.schema_validator)?;
@@ -843,12 +860,17 @@ fn receive_slo_impl(
         receipt,
         &request,
         LogoutFlowValidation::typed(
-            Some(&expected_recipient),
+            expected_recipient.as_deref(),
             validation.now(),
             validation.clock_skew(),
             peer.hmac_secret,
         ),
     )?;
+    if let Some(error) = unresolved_recipient {
+        if flow.extract.get_str(fields::request::DESTINATION).is_some() {
+            return Err(error);
+        }
+    }
     let recognizes_async = matches!(
         (mode, binding),
         (
@@ -1072,10 +1094,22 @@ fn logout_recipient_endpoint(
     direction: EndpointDirection,
     validation: &SamlValidationContext<'_>,
 ) -> Result<String, SamlError> {
+    validation.resolve_recipient_endpoint(&local_logout_locations(
+        local_metadata,
+        binding,
+        direction,
+    )?)
+}
+
+fn local_logout_locations(
+    local_metadata: &Metadata,
+    binding: LogoutBinding,
+    direction: EndpointDirection,
+) -> Result<Vec<String>, SamlError> {
     let locations =
         local_metadata.single_logout_service_locations(Binding::from(binding), direction);
     if locations.is_empty() {
         return Err(SamlError::MissingMetadata("SingleLogoutService".into()));
     }
-    validation.resolve_recipient_endpoint(&locations)
+    Ok(locations)
 }

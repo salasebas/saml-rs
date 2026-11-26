@@ -264,15 +264,18 @@ impl<'a> SamlValidationContext<'a> {
     ///
     /// Supply the URL from the HTTP handler, never from the message's
     /// `Destination`. It must be published for the incoming binding and
-    /// message direction. For a SOAP `finish_slo`, it selects the local SOAP
-    /// `SingleLogoutService` that a present `Destination` must name. For
-    /// `receive_name_id_management`, it selects the local SOAP
-    /// `ManageNameIDService` that a present `Destination` must name, and a
-    /// request without `Destination` needs no unique local endpoint. When
-    /// omitted, `finish_sso` expects the assertion consumer of the pending
-    /// request, `accept_unsolicited_sso` expects the default assertion
-    /// consumer for the incoming binding, and the other methods infer a
-    /// unique published URL and reject ambiguous metadata.
+    /// message direction. For a SOAP `receive_slo` or `finish_slo`, it selects
+    /// the local SOAP `SingleLogoutService` that a present `Destination` must
+    /// name. For `receive_name_id_management`, it selects the local SOAP
+    /// `ManageNameIDService` that a present `Destination` must name. A SOAP
+    /// message without `Destination` needs no unique local endpoint.
+    /// `receive_slo` and `receive_name_id_management` still require a
+    /// supplied URL to be published; `finish_slo` checks it only when the
+    /// SOAP response has `Destination`. When omitted, `finish_sso` expects the
+    /// assertion consumer of the pending request, `accept_unsolicited_sso`
+    /// expects the default assertion consumer for the incoming binding, and
+    /// the other methods infer a unique published URL and reject ambiguous
+    /// metadata.
     pub fn with_recipient_endpoint(mut self, endpoint: EndpointUrl) -> Self {
         self.recipient_endpoint = Some(endpoint);
         self

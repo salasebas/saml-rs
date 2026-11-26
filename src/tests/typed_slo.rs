@@ -3782,6 +3782,52 @@ fn soap_logout_accepts_signed_messages_without_destination(
 }
 
 #[test]
+fn a_soap_logout_request_without_destination_needs_no_receiving_url(
+) -> Result<(), Box<dyn std::error::Error>> {
+    const SECOND_SOAP: &str = "https://idp.example.com/slo/soap-second";
+    let sp = ServiceProvider::new(sp_config()?);
+    let idp = IdentityProvider::new(
+        idp_config_builder(signed_authn_request_idp_validation())?
+            .slo_endpoint(SloEndpoint::soap(SECOND_SOAP)?)
+            .build()?,
+    );
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let receive = |destination: Option<&str>, validation| {
+        let xml = logout_request_xml("_soap_two_endpoints", SP_ENTITY_ID, destination);
+        idp.receive_slo(
+            &sp_descriptor,
+            signed_logout_request_input(&xml, LogoutBinding::Soap)?,
+            validation,
+        )
+    };
+
+    assert_eq!(receive(None, validation())?.message().destination(), None);
+    assert!(matches!(
+        receive(Some(SECOND_SOAP), validation()),
+        Err(SamlError::RecipientEndpointAmbiguous)
+    ));
+    let unpublished = EndpointUrl::try_new("https://idp.example.com/slo/unpublished")?;
+    for destination in [None, Some(SECOND_SOAP)] {
+        assert!(matches!(
+            receive(
+                destination,
+                validation().with_recipient_endpoint(unpublished.clone())
+            ),
+            Err(SamlError::RecipientEndpointNotPublished)
+        ));
+    }
+    let received = receive(
+        Some(SECOND_SOAP),
+        validation().with_recipient_endpoint(EndpointUrl::try_new(SECOND_SOAP)?),
+    )?;
+    assert_eq!(
+        received.message().destination().map(EndpointUrl::as_str),
+        Some(SECOND_SOAP)
+    );
+    Ok(())
+}
+
+#[test]
 fn a_soap_requester_without_a_soap_endpoint_checks_only_a_present_destination(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::new(
