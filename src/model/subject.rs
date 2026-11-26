@@ -22,10 +22,7 @@ pub(crate) fn is_name_id_format(format_uri: Option<&str>, expected: &str) -> boo
     format_uri.is_some_and(|format| collapse_whitespace(format) == expected)
 }
 
-pub(crate) fn validate_issued_name_id_length(
-    format_uri: Option<&str>,
-    value: &str,
-) -> Result<(), SamlError> {
+fn validate_issued_name_id_length(format_uri: Option<&str>, value: &str) -> Result<(), SamlError> {
     let format = if is_name_id_format(format_uri, name_id_format::PERSISTENT) {
         "persistent"
     } else if is_name_id_format(format_uri, name_id_format::TRANSIENT) {
@@ -41,7 +38,16 @@ pub(crate) fn validate_issued_name_id_length(
     Ok(())
 }
 
-pub(crate) fn validate_issued_entity_name_id(
+pub(crate) fn validate_issued_name_id(
+    format_uri: Option<&str>,
+    value: &str,
+    qualifiers: OutboundNameIdQualifiers<'_>,
+) -> Result<(), SamlError> {
+    validate_issued_name_id_length(format_uri, value)?;
+    validate_issued_entity_name_id(format_uri, value, qualifiers)
+}
+
+fn validate_issued_entity_name_id(
     format_uri: Option<&str>,
     value: &str,
     qualifiers: OutboundNameIdQualifiers<'_>,
@@ -77,12 +83,14 @@ pub(crate) fn validate_issued_entity_name_id(
 /// [`Self::generate_transient`], [`Self::generate_persistent`], and
 /// [`Self::persistent`] create the identifiers an identity provider issues in
 /// those two formats. [`Self::new`] takes any value, and
-/// [`Self::with_format`] any format. An identity provider response rejects a
+/// [`Self::with_format`] any format. An identity provider rejects a
 /// persistent or transient value longer than 256 characters, whichever
-/// constructor created it. It also rejects an `entity` value that is not an
-/// absolute URI reference of at most 1024 characters with collapsed
-/// whitespace, and an `entity` `NameId` with any qualifier. A message that
-/// writes the `NameId` rejects a format that is not an absolute URI
+/// constructor created it, in a response, a `LogoutRequest`, and a
+/// `ManageNameIDRequest`. It also rejects there an `entity` value that is not
+/// an absolute URI reference of at most 1024 characters with collapsed
+/// whitespace, and an `entity` `NameId` with any qualifier. A service
+/// provider sends the `NameId` it received without these checks. A message
+/// that writes the `NameId` rejects a format that is not an absolute URI
 /// reference.
 ///
 /// # Examples

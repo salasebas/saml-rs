@@ -4,7 +4,7 @@ use crate::constants::{Binding, ParserType};
 use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::Metadata;
-use crate::model::{validate_name_id_format, Status};
+use crate::model::{validate_issued_name_id, validate_name_id_format, Status};
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
 use crate::xml::dom::is_xml_whitespace_char;
 use crate::xml::{
@@ -75,6 +75,12 @@ pub(crate) fn create_logout_request_for_subject_inner(
 
     reject_soap_relay_state(binding, relay_state)?;
     validate_name_id_format(name_id_format)?;
+    match validation {
+        LogoutRequestValidation::SessionAuthority => {
+            validate_issued_name_id(name_id_format, subject.name_id, subject.qualifiers)?;
+        }
+        LogoutRequestValidation::SessionParticipant => {}
+    }
     if reason.is_some_and(|value| !is_absolute_uri_reference(value)) {
         return Err(SamlError::Invalid(
             "a LogoutRequest reason must be an absolute URI reference".into(),

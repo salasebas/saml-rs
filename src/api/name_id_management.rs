@@ -58,8 +58,10 @@ impl IdentityProvider {
     /// none. Returns [`SamlError::SoapChannelProtection`] when `channel` does
     /// not authenticate both parties and protect integrity. Returns
     /// [`SamlError::Invalid`] when the persistent `name_id` value or a new
-    /// value is longer than 256 characters, or when the NameID format is not
-    /// an absolute URI reference. With
+    /// value is longer than 256 characters, when an `entity` value or new
+    /// value is not an absolute URI reference of at most 1024 characters with
+    /// collapsed whitespace, when an `entity` `name_id` has a qualifier, or
+    /// when the NameID format is not an absolute URI reference. With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers), returns
     /// [`SamlError::MissingMetadata`] when the service provider role that
     /// publishes the receiving `ManageNameIDService` has no encryption

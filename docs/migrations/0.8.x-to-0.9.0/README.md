@@ -78,5 +78,6 @@ Check the topics that affect your integration.
 - [Read metadata endpoints only in the metadata namespace](metadata-endpoint-namespace.md)
 - [Require a `validUntil` on the metadata root](root-valid-until.md)
 - [Encrypt logout and name identifier management for the receiving role](logout-and-nim-encryption-role.md)
+- [Handle NameID value errors in identity provider logout and management](identity-provider-name-id-checks.md)
 
 [All migration guides](../README.md)
