@@ -146,24 +146,31 @@ impl Metadata {
 
     fn from_extracted(
         xml: Arc<str>,
-        mut meta: Value,
+        meta: Value,
         descriptors: SelectedDescriptors<'_>,
         description: EntityDescription,
         entity_attributes: Vec<SamlElement>,
     ) -> (Self, Vec<SamlElement>) {
-        meta.insert(
-            "singleLogoutService",
-            endpoints::roles_endpoints(
-                &descriptors.namespaced,
-                "SingleLogoutService",
-                &["Binding", "Location", "ResponseLocation"],
-            ),
-        );
+        let role_services = |name| {
+            descriptors
+                .namespaced
+                .iter()
+                .map(|role| {
+                    endpoints::role_endpoints(
+                        role,
+                        name,
+                        &["Binding", "Location", "ResponseLocation"],
+                    )
+                })
+                .collect()
+        };
         let metadata = Self {
             xml,
             meta,
             entity_id: descriptors.entity_id,
             key_certificates: descriptors.key_certificates,
+            single_logout_service_roles: role_services("SingleLogoutService"),
+            manage_name_id_service_roles: role_services("ManageNameIDService"),
             valid_until_bounds: descriptors.valid_until_bounds,
             signing_flags: descriptors.signing_flags,
             scope_elements: descriptors.scope_elements,

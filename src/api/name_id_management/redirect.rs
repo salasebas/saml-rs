@@ -5,7 +5,7 @@ use crate::config::{IdpDescriptor, SpDescriptor};
 use crate::constants::Binding;
 use crate::entity::{generate_id, EntitySetting};
 use crate::flow::MessageAuthentication;
-use crate::metadata::{EndpointDirection, Metadata};
+use crate::metadata::{EndpointDirection, Metadata, RoleLocation};
 use crate::model::{
     MessageId, NameId, Received, RelayState, ReplayKey, SamlValidationContext, Status,
 };
@@ -67,8 +67,9 @@ impl ServiceProvider {
     /// absolute URI reference, or when `allow_http` is selected and the first
     /// endpoint is not an `http` or `https` URL. With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers),
-    /// returns [`SamlError::MissingMetadata`] when the identity provider
-    /// publishes no encryption certificate. Returns another [`SamlError`] when
+    /// returns [`SamlError::MissingMetadata`] when the identity provider role
+    /// that publishes the receiving `ManageNameIDService` has no encryption
+    /// certificate. Returns another [`SamlError`] when
     /// relay state is invalid, the signing key is missing, or no crypto
     /// provider is enabled.
     ///
@@ -276,8 +277,9 @@ impl IdentityProvider {
     /// `https` URL.
     /// With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers),
-    /// returns [`SamlError::MissingMetadata`] when the service provider
-    /// publishes no encryption certificate. Returns another [`SamlError`] when
+    /// returns [`SamlError::MissingMetadata`] when the service provider role
+    /// that publishes the receiving `ManageNameIDService` has no encryption
+    /// certificate. Returns another [`SamlError`] when
     /// relay state is invalid, the signing key is missing, or no crypto
     /// provider is enabled.
     ///
@@ -489,7 +491,7 @@ fn start(
         relay_state.ensure_sendable()?;
     }
     local_locations(local.metadata, EndpointDirection::Response)?;
-    let destination = peer_destination(&peer, EndpointDirection::Request, options.transport())?;
+    let receiver = peer_destination(&peer, EndpointDirection::Request, options.transport())?;
     let issuer = local.entity_id()?;
     let (idp_entity_id, sp_entity_id) = match local.requester {
         Requester::IdentityProvider => (issuer.as_str(), peer.entity_id.as_str()),
@@ -499,10 +501,11 @@ fn start(
     let context = create_request(
         local.setting,
         peer.metadata,
+        receiver.role,
         &RequestXml {
             id: &id,
             issuer: &issuer,
-            destination: &destination,
+            destination: &receiver.location,
             name_id,
             change,
             requester: local.requester,
@@ -620,7 +623,7 @@ fn response_outbound(
     relay_state: Option<&str>,
     transport: PeerEndpointTransport,
 ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
-    let destination = peer_destination(peer, EndpointDirection::Response, transport)?;
+    let destination = peer_destination(peer, EndpointDirection::Response, transport)?.location;
     let context = create_response(
         local.setting,
         &ResponseXml {
@@ -679,13 +682,12 @@ fn peer_destination(
     peer: &Peer<'_>,
     direction: EndpointDirection,
     transport: PeerEndpointTransport,
-) -> Result<String, SamlError> {
-    let locations = peer.metadata.manage_name_id_service_locations(
-        Binding::from(NameIdManagementBinding::Redirect),
-        direction,
-    );
+) -> Result<RoleLocation, SamlError> {
+    let endpoints = peer
+        .metadata
+        .manage_name_id_services(Binding::from(NameIdManagementBinding::Redirect), direction);
     peer_endpoint_for_transport(
-        locations,
+        endpoints,
         transport,
         "name identifier management",
         "ManageNameIDService",

@@ -133,14 +133,6 @@ impl IdpMetadata {
                 &["Binding", "Location"],
             ),
         );
-        inner.meta.insert(
-            "manageNameIDService",
-            super::endpoints::roles_endpoints(
-                roles,
-                "ManageNameIDService",
-                &["Binding", "Location", "ResponseLocation"],
-            ),
-        );
         Self {
             inner,
             artifact_resolution_roles,

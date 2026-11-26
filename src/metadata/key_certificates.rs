@@ -45,14 +45,6 @@ impl KeyCertificates {
     }
 
     #[cfg(crypto)]
-    pub(super) fn encryption_keys(&self) -> &[Vec<String>] {
-        self.role_encryption_keys
-            .iter()
-            .find(|keys| !keys.is_empty())
-            .map_or(&[], Vec::as_slice)
-    }
-
-    #[cfg(crypto)]
     pub(super) fn role_encryption_keys(&self, role: usize) -> &[Vec<String>] {
         self.role_encryption_keys
             .get(role)
@@ -183,7 +175,7 @@ mod tests {
                         metadata.x509_certificates(CertUse::Signing).to_vec(),
                         metadata.x509_certificates(CertUse::Encryption).to_vec(),
                         #[cfg(crypto)]
-                        metadata.encryption_key_certificates().concat(),
+                        metadata.role_encryption_key_certificates(0).concat(),
                     ]
                 })
                 .collect())

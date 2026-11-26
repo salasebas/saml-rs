@@ -6,7 +6,7 @@ use crate::browser::{
 use crate::config::{EntityId, HmacSecret, IdpDescriptor, SpDescriptor};
 use crate::constants::{url_params, Binding};
 use crate::idp;
-use crate::metadata::{DefaultMarking, Metadata};
+use crate::metadata::{DefaultMarking, Metadata, RoleLocation};
 use crate::model::RelayState;
 use crate::sp;
 use std::time::SystemTime;
@@ -149,18 +149,18 @@ pub(super) fn ensure_entity_id(expected: &EntityId, actual: &EntityId) -> Result
 }
 
 pub(super) fn peer_endpoint_for_transport(
-    locations: Vec<String>,
+    endpoints: Vec<RoleLocation>,
     transport: PeerEndpointTransport,
     profile: &str,
     service: &str,
-) -> Result<String, SamlError> {
+) -> Result<RoleLocation, SamlError> {
     let mut first_error = None;
-    for location in locations {
+    for endpoint in endpoints {
         match transport {
-            PeerEndpointTransport::AllowHttp => return Ok(location),
+            PeerEndpointTransport::AllowHttp => return Ok(endpoint),
             PeerEndpointTransport::RequireHttps => {
-                match ensure_https_endpoint(&location, profile, service) {
-                    Ok(()) => return Ok(location),
+                match ensure_https_endpoint(&endpoint.location, profile, service) {
+                    Ok(()) => return Ok(endpoint),
                     Err(error) => {
                         first_error.get_or_insert(error);
                     }

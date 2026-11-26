@@ -97,7 +97,7 @@ impl SpMetadata {
         Ok(Self::from_roles(inner, &roles))
     }
 
-    fn from_roles(mut inner: Metadata, roles: &[SamlElement]) -> Self {
+    fn from_roles(inner: Metadata, roles: &[SamlElement]) -> Self {
         let assertion_consumer_service_roles = roles
             .iter()
             .map(|role| {
@@ -108,14 +108,6 @@ impl SpMetadata {
                 )
             })
             .collect();
-        inner.meta.insert(
-            "manageNameIDService",
-            super::endpoints::roles_endpoints(
-                roles,
-                "ManageNameIDService",
-                &["Binding", "Location", "ResponseLocation"],
-            ),
-        );
         Self {
             inner,
             assertion_consumer_service_roles,

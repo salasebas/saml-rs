@@ -426,6 +426,118 @@ fn identifiers_are_encrypted_for_a_later_peer_key_the_key_transport_can_use() ->
     Ok(())
 }
 
+fn with_keyed_role_without_endpoints(
+    metadata: &str,
+    role: &str,
+    certificate: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let position = metadata
+        .find(&format!("<{role}"))
+        .ok_or_else(|| format!("metadata has no {role}"))?;
+    let mut metadata = metadata.to_string();
+    metadata.insert_str(
+        position,
+        &format!(
+            "<{role} protocolSupportEnumeration=\"{PROTOCOL}\"><KeyDescriptor use=\"encryption\"><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><ds:X509Data><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor></{role}>",
+            normalize_cert_string(certificate)
+        ),
+    );
+    Ok(metadata)
+}
+
+fn with_sp_soap_service(metadata: &str) -> String {
+    metadata.replacen(
+        "<ManageNameIDService ",
+        r#"<ManageNameIDService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://sp.example.com/manage-name-id/soap"/><ManageNameIDService "#,
+        1,
+    )
+}
+
+#[test]
+fn identifiers_are_encrypted_for_the_role_that_publishes_the_manage_name_id_service() -> TestResult
+{
+    let sp = sp()?;
+    let idp = idp()?;
+    let sp_peer = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &with_keyed_role_without_endpoints(
+            &with_sp_soap_service(sp.metadata_xml()),
+            "SPSSODescriptor",
+            IDP_ENCRYPTION_CERT,
+        )?,
+        MetadataTrustPolicy::Unverified,
+    )?;
+    let idp_peer = idp_descriptor_from(&with_keyed_role_without_endpoints(
+        idp.metadata_xml(),
+        "IDPSSODescriptor",
+        SP_ENCRYPTION_CERT,
+    )?)?;
+    assert_ne!(
+        normalize_cert_string(IDP_ENCRYPTION_CERT),
+        normalize_cert_string(SP_ENCRYPTION_CERT)
+    );
+
+    let started = sp.start_name_id_management_redirect(
+        &idp_peer,
+        &alice(),
+        &NameIdChange::NewId("sp-alias".into()),
+        encrypted(),
+    )?;
+    let NameIdManagementReceipt::Request(request) = idp.receive_name_id_management_redirect(
+        &sp_descriptor(&sp)?,
+        request_input(&started.outbound)?,
+        ReceiveNameIdManagement::new(),
+        validation(),
+    )?
+    else {
+        return Err("the service provider request was refused".into());
+    };
+    assert_eq!(request.message().name_id(), &alice());
+
+    let started = idp.start_name_id_management_redirect(
+        &sp_peer,
+        &alice(),
+        &NameIdChange::NewId("alice-2".into()),
+        encrypted(),
+    )?;
+    let NameIdManagementReceipt::Request(request) = sp.receive_name_id_management_redirect(
+        &idp_descriptor(&idp)?,
+        request_input(&started.outbound)?,
+        ReceiveNameIdManagement::new(),
+        validation(),
+    )?
+    else {
+        return Err("the identity provider Redirect request was refused".into());
+    };
+    assert_eq!(request.message().name_id(), &alice());
+
+    let started = idp.start_name_id_management(
+        &sp_peer,
+        &alice(),
+        &NameIdChange::NewId("alice-2".into()),
+        encrypted(),
+        authenticated(),
+    )?;
+    let soap_xml = SoapBodyElement::from_envelope(started.request().envelope())?
+        .xml()
+        .to_string();
+    let (encrypted_id, new_encrypted_id) = encrypted_identifier_and_new_value(&soap_xml)?;
+    let NameIdManagementReceipt::Request(request) = sp.receive_name_id_management_redirect(
+        &idp_descriptor(&idp)?,
+        idp_request_input(&format!("{encrypted_id}{new_encrypted_id}"))?,
+        ReceiveNameIdManagement::new(),
+        validation(),
+    )?
+    else {
+        return Err("the identity provider SOAP request was refused".into());
+    };
+    assert_eq!(
+        request.message().change(),
+        &NameIdChange::NewId("alice-2".into())
+    );
+    Ok(())
+}
+
 #[test]
 fn identity_provider_encrypts_a_soap_request_and_decrypts_one_over_soap() -> TestResult {
     let sp = sp()?;
