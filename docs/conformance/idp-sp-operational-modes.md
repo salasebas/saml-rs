@@ -98,8 +98,8 @@ Conformance §4. Rules, including what each backend supports, are in [XML Signat
 
 | Obligation | Actor | Disposition |
 | --- | --- | --- |
-| §4.1 SHA-1 digest, HMAC-SHA1, Canonical XML 1.0 without comments, enveloped-signature transform, and RSAwithSHA1 | Signer and verifier: both roles | Claimed feature. Generated only when selected |
-| §4.1 DSAwithSHA1, recommended. Bindings §3.4.4.1 signature rule 5 makes it and RSAwithSHA1 mandatory for the HTTP-Redirect `SigAlg` | Signer and verifier: both roles | Claimed feature on the default build only. Generated only when selected |
+| §4.1 SHA-1 digest, HMAC-SHA1, Canonical XML 1.0 without comments, enveloped-signature transform, and RSAwithSHA1, for embedded XML signatures | Signer and verifier: both roles | Claimed feature on RustCrypto builds, which include the default. `crypto-aws-lc` only verifies RSAwithSHA1. `crypto-fips` lacks the SHA-1 digest, HMAC-SHA1, and RSAwithSHA1. See [signature algorithms by build](xml-security-algorithms.md#signature-algorithms-by-build). The SHA-1 algorithms are generated only when selected |
+| §4.1 DSAwithSHA1, recommended. Bindings §3.4.4.1 signature rule 5 makes it and RSAwithSHA1 mandatory for the HTTP-Redirect `SigAlg` | Signer and verifier: both roles | Claimed feature on RustCrypto with `crypto-legacy-algorithms`, which the default build includes. Generated only when selected |
 | §4.2 Triple DES, AES-128, AES-256, RSA-v1.5, and RSA-OAEP | Encrypter and decrypter: both roles | Claimed feature. Triple DES and RSA-v1.5 are generated only when selected. RSA-v1.5 is decrypted only when selected |
 
 ## TLS

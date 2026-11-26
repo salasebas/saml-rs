@@ -611,10 +611,16 @@ pub struct AlgorithmPolicy {
     pub key_encryption: KeyEncryptionAlgorithm,
     /// XML-DSig reference transforms.
     ///
+    /// The default is the enveloped-signature transform followed by
+    /// exclusive canonicalization. A peer may reject a signature with any
+    /// other transform, and Canonical XML puts the namespace declarations of
+    /// the signed element's ancestors into the digest.
+    ///
     /// They apply to responses from `respond_sso` and `initiate_sso`, to an
     /// `AuthnRequest` with an XML signature, and to logout messages signed on
     /// HTTP-POST. Responses from `respond_sso_artifact` and
-    /// `initiate_sso_artifact`, and logout messages over SOAP, keep the
+    /// `initiate_sso_artifact`, the SOAP `ArtifactResolve`, and logout
+    /// messages over SOAP keep the
     /// enveloped-signature and exclusive canonicalization
     /// transforms. The scope is in
     /// `docs/conformance/xml-security-algorithms.md`.
