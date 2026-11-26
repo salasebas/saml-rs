@@ -22,15 +22,18 @@ Bindings §3.4.4.1 and the HTTP-POST-SimpleSign
 [1.1](https://www.w3.org/TR/xmlenc-core1/) define the algorithms. This record
 claims neither operational mode, and Conformance §5 (TLS) is not in it.
 
+<a id="builds-without-a-crypto-provider"></a>
+
+The statuses hold on builds with a crypto provider. A build without one
+neither signs nor verifies, and neither encrypts nor decrypts. Its config
+builders refuse a policy that needs a crypto provider.
+
 ## Support
 
 The identity provider and the service provider each sign, verify, encrypt,
 and decrypt. For assertion delivery the identity provider encrypts and the
 service provider decrypts, and in single logout and name identifier
-management either role encrypts identifiers for its peer. A build without a
-crypto provider implements none of these features, so a feature that every
-crypto provider implements is `Partial` and links to
-[builds without a crypto provider](#builds-without-a-crypto-provider).
+management either role encrypts identifiers for its peer.
 
 ### XML Signature
 
@@ -38,31 +41,31 @@ crypto provider implements is `Partial` and links to
 | --- | --- | --- | --- |
 | SHA-1 digest | Conformance §4.1 | [Partial](#signature-algorithms-by-build) | [Partial](#signature-algorithms-by-build) |
 | HMAC-SHA1 | Conformance §4.1 | [Partial](#signature-algorithms-by-build) | [Partial](#signature-algorithms-by-build) |
-| Canonical XML 1.0 without comments | Conformance §4.1 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
-| Enveloped-signature transform | Conformance §4.1 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
+| Canonical XML 1.0 without comments | Conformance §4.1 | Supported | Supported |
+| Enveloped-signature transform | Conformance §4.1 | Supported | Supported |
 | RSAwithSHA1 | Conformance §4.1 | [Partial](#signature-algorithms-by-build) | [Partial](#signature-algorithms-by-build) |
 | DSAwithSHA1 | Conformance §4.1 | [Partial](#signature-algorithms-by-build) | [Partial](#signature-algorithms-by-build) |
 | RSAwithSHA1 and DSAwithSHA1 as the `SigAlg` of HTTP-Redirect and HTTP-POST-SimpleSign | Bindings §3.4.4.1, CS-01 §2.5 | [Partial](#signature-algorithms-by-build) | [Partial](#signature-algorithms-by-build) |
-| Exclusive canonicalization without comments, in `SignedInfo` and as a reference transform | Core §5.4.3, E83 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
-| RSA-SHA256, RSA-SHA384, and RSA-SHA512 | E50 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
-| ECDSA-SHA256, ECDSA-SHA384, and ECDSA-SHA512 | E50, RFC 9231 §2.3.6 | [Partial](#generation-by-provider) | [Partial](#builds-without-a-crypto-provider) |
+| Exclusive canonicalization without comments, in `SignedInfo` and as a reference transform | Core §5.4.3, E83 | Supported | Supported |
+| RSA-SHA256, RSA-SHA384, and RSA-SHA512 | E50 | Supported | Supported |
+| ECDSA-SHA256, ECDSA-SHA384, and ECDSA-SHA512 | E50, RFC 9231 §2.3.6 | [Partial](#generation-by-provider) | Supported |
 | Ed25519 | E50, RFC 9231 §2.3.12 | [Partial](#generation-by-provider) | [Partial](#provider-supported-set) |
 | Other signature and digest algorithms | E50, E81 | [Partial](#generation-by-provider) | [Partial](#provider-supported-set) |
-| Explicit `HMACOutputLength` on an HMAC `SignatureMethod` | XMLDSig 1.1 §4.4.2, §6.3.1 | Not supported | [Partial](#builds-without-a-crypto-provider) |
+| Explicit `HMACOutputLength` on an HMAC `SignatureMethod` | XMLDSig 1.1 §4.4.2, §6.3.1 | Not supported | Supported |
 
 ### XML Encryption
 
 | Feature | Section | Encrypter | Decrypter |
 | --- | --- | --- | --- |
-| AES-128-CBC and AES-256-CBC | Conformance §4.2 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
+| AES-128-CBC and AES-256-CBC | Conformance §4.2 | Supported | Supported |
 | Triple DES CBC | Conformance §4.2 | [Partial](#encryption-algorithms-by-provider) | [Partial](#encryption-algorithms-by-provider) |
 | RSA-v1.5 key transport | Conformance §4.2 | [Partial](#encryption-algorithms-by-provider) | [Partial](#encryption-algorithms-by-provider) |
 | RSA-OAEP-MGF1P key transport | Conformance §4.2 | [Partial](#encryption-algorithms-by-provider) | [Partial](#encryption-algorithms-by-provider) |
-| AES-128-GCM and AES-256-GCM | E50, XML Encryption 1.1 §5.2.4 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
+| AES-128-GCM and AES-256-GCM | E50, XML Encryption 1.1 §5.2.4 | Supported | Supported |
 | XML Encryption 1.1 RSA-OAEP with a SHA-256, SHA-384, or SHA-512 digest and MGF1 | E50, XML Encryption 1.1 §5.5.2 | [Partial](#encryption-algorithms-by-provider) | [Partial](#encryption-algorithms-by-provider) |
 | Other encryption algorithms | E50 | [Partial](#encryption-algorithms-by-provider) | [Partial](#encryption-algorithms-by-provider) |
-| `EncryptedKey` embedded in the `ds:KeyInfo` of `EncryptedData` | XML Encryption 1.0 §3.5.1, E43 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
-| `ds:RetrievalMethod` that names an `EncryptedKey` inside the encrypted element | XML Encryption 1.0 §3.5.2, E43 | Not supported | [Partial](#builds-without-a-crypto-provider) |
+| `EncryptedKey` embedded in the `ds:KeyInfo` of `EncryptedData` | XML Encryption 1.0 §3.5.1, E43 | Supported | Supported |
+| `ds:RetrievalMethod` that names an `EncryptedKey` inside the encrypted element | XML Encryption 1.0 §3.5.2, E43 | Not supported | Supported |
 | `ds:RetrievalMethod` that names an `EncryptedKey` elsewhere in the message | XML Encryption 1.0 §3.5, E43 | Not supported | Not supported |
 | A `ds:RetrievalMethod` after the first one whose reference resolves | XML Encryption 1.0 §3.5.2, E43 | — | Not supported |
 | `ds:KeyName` that names an `EncryptedKey` by its `CarriedKeyName` | XML Encryption 1.0 §3.5, E43 | Not supported | Not supported |
@@ -72,22 +75,13 @@ crypto provider implements is `Partial` and links to
 
 ## Partial support
 
-### Builds without a crypto provider
-
-- **Supported:** RustCrypto, `crypto-aws-lc`, and `crypto-fips` implement
-  the feature for each actor whose cell links here.
-- **Not supported:** a build without a crypto provider neither signs nor
-  verifies, and neither encrypts nor decrypts. Its config builders refuse a
-  policy that needs a crypto provider.
-
 ### Signature algorithms by build
 
 - **Supported:** RustCrypto with `crypto-legacy-algorithms`, which the
   default build enables, signs and verifies every Conformance §4.1
   algorithm, the DSAwithSHA1 that it recommends, and both `SigAlg` methods of
   Bindings §3.4.4.1 and CS-01 §2.5.
-- **Not supported:** the other builds lack what the table marks, and a build
-  without a crypto provider signs and verifies none of it.
+- **Not supported:** the other builds lack what the table marks.
   `XmlSignatureProfile::StrictRsaSha2` refuses every SHA-1 algorithm on
   every build. That is verifier policy, not build capability.
 
@@ -191,9 +185,8 @@ unless its row or cell says otherwise.
   AES-256, RSA-v1.5, and RSA-OAEP-MGF1P.
 - **Not supported:** `crypto-aws-lc` lacks Triple DES, and implements
   RSA-v1.5 only with `crypto-legacy-algorithms`. `crypto-fips` lacks Triple
-  DES and RSA-v1.5, and refuses the SHA-1 digest and MGF1 of RSA-OAEP-MGF1P. A build without a crypto
-  provider neither encrypts nor decrypts. RSA-v1.5 decryption also needs
-  `Rsa15KeyTransportPolicy::AllowDecryption`.
+  DES and RSA-v1.5, and refuses the SHA-1 digest and MGF1 of RSA-OAEP-MGF1P.
+  RSA-v1.5 decryption also needs `Rsa15KeyTransportPolicy::AllowDecryption`.
 
 | Algorithm | RustCrypto | `crypto-aws-lc` | `crypto-fips` |
 | --- | --- | --- | --- |

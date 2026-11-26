@@ -30,6 +30,16 @@ bindings this record covers.>
 <Normative text is ... Name the normative documents, and the errata that
 change them.>
 
+<!--
+Keep this paragraph when a build without a crypto provider lacks a feature
+of this record, and delete it otherwise. Keep its first sentence. In at most
+two more, say what that build cannot do in the record's flows and what the
+public APIs return or refuse there.
+-->
+
+The statuses hold on builds with a crypto provider. <What a build without
+one cannot do in this record's flows, and what the APIs return or refuse.>
+
 ## Support
 
 <!--
@@ -43,10 +53,12 @@ provider" and "Service provider", or "Requester" and "Responder", or
 "Signer" and "Verifier". Use a second table, under its own
 level-three heading, when part of the record has different actors.
 
-A status is `Supported`, `Partial`, `Not supported`, or `—`. `Supported`
-covers every build and every form of the feature that the row names. When
-only part of that works, the status is `Partial`. Link a `Partial` cell to
-its entry under "Partial support".
+A status is `Supported`, `Partial`, `Not supported`, or `—`, and it
+describes the builds with a crypto provider. `Supported` covers every such
+build, whatever its provider and feature flags, and every form of the
+feature that the row names. When only part of that works, the status is
+`Partial`. A build without a crypto provider makes no cell `Partial`. Link a
+`Partial` cell to its entry under "Partial support".
 -->
 
 | Feature | Section | <Actor> | <Actor> |
@@ -59,7 +71,7 @@ its entry under "Partial support".
 <!--
 One entry per `Partial` cell, or one for several cells that one gap
 explains. Say what works, what does not, and for whom. Name the builds when
-support depends on a crypto provider or feature.
+support differs between crypto providers or feature flags.
 -->
 
 ### <Feature>

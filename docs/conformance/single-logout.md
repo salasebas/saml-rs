@@ -20,6 +20,14 @@ rules for principal identifiers, and the shared
 [SOAP envelope rules](artifact-resolution.md#soap-envelope-rules) cover header
 order, `mustUnderstand`, and body contents.
 
+<a id="builds-without-a-crypto-provider"></a>
+
+The statuses hold on builds with a crypto provider. A build without one
+neither signs nor verifies, and neither encrypts nor decrypts. `start_slo`,
+`start_async_slo`, `respond_slo`, and `respond_slo_refusal` return
+`SamlError::Unsupported`, and `receive_slo` and `finish_slo` refuse a
+message over a browser binding, so no logout exchange completes.
+
 ## Support
 
 A status covers the role's part in the feature: sending, receiving, or both.
@@ -28,13 +36,13 @@ A status covers the role's part in the feature: sending, receiving, or both.
 
 | Feature | Section | Identity provider | Service provider |
 | --- | --- | --- | --- |
-| `LogoutRequest` over HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign, sent and received | Profiles §4.4.3.1, §4.4.3.3, Bindings §3.4, §3.5, CS-01 §2.4 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
-| `LogoutResponse` over HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign, sent and received | Profiles §4.4.3.4, §4.4.3.5, Bindings §3.4, §3.5, CS-01 §2.4 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
-| A `LogoutResponse` on another of those bindings than its request | Profiles §4.4.3.4, §4.4.3.5 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
-| `LogoutRequest` over SOAP, sent and received | Profiles §4.4.3.1, §4.4.3.3, Bindings §3.2 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
-| `LogoutResponse` over SOAP, sent and received | Profiles §4.4.3.4, §4.4.3.5, Bindings §3.2 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
+| `LogoutRequest` over HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign, sent and received | Profiles §4.4.3.1, §4.4.3.3, Bindings §3.4, §3.5, CS-01 §2.4 | Supported | Supported |
+| `LogoutResponse` over HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign, sent and received | Profiles §4.4.3.4, §4.4.3.5, Bindings §3.4, §3.5, CS-01 §2.4 | Supported | Supported |
+| A `LogoutResponse` on another of those bindings than its request | Profiles §4.4.3.4, §4.4.3.5 | Supported | Supported |
+| `LogoutRequest` over SOAP, sent and received | Profiles §4.4.3.1, §4.4.3.3, Bindings §3.2 | Supported | Supported |
+| `LogoutResponse` over SOAP, sent and received | Profiles §4.4.3.4, §4.4.3.5, Bindings §3.2 | Supported | Supported |
 | `LogoutRequest` and `LogoutResponse` over HTTP-Artifact | Profiles §4.4.3.1, §4.4.3.4, Bindings §3.6 | Not supported | Not supported |
-| A signature on each sent message, and its verification on a received one | Core §3.7.1, §3.7.2, Profiles §4.4.4.1, §4.4.4.2 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
+| A signature on each sent message, and its verification on a received one | Core §3.7.1, §3.7.2, Profiles §4.4.4.1, §4.4.4.2 | Supported | Supported |
 | An unsigned SOAP message that the channel authenticates, received | Profiles §4.4.3.1, §4.4.3.4, §4.4.4.1, §4.4.4.2 | Supported | Supported |
 | An unsigned SOAP message that the channel authenticates, sent | Profiles §4.4.3.1, §4.4.3.4, §4.4.4.1, §4.4.4.2 | Not supported | Not supported |
 | `SingleLogoutService` endpoints of the peer's metadata, `ResponseLocation` included | Profiles §4.4.3.1, §4.4.5, Metadata §2.2.2, §2.4.2, E41 | Supported | Supported |
@@ -53,7 +61,7 @@ returns a received one unchanged.
 | Feature | Section | Identity provider | Service provider |
 | --- | --- | --- | --- |
 | `NameID` as the principal identifier | Core §3.7.1, Profiles §4.4.4.1 | Supported | [Partial](#service-provider-nameid) |
-| `EncryptedID` as the principal identifier | Core §3.7.1, §6.1, Profiles §4.4.5, Conformance §3.4 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
+| `EncryptedID` as the principal identifier | Core §3.7.1, §6.1, Profiles §4.4.5, Conformance §3.4 | Supported | [Partial](#service-provider-nameid) |
 | `BaseID` as the principal identifier | Core §2.2.1, §3.7.1 | [Partial](#baseid-principal-identifier) | [Partial](#baseid-principal-identifier) |
 | `SessionIndex` | Core §3.7.1, Profiles §4.4.4.1, E38 | Supported | Supported |
 | A request without `SessionIndex`, for all of the principal's sessions | Profiles §4.4.4.1, E38 | Supported | Supported |
@@ -61,7 +69,7 @@ returns a received one unchanged.
 | `NotOnOrAfter` on a received request | Core §3.7.1 | Supported | Supported |
 | `NotOnOrAfter` at or after that of the latest assertion of the targeted session | Core §3.7.3.2 | Not supported | — |
 | `Reason`, sent and received | Core §3.7.1, §3.7.3, E10 | Supported | Supported |
-| The asynchronous marker on HTTP-Redirect and HTTP-POST | Async SLO §2.1, §2.2 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
+| The asynchronous marker on HTTP-Redirect and HTTP-POST | Async SLO §2.1, §2.2 | Supported | Supported |
 | The asynchronous marker on HTTP-POST-SimpleSign and SOAP | Async SLO §2.1 | Not supported | Not supported |
 | `supportsAsynchronous` on a metadata endpoint | Async SLO §2.3 | Not supported | Not supported |
 
@@ -91,25 +99,12 @@ provider sends it. `Consent`, caller extensions, and `StatusDetail` are in
 
 ## Partial support
 
-### Builds without a crypto provider
-
-- **Supported:** on a build with a crypto provider, both roles sign each
-  logout message they send and verify the signature that a received one
-  carries, so each exchange that links here works. They encrypt and decrypt
-  `EncryptedID` with the algorithms that
-  [XML Encryption](xml-security-algorithms.md#encryption-algorithms-by-provider)
-  lists for the build.
-- **Not supported:** a build without a crypto provider neither signs nor
-  verifies, and neither encrypts nor decrypts. `start_slo`,
-  `start_async_slo`, `respond_slo`, and `respond_slo_refusal` return
-  `SamlError::Unsupported`, and `receive_slo` and `finish_slo` refuse a
-  message over a browser binding, so no logout exchange completes.
-
 ### Service provider `NameID`
 
 - **Supported:** `ServiceProvider::start_slo` writes the `NameID` of the
-  `NameId` it is given, and `SsoSession::logout_subject` gives no subject for
-  a `NameID` value with only XML whitespace.
+  `NameId` it is given, in the clear or in an `EncryptedID`, and
+  `SsoSession::logout_subject` gives no subject for a `NameID` value with
+  only XML whitespace.
 - **Not supported:** a `NameId` that the caller builds with a value or
   qualifier of only XML whitespace, or an `entity` `NameID` that breaks Core
   §8.3.6, is written unchanged, as

@@ -17,15 +17,24 @@ Where this record states no difference, the `Response` follows
 and its acceptance follows the HTTP-POST rows of
 [SSO acceptance](web-browser-sso-acceptance.md).
 
+<a id="partial-support"></a>
+<a id="builds-without-a-crypto-provider"></a>
+
+The statuses hold on builds with a crypto provider. A build without one
+writes no Web SSO `Response` at the identity provider, so it delivers no
+artifact. Its service provider verifies no XML signature, so it establishes
+no session, reports the status of an unsigned error `Response`, and refuses
+a signed one.
+
 ## Support
 
 | Feature | Section | Identity provider | Service provider |
 | --- | --- | --- | --- |
-| `Response` by artifact, in a `SAMLart` query parameter or form control | Bindings §3.6.3, Profiles §4.1.3.5 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
-| Error `Response` by artifact | Profiles §4.1.3.5, §4.1.4.2, E85 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
-| Unsolicited `Response` by artifact | Profiles §4.1.5 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
-| `RelayState` with a `Response` artifact | Bindings §3.6.3.1, Profiles §4.1.5 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
-| XML signature on the `Response` or on each assertion | Profiles §4.1.3.5, E93 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
+| `Response` by artifact, in a `SAMLart` query parameter or form control | Bindings §3.6.3, Profiles §4.1.3.5 | Supported | Supported |
+| Error `Response` by artifact | Profiles §4.1.3.5, §4.1.4.2, E85 | Supported | Supported |
+| Unsolicited `Response` by artifact | Profiles §4.1.5 | Supported | Supported |
+| `RelayState` with a `Response` artifact | Bindings §3.6.3.1, Profiles §4.1.5 | Supported | Supported |
+| XML signature on the `Response` or on each assertion | Profiles §4.1.3.5, E93 | Supported | Supported |
 | Successful `Response` without an XML signature, protected by the artifact resolution channel | Profiles §4.1.3.5, §4.1.4.4, E93 | Not supported | Not supported |
 | `AuthnRequest` by artifact, with its `RelayState` | Profiles §4.1.3.3, Bindings §3.6.3.1 | Not supported | Not supported |
 | HTTP-Artifact `AssertionConsumerService` in service provider metadata | Bindings §3.6.7, E2 | Supported | Supported |
@@ -35,20 +44,6 @@ The artifact format, the dereference over a mutually authenticated,
 integrity-protected, and confidential channel (Profiles §4.1.4.4), the single
 use of the artifact, and its release only to the service provider the
 `Response` was issued to are in [Artifact resolution](artifact-resolution.md).
-
-## Partial support
-
-### Builds without a crypto provider
-
-- **Supported:** on a build with a crypto provider, the identity provider
-  signs and stores the `Response` and delivers its artifact. The service
-  provider verifies the resolved `Response`, reports the status of an error,
-  and establishes a session from a `Success` response.
-- **Not supported:** on a build without a crypto provider, the identity
-  provider writes no Web SSO `Response`, so it delivers no artifact. The
-  service provider verifies no XML signature, so it establishes no session.
-  It reports the status of an unsigned error `Response` and refuses a signed
-  one.
 
 ## Rules
 

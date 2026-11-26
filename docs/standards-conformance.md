@@ -151,12 +151,18 @@ still has a row. When no specification defines the record's behaviour, as
 for a callback that the crate offers, the record has no Support section, and
 its rows are library policies.
 
+A status describes the builds that have a crypto provider, whatever their
+provider and feature flags.
+[Builds without a crypto provider](#builds-without-a-crypto-provider) says
+how a record describes the others.
+
 - `Supported`: the crate implements the feature for this actor, on every
-  build and for every form of the feature that the row names, and every
-  Mandatory rule for it holds.
+  build with a crypto provider and for every form of the feature that the
+  row names, and every Mandatory rule for it holds.
 - `Partial`: the crate implements only part of what the row names. A
   Mandatory rule is unmet, a binding or a form of the message is missing, or
-  a build lacks it. The record says which under **Partial support**.
+  a build with a crypto provider lacks it because of its provider or feature
+  flags. The record says which under **Partial support**.
 - `Not supported`: the crate does not implement the feature and claims
   nothing about it.
 - `—`: the specification gives this actor no part in the feature.
@@ -166,6 +172,26 @@ actors. Two `Partial` cells can link to one entry when one gap explains both.
 
 A duty that only the application can perform does not make a feature
 `Partial`. Record it under **Application duties**.
+
+#### Builds without a crypto provider
+
+A build without a crypto provider enables none of `crypto-rustcrypto`,
+`crypto-aws-lc`, and `crypto-fips`, as with `--no-default-features` alone.
+It signs, verifies, encrypts, and decrypts nothing. A record that has a
+feature such a build lacks describes the build once, in one paragraph
+between the normative text and **Support**. The paragraph starts with "The
+statuses hold on builds with a crypto provider." In at most two more
+sentences, it says what the build cannot do in the record's flows and what
+the public APIs return or refuse there.
+
+A difference between builds that have a crypto provider makes a cell
+`Partial`. The build without one makes no cell `Partial`, and no
+**Partial support** entry describes it:
+
+- RSAwithSHA1 in an XML signature is `Partial`, because `crypto-fips`
+  neither signs nor verifies it.
+- AES-128-CBC and AES-256-CBC are `Supported`, because every crypto
+  provider encrypts and decrypts them. The build without one does neither.
 
 ### Rule rows
 
