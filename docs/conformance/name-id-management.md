@@ -197,7 +197,7 @@ Code: `src/name_id_management.rs`, `src/soap.rs`, `src/crypto/verify.rs`, `src/m
 | --- | --- | --- | --- |
 | Verify a present request signature, including on a protected channel, and pass no change from a request whose signature is invalid | Mandatory | Core §3.2.1 | Always |
 | Require the verified signature to cover the request element | Mandatory | Core §3.2.1 | Always |
-| Answer a request from the service provider, on its attested `SoapChannel` and at this identity provider's endpoint, that declares no later major version and whose present signature does not verify with `Requester`, before replay storage | Mandatory | Core §3.2.1, Profiles §4.5.3.2 | `NameIdManagementRefusal::RequestDenied` |
+| Answer a request from the service provider, on its attested `SoapChannel` and at this identity provider's endpoint, whose `Version` has major version 2 or is not `major.minor`, and whose present signature does not verify, with `Requester`, before replay storage | Mandatory | Core §3.2.1, Profiles §4.5.3.2 | `NameIdManagementRefusal::RequestDenied` |
 | Add the second-level status `RequestDenied` to that answer | Optional | Core §3.2.2.2 | Always |
 | Answer such a request whose present signature this build cannot verify, because it has no crypto provider or the provider fails to start, with `Responder`, before replay storage | Mandatory | Core §3.2.2.2, Profiles §4.5.3.2 | `NameIdManagementRefusal::VerificationUnavailable` |
 | Answer a request that declares a later major version with neither `Requester` nor `Responder`, also when its signature does not verify or cannot be verified | Mandatory | Core §4.1.3.2 | Always |
