@@ -260,8 +260,9 @@ impl SsoSession {
     /// Returns `None` when its authentication statements specify no deadline.
     /// End the application session at this instant unless the principal signs
     /// in again. A fraction of a second finer than the platform's
-    /// [`SystemTime`] resolution is dropped, which moves the deadline earlier. [`AuthnStatement::session_not_on_or_after`]
-    /// keeps the text of each value.
+    /// [`SystemTime`] resolution is dropped, which moves the deadline earlier.
+    /// [`AuthnStatement::session_not_on_or_after`] keeps the text of each
+    /// value.
     pub fn session_not_on_or_after(&self) -> Option<SystemTime> {
         self.session_not_on_or_after
     }
