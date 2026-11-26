@@ -40,6 +40,17 @@ Metadata carries the `subject-id:req` requirement and the scope declarations
 of Subject Identifier §3.5, as the
 [metadata extensions](metadata-and-replay.md#metadata-extensions) show.
 
+### Attribute values that the identity provider writes
+
+`AttributeValue::new` takes a string, which the identity provider writes as
+escaped text.
+
+| Feature | Section | Identity provider |
+| --- | --- | --- |
+| A value of another simple datatype, declared with `xsi:type` | Core §2.7.3.1.1 | Not supported |
+| Structured content defined in an extension schema | Core §2.7.3.1.1 | Not supported |
+| A null value: an empty `AttributeValue` with `xsi:nil` set to `true` or `1` | Core §2.7.3.1.1 | Not supported |
+
 ### Name identifiers
 
 The identity provider writes name identifiers in a `Response`, a
@@ -47,12 +58,15 @@ The identity provider writes name identifiers in a `Response`, a
 `Subject` of an `AuthnRequest`, a `LogoutRequest`, and a `ManageNameIDRequest`.
 The service provider writes them in a `LogoutRequest` and a
 `ManageNameIDRequest`, and reads them in an assertion `Subject` and in those
-two requests.
+two requests. Neither role writes a transient identifier in a
+`ManageNameIDRequest`, as
+[name identifier management](name-id-management.md#turning-the-protocol-on)
+states.
 
 | Feature | Section | Identity provider writes | Identity provider reads | Service provider writes | Service provider reads |
 | --- | --- | --- | --- | --- | --- |
 | `NameID` | Core §2.2.3 | Supported | Supported | [Partial](#service-provider-requests) | Supported |
-| `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` | Core §2.2.2 | Supported | Supported | Supported | Supported |
+| `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` | Core §2.2.2 | Supported | Supported | [Partial](#service-provider-requests) | Supported |
 | An omitted `Format`, which means `unspecified` | Core §2.2.2, E60 | Supported | Supported | Supported | Supported |
 | The `unspecified`, `emailAddress`, `X509SubjectName`, `WindowsDomainQualifiedName`, and `kerberos` formats | Conformance §3.3, Core §8.3.1 to §8.3.5 | Supported | Supported | Supported | Supported |
 | The `entity` format | Conformance §3.3, Core §8.3.6 | Supported | Supported | [Partial](#service-provider-requests) | Supported |
@@ -60,8 +74,8 @@ two requests.
 | The `transient` format | Conformance §3.3, Core §8.3.8 | Supported | Supported | Supported | Supported |
 | Another `Format` URI | Core §2.2.2 | Supported | Supported | Supported | Supported |
 | `EncryptedID` that carries a `NameID` | Core §2.2.4 | [Partial](#encrypted-identifiers-and-attributes) | [Partial](#encrypted-identifiers-and-attributes) | [Partial](#encrypted-identifiers-and-attributes) | [Partial](#encrypted-identifiers-and-attributes) |
-| `EncryptedID` that carries a `BaseID` or an `Assertion` | Core §2.2.4 | Not supported | Not supported | Not supported | Not supported |
-| `BaseID` | Core §2.2.1 | Not supported | Not supported | Not supported | Not supported |
+| The identifier in a `BaseID` | Core §2.2.1 | Not supported | Not supported | Not supported | Not supported |
+| The identifier in an `EncryptedID` that carries a `BaseID` or an `Assertion` | Core §2.2.4 | Not supported | Not supported | Not supported | Not supported |
 
 ### Entity and generated identifiers
 
@@ -122,12 +136,6 @@ Code: `src/idp/login_response.rs`, `src/model/attributes.rs`, `src/xml/name.rs`,
 | When an attribute has several values and any declares `xsi:type`, give every value the same datatype. The writer uses `xs:string` when it declares a type | Mandatory | Core §2.7.3.1, E49 | Always |
 | Write a `FriendlyName`, XML-escaped, only when the caller sets one | Optional | Core §2.7.3.1 | `Attribute::with_friendly_name` |
 | Write no `AttributeStatement` in an error `Response` | Mandatory | Profiles §4.1.4.2 | Always |
-
-Core §2.7.3.1.1 lets a producer declare another simple datatype with
-`xsi:type`, define structured content in an extension schema, or send a null
-value, which must be an empty `AttributeValue` with `xsi:nil` set to `true` or
-`1`. The identity provider writes none of these forms: `AttributeValue::new`
-takes a string, which it writes as escaped text.
 
 ### Service provider: `SsoSession::attributes`
 
@@ -206,7 +214,7 @@ issued `NameId` omits one.
 | Reject a value, `NameQualifier`, `SPNameQualifier`, `SPProvidedID`, or `NewID` with no character other than XML whitespace | Mandatory | Core §1.3.1, XML 1.0 §2.3 | Always |
 | Generate a transient value under the [generated-ID rules](#generated-message-and-assertion-identifiers) | Mandatory | Core §8.3.8, §1.3.4 | `NameId::generate_transient` |
 | Generate a persistent value with no discernible correspondence to the subject, unique among those the identity provider issues for a service provider or affiliation | Mandatory | Core §8.3.7, E86 | `NameId::generate_persistent` |
-| Reject a persistent or transient value of more than 256 characters, and a persistent one passed to `NameId::persistent` | Mandatory | Core §8.3.7, §8.3.8 | Always |
+| Reject a persistent value of more than 256 characters, a transient one in a `Response` or a `LogoutRequest`, and a persistent one passed to `NameId::persistent` | Mandatory | Core §8.3.7, §8.3.8 | Always |
 | Reject an `entity` `NameID` whose value or `NewID` is not an absolute URI reference of at most 1024 characters, or that has `NameQualifier`, `SPNameQualifier`, or `SPProvidedID` | Mandatory | Core §8.3.6, §1.3.2 | Always |
 
 A requested `NameIDPolicy` `SPNameQualifier` is checked as in
@@ -285,9 +293,13 @@ Code: `src/model/subject_identifier.rs`, `src/model/attributes.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Match each attribute by its profile name and the `uri` format. Also accept an omitted or `unspecified` format for that name | Core §2.7.3.1 gives an omitted `NameFormat` the `unspecified` meaning, and the URI attribute mapping in Shibboleth SP reads such an attribute. | Subject Identifier §3.3, §3.4, Core §2.7.3.1 | Always |
+| Match each attribute by its profile name and the `uri` format. Also accept an omitted or `unspecified` format for that name | Reason not recorded. | Subject Identifier §3.3, §3.4, Core §2.7.3.1 | Always |
 | Require exactly one value across matching attributes, in the profile grammar, when the caller reads the identifier | The typed accessor needs one identifier. | Subject Identifier §3.2, §3.3.1 | Always |
 | Read a received identifier by its text regardless of `xsi:type` | The type requirement applies to the producer. | Subject Identifier §3.3.1 | Always |
+
+[Shibboleth SP 3.5.0](https://codeberg.org/Shibboleth/cpp-sp/src/tag/3.5.0/shibsp/attribute/resolver/impl/XMLAttributeExtractor.cpp#L516-L543)
+maps an attribute with an omitted or `unspecified` `NameFormat` that has no
+rule of its own to the rule configured for the `uri` format.
 
 ### Identity provider: `NameId` in a `Response`, a `LogoutRequest`, or a `ManageNameIDRequest`
 
@@ -341,7 +353,8 @@ The crate has no identifier store or log.
 | --- | --- | --- |
 | Give the provider an entity identifier that is a URL containing its own domain name. `SpConfig::builder` and `IdpConfig::builder` accept any absolute URI, such as a URN, and check no domain | Recommended | Core §8.3.6 |
 | Identity provider: assign a persistent value to one principal only, and store it so later responses reuse it through `NameId::persistent` | Mandatory | Core §8.3.7, E78 |
-| Identity provider: keep a persistent value out of clear text shared with other providers and out of unprotected logs, and do not use the format for non-opaque values | Mandatory | Core §8.3.7 |
+| Identity provider and service provider: keep a persistent value out of clear text shared with providers other than those that established it, and out of log files without appropriate controls | Mandatory | Core §8.3.7 |
+| Identity provider: do not use the persistent format for values that are not opaque | Mandatory | Core §8.3.7 |
 | Identity provider: generate a transient value passed to `NameId::new` under the Core §1.3.4 rules, as `NameId::generate_transient` does | Mandatory | Core §8.3.8, §1.3.4 |
 | Identity provider: when a persistent or pairwise transient `NameId` carries `NameQualifier` or `SPNameQualifier`, set them with `NameId::with_name_qualifier` and `NameId::with_sp_name_qualifier` to the entities Core §8.3.7 names | Mandatory | Core §8.3.7, §8.3.8 |
 | Identity provider: for a persistent or pairwise transient `NameId`, omit `NameQualifier` only when context identifies its creator, and `SPNameQualifier` only in a message solely for the service provider it would name | Optional | Core §8.3.7, §8.3.8 |
@@ -357,10 +370,11 @@ cover the `SPProvidedID` after a `NewID`.
 
 ## Not supported
 
-- `BaseID`, and an `EncryptedID` that carries a `BaseID` or an `Assertion`,
-  for both roles. Core §2.2.1 defines `BaseID` as an extension point with no
-  SAML-defined type, and neither role writes one. A `LogoutRequest` that
-  carries a `BaseID` has no `LogoutRequest::name_id`, and the receiver can
-  still answer it with `respond_slo`. The identity provider reports a
-  requested `BaseID` as `RequestedSubjectIdentifier::BaseId`, and the service
-  provider refuses an assertion whose `Subject` carries one.
+- The identifier in a `BaseID`, and in an `EncryptedID` that carries a
+  `BaseID` or an `Assertion`, for both roles. Core §2.2.1 defines `BaseID` as
+  an extension point with no SAML-defined type, and neither role writes one.
+  A `LogoutRequest` that carries a `BaseID` has no `LogoutRequest::name_id`,
+  and the receiver can still answer it with `respond_slo`. The identity
+  provider reports a requested `BaseID` as
+  `RequestedSubjectIdentifier::BaseId`, and the service provider refuses an
+  assertion whose `Subject` carries one.
