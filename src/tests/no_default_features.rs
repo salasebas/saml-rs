@@ -288,10 +288,15 @@ fn sp_required_response_signatures_return_unsupported_without_default_crypto(
 #[test]
 fn sp_signed_authn_requests_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut validation = sp_validation_without_crypto();
-    validation.authn_request_signing = AuthnRequestSigningPolicy::Sign;
+    for signing in [
+        AuthnRequestSigningPolicy::Sign,
+        AuthnRequestSigningPolicy::SignWhenIdpWants,
+    ] {
+        let mut validation = sp_validation_without_crypto();
+        validation.authn_request_signing = signing;
 
-    assert_unsupported(&sp_config_builder()?.validation(validation).build());
+        assert_unsupported(&sp_config_builder()?.validation(validation).build());
+    }
     Ok(())
 }
 

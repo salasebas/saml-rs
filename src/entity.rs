@@ -1,7 +1,7 @@
 use core::fmt;
 
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
-use crate::config::{AssertionElementEncryption, XmlSignatureProfile};
+use crate::config::{AssertionElementEncryption, AuthnRequestSigningPolicy, XmlSignatureProfile};
 use crate::config::{DigestAlgorithm, HmacSecret, MaskGenerationFunction, X509Credential};
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, signature_algorithm, transform_algorithm,
@@ -25,6 +25,7 @@ pub struct EntitySetting {
     pub want_assertions_signed: bool,
     pub(crate) require_audience_restriction: bool,
     pub want_message_signed: bool,
+    pub(crate) authn_request_signing: AuthnRequestSigningPolicy,
     pub(crate) xml_signatures: XmlSignatureProfile,
     pub(crate) want_encrypted_cbc_response_signed: bool,
     pub name_id_format: Vec<String>,
@@ -77,6 +78,7 @@ impl fmt::Debug for EntitySetting {
                 &self.require_audience_restriction,
             )
             .field("want_message_signed", &self.want_message_signed)
+            .field("authn_request_signing", &self.authn_request_signing)
             .field("xml_signatures", &self.xml_signatures)
             .field(
                 "want_encrypted_cbc_response_signed",
@@ -139,6 +141,7 @@ impl Default for EntitySetting {
             want_assertions_signed: false,
             require_audience_restriction: true,
             want_message_signed: false,
+            authn_request_signing: AuthnRequestSigningPolicy::DoNotSign,
             xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
             want_encrypted_cbc_response_signed: false,
             name_id_format: Vec::new(),

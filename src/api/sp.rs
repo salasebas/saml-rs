@@ -183,9 +183,12 @@ impl ServiceProvider {
     /// [`StartSso::sp_name_qualifier`] is invalid or cannot be combined with
     /// the configured NameID format, or request creation fails
     /// because required metadata, signing keys, or supported bindings are unavailable.
-    /// Returns [`SamlError::Invalid`] for [`StartSso::simple_sign`] when the
-    /// service provider's [`AuthnRequestSigningPolicy`](crate::AuthnRequestSigningPolicy)
-    /// is `DoNotSign`.
+    /// Returns [`SamlError::AuthnRequestSigningRequired`] when the IdP
+    /// metadata sets `WantAuthnRequestsSigned` and the service provider's
+    /// [`AuthnRequestSigningPolicy`](crate::AuthnRequestSigningPolicy) is
+    /// `DoNotSign`. When the IdP metadata does not set it, returns
+    /// [`SamlError::Invalid`] for [`StartSso::simple_sign`] under `DoNotSign`
+    /// and `SignWhenIdpWants`.
     ///
     /// # Examples
     ///

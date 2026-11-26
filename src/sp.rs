@@ -1,4 +1,5 @@
 use crate::binding::{build_redirect_url, encode_base64};
+use crate::config::AuthnRequestSigningPolicy;
 use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting};
 use crate::error::SamlError;
@@ -133,7 +134,12 @@ impl Engine {
     ) -> Result<BindingContext, SamlError> {
         let name_id_format = self.setting.default_name_id_format();
         preferences.validate(name_id_format)?;
-        if idp.metadata.want_authn_requests_signed() && !self.metadata.authn_requests_signed() {
+        let idp_wants_signature = idp.metadata.want_authn_requests_signed();
+        let signs = self.metadata.authn_requests_signed()
+            || (idp_wants_signature
+                && self.setting.authn_request_signing
+                    == AuthnRequestSigningPolicy::SignWhenIdpWants);
+        if idp_wants_signature && !signs {
             return Err(SamlError::AuthnRequestSigningRequired);
         }
         let destination =
@@ -174,7 +180,7 @@ impl Engine {
         let xml = render_default_authn_request_xml(Prefixes::of(&self.setting)?, &request);
         let relay_state = options.relay_state.map(str::to_owned);
 
-        if self.metadata.authn_requests_signed() {
+        if signs {
             return self.signed_request_context(binding, &xml, destination, relay_state, id);
         }
 

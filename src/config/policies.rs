@@ -137,6 +137,24 @@ pub enum XmlSignatureProfile {
 pub enum AuthnRequestSigningPolicy {
     /// Sign outgoing AuthnRequests.
     Sign,
+    /// Sign an AuthnRequest when the identity provider's metadata sets
+    /// `WantAuthnRequestsSigned`, and send it unsigned otherwise.
+    ///
+    /// The flag is read as
+    /// [`IdpMetadata::want_authn_requests_signed`](crate::metadata::IdpMetadata::want_authn_requests_signed)
+    /// reads it. The service provider metadata publishes
+    /// `AuthnRequestsSigned="false"`. As for [`Self::Sign`],
+    /// [`SpConfigBuilder::build`](crate::SpConfigBuilder::build) returns
+    /// [`crate::SamlError::MissingKey`] without the key of the configured
+    /// signature algorithm: the signing credential, or the HMAC secret for an
+    /// HMAC algorithm. A build without a crypto provider returns
+    /// [`crate::SamlError::Unsupported`].
+    ///
+    /// An HTTP-POST-SimpleSign request needs a signature, so
+    /// [`ServiceProvider::start_sso`](crate::ServiceProvider::start_sso) returns
+    /// [`crate::SamlError::Invalid`] for one to an identity provider that does
+    /// not set the flag.
+    SignWhenIdpWants,
     /// Send unsigned AuthnRequests unless the IdP advertises `WantAuthnRequestsSigned`.
     /// In that case, request creation returns [`crate::SamlError::AuthnRequestSigningRequired`].
     #[default]
@@ -690,8 +708,15 @@ impl Default for TemplatePolicy {
 }
 pub(super) fn authn_request_signing_enabled(policy: AuthnRequestSigningPolicy) -> bool {
     match policy {
-        AuthnRequestSigningPolicy::Sign => true,
+        AuthnRequestSigningPolicy::Sign | AuthnRequestSigningPolicy::SignWhenIdpWants => true,
         AuthnRequestSigningPolicy::DoNotSign => false,
+    }
+}
+
+pub(super) fn publishes_authn_requests_signed(policy: AuthnRequestSigningPolicy) -> bool {
+    match policy {
+        AuthnRequestSigningPolicy::Sign => true,
+        AuthnRequestSigningPolicy::SignWhenIdpWants | AuthnRequestSigningPolicy::DoNotSign => false,
     }
 }
 
