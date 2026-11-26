@@ -18,7 +18,11 @@ use super::algorithms::{
 pub enum AssertionSignaturePolicy {
     /// Reject an assertion that is not directly signed.
     ///
-    /// Library hardening for the accepting service provider.
+    /// Each assertion, a decrypted one included, needs a verified signature
+    /// that covers the assertion directly. A `Response` signature or an
+    /// HTTP-POST-SimpleSign detached signature alone does not satisfy it.
+    /// The service provider metadata that the configuration generates then
+    /// sets `WantAssertionsSigned="true"`.
     RequireSigned,
     /// Do not require a signature directly on the Assertion.
     ///
@@ -34,8 +38,8 @@ pub enum AssertionSignaturePolicy {
 /// [`Self::RequireForEncryptedCbc`] follows the recommendation for a
 /// CBC-encrypted assertion. [`Self::AllowUnsignedEncryptedCbc`] relaxes that
 /// recommendation alone.
-/// [`Self::RequireSigned`] requires a signature on every response and is
-/// library hardening. The accept combination is classified in
+/// [`Self::RequireSigned`] requires a signature on every successful response
+/// and is library hardening. The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 ///
 /// The policy has no `Default`. Take it from the role policy, for example
@@ -48,6 +52,13 @@ pub enum AssertionSignaturePolicy {
 #[non_exhaustive]
 pub enum ResponseSignaturePolicy {
     /// Accept a CBC `EncryptedAssertion` without a Response signature.
+    ///
+    /// The service provider then decrypts CBC ciphertext that no verified
+    /// signature protects. That exposes it to the XML Encryption attack that
+    /// Errata 05 E93 describes, in which a sender who can tell decryption
+    /// outcomes apart recovers encrypted content. Select it only for an
+    /// identity provider that signs the assertion but not the `Response` and
+    /// cannot encrypt with AES-GCM.
     AllowUnsignedEncryptedCbc,
     /// Require a signed Response when an `<EncryptedAssertion>` uses CBC.
     ///
@@ -58,9 +69,12 @@ pub enum ResponseSignaturePolicy {
     /// unknown data algorithms return [`SamlError::Unsupported`](crate::SamlError::Unsupported).
     /// Plaintext and AES-GCM responses do not require an outer signature.
     RequireForEncryptedCbc,
-    /// Require a Response signature on every response.
+    /// Require a signature that covers every successful Response.
     ///
     /// Library hardening. Also rejects a response signed only on the Assertion.
+    /// A verified HTTP-POST-SimpleSign detached signature covers the Response.
+    /// An error Response is accepted unsigned, and its signature is verified
+    /// when present.
     RequireSigned,
 }
 

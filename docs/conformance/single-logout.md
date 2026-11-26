@@ -163,7 +163,7 @@ shared [status code rule](web-browser-sso-acceptance.md#status-codes).
 | Return an error for an older request version that forbids a SAML 2.0 response | Mandatory | Core §4.1.3.2 | Always |
 | Allow the validation-context clock skew on `LogoutRequest` `NotOnOrAfter`, five minutes by default | Recommended | Core §1.3.3, E92 | `SamlValidationContext::with_clock_skew` |
 | Discard a `LogoutRequest` at or after its skew-adjusted `NotOnOrAfter` | Library policy: Core §3.7.1 only permits discarding an expired request. | Core §3.7.1 | `ClockSkew` |
-| Apply the [signature algorithm profile](xml-security-algorithms.md#weak-algorithms-and-keys) to an embedded signature and a detached `SigAlg`, including the mandatory logout signatures | Library policy: hardening beyond the default exclusions. | — | `XmlSignatureProfile::StrictRsaSha2` |
+| Apply the [signature algorithm profile](xml-security-algorithms.md#weak-algorithms-and-keys) to an embedded signature and a detached `SigAlg`, including the mandatory logout signatures | Library policy: the linked rows state the reason for each profile. | XMLDSig 1.1 §6.2, §6.4.2, Conformance §4.1 | `XmlSignatureProfile`: `ExcludeWeakAlgorithms` by default, `StrictRsaSha2` or `AllowWeakAlgorithms` when selected |
 
 ## SP session selection
 
