@@ -453,20 +453,25 @@ fn typed_redirect_refuses_an_authn_request_with_signed_content(
     let signed = ExtensionElement::from_xml(
         r#"<app:Ticket xmlns:app="urn:example:app" ID="ticket-1"><sig:Signature xmlns:sig="http://www.w3.org/2000/09/xmldsig#"><sig:SignatureValue>AA==</sig:SignatureValue></sig:Signature></app:Ticket>"#,
     )?;
+    let referenced_namespace = ExtensionElement::from_xml(
+        r#"<app:Ticket xmlns:app="urn:example:app"><sig:Signature xmlns:sig="http://www.w3.org/2000/09/xmldsig&#x23;"/></app:Ticket>"#,
+    )?;
     let named_signature = ExtensionElement::from_xml(
         r#"<app:Signature xmlns:app="urn:example:app">approved</app:Signature>"#,
     )?;
     for validation in [SpValidationPolicy::default(), signing_sp_validation()] {
         let sp = sp_with(validation)?;
         let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-        let refused = sp.start_sso(
-            &idp_descriptor,
-            StartSso::redirect().extension(signed.clone()),
-        );
-        assert!(
-            matches!(refused, Err(SamlError::SignedContentOnRedirect)),
-            "{refused:?}"
-        );
+        for extension in [&signed, &referenced_namespace] {
+            let refused = sp.start_sso(
+                &idp_descriptor,
+                StartSso::redirect().extension(extension.clone()),
+            );
+            assert!(
+                matches!(refused, Err(SamlError::SignedContentOnRedirect)),
+                "{refused:?}"
+            );
+        }
         sp.start_sso(
             &idp_descriptor,
             StartSso::redirect().extension(named_signature.clone()),

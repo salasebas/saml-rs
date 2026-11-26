@@ -6,11 +6,11 @@ use super::query::ensure_endpoint_query_has_no_saml_parameter;
 use crate::constants::namespace;
 use crate::constants::ParserType;
 use crate::error::SamlError;
-use crate::xml::dom::{reader_err, XmlLimits};
+use crate::xml::dom::{push_normalized_namespaces, reader_err, XmlLimits};
 use crate::xml::utf8_bom_len;
-use quick_xml::events::Event;
-use quick_xml::name::ResolveResult;
-use quick_xml::NsReader;
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::name::{Namespace, NamespaceResolver, ResolveResult};
+use quick_xml::reader::Reader;
 use url::form_urlencoded::byte_serialize;
 
 pub(crate) fn redirect_binding_query(
@@ -107,11 +107,10 @@ struct RedirectSignatures {
 fn redirect_signatures(xml: &str) -> Result<RedirectSignatures, SamlError> {
     let limits = XmlLimits::default();
     limits.check_input_bytes(xml.len())?;
-    let mut reader = NsReader::from_str(xml);
+    let mut reader = Reader::from_str(xml);
+    let mut resolver = NamespaceResolver::default();
+    resolver.set_max_namespace_bindings(limits.max_attributes_per_element);
     let bom_len = utf8_bom_len(xml);
-    reader
-        .resolver_mut()
-        .set_max_namespace_bindings(limits.max_attributes_per_element);
     let mut depth = 0usize;
     let mut element_count = 0usize;
     let mut open_signature = None;
@@ -119,10 +118,7 @@ fn redirect_signatures(xml: &str) -> Result<RedirectSignatures, SamlError> {
     let mut in_content = false;
 
     loop {
-        let tag = {
-            let (resolved, event) = reader.read_resolved_event().map_err(reader_err)?;
-            RedirectTag::from_event(&resolved, &event)
-        };
+        let tag = RedirectTag::read(&mut reader, &mut resolver)?;
         let end = bom_len + reader.buffer_position() as usize;
         match tag {
             RedirectTag::DocType => {
@@ -172,9 +168,10 @@ fn redirect_signatures(xml: &str) -> Result<RedirectSignatures, SamlError> {
     })
 }
 
-fn is_xml_signature(resolved: &ResolveResult<'_>, local_name: &[u8]) -> bool {
-    local_name == b"Signature"
-        && matches!(resolved, ResolveResult::Bound(value) if value.into_inner() == namespace::DSIG)
+fn is_xml_signature(resolver: &NamespaceResolver, element: &BytesStart<'_>) -> bool {
+    let (resolved, local_name) = resolver.resolve_element(element.name());
+    local_name.as_ref() == "Signature"
+        && matches!(resolved, ResolveResult::Bound(Namespace(namespace::DSIG)))
 }
 
 enum RedirectTag {
@@ -187,16 +184,28 @@ enum RedirectTag {
 }
 
 impl RedirectTag {
-    fn from_event(resolved: &ResolveResult<'_>, event: &Event<'_>) -> Self {
-        match event {
+    fn read(
+        reader: &mut Reader<&[u8]>,
+        resolver: &mut NamespaceResolver,
+    ) -> Result<Self, SamlError> {
+        Ok(match reader.read_event().map_err(reader_err)? {
             Event::DocType(_) => Self::DocType,
-            Event::Start(element) => Self::Start {
-                signature: is_xml_signature(resolved, element.local_name().into_inner().as_bytes()),
-            },
-            Event::Empty(element) => Self::Empty {
-                signature: is_xml_signature(resolved, element.local_name().into_inner().as_bytes()),
-            },
-            Event::End(_) => Self::End,
+            Event::Start(element) => {
+                push_normalized_namespaces(resolver, &element)?;
+                Self::Start {
+                    signature: is_xml_signature(resolver, &element),
+                }
+            }
+            Event::Empty(element) => {
+                push_normalized_namespaces(resolver, &element)?;
+                let signature = is_xml_signature(resolver, &element);
+                resolver.pop();
+                Self::Empty { signature }
+            }
+            Event::End(_) => {
+                resolver.pop();
+                Self::End
+            }
             Event::Eof => Self::Eof,
             Event::Decl(_)
             | Event::Text(_)
@@ -204,7 +213,7 @@ impl RedirectTag {
             | Event::Comment(_)
             | Event::PI(_)
             | Event::GeneralRef(_) => Self::Other,
-        }
+        })
     }
 }
 
