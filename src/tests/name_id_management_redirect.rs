@@ -1280,6 +1280,48 @@ fn error_status_is_reported_only_for_an_authenticated_matching_response() -> Tes
 }
 
 #[test]
+fn an_issuer_is_compared_by_its_value_whatever_its_format() -> TestResult {
+    let sp = sp()?;
+    let idp = idp()?;
+    let idp_peer = idp_descriptor(&idp)?;
+    let sp_peer = sp_descriptor(&sp)?;
+    let unspecified =
+        r#"<saml:Issuer Format="urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified">"#;
+
+    let request_xml = idp_request_xml(
+        r#"<saml:NameID>alice@example.com</saml:NameID>"#,
+        "<samlp:Terminate/>",
+    )
+    .replacen("<saml:Issuer>", unspecified, 1);
+    assert!(request_xml.contains(unspecified));
+    request(sp.receive_name_id_management_redirect(
+        &idp_peer,
+        signed_request_input(&request_xml)?,
+        ReceiveNameIdManagement::new(),
+        validation(),
+    )?)?;
+
+    let started = idp.start_name_id_management_redirect(
+        &sp_peer,
+        &alice(),
+        &NameIdChange::Terminate,
+        StartNameIdManagement::new(),
+    )?;
+    let success = sp_error_response_xml(started.pending.request_id().as_str())
+        .replacen(status_code::REQUESTER, status_code::SUCCESS, 1)
+        .replacen("<saml:Issuer>", unspecified, 1);
+    assert!(success.contains(status_code::SUCCESS) && success.contains(unspecified));
+    let finished = idp.finish_name_id_management_redirect(
+        &sp_peer,
+        &started.pending,
+        signed_response_input(&success)?,
+        validation(),
+    )?;
+    assert_eq!(finished, None);
+    Ok(())
+}
+
+#[test]
 fn request_goes_to_the_service_provider_role_of_a_dual_role_peer() -> TestResult {
     let dual_role = format!(
         concat!(

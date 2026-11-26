@@ -52,7 +52,9 @@ application.
 | Require the unqualified response `InResponseTo`, after XML whitespace collapse, to equal the pending request ID, including on an error response | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2, `StatusResponseType`, XML Schema Part 2 §4.3.6 | Always |
 | Require one `Status` with one direct `StatusCode` | Mandatory | `StatusResponseType`, `StatusType` | Always |
 | Report a status other than `Success` as an error | Library policy: only `Success` confirms the change, and the caller needs the peer's refusal status. | Core §3.6.3 | Always |
-| Require an `Issuer` equal to the service provider, with `Format` omitted or `entity` | Library policy: Profiles §4.5.4.2 binds the responder, and the requester attributes the response to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.2 | Always |
+| Require an `Issuer` equal to the service provider | Library policy: the requester attributes the response to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.2 | Always |
+| Refuse an `Issuer` whose `Format` is neither omitted nor `entity` | Library policy: reason not recorded. | Profiles §4.5.4.2 | Always |
+| Accept a present `Destination` without comparing it | Library policy: [artifact resolution](artifact-resolution.md#service-provider-acceptance) gives the reason and the reading of Core §3.2.2 for a SOAP reply. | Core §3.2.2, Bindings §3.2 | Always |
 | Require the mutually authenticated, integrity-protected `SoapChannel` attested at start, for a signed response as well | Library policy: the crate sends the request unsigned, so the channel must authenticate the identity provider to the service provider under Profiles §4.5.4.1, and `SoapChannel` can attest that only as mutual authentication. | Profiles §4.5.4.1, §4.5.4.2 | `SoapChannel` |
 | Verify a present response signature, including on a protected channel, and rely on no content of a response whose signature is invalid | Mandatory | Core §3.2.2 | Always |
 | Require the verified signature to cover the response element | Mandatory | Core §3.2.2 | Always |
@@ -78,7 +80,8 @@ application.
 | Require the verified signature to reference the request's `ID`. See [SOAP body signatures](xml-security-algorithms.md#soap-body-signatures) | Library policy: Core §5.4.2 binds the signer, and the receiver accepts only a signature over the request it reads. | Core §5.4.2 | Always |
 | Allow enveloped signature and canonicalization transforms | Library policy: a signature must cover the entire request. | Core §5.4.4 | Always |
 | Verify a request signature with the SP's configured signing keys or HMAC secret | Library policy: the caller binds the receipt to the SP it authenticated on the SOAP channel. | Profiles §4.5.4.1 | SP metadata or HMAC secret |
-| Require an `Issuer` equal to the service provider, with `Format` omitted or `entity` | Library policy: Profiles §4.5.4.1 binds the requester, and the responder ties the change to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.1 | Always |
+| Require an `Issuer` equal to the service provider | Library policy: the responder ties the change to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.1 | Always |
+| Refuse an `Issuer` whose `Format` is neither omitted nor `entity` | Library policy: reason not recorded. | Profiles §4.5.4.1 | Always |
 | Compare a present `Destination` with the receiving SOAP `ManageNameIDService` after collapsing XML whitespace. Accept an absent value | Mandatory | Core §3.2.1, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Reject a supplied receiving URL that this identity provider does not publish as a SOAP `ManageNameIDService` | Library policy: the URL is caller input, and the restriction keeps a value derived from the request from naming an endpoint this party does not operate. | Core §3.2.1 | `SamlValidationContext::with_recipient_endpoint` |
 | Without a supplied URL, reject several published SOAP `ManageNameIDService` locations when a `Destination` is compared. A request without `Destination` needs no unique local endpoint | Library policy: the library is not told which endpoint received the request, and accepting any published one would not check the location that received it. | Core §3.2.1 | `SamlValidationContext::with_recipient_endpoint` |
@@ -134,6 +137,7 @@ application.
 | --- | --- | --- | --- |
 | Reject an unsigned request | Library policy: the Redirect signature authenticates the peer and protects the message across the browser redirect. | Profiles §4.5.3.1, §4.5.4.1 | Always. An HMAC signature uses the secret from `with_hmac_secret` on the peer descriptor |
 | Require an `Issuer` equal to the peer descriptor's entity ID | Library policy: Profiles §4.5.4.1 requires an `Issuer` and does not name the descriptor, and the signature is verified with that descriptor's keys, so the change is attributed to it. | Profiles §4.5.4.1 | Always |
+| Compare only the `Issuer` value, and accept any `Format` | Library policy: the signature verified with the peer descriptor's keys attributes the request, so a peer that writes another `Format` still completes the exchange. | Profiles §4.5.4.1 | Always |
 | Require `Destination` on the signed request. Compare it with the receiving `ManageNameIDService` after collapsing XML whitespace | Mandatory | Core §3.2.1, Bindings §3.4.5.2, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Require `ID`, `Version`, and a UTC `IssueInstant` | Library policy: [baseline receipt](xml-schema-validation.md#baseline-receipt) gives the reason. | `RequestAbstractType`, Core §1.3.3 | Always |
 | Require at most one `Issuer`, `ds:Signature`, and `Extensions` in that order, then one `NameID` or `EncryptedID`, then one `NewID`, `NewEncryptedID`, or `Terminate`, with text-only `NameID` and `NewID` and an empty `Terminate` | Mandatory | `RequestAbstractType`, `ManageNameIDRequestType`, `TerminateType` | Always |
@@ -179,6 +183,7 @@ both clock-skew tolerances to cover the full window on either binding.
 | Reject an unsigned response | Library policy: the Redirect signature authenticates the peer and protects the message across the browser redirect. | Profiles §4.5.3.2, §4.5.4.2 | Always. An HMAC signature uses the secret from `with_hmac_secret` on the peer descriptor |
 | Require the unqualified response `InResponseTo`, after XML whitespace collapse, to equal the pending request ID, including on an error response | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2, `StatusResponseType`, XML Schema Part 2 §4.3.6 | `PendingManageNameIdRequest` |
 | Require the response to come from the peer the request went to | Library policy: another peer must not complete the pending transaction. | Profiles §4.5.4.2 | Always |
+| Compare only the `Issuer` value, and accept any `Format` | Library policy: the signature verified with the peer descriptor's keys attributes the response, so a peer that writes another `Format` still completes the exchange. | Profiles §4.5.4.2 | Always |
 | Require the `RelayState` the request carried, and accept any when it carried none | Library policy: Bindings §3.4.3 binds the responder, and another transaction's state must not complete this one. | Bindings §3.4.3 | Always |
 | Require `Destination` on the signed response. Compare it with this provider's response location after collapsing XML whitespace | Mandatory | Core §3.2.2, Bindings §3.4.5.2, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Require one `Status` with one direct `StatusCode` | Mandatory | `StatusResponseType`, `StatusType` | Always |
@@ -233,5 +238,4 @@ sessions. The actor is the provider that sent or received the request.
 
 - Signing outbound SOAP management messages. Optional, Profiles §§4.5.3.1-2.
 - A responder that adds `RelayState` to a request that had none. Optional, Bindings §3.4.3.
-- Checking a present `Destination` on a SOAP `ManageNameIDResponse`. Mandatory, Core §3.2.2. The synchronous `finish` API has no receiving URL and skips this check.
 - Exchanges the crate does not implement, and the operational modes it does not claim: [IdP and SP operational modes](idp-sp-operational-modes.md#exchanges-not-implemented).
