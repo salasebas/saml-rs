@@ -937,6 +937,7 @@ fn a_request_without_one_identifier_and_one_change_is_rejected() -> TestResult {
             r#"{name_id}<samlp:NewID><ext:Value xmlns:ext="urn:test">alias</ext:Value></samlp:NewID>"#
         ),
         format!("{name_id}<samlp:Terminate>now</samlp:Terminate>"),
+        format!("{name_id}<samlp:Terminate>\u{a0}</samlp:Terminate>"),
         r#"<saml:NameID><ext:Value xmlns:ext="urn:test">alias</ext:Value></saml:NameID><samlp:Terminate/>"#
             .to_string(),
         format!("{name_id}<samlp:Terminate/>{EXTENSIONS}"),

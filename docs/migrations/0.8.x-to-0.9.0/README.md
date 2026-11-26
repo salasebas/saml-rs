@@ -87,5 +87,6 @@ Check the topics that affect your integration.
 - [Answer AuthnRequests refused for their signature or age](authn-request-signature-and-age-refusals.md)
 - [Answer requests for a confirmation method other than bearer](requested-subject-confirmations.md)
 - [Pass the authentication time of each SSO assertion](required-authn-instant.md)
+- [Handle strings that hold only non-XML whitespace](xml-whitespace.md)
 
 [All migration guides](../README.md)

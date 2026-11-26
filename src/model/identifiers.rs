@@ -1,6 +1,7 @@
 use std::fmt;
 
 use crate::error::SamlError;
+use crate::xml::dom::is_xml_whitespace_char;
 use crate::xml::parse_saml_utc_date_time;
 
 macro_rules! non_empty_text {
@@ -17,11 +18,11 @@ macro_rules! non_empty_text {
             #[doc = concat!(
                 "Returns [`SamlError::Invalid`] when the ",
                 $label,
-                " has no non-whitespace character."
+                " has no character other than XML whitespace."
             )]
             pub fn try_new(value: impl Into<String>) -> Result<Self, SamlError> {
                 let value = value.into();
-                if value.trim().is_empty() {
+                if value.chars().all(is_xml_whitespace_char) {
                     return Err(SamlError::Invalid(
                         concat!($label, " must not be empty").into(),
                     ));

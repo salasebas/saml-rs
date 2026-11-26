@@ -15,9 +15,9 @@ use saml_rs::XmlLimits;
 #[cfg(crypto)]
 use saml_rs::{entity::User, idp::LoginResponseOptions};
 use saml_rs::{
-    AuthnRequest, EndpointUrl, FormField, Inbound, LogoutRequest, LogoutResponse, MessageId,
-    NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, RelayState, SamlError,
-    SamlInstant, SsoResponse, SsoResponseBinding, SsoSession, Status,
+    AuthnRequest, EndpointUrl, EntityId, FormField, Inbound, LogoutRequest, LogoutResponse,
+    MessageId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, RelayState, SamlError,
+    SamlInstant, SessionIndex, SsoResponse, SsoResponseBinding, SsoSession, Status,
 };
 
 #[cfg(crypto)]
@@ -29,6 +29,22 @@ const IDP_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypte
 #[test]
 fn typed_models_empty_request_ids_fail() {
     assert!(matches!(MessageId::try_new(""), Err(SamlError::Invalid(_))));
+}
+
+#[test]
+fn typed_models_saml_strings_are_empty_only_with_xml_whitespace(
+) -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(SessionIndex::try_new("\u{a0}")?.as_str(), "\u{a0}");
+    assert_eq!(EntityId::try_new("\u{a0}")?.as_str(), "\u{a0}");
+    assert!(matches!(
+        SessionIndex::try_new(" \t\r\n"),
+        Err(SamlError::Invalid(_))
+    ));
+    assert!(matches!(
+        EntityId::try_new(" \t\r\n"),
+        Err(SamlError::Invalid(_))
+    ));
+    Ok(())
 }
 
 #[test]
