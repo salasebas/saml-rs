@@ -510,3 +510,39 @@ fn rejected_outstanding_logout_still_records_the_bearer_assertion(
         .into()),
     }
 }
+
+#[test]
+fn outstanding_logout_from_receive_slo_applies_to_a_name_id_of_non_breaking_space(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let principal = NameId::new("\u{a0}");
+    let issued = issued_sso_for(principal.clone())?;
+    let started = issued.idp.start_slo(
+        &issued.sp_descriptor,
+        LogoutSubject::new(principal.clone()),
+        StartSlo::post(),
+    )?;
+    let now = unix_seconds()? + 2;
+    let received = issued.sp.receive_slo(
+        &issued.idp_descriptor,
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
+        validation_at(now, ClockSkew::strict(), &mut InMemoryReplayCache::new())?,
+    )?;
+    let request = received.message();
+    assert_eq!(request.name_id(), Some(&principal));
+    let outstanding = OutstandingLogout::try_new(
+        request.issuer().clone(),
+        principal,
+        request.session_indexes().to_vec(),
+        request
+            .not_on_or_after()
+            .ok_or("expected a deadline")?
+            .clone(),
+    )?;
+    match finish(&issued, now, ClockSkew::strict(), Some(&outstanding)) {
+        Err(SamlError::AssertionMatchesOutstandingLogout) => Ok(()),
+        other => Err(format!(
+            "expected the logout for a U+00A0 NameID to reject the later assertion, got {other:?}"
+        )
+        .into()),
+    }
+}

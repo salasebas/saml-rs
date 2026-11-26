@@ -56,23 +56,19 @@ impl OutstandingLogout {
     /// `NotOnOrAfter` of the same authenticated logout request.
     ///
     /// Take these values from the result of [`crate::ServiceProvider::receive_slo`]
-    /// or restore them together from a trusted store.
+    /// or restore them together from a trusted store. Every `NameID` value is
+    /// recorded as given, an empty one included.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when the NameID value is empty or
-    /// `not_on_or_after` is not a representable SAML UTC `xs:dateTime`.
+    /// Returns [`SamlError::Invalid`] when `not_on_or_after` is not a
+    /// representable SAML UTC `xs:dateTime`.
     pub fn try_new(
         issuer: EntityId,
         name_id: NameId,
         session_indexes: Vec<SessionIndex>,
         not_on_or_after: SamlInstant,
     ) -> Result<Self, SamlError> {
-        if name_id.value().trim().is_empty() {
-            return Err(SamlError::Invalid(
-                "outstanding logout principal must not be empty".into(),
-            ));
-        }
         let normalized = parse_saml_utc_date_time(not_on_or_after.as_str()).ok_or_else(|| {
             SamlError::Invalid(
                 "outstanding logout NotOnOrAfter must be a SAML UTC xs:dateTime ending in Z".into(),

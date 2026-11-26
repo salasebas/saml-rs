@@ -12,6 +12,13 @@ whitespace set, which also includes characters such as U+00A0 NO-BREAK SPACE.
 - `receive_name_id_management` and `receive_name_id_management_redirect`
   return `SamlError::ProtocolProfile` for a `Terminate` element that contains
   such a character. Before, the request was returned as a termination.
+- `SsoSession::logout_subject` now returns a subject for a `NameID` such as
+  `"\u{a0}"`. It still returns `None` for an empty value or one made only of
+  XML whitespace.
+- `OutstandingLogout::try_new` now records every `NameID` value, an empty one
+  included. A later assertion with the same `NameID` fails
+  `finish_sso_with_outstanding_logout` and
+  `accept_unsolicited_sso_with_outstanding_logout`.
 
-If you relied on these constructors to reject a value made only of Unicode
-whitespace, check the value yourself before you call them.
+If you relied on these calls to reject such a value, check the value
+yourself before you call them.

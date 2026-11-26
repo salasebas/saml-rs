@@ -20,6 +20,7 @@ Find the rules by operation.
 | Never write a time with a leap second | Mandatory | Core §1.3.3 | Always |
 | Identify the principal with `NameID`, or `EncryptedID` when selected | Mandatory | Profiles §4.4.4.1, `LogoutRequestType` | `StartSlo::identifier_encryption` |
 | Give no logout subject for an accepted assertion without a `NameID`, because no identifier can strongly match it | Mandatory | Profiles §4.4.4.1, Core §3.3.4 | `SsoSession::logout_subject` |
+| Give no logout subject when the `NameID` value is empty or only XML whitespace, because the request copies the value and a SAML string needs another character. U+00A0 is not XML whitespace | Mandatory | Core §1.3.1, XML 1.0 §2.3 | `SsoSession::logout_subject` |
 | Copy `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` from the `LogoutSubject` `NameId` | Mandatory | Profiles §4.4.4.1, Core §3.7.1, §3.3.4 | Always |
 | Omit `Format` when the `NameId` has none | Optional | Core §2.2.2, E60 | Always |
 | Reject a `Format` that is not an absolute URI reference, also when the `NameId` came from an accepted assertion | Mandatory | Core §1.3.2 | Always |
@@ -185,6 +186,8 @@ shared [status code rule](web-browser-sso-acceptance.md#status-codes).
 `ServiceProvider::receive_slo` authenticates the IdP request. The application
 stores the assertion issuer and logout subject, looks up candidate sessions,
 and invalidates each match.
+`OutstandingLogout::try_new` records the same request for the
+[later-assertion check](web-browser-sso-acceptance.md#service-provider).
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
@@ -192,6 +195,7 @@ and invalidates each match.
 | Compare the `NameID` value, effective `Format`, and all three qualifier attributes. An omitted `Format` means `unspecified` | Mandatory | Core §2.2.2, §3.3.4, §3.7.3.1, Profiles §4.4.4.1, E60, `NameIDType` | `matches_sp_session` |
 | With one or more `SessionIndex` elements, require at least one match. With none, select every session from that authority with the matching `NameID` | Mandatory | Core §3.7.3.1, Profiles §4.4.4.1, E38, `LogoutRequestType` | `matches_sp_session` |
 | Return no built-in match for a `BaseID` or an `EncryptedID` that could not be decrypted to a `NameID` | Library policy: the helper needs a `NameID` to compare. | Core §2.2.1, §3.3.4, §3.7.3.1 | `matches_sp_session` |
+| Record the request `NameID` whatever its value, an empty or whitespace-only one included | Mandatory | Core §3.7.3.1 | `OutstandingLogout::try_new` |
 
 ## Encrypted principal identifier
 
