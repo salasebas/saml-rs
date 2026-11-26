@@ -4,6 +4,11 @@ export const pages = {
 		description:
 			'Rules for issuing, resolving, and answering artifacts over SOAP, including how the SP can sign an artifact resolution request.',
 	},
+	'common-message-fields.md': {
+		title: 'Common message fields',
+		description:
+			'Which optional fields shared by every SAML request and response the typed messages write and read: `Consent`, `StatusDetail`, status code depth, and `Extensions`.',
+	},
 	'identifiers.md': {
 		title: 'SAML-defined identifiers',
 		description:
@@ -48,11 +53,6 @@ export const pages = {
 		title: 'SSO generation',
 		description:
 			'Producer rules for typed Web Browser SSO generation: service-provider `start_sso`, and identity-provider `respond_sso` and `initiate_sso`.',
-	},
-	'common-message-fields.md': {
-		title: 'Common message fields',
-		description:
-			'Which optional fields shared by every SAML request and response the typed messages write and read: `Consent`, `StatusDetail`, status code depth, and `Extensions`.',
 	},
 	'xml-input.md': {
 		title: 'XML input limits and encoding',
