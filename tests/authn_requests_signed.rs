@@ -265,6 +265,68 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
 }
 
 #[test]
+fn sign_when_idp_wants_signs_only_for_an_idp_whose_metadata_sets_the_flag(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp(AuthnRequestSigningPolicy::SignWhenIdpWants)?;
+    assert!(sp.metadata_xml().contains(" AuthnRequestsSigned=\"false\""));
+    let mut strict_policy = IdpValidationPolicy::default();
+    strict_policy.authn_request_signatures = AuthnRequestValidationPolicy::RequireSigned;
+    let strict = idp(strict_policy)?;
+    let permissive = idp(IdpValidationPolicy::default())?;
+
+    let (sp_descriptor, strict_descriptor) = descriptors(&sp, &strict)?;
+    let post = sp.start_sso(&strict_descriptor, StartSso::post())?;
+    let redirect = sp.start_sso(&strict_descriptor, StartSso::redirect())?;
+    let simple_sign = sp.start_sso(&strict_descriptor, StartSso::simple_sign())?;
+    for input in [
+        post_input(&post.outbound)?,
+        redirect_input(&redirect.outbound)?,
+        Inbound::simple_sign(simple_sign.outbound.post_form()?.fields().to_vec()),
+    ] {
+        let received = strict.receive_sso(&sp_descriptor, input, validation())?;
+        assert_eq!(
+            received.authentication(),
+            MessageAuthentication::Authenticated
+        );
+    }
+
+    let (sp_descriptor, permissive_descriptor) = descriptors(&sp, &permissive)?;
+    let post = sp.start_sso(&permissive_descriptor, StartSso::post())?;
+    let redirect = sp.start_sso(&permissive_descriptor, StartSso::redirect())?;
+    for input in [
+        post_input(&post.outbound)?,
+        redirect_input(&redirect.outbound)?,
+    ] {
+        let received = permissive.receive_sso(&sp_descriptor, input, validation())?;
+        assert_eq!(
+            received.authentication(),
+            MessageAuthentication::Unauthenticated
+        );
+    }
+    let simple_sign = sp.start_sso(&permissive_descriptor, StartSso::simple_sign());
+    assert!(
+        matches!(simple_sign, Err(SamlError::Invalid(_))),
+        "{simple_sign:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn sign_when_idp_wants_requires_a_signing_credential_to_build(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut policy = SpValidationPolicy::default();
+    policy.authn_request_signing = AuthnRequestSigningPolicy::SignWhenIdpWants;
+    let config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
+        .validation(policy)
+        .build();
+    assert!(
+        matches!(&config, Err(SamlError::MissingKey(key)) if key == "signing_credential"),
+        "{config:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn default_idp_reports_whether_a_signature_authenticated_the_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = idp(IdpValidationPolicy::default())?;

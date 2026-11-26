@@ -26,6 +26,7 @@ impl SpConfigBuilder {
             assertion_signature_required(validation.assertion_signatures);
         setting.require_audience_restriction = audience_restriction_required(validation.audience);
         setting.want_message_signed = response_signature_required(validation.response_signatures);
+        setting.authn_request_signing = validation.authn_request_signing;
         setting.xml_signatures = validation.xml_signatures;
         setting.want_encrypted_cbc_response_signed =
             encrypted_cbc_response_signature_required(validation.response_signatures);

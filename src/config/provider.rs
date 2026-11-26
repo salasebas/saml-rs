@@ -9,7 +9,7 @@ use super::builders::{IdpConfigBuilder, SpConfigBuilder};
 use super::credentials::{Credentials, X509Credential};
 use super::descriptors::ManageNameIdService;
 use super::policies::{
-    assertion_signature_required, authn_request_signature_required, authn_request_signing_enabled,
+    assertion_signature_required, authn_request_signature_required, publishes_authn_requests_signed,
 };
 
 impl SpConfigBuilder {
@@ -30,7 +30,7 @@ fn sp_metadata_input(config: &SpConfigBuilder) -> SpMetadataInput {
         entity_id: config.entity_id.as_str().to_string(),
         signing_certs: signing_certificates(&config.credentials),
         encrypt_certs: encryption_certificates(&config.credentials),
-        authn_requests_signed: authn_request_signing_enabled(
+        authn_requests_signed: publishes_authn_requests_signed(
             config.validation.authn_request_signing,
         ),
         want_assertions_signed: assertion_signature_required(
