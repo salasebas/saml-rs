@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const indexRecord = 'README.md';
+const templateRecord = 'TEMPLATE.md';
 const indexPage = {
 	title: 'Conformance',
 	description: 'SAML conformance records by exchange and public API.',
@@ -35,6 +36,7 @@ export function conformancePages({ docsDir, recordsDir, pages, pagesOutsideRecor
 				server.watcher.add(recordsPath);
 				server.watcher.on('change', async (changedPath) => {
 					if (path.dirname(changedPath) !== recordsPath || !changedPath.endsWith('.md')) return;
+					if (path.basename(changedPath) === templateRecord) return;
 					try {
 						await writePage(path.basename(changedPath));
 					} catch (error) {
@@ -47,7 +49,9 @@ export function conformancePages({ docsDir, recordsDir, pages, pagesOutsideRecor
 }
 
 function recordFiles(entries, recordsDir, pages) {
-	const records = entries.filter((file) => file !== indexRecord && file.endsWith('.md')).sort();
+	const records = entries
+		.filter((file) => file !== indexRecord && file !== templateRecord && file.endsWith('.md'))
+		.sort();
 	const unpublished = records.filter((record) => !(record in pages));
 	const missing = Object.keys(pages).filter((record) => !records.includes(record));
 	if (unpublished.length > 0 || missing.length > 0) {

@@ -102,11 +102,64 @@ The [conformance index](conformance/README.md) lists the records and their
 public entry points. Read the sections that cover the affected flow. The
 site publishes the index and records.
 
-A record has one table row per rule, with four columns:
+A record follows the [record template](conformance/TEMPLATE.md). Its sections
+are, in this order:
+
+1. **Support.** Every feature the specification defines for the exchange,
+   with one status for each actor.
+2. **Partial support.** For each `Partial` feature, what the crate supports
+   and what it does not.
+3. **Rules.** One row for each behaviour the specification states.
+4. **Library policies.** One row for each behaviour the crate adds.
+5. **Application duties.** What the specification asks for and only the
+   application can do.
+6. **Not supported.** What a caller does in place of a missing feature.
+
+[Identity Provider Discovery](conformance/identity-provider-discovery.md)
+follows the template. The other records move to it one at a time. A record
+that writes `Library policy: <reason>.` in a `Level` cell has not moved yet,
+and its rows keep that form until it does.
+
+### Support statuses
+
+Take the features from the specification, so that a feature the crate lacks
+still has a row.
+
+- `Supported`: the crate implements the feature for this actor, on every
+  build and for every form of the feature that the row names, and every
+  Mandatory rule for it holds.
+- `Partial`: the crate implements only part of what the row names. A
+  Mandatory rule is unmet, a binding or a form of the message is missing, or
+  a build lacks it. The record says which under **Partial support**.
+- `Not supported`: the crate does not implement the feature and claims
+  nothing about it.
+- `—`: the specification gives this actor no part in the feature.
+
+A record uses more than one Support table when its exchanges have different
+actors.
+
+A duty that only the application can perform does not make a feature
+`Partial`. Record it under **Application duties**.
+
+### Rule rows
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| What the crate does | `Mandatory`, `Recommended`, `Optional`, or `Library policy: <reason>.` | The section, erratum, or schema type that states the rule. For library policy, the section that leaves the point open, or `—` | The option that changes it, or `Always` |
+| What the crate does | `Mandatory`, `Recommended`, or `Optional` | The section, erratum, or schema type that states the rule | The option that changes it, or `Always` |
+
+### Library policy rows
+
+| Policy | Reason | Section | Option |
+| --- | --- | --- | --- |
+| What the crate does | One sentence: why the looser rule cannot be applied | The section that the policy exceeds or that leaves the point open, or `—` | The option that changes it, or `Always` |
+
+A policy without a reason says `Reason not recorded.` Such a row is an open
+question, not a decision. Report it rather than extend or defend it. When
+the evidence is ambiguous, check the schemas, related OASIS documents,
+errata, and the behaviour of other implementations before changing
+validation. An uncertain reading does not become a new rejection.
+
+### Wording and links
 
 A row stays near 300 characters. Section headings name the actor and the
 APIs, so the rows do not repeat them. `SamlError` variants and the order of
@@ -115,14 +168,9 @@ checks belong in the rustdoc of the API that returns them, not in a record.
 Link a shared rule from each affected flow and keep its text in one record.
 Add section links when readers usually need one part of a long record. Split a
 record when its parts cover independently used flows or bindings. Preserve
-published URLs and section links when moving those parts.
-
-A library-policy row states its reason in one sentence: why the looser rule
-cannot be applied. A row without a reason is an open question, not a decision.
-Report it rather than extend or defend it. When the evidence is ambiguous,
-check the schemas, related OASIS documents, errata, and the behaviour of other
-implementations before changing validation. An uncertain reading does not
-become a new rejection.
+published URLs and section links when moving those parts. When a heading
+changes, keep its old link target with `<a id="old-anchor"></a>` above the
+new heading.
 
 ## Review checklist
 
