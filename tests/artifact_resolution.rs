@@ -657,6 +657,25 @@ fn an_unknown_or_unreadable_artifact_does_not_consume_another(
         ArtifactRelease::Withheld(ArtifactWithheld::NotOutstanding)
     );
 
+    for empty in ["", " \n "] {
+        let empty_request = resolution
+            .request()
+            .envelope()
+            .replace(artifact.as_str(), empty);
+        let withheld = parties.idp.answer_artifact_resolve(
+            &parties.sp_metadata,
+            &empty_request,
+            &EndpointUrl::try_new(RESOLUTION_URL)?,
+            &mut issued,
+            channel,
+        )?;
+        assert_eq!(
+            withheld.release(),
+            ArtifactRelease::Withheld(ArtifactWithheld::NotOutstanding),
+            "{empty:?}"
+        );
+    }
+
     let mut broken = artifact.as_str().to_string();
     broken.insert(1, ' ');
     let spaced = resolution

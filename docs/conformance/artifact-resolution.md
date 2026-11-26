@@ -76,6 +76,7 @@ with a higher receive limit could accept. [OpenSAML 5.2.3 source release](https:
 | --- | --- | --- | --- |
 | Verify a present `ArtifactResolve` signature over the SOAP body message using the expected SP's signing keys before acting on the request | Mandatory | Core §3.2.1, §5.4.1–§5.4.2 | Always |
 | Answer an understood `ArtifactResolve` with status Success, and omit the message for an unauthorized presenter or an artifact that is not outstanding | Mandatory | Bindings §3.6.6, Core §3.5.3, Profiles §5.3.2 | Always |
+| Answer an empty `Artifact` as an artifact that is not outstanding | Mandatory | `ArtifactResolveType`, Core §3.5.3, Bindings §3.6.6 | Always |
 | Reject an unsupported major request version | Mandatory | Core §4.1.3.1 | Always |
 | Reject a higher minor request version | Optional | Core §4.1.3.1 | Always |
 | Answer a newer request version with `VersionMismatch`. Add `RequestVersionTooHigh` for a newer major version and keep the artifact outstanding | Mandatory | Core §4.1.3.2 | Always |
