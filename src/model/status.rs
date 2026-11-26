@@ -64,14 +64,36 @@ fn older_request_version() -> SamlError {
     SamlError::ProtocolProfile("request Version is too low for a SAML 2.0 response".into())
 }
 
-/// Refuse to answer a request whose `Version` declares a major version below
-/// 2, because Core §4.1.3.2 bars a response version above the request
-/// version. A missing or malformed `Version` declares no version.
-pub(crate) fn check_saml2_answer_allowed(version: Option<&str>) -> Result<(), SamlError> {
+/// The statuses that a SAML 2.0 response may report to a request, by the
+/// request's `Version` (Core §4.1.3.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AnswerableStatuses {
+    /// Any status: the request declares major version 2, or no `major.minor`
+    /// version.
+    Any,
+    /// Only `VersionMismatch` with `RequestVersionTooHigh`: the request
+    /// declares a later major version.
+    RequestVersionTooHigh,
+}
+
+/// The statuses that a SAML 2.0 response may report to a request whose
+/// `Version` is `version`.
+///
+/// A major version below 2 returns an error, because Core §4.1.3.2 bars a
+/// response version above the request version. A missing or malformed
+/// `Version` declares no version.
+pub(crate) fn answerable_statuses(version: Option<&str>) -> Result<AnswerableStatuses, SamlError> {
     match version.map(DeclaredVersion::of) {
         Some(DeclaredVersion::Older) => Err(older_request_version()),
-        Some(DeclaredVersion::Saml20 | DeclaredVersion::Newer(_) | DeclaredVersion::Malformed)
-        | None => Ok(()),
+        Some(DeclaredVersion::Newer(RequestVersionMismatch::NewerMajor)) => {
+            Ok(AnswerableStatuses::RequestVersionTooHigh)
+        }
+        Some(
+            DeclaredVersion::Saml20
+            | DeclaredVersion::Newer(RequestVersionMismatch::SameMajor)
+            | DeclaredVersion::Malformed,
+        )
+        | None => Ok(AnswerableStatuses::Any),
     }
 }
 

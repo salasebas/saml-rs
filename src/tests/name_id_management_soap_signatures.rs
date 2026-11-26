@@ -248,7 +248,7 @@ fn soap_manage_name_id_request_verifies_the_sp_signature() -> TestResult {
     )?;
     assert_denied(&result, None)?;
     let older = saml_rs::SoapRequest::try_new(
-        destination,
+        destination.clone(),
         &sign(&xml.replacen(r#"Version="2.0""#, r#"Version="1.1""#, 1))?,
     )?;
     let result = idp.receive_name_id_management(
@@ -261,6 +261,31 @@ fn soap_manage_name_id_request_verifies_the_sp_signature() -> TestResult {
         matches!(result, Err(SamlError::ProtocolProfile(_))),
         "{result:?}"
     );
+    let later_major = saml_rs::SoapRequest::try_new(
+        destination.clone(),
+        &sign(&xml.replacen(r#"Version="2.0""#, r#"Version="3.0""#, 1))?,
+    )?;
+    let result = idp.receive_name_id_management(
+        &stale_sp,
+        later_major.envelope(),
+        channel,
+        SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::NoCache),
+    );
+    assert!(
+        matches!(result, Err(SamlError::SignatureVerification { .. })),
+        "{result:?}"
+    );
+    let later_minor = saml_rs::SoapRequest::try_new(
+        destination,
+        &sign(&xml.replacen(r#"Version="2.0""#, r#"Version="2.1""#, 1))?,
+    )?;
+    let result = idp.receive_name_id_management(
+        &stale_sp,
+        later_minor.envelope(),
+        channel,
+        SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::NoCache),
+    )?;
+    assert_denied(&result, Some("_request"))?;
     let receipt =
         idp.receive_name_id_management(&sp, request.envelope(), channel, validation(&mut cache))?;
     let NameIdManagementReceipt::Request(request) = receipt else {

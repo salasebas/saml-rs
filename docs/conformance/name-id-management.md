@@ -33,9 +33,9 @@ The statuses hold on builds with a crypto provider. On a build without one,
 return `SamlError::Unsupported`, and the HTTP-Redirect receive operations
 refuse every message, because the build neither signs nor verifies. Over
 SOAP, its identity provider still exchanges unsigned messages on the
-`SoapChannel`, refuses a signed one with `Responder`, returns an error for an
-identifier it would encrypt, and answers a received encrypted one as
-undecryptable.
+`SoapChannel`, returns an error for an identifier it would encrypt, answers a
+received encrypted one as undecryptable, and refuses a signed request with
+`Responder`, or with an error when the request declares a later major version.
 
 ## Support
 
@@ -191,7 +191,7 @@ the request, and over HTTP-Redirect its verified signature does.
 
 ### Identity provider: `receive_name_id_management`
 
-Code: `src/name_id_management.rs`, `src/soap.rs`, `src/crypto/verify.rs`
+Code: `src/name_id_management.rs`, `src/soap.rs`, `src/crypto/verify.rs`, `src/model/status.rs`
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
@@ -200,6 +200,7 @@ Code: `src/name_id_management.rs`, `src/soap.rs`, `src/crypto/verify.rs`
 | Answer a request from the service provider, on its attested `SoapChannel` and at this identity provider's endpoint, whose present signature does not verify with `Requester`, before replay storage | Mandatory | Core §3.2.1, Profiles §4.5.3.2 | `NameIdManagementRefusal::RequestDenied` |
 | Add the second-level status `RequestDenied` to that answer | Optional | Core §3.2.2.2 | Always |
 | Answer such a request whose present signature this build cannot verify, because it has no crypto provider or the provider fails to start, with `Responder`, before replay storage | Mandatory | Core §3.2.2.2, Profiles §4.5.3.2 | `NameIdManagementRefusal::VerificationUnavailable` |
+| Answer a request that declares a later major version with neither `Requester` nor `Responder`, also when its signature does not verify or cannot be verified | Mandatory | Core §4.1.3.2 | Always |
 | Compare a present `Destination` with the receiving SOAP `ManageNameIDService` after collapsing XML whitespace. Accept an absent value | Mandatory | Core §3.2.1, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 
 <a id="http-redirect-receiving-a-managenameidrequest"></a>
@@ -355,7 +356,7 @@ deadline.
 
 ### Identity provider: `receive_name_id_management`
 
-Code: `src/name_id_management.rs`, `src/soap.rs`, `src/crypto/verify.rs`
+Code: `src/name_id_management.rs`, `src/soap.rs`, `src/crypto/verify.rs`, `src/model/status.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
@@ -366,6 +367,14 @@ Code: `src/name_id_management.rs`, `src/soap.rs`, `src/crypto/verify.rs`
 | Allow enveloped signature and canonicalization transforms | A signature must cover the entire request. | Core §5.4.4 | Always |
 | Require an `Issuer` equal to the service provider | The responder ties the change to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.1 | Always |
 | Refuse an `Issuer` whose `Format` is neither omitted nor `entity` | Reason not recorded. | Profiles §4.5.4.1 | Always |
+| Return the signature error, and no refusal, for a request of a later major version whose present signature does not verify or cannot be verified | A `Requester` or `Responder` answer would break Core §4.1.3.2 if that version is genuine, and a `VersionMismatch` answer would rely on the `Version` of a request whose signature failed, which Core §3.2.1 forbids. | Core §3.2.1, §4.1.3.2, Profiles §4.5.3.2 | Always |
+
+[PySAML2 v7.5.5](https://github.com/IdentityPython/pysaml2/blob/v7.5.5/src/saml2/request.py#L60-L71)
+raises `IncorrectlySigned` for a `ManageNameIDRequest` whose signature does
+not verify, before it
+[reads the `Version`](https://github.com/IdentityPython/pysaml2/blob/v7.5.5/src/saml2/request.py#L126-L129),
+and writes no response. Shibboleth IdP 5.2.3 and SimpleSAMLphp 2.5.5
+implement no name identifier management.
 
 ### Identity provider and service provider: `receive_name_id_management_redirect`
 

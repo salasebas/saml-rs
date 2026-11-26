@@ -224,9 +224,9 @@ impl IdentityProvider {
     /// lost to another responder gets `Success` without the message. So does
     /// a request that `issued` fails to look up, time, or consume:
     /// [`AnsweredArtifact::error`] then returns the store error, and the
-    /// artifact is not released. An unsupported newer version gets
-    /// `VersionMismatch`, with `RequestVersionTooHigh` for a newer major
-    /// version.
+    /// artifact is not released. A request of a later version gets
+    /// `VersionMismatch`, with `RequestVersionTooHigh` for a later major
+    /// version, whatever else it lacks.
     ///
     /// A present XML signature must cover the `ArtifactResolve` and verify
     /// against `presenter`'s signing keys before the request can be
@@ -236,11 +236,13 @@ impl IdentityProvider {
     /// because the build has no crypto provider or the provider fails to
     /// start, the answer has status `Responder`, and
     /// [`AnsweredArtifact::error`] returns [`SamlError::Unsupported`] or
-    /// [`SamlError::Crypto`].
+    /// [`SamlError::Crypto`]. A request whose `Version` declares a later
+    /// major version gets neither answer: see the errors below.
     ///
-    /// A request without exactly one `Artifact` element, with a second
-    /// `Issuer`, or without an `xs:NCName` `ID`, a `major.minor` `Version`,
-    /// or a UTC `IssueInstant` gets status `Requester`:
+    /// A request of version `2.0` without exactly one `Artifact` element,
+    /// with a second `Issuer`, or without an `xs:NCName` `ID` or a UTC
+    /// `IssueInstant`, and a request without a `major.minor` `Version`, get
+    /// status `Requester`:
     /// [`AnsweredArtifact::release`] returns
     /// [`ArtifactRelease::MalformedRequest`](crate::ArtifactRelease::MalformedRequest), and
     /// [`AnsweredArtifact::error`] returns what the request lacks. An answer
@@ -262,7 +264,12 @@ impl IdentityProvider {
     /// [`SamlError::ProtocolProfile`] when the body is not one
     /// `ArtifactResolve`, and when the request's `Version` has a major
     /// version below 2, even if its signature does not verify, because a
-    /// SAML 2.0 answer would have a higher version than the request.
+    /// SAML 2.0 answer would have a higher version than the request. A
+    /// request whose `Version` has a later major version and whose present
+    /// signature does not verify, or cannot be verified, returns the error
+    /// that a refusal would carry in [`AnsweredArtifact::error`], because a
+    /// SAML 2.0 answer to it may report only `RequestVersionTooHigh`, and the
+    /// `Version` of a request that fails verification cannot be relied on.
     /// Returns [`SamlError::LimitExceeded`] when the response cannot fit
     /// within the default [`crate::XmlLimits`]. The artifact stays outstanding.
     ///

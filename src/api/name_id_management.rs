@@ -153,7 +153,8 @@ impl IdentityProvider {
     /// verify, because the build has no crypto provider or the provider fails
     /// to start, is refused with `Responder`.
     /// [`RefusedNameIdManagement::signature_error`](crate::RefusedNameIdManagement::signature_error)
-    /// returns the cause of either.
+    /// returns the cause of either. A request whose `Version` declares a
+    /// later major version gets neither refusal: see the errors below.
     ///
     /// `validation` selects the receiving endpoint
     /// that a present `Destination` must name when this identity provider
@@ -174,6 +175,11 @@ impl IdentityProvider {
     /// [`SamlError`] when the envelope is not a SOAP 1.1
     /// `ManageNameIDRequest` from `sp`, its `Destination` is not the receiving
     /// endpoint, or the request version is too low for a SAML 2.0 response.
+    /// A request whose `Version` has a later major version and whose present
+    /// signature does not verify, or cannot be verified, returns the error
+    /// that a refusal would carry in `signature_error`, because a SAML 2.0
+    /// response to it may report only `RequestVersionTooHigh`, and the
+    /// `Version` of a request that fails verification cannot be relied on.
     /// Returns [`SamlError::RecipientEndpointNotPublished`] when `validation`
     /// names a URL this identity provider does not publish, and
     /// [`SamlError::RecipientEndpointAmbiguous`] when the request has

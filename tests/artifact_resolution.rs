@@ -604,6 +604,39 @@ fn a_version_mismatch_does_not_consume_the_artifact() -> Result<(), Box<dyn std:
         .contains("urn:oasis:names:tc:SAML:2.0:status:RequestVersionTooHigh"));
     assert!(!rejected.response().envelope().contains(SUCCESS));
     assert!(!rejected.response().envelope().contains(WEB_SSO_MARKER));
+    let artifact_element = format!("<samlp:Artifact>{}</samlp:Artifact>", artifact.as_str());
+    assert!(mismatched.contains(&artifact_element));
+    for (case, malformed, writes_in_response_to) in [
+        (
+            "no Artifact",
+            mismatched.replacen(&artifact_element, "", 1),
+            true,
+        ),
+        ("no ID", remove_attribute(&mismatched, "ID")?, false),
+    ] {
+        let rejected = parties.idp.answer_artifact_resolve(
+            &parties.sp_metadata,
+            &malformed,
+            &EndpointUrl::try_new(RESOLUTION_URL)?,
+            &mut issued,
+            channel,
+        )?;
+        let envelope = rejected.response().envelope();
+        assert_eq!(
+            rejected.release(),
+            ArtifactRelease::VersionMismatch,
+            "{case}"
+        );
+        assert!(
+            envelope.contains("urn:oasis:names:tc:SAML:2.0:status:RequestVersionTooHigh"),
+            "{case}: {envelope}"
+        );
+        assert_eq!(
+            envelope.contains("InResponseTo="),
+            writes_in_response_to,
+            "{case}: {envelope}"
+        );
+    }
 
     let accepted = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,

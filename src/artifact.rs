@@ -12,7 +12,7 @@ use crate::entity::{generate_id, now_iso8601, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::IdpMetadata;
 use crate::model::{
-    check_saml2_answer_allowed, EndpointUrl, ReplayKey, RequestVersionMismatch,
+    answerable_statuses, AnswerableStatuses, EndpointUrl, ReplayKey, RequestVersionMismatch,
     SamlValidationContext, Status, SubordinateStatusCode,
 };
 use crate::soap::{
@@ -116,7 +116,9 @@ pub enum ArtifactRelease {
     Returned,
     /// The response status is Success and the message is absent.
     Withheld(ArtifactWithheld),
-    /// The request version is unsupported. The response status is `VersionMismatch`.
+    /// The request's `Version` is later than `2.0`. The response status is
+    /// `VersionMismatch`, with `RequestVersionTooHigh` for a later major
+    /// version, and the message is absent.
     VersionMismatch,
     /// The request signature did not verify. The response status is
     /// `Requester` with `RequestDenied`, and the message is absent.
@@ -131,7 +133,8 @@ pub enum ArtifactRelease {
     /// The request does not have exactly one `Artifact` and at most one
     /// `Issuer`, or lacks an `xs:NCName` `ID`, a `major.minor` `Version`, or
     /// a UTC `IssueInstant`. The response status is `Requester`, and the
-    /// message is absent. [`AnsweredArtifact::error`] returns why.
+    /// message is absent. [`AnsweredArtifact::error`] returns why. A request
+    /// of a later version gets [`Self::VersionMismatch`] instead.
     MalformedRequest,
 }
 
@@ -525,20 +528,16 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
         ));
     }
     let element = parse_saml_with_limits(&body.xml, setting.xml_limits)?;
-    check_saml2_answer_allowed(element.attr("Version"))?;
+    let statuses = answerable_statuses(element.attr("Version"))?;
     let prefixes = Prefixes::of(setting)?;
+    let in_response_to = element.attr("ID").and_then(writable_in_response_to);
     let refuse = |status: &Status, release, error| {
-        Ok(answered(
-            &prefixes,
-            &entity_id,
-            element.attr("ID").and_then(writable_in_response_to),
-            status,
-            None,
-            release,
-        )?
-        .caused_by(error))
+        Ok(
+            answered(&prefixes, &entity_id, in_response_to, status, None, release)?
+                .caused_by(error),
+        )
     };
-    match body.check_request_signature(
+    let signature = body.check_request_signature(
         request_envelope,
         &element,
         presenter
@@ -547,19 +546,50 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
             .x509_certificates(CertUse::Signing),
         presenter.provider().setting.hmac_secret.as_ref(),
         setting.xml_signatures,
-    ) {
-        RequestSignature::Accepted => {}
-        RequestSignature::Unverifiable(error) => {
+    );
+    match (signature, statuses) {
+        (
+            RequestSignature::Accepted,
+            AnswerableStatuses::Any | AnswerableStatuses::RequestVersionTooHigh,
+        ) => {}
+        (
+            RequestSignature::Unverifiable(error) | RequestSignature::Rejected(error),
+            AnswerableStatuses::RequestVersionTooHigh,
+        ) => return Err(error),
+        (RequestSignature::Unverifiable(error), AnswerableStatuses::Any) => {
             return refuse(
                 &Status::responder(),
                 ArtifactRelease::VerificationUnavailable,
                 error,
             )
         }
-        RequestSignature::Rejected(error) => {
+        (RequestSignature::Rejected(error), AnswerableStatuses::Any) => {
             return refuse(
                 &Status::requester().with_subordinate(SubordinateStatusCode::request_denied()),
                 ArtifactRelease::RequestDenied,
+                error,
+            )
+        }
+    }
+    let version_mismatch = element
+        .required_attr("Version")
+        .and_then(|version| RequestVersionMismatch::for_request(&version));
+    match version_mismatch {
+        Ok(None) => {}
+        Ok(Some(mismatch)) => {
+            return answered(
+                &prefixes,
+                &entity_id,
+                in_response_to,
+                &mismatch.status(),
+                None,
+                ArtifactRelease::VersionMismatch,
+            )
+        }
+        Err(error) => {
+            return refuse(
+                &Status::requester(),
+                ArtifactRelease::MalformedRequest,
                 error,
             )
         }
@@ -574,16 +604,6 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
             )
         }
     };
-    if let Some(mismatch) = request.version_mismatch {
-        return answered(
-            &prefixes,
-            &entity_id,
-            Some(&request.id),
-            &mismatch.status(),
-            None,
-            ArtifactRelease::VersionMismatch,
-        );
-    }
     let success_without = |reason| {
         answered(
             &prefixes,
@@ -740,7 +760,6 @@ fn encode_artifact(
 
 struct ResolveRequest {
     id: String,
-    version_mismatch: Option<RequestVersionMismatch>,
     destination: Option<String>,
     issuer: Option<PartyName>,
     artifact: String,
@@ -754,7 +773,6 @@ fn parse_resolve(element: &SamlElement) -> Result<ResolveRequest, SamlError> {
     }
     let id = element.required_attr("ID")?;
     check_in_response_to(&id)?;
-    let version_mismatch = RequestVersionMismatch::for_request(&element.required_attr("Version")?)?;
     element.required_issue_instant()?;
     let artifact = element
         .children
@@ -777,7 +795,6 @@ fn parse_resolve(element: &SamlElement) -> Result<ResolveRequest, SamlError> {
     }
     Ok(ResolveRequest {
         id,
-        version_mismatch,
         destination: element.attr("Destination").map(collapse_whitespace),
         issuer: issuer(element)?,
         artifact,
