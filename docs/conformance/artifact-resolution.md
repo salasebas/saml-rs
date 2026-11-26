@@ -28,8 +28,9 @@ The statuses hold on builds with a crypto provider. A build without one
 neither signs nor verifies: `resolve_artifact_with_signed_request` returns
 `SamlError::Unsupported`, `ArtifactResolution::finish` returns it for a
 response that carries a signature, and `answer_artifact_resolve` answers a
-signed request with `Responder`. Unsigned exchanges over an attested
-`SoapChannel` complete.
+signed request with `Responder`, or with an error when the request declares a
+later major version. Unsigned exchanges over an attested `SoapChannel`
+complete.
 
 ## Support
 
@@ -124,15 +125,16 @@ Code: `src/artifact.rs`, `src/artifact/store.rs`, `src/soap.rs`, `src/crypto/ver
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Answer a request without `samlp:Artifact`, with a second direct child named `Artifact` in any namespace, or with a second `Issuer` with status `Requester`, without the message | Mandatory | `RequestAbstractType`, `ArtifactResolveType`, Core §3.2.1, Profiles §5.3.2 | Always |
-| Answer a request without `ID`, `Version`, or a UTC `IssueInstant`, or whose `Version` is not a `major.minor` number, with status `Requester`, without the message | Mandatory | `RequestAbstractType`, Core §3.2.1, §4.1.3, Profiles §5.3.2 | Always |
+| Answer a `2.0` request without `samlp:Artifact`, with a second direct child named `Artifact` in any namespace, or with a second `Issuer` with status `Requester`, without the message | Mandatory | `RequestAbstractType`, `ArtifactResolveType`, Core §3.2.1, Profiles §5.3.2 | Always |
+| Answer a request without `Version`, or whose `Version` is not a `major.minor` number, and a `2.0` request without `ID` or a UTC `IssueInstant`, with status `Requester`, without the message | Mandatory | `RequestAbstractType`, Core §3.2.1, §4.1.3, Profiles §5.3.2 | Always |
 | Verify a present `ArtifactResolve` signature over the SOAP body message with the expected service provider's signing keys before acting on the request | Mandatory | Core §3.2.1, §5.4.1–§5.4.2 | Always |
-| When a present signature does not verify, answer status `Requester` without the message and keep the artifact outstanding | Mandatory | Core §3.2.1, Profiles §5.3.2 | Always |
+| When a present signature does not verify, answer a request of major version 2, or without a `major.minor` `Version`, with status `Requester`, without the message, and keep the artifact outstanding | Mandatory | Core §3.2.1, Profiles §5.3.2 | Always |
 | Add the second-level status `RequestDenied` to that answer | Recommended | Bindings §3.6.6, Core §3.2.2.2 | Always |
-| When this build cannot verify a present signature, because it has no crypto provider or the provider fails to start, answer status `Responder` without the message and keep the artifact outstanding | Mandatory | Core §3.2.2.2, Profiles §5.3.2 | Always |
+| When this build cannot verify a present signature, because it has no crypto provider or the provider fails to start, answer a request of major version 2, or without a `major.minor` `Version`, with status `Responder`, without the message, and keep the artifact outstanding | Mandatory | Core §3.2.2.2, Profiles §5.3.2 | Always |
+| Answer a request that declares a later major version with neither `Requester` nor `Responder`, also when its signature does not verify or cannot be verified | Mandatory | Core §4.1.3.2 | Always |
 | Reject an unsupported major request version | Mandatory | Core §4.1.3.1 | Always |
 | Reject a higher minor request version | Optional | Core §4.1.3.1 | Always |
-| Answer a newer request version with `VersionMismatch`. Add `RequestVersionTooHigh` for a newer major version and keep the artifact outstanding | Mandatory | Core §4.1.3.2 | Always |
+| Answer a newer request version with `VersionMismatch` once its signature, when present, verifies. Add `RequestVersionTooHigh` for a newer major version and keep the artifact outstanding | Mandatory | Core §4.1.3.2 | Always |
 | Return an error for an older request version that forbids a SAML 2.0 response, also when its signature does not verify or the request is malformed | Mandatory | Core §4.1.3.2 | Always |
 | Answer an understood `ArtifactResolve` with status `Success`, and omit the message for an unauthorized presenter or an artifact that is not outstanding | Mandatory | Bindings §3.6.6, Core §3.5.3, Profiles §5.3.2 | Always |
 | Answer an empty `Artifact` as an artifact that is not outstanding | Mandatory | `ArtifactResolveType`, Core §3.5.3, Bindings §3.6.6 | Always |
@@ -261,7 +263,7 @@ Code: `src/artifact.rs`, `src/metadata/idp.rs`
 
 ### Identity provider: `answer_artifact_resolve`
 
-Code: `src/artifact.rs`, `src/artifact/store.rs`
+Code: `src/artifact.rs`, `src/artifact/store.rs`, `src/model/status.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
@@ -273,7 +275,16 @@ Code: `src/artifact.rs`, `src/artifact/store.rs`
 | Release an outstanding artifact whose `EndpointIndex` this identity provider no longer publishes | The index tells the receiver where to send the request, and the presenter, the receiving URL, and the stored entry are checked without it. | Bindings §3.6.4.2, Core §3.5.3 | Always |
 | Check the actual SOAP envelope against the default `XmlLimits` before consuming the artifact | The entry stays outstanding for a retry when the response exceeds the [SOAP response size budget](#soap-response-size-budget). | Core §3.5.3, Bindings §3.2.2.1, E19 | Always |
 | Answer a request whose `ID` is not an `xs:NCName` as a malformed request, with status `Requester` and without the message, and keep the artifact outstanding | An answer that releases the message must carry the request `ID` as its `InResponseTo`, which `StatusResponseType` types as `xs:NCName`, so the message cannot be released for such a request. | Core §3.2.1, §3.2.2, §3.5.3 | Always |
+| Return the signature error, and no answer, for a request of a later major version whose present signature does not verify or cannot be verified, and keep the artifact outstanding | A `Requester` or `Responder` answer would break Core §4.1.3.2 if that version is genuine, and a `VersionMismatch` answer would rely on the `Version` of a request whose signature failed, which Core §3.2.1 forbids. | Core §3.2.1, §4.1.3.2, Profiles §5.3.2 | Always |
 | Keep issued artifacts in the caller's `ArtifactStore`, whose `consume` succeeds for at most one concurrent caller. Nodes share one store, or each node publishes its own `ArtifactResolutionService` index | Any node behind one endpoint can then answer for an artifact that another node issued, and the message is still released once. | Core §3.5.3, Bindings §3.6.4.2, §3.6.5.2, Profiles §5.5 | `ArtifactStore`, `IdpConfigBuilder::artifact_resolution_service` |
+
+[Shibboleth IdP 5.2.3](https://codeberg.org/Shibboleth/java-identity-provider/src/tag/5.2.3/idp-conf-impl/src/main/resources/net/shibboleth/idp/flows/saml/saml-abstract-flow.xml#L17-L53)
+checks the major version before the subflow that verifies the signature, and
+answers every early failure with a
+[`Success` `ArtifactResponse`](https://codeberg.org/Shibboleth/java-identity-provider/src/tag/5.2.3/idp-conf-impl/src/main/resources/net/shibboleth/idp/flows/saml/saml2/artifact-resolution-flow.xml#L49-L65).
+[SimpleSAMLphp 2.5.5](https://github.com/simplesamlphp/saml2-legacy/blob/v4.20.10/src/SAML2/Message.php#L159-L162)
+throws on any `Version` other than `2.0` while it reads the request, before
+it reads a signature, and sends no `ArtifactResponse`.
 
 <a id="service-provider-acceptance"></a>
 

@@ -27,3 +27,13 @@ Send `refused.response()` as for the other refusals, and log
 refused for its signature is not stored for replay detection, so the service
 provider can retry it. `NameIdManagementRefusal` is `#[non_exhaustive]`, so a `match` on it
 already has a wildcard arm.
+
+A request whose `Version` has a later major version, such as `3.0`, and whose
+present signature does not verify or cannot be verified is not refused:
+`receive_name_id_management` returns the error that `signature_error()` would
+hold. A SAML 2.0 response to such a request may report only
+`RequestVersionTooHigh`, and the `Version` of a request that fails
+verification cannot be relied on. 0.8 refused it with `VersionMismatch`.
+Answer the error with a SOAP fault, as
+[Answer SOAP processing failures with a SOAP fault](status-and-soap-replies.md#answer-soap-processing-failures-with-a-soap-fault)
+describes.

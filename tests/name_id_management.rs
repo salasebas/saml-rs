@@ -1259,6 +1259,12 @@ fn a_present_signature_without_a_crypto_provider_is_refused_with_responder() -> 
         "{xml}"
     );
     assert_eq!(attribute(&xml, "InResponseTo"), Some(SP_REQUEST_ID));
+    let later_major = envelope.replacen(r#"Version="2.0""#, r#"Version="3.0""#, 1);
+    let result = idp.receive_name_id_management(&sp, &later_major, authenticated(), validation());
+    assert!(
+        matches!(result, Err(SamlError::Unsupported(_))),
+        "{result:?}"
+    );
     Ok(())
 }
 

@@ -258,6 +258,20 @@ fn artifact_resolve_signature_failure_is_denied_and_stays_outstanding() -> TestR
         matches!(older, Err(SamlError::ProtocolProfile(_))),
         "{older:?}"
     );
+    let later_major = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &sign_rsa(
+            &request.replacen("Version=\"2.0\"", "Version=\"3.0\"", 1),
+            IDP_KEY,
+        )?,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
+        &mut issued,
+        channel,
+    );
+    assert!(
+        matches!(later_major, Err(SamlError::SignatureVerification { .. })),
+        "{later_major:?}"
+    );
     let request_id = crate::xml::protocol_element::parse_saml(
         saml_rs::SoapBodyElement::from_envelope(request)?.xml(),
     )?
@@ -265,7 +279,7 @@ fn artifact_resolve_signature_failure_is_denied_and_stays_outstanding() -> TestR
     for (from, to, in_response_to) in [
         (
             "Version=\"2.0\"",
-            "Version=\"3.0\"",
+            "Version=\"2.1\"",
             Some(request_id.as_str()),
         ),
         ("ID=\"", "ID=\"a:", None),

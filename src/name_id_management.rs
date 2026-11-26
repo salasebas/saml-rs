@@ -10,7 +10,7 @@ use crate::error::SamlError;
 use crate::flow::MessageAuthentication;
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
-    check_saml2_answer_allowed, EndpointUrl, MessageId, NameId, Received, ReplayKey,
+    answerable_statuses, AnswerableStatuses, EndpointUrl, MessageId, NameId, Received, ReplayKey,
     RequestVersionMismatch, SamlValidationContext, Status, SubordinateStatusCode,
 };
 use crate::soap::{
@@ -426,7 +426,7 @@ pub(crate) fn receive(
             ));
         }
     }
-    let signature_refusal = match body.check_request_signature(
+    let signature = body.check_request_signature(
         request_envelope,
         &request,
         service_provider
@@ -435,13 +435,24 @@ pub(crate) fn receive(
             .x509_certificates(CertUse::Signing),
         service_provider.provider().setting.hmac_secret.as_ref(),
         idp.setting.xml_signatures,
-    ) {
-        RequestSignature::Accepted => None,
-        RequestSignature::Unverifiable(error) => Some(Refusal::Unverifiable(error)),
-        RequestSignature::Rejected(error) => Some(Refusal::Denied(error)),
+    );
+    let signature_refusal = match (signature, answerable_statuses(Some(&version))?) {
+        (
+            RequestSignature::Accepted,
+            AnswerableStatuses::Any | AnswerableStatuses::RequestVersionTooHigh,
+        ) => None,
+        (
+            RequestSignature::Unverifiable(error) | RequestSignature::Rejected(error),
+            AnswerableStatuses::RequestVersionTooHigh,
+        ) => return Err(error),
+        (RequestSignature::Unverifiable(error), AnswerableStatuses::Any) => {
+            Some(Refusal::Unverifiable(error))
+        }
+        (RequestSignature::Rejected(error), AnswerableStatuses::Any) => {
+            Some(Refusal::Denied(error))
+        }
     };
     if let Some(refusal) = signature_refusal {
-        check_saml2_answer_allowed(Some(&version))?;
         return refused(idp, &id, refusal);
     }
     if let Some(mismatch) = RequestVersionMismatch::for_request(&version)? {

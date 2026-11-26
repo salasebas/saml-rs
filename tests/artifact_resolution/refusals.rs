@@ -163,6 +163,12 @@ fn a_signed_artifact_resolve_without_a_crypto_provider_is_answered_with_responde
         matches!(unverifiable.error(), Some(SamlError::Unsupported(_))),
         "{unverifiable:?}"
     );
+    let later_major = with_signature(&request.replacen(r#"Version="2.0""#, r#"Version="3.0""#, 1));
+    let result = answer(&parties, &later_major, &mut issued);
+    assert!(
+        matches!(&result, Err(error) if matches!(error.downcast_ref::<SamlError>(), Some(SamlError::Unsupported(_)))),
+        "{result:?}"
+    );
 
     let answer = answer(&parties, request, &mut issued)?;
     let envelope = answer.response().envelope();

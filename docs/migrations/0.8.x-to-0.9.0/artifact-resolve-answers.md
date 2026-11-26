@@ -49,6 +49,15 @@ A request whose `Version` has a major version below 2 returns
 verify, because a SAML 2.0 answer would have a higher version than the
 request.
 
+A request whose `Version` has a later major version, such as `3.0`, and whose
+present signature does not verify or cannot be verified gets no answer:
+`answer_artifact_resolve` returns the error that `error()` would hold. A SAML
+2.0 answer to such a request may report only `RequestVersionTooHigh`, and the
+`Version` of a request that fails verification cannot be relied on. 0.8
+answered it with `VersionMismatch`. Answer the error with a SOAP fault, as
+[Answer SOAP processing failures with a SOAP fault](status-and-soap-replies.md#answer-soap-processing-failures-with-a-soap-fault)
+describes.
+
 A service provider that reads one of these answers with
 `ArtifactResolution::finish` gets `SamlError::StatusNotSuccess` with its
 status. An answer without `InResponseTo` gives
@@ -73,6 +82,13 @@ Two requests that 0.8 answered as usual now get the same `Requester` answer:
 
 An answer to a request whose `ID` is missing or not an `xs:NCName` has no
 `InResponseTo`.
+
+A request of a later version, such as `2.1` or `3.0`, gets `VersionMismatch`,
+with `RequestVersionTooHigh` for a later major version, even when it lacks
+one of the parts above. A configured `SchemaValidator` that rejects the
+request still returns its error first. 0.8 returned
+`SamlError::ProtocolProfile` for such a request when it lacked one of those
+parts.
 
 ## Update matches and derives
 
