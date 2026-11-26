@@ -1456,6 +1456,19 @@ mod encrypted_assertions {
     }
 
     #[test]
+    fn an_unsigned_response_is_rejected_when_only_its_plaintext_assertion_is_signed(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(SpValidationPolicy::default())?;
+        let mixed = encrypt_first(&two_assertions(&exchange)?, AES_128_GCM, CERT)?;
+        let plaintext_signed = sign_first_assertion(&mixed, RSA_SHA256)?;
+        for unsigned_response in both_orders(&plaintext_signed)? {
+            assert_eq!(unsigned_response.matches("</ds:Signature>").count(), 1);
+            expect_error(accept(&exchange, &unsigned_response), |_| true)?;
+        }
+        Ok(())
+    }
+
+    #[test]
     fn required_encryption_rejects_either_order_of_a_signed_mixed_response(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut xml = XmlPolicy::default();
