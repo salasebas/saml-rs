@@ -900,6 +900,50 @@ fn a_request_without_destination_is_accepted() -> TestResult {
     )?)?;
 
     assert_eq!(request.message().change(), &NameIdChange::Terminate);
+
+    let two_services = IdentityProvider::new(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect("https://idp.example.com/sso")?,
+        )
+        .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
+            IDP_NIM_URL,
+        )?))
+        .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
+            "https://idp.example.com/nameid-backup",
+        )?))
+        .build()?,
+    );
+    let request = received_request(two_services.receive_name_id_management(
+        &sp,
+        &envelope,
+        authenticated(),
+        validation(),
+    )?)?;
+    assert_eq!(request.message().change(), &NameIdChange::Terminate);
+
+    let addressed = two_services.receive_name_id_management(
+        &sp,
+        &sp_request(&format!("{}<samlp:Terminate/>", current_name_id_xml()))?,
+        authenticated(),
+        validation(),
+    );
+    assert!(
+        matches!(addressed, Err(SamlError::RecipientEndpointAmbiguous)),
+        "{addressed:?}"
+    );
+
+    let unpublished = two_services.receive_name_id_management(
+        &sp,
+        &envelope,
+        authenticated(),
+        validation()
+            .with_recipient_endpoint(EndpointUrl::try_new("https://idp.example.com/unpublished")?),
+    );
+    assert!(
+        matches!(unpublished, Err(SamlError::RecipientEndpointNotPublished)),
+        "{unpublished:?}"
+    );
     Ok(())
 }
 

@@ -134,7 +134,9 @@ impl IdentityProvider {
     /// `sp` is the service provider the deployment authenticated on
     /// `channel`. A present XML signature must cover the request and verify
     /// against `sp`'s signing keys. `validation` selects the receiving endpoint
-    /// when this identity provider publishes more than one, applies its
+    /// that a present `Destination` must name when this identity provider
+    /// publishes more than one. A request without `Destination` needs no
+    /// selection. `validation` also applies its
     /// `ManageNameIDRequest` age policy, and stores the request `ID` for replay
     /// detection.
     ///
@@ -147,6 +149,11 @@ impl IdentityProvider {
     /// [`SamlError`] when the envelope is not a SOAP 1.1
     /// `ManageNameIDRequest` from `sp`, its `Destination` is not the receiving
     /// endpoint, or the request version is too low for a SAML 2.0 response.
+    /// Returns [`SamlError::RecipientEndpointNotPublished`] when `validation`
+    /// names a URL this identity provider does not publish, and
+    /// [`SamlError::RecipientEndpointAmbiguous`] when the request has
+    /// `Destination`, several SOAP `ManageNameIDService` locations are
+    /// published, and `validation` names none.
     /// A repeated request `ID` returns [`SamlError::ReplayDetected`]. Returns
     /// [`SamlError::TimeWindowInvalid`] when
     /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
