@@ -302,7 +302,7 @@ Code: `src/metadata/generate.rs`, `src/metadata/lifetime.rs`, `src/metadata/scop
 | Keep the configured order of the endpoints in each group | A peer takes the first suitable endpoint and the first indexed default (Metadata §2.2.3, E37), so the caller's order is its preference. | Metadata §2.2.3, E37 | Always |
 | Write an `emailAddress` `NameIDFormat` when a service provider configures none | The typed service provider requests the first format its metadata lists, so the published format matches the one it requests. | Metadata §2.4.2 | `name_id_format`, `name_id_formats` |
 | Give an `AssertionConsumerService` without an explicit index its position as `index`, or the smallest unused value when an explicit index holds that position | Metadata §2.2.3 leaves the values open, and positions keep the numbers that peers stored until the caller sets an index. | Metadata §2.2.3 | `Endpoint::index` |
-| Take each endpoint that `SpConfigBuilder` and `IdpConfigBuilder` publish as an `EndpointUrl`, an absolute HTTP or HTTPS URL. The generators take any absolute URI reference | Reason not recorded. | Metadata §2.2.2 | Always |
+| Take each endpoint that `SpConfigBuilder` and `IdpConfigBuilder` publish as an `EndpointUrl`, an absolute HTTP or HTTPS URL. The generators take any absolute URI reference | Every binding the builders publish delivers its message to the endpoint in an HTTP request, so a peer could send nothing to an endpoint with another scheme. | Metadata §2.2.2 | Always |
 | Publish an `ArtifactResolutionService` with an `EndpointUrl` and the SOAP binding | Artifact resolution uses a synchronous binding, and SOAP over HTTP is the one the crate implements for it. | Metadata §2.2.2, Bindings §3.6 | `IdpConfigBuilder::artifact_resolution_service` |
 | Write `validUntil` in UTC truncated to whole seconds, and refuse one outside the years 0001 to 9999 | Truncation never extends the validity the caller chose, and the import reads only four-digit years. | Metadata §2.3.2, XML Schema 1.0 Part 2 §3.2.7 | `MetadataLifetime` |
 | Write `cacheDuration="PT86400S"` when no lifetime is configured | A daily refresh target without a fixed expiration suits metadata generated once at config build. | Metadata §2.3.2, E94 | `metadata_lifetime` on `SpConfigBuilder` and `IdpConfigBuilder` |
@@ -353,18 +353,24 @@ Code: `src/metadata/key_certificates.rs`, `src/flow.rs`, `src/crypto/verify.rs`
 
 ### Metadata consumer: endpoints
 
-Code: `src/metadata/sp.rs`, `src/metadata/idp.rs`, `src/metadata/endpoints.rs`, `src/xml/schema_value.rs`, `src/config/descriptors.rs`
+Code: `src/metadata/sp.rs`, `src/metadata/idp.rs`, `src/metadata/endpoints.rs`, `src/xml/schema_value.rs`, `src/config/descriptors.rs`, `src/artifact.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
 | Select a default `AssertionConsumerService` within one SAML 2.0 `SPSSODescriptor`: the first one for a lookup without a binding, else the first one that publishes the binding | E37 defines the default within one role, and Metadata §2.3.2 leaves the choice among roles undefined. | Metadata §2.2.3, §2.3.2, E37 | Always |
 | Look up an `AssertionConsumerServiceIndex` in each selected `SPSSODescriptor`, counting endpoints of every binding. Refuse an index that one of them publishes twice or that more than one of them publishes | The request names the index but not the role, so a guessed endpoint could receive an assertion the requester did not route there. | Core §3.4.1, Metadata §2.2.3, §2.3.2 | Always |
 | Refuse the import when an `AssertionConsumerService` of a selected SP role or an `ArtifactResolutionService` of a selected IdP role has no `Binding`, no `Location` or an empty one, no `index` or one that is not an integer, or an `isDefault` that is not an `xs:boolean` | Reading such an endpoint leniently or skipping it could change which endpoint the default and index lookups select. | Metadata §2.2.2, §2.2.3, E37 | Always |
-| Import such an endpoint when its `Binding` is empty, its `Binding` or `Location` holds only whitespace, or its `index` is an integer outside 0 to 65535. An assertion consumer service reads such an `index` as none, and the artifact resolution accessors refuse the endpoint | The rest of the peer's metadata stays usable, and a lookup reads such an endpoint without the value, skips it, or refuses it. | Core §1.3.2, Metadata §2.2.2, §2.2.3 | Always |
-| Skip an `AssertionConsumerService` whose `Binding` the crate does not support in a lookup by binding or URL. Refuse the default for a lookup without a binding when the endpoint it selects has such a `Binding` | Reason not recorded. | Metadata §2.2.2, §2.2.3, E37 | Always |
+| Import such an endpoint when its `Binding` is empty, its `Binding` or `Location` holds only whitespace, or its `index` is an integer outside 0 to 65535. An assertion consumer service reads such an `index` as none, and the artifact resolution accessors refuse such an `index` | The rest of the peer's metadata stays usable, and a lookup reads such an endpoint without the value, skips it, or refuses it. | Core §1.3.2, Metadata §2.2.2, §2.2.3 | Always |
+| Import an `AssertionConsumerService` whose `Binding` the crate does not support, and skip it in a lookup by binding or URL | A service provider that also publishes endpoints of other profiles, such as a PAOS endpoint for ECP, still receives responses at its endpoints of a binding the crate sends. | Metadata §2.2.2, §2.2.3 | Always |
 | Look up an artifact's `EndpointIndex` in each selected `IDPSSODescriptor`, and refuse an index that more than one of them publishes | The artifact names its issuer and index but not the role, so a guessed role could receive an `ArtifactResolve` for an artifact it did not issue. | Metadata §2.2.3, §2.3.2, Bindings §3.6.4 | `IdpMetadata::artifact_resolution_service` |
-| Reject an `ArtifactResolutionService` whose `Binding` or `Location` is empty after whitespace collapse | Reason not recorded. | Core §1.3.2, Metadata §2.2.2 | `IdpMetadata::artifact_resolution_services` |
+| Return an `ArtifactResolutionService` whose `Binding` or `Location` is empty after whitespace collapse. Artifact resolution refuses only an artifact whose index names it | A peer that publishes one such endpoint still has its artifacts resolved at its other endpoints. | Core §1.3.2, Metadata §2.2.2 | `IdpMetadata::artifact_resolution_services` |
 | Return a selected endpoint as an `EndpointUrl`. A non-HTTP(S) URL is an error from the accessor, and import accepts it | The typed endpoint contract is absolute HTTP(S), and Metadata §2.2.2 and §2.2.3 use `anyURI` without that restriction. | Metadata §2.2.2, §2.2.3 | Always |
+
+A lookup without a binding still takes its default from every
+`AssertionConsumerService` of the role, and fails when that default has a
+`Binding` the crate does not support, as the
+[Web Browser SSO generation rules](web-browser-sso-generation.md#endpoint-selection)
+require.
 
 [Shibboleth SP 3.6.0](https://codeberg.org/Shibboleth/cpp-sp/src/tag/3.6.0/shibsp/binding/impl/ArtifactResolver.cpp)
 looks up the artifact's index only in the first `IDPSSODescriptor` that is

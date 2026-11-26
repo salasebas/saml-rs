@@ -467,6 +467,7 @@ fn service_provider_reports_the_name_format_of_each_peer_attribute(
         ("eduPersonAffiliation", BASIC, "member"),
         ("eduPersonAffiliation", BASIC, "staff"),
         ("role", DEPLOYMENT_FORMAT, "admin"),
+        ("department", "local-format", "sales"),
     ])?;
 
     assert_eq!(
@@ -480,6 +481,8 @@ fn service_provider_reports_the_name_format_of_each_peer_attribute(
                 .with_name_format(AttributeNameFormat::Basic),
             Attribute::new("role", values(&["admin"]))
                 .with_name_format(AttributeNameFormat::Custom(DEPLOYMENT_FORMAT.to_string())),
+            Attribute::new("department", values(&["sales"]))
+                .with_name_format(AttributeNameFormat::Custom("local-format".to_string())),
         ]
     );
     Ok(())

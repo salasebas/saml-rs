@@ -289,8 +289,8 @@ Code: `src/model/extract.rs`, `src/model/attributes.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Accept `Name=""`, and a `basic` name that is not an `xs:Name` | Reason not recorded. | Core §8.2.3, `AttributeType` | Always |
-| Report a received `NameFormat` whether or not it is an absolute URI reference | Reason not recorded. | Core §1.3.2 | Always |
+| Accept `Name=""`, and a `basic` name that is not an `xs:Name` | A response with such an attribute, such as a `basic` attribute named `given name`, still logs the principal in with all its attributes. | Core §8.2.3, `AttributeType` | Always |
+| Report a received `NameFormat` whether or not it is an absolute URI reference | An attribute with a relative `NameFormat`, such as `local-format`, still reaches the caller, who can match it by the format the identity provider sent. | Core §1.3.2 | Always |
 | Merge `<Attribute>` elements with the same `Name` and `NameFormat` into one `Attribute`, in document order, whatever their `FriendlyName` values. Treat an omitted `NameFormat` as `unspecified`, and report the `NameFormat` and `FriendlyName` of the first element | E49 identifies an attribute by `NameFormat` and `Name` together, and the standard does not define how repeated elements combine. | Core §2.7.3.1, E49 | Always |
 
 ### Service provider: `SsoSession::subject_id`, `SsoSession::pairwise_id`
@@ -341,8 +341,8 @@ Code: `src/model/extract.rs`, `src/model/authn.rs`, `src/name_id_management.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Accept a received `Format` that is not an absolute URI reference, and report it | Reason not recorded. | Core §1.3.2 | Always |
-| Accept a received persistent or transient `<NameID>` that misses the producer rules, including one over 256 characters | Reason not recorded. | Conformance §3.3, Core §8.3.7, §8.3.8 | Always |
+| Accept a received `Format` that is not an absolute URI reference, and report it | A message whose `NameID` or `NameIDPolicy` has a relative `Format`, such as `local-format`, is still processed, and the caller reads that format as sent. | Core §1.3.2 | Always |
+| Accept a received persistent or transient `<NameID>` that misses the producer rules, including one over 256 characters | A principal whose identity provider issued such an identifier, such as a persistent value over 256 characters, still logs in, and a logout or management request that repeats it unchanged is still accepted. | Conformance §3.3, Core §8.3.7, §8.3.8 | Always |
 
 ### Identity provider and service provider: `SpConfigBuilder::build`, `IdpConfigBuilder::build`, `generate_sp_metadata`, `generate_idp_metadata`
 
