@@ -7,14 +7,17 @@ its provider's `XmlPolicy::limits`. `MetadataAggregate::from_xml` takes its
 
 Normative text is XML 1.0 (Fifth Edition) §2.8 and §5.1, which make a
 malformed XML declaration a fatal error, and §4.3.3, which defines the
-character encodings an XML processor reads. XML 1.0 sets no resource limits,
-so each limit is library policy.
+character encodings an XML processor reads. Namespaces in XML 1.0 (Third
+Edition) §7 and §8 make a processor report an element or attribute name that
+is not a `QName`. XML 1.0 sets no resource limits, so each limit is library
+policy.
 
 ## Support
 
 | Feature | Section | XML processor |
 | --- | --- | --- |
 | Report an XML declaration that does not match `XMLDecl` as a fatal error | XML 1.0 §2.8, §5.1 | Supported |
+| Report an element or attribute name that does not match `QName` | XML 1.0 §2.3, Namespaces in XML 1.0 §7, §8 | Supported |
 | Read an entity encoded in UTF-8, with or without a byte order mark | XML 1.0 §4.3.3 | Supported |
 | Read an entity encoded in UTF-16 | XML 1.0 §4.3.3 | Not supported |
 | Read an entity in another encoding that its `encoding` declaration names | XML 1.0 §4.3.3 | Not supported |
@@ -36,11 +39,12 @@ the caller decoded.
 
 ### XML processor: received messages, SOAP envelopes, and metadata
 
-Code: `src/xml/dom.rs`, `src/xml/dom/element.rs`
+Code: `src/xml/dom.rs`, `src/xml/dom/element.rs`, `src/xml/name.rs`
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Reject an XML declaration that does not match `XMLDecl`: `version` with a `1.x` number, then optional `encoding` and `standalone`, in that order, separated by whitespace, with no other pseudo-attribute | Mandatory | XML 1.0 §2.8, §2.9, §4.3.3, §5.1 | Always |
+| Reject an element or attribute name that does not match `QName`: one `NCName`, or two joined by one colon, of XML 1.0 Fifth Edition name characters | Mandatory | XML 1.0 §2.3, Namespaces in XML 1.0 §7, §8 | Always |
 
 ## Library policies
 
