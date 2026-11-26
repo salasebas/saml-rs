@@ -118,7 +118,7 @@ Code: `src/name_id_management/xml.rs`, `src/model/subject.rs`, `src/entity.rs`
 | Write `ID`, `Version` `2.0`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §1.3.3 | Always |
 | Write the requesting entity's ID as `Issuer`, with `Format` omitted or `entity`. The writer omits `Format` | Mandatory | Profiles §4.5.4.1 | Always |
 | Write the value of the `NameId` given as the `NameID`, with its `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` | Mandatory | Core §3.6.1, §3.6.3 | Always |
-| For a persistent identifier, write a missing `NameQualifier` as the identity provider's entity ID and a missing `SPNameQualifier` as the service provider's | Mandatory | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
+| For a persistent identifier, write each qualifier whose established value differs from `Issuer`. The writer fills a missing `NameQualifier` with the identity provider's entity ID and a missing `SPNameQualifier` with the service provider's | Mandatory | Core §3.6.3 | `NameId::with_name_qualifier`, `NameId::with_sp_name_qualifier` |
 | Write each persistent qualifier also when it equals `Issuer`, which Core §3.6.3 lets the requester omit | Recommended | Core §3.6.3 | Always |
 | Write `NewID` with the new value only, or an empty `Terminate` | Mandatory | E12, E55, `TerminateType` | `NameIdChange` |
 
