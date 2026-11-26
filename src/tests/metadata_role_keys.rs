@@ -633,12 +633,13 @@ fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
     use saml_rs::metadata::{IdpMetadata, SpMetadata};
     use saml_rs::sp;
     use saml_rs::sp::LoginRequestOptions;
+    const FOREIGN_NAME_ID_FORMAT: &str = r#"<ext:NameIDFormat xmlns:ext="urn:example:ext">urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</ext:NameIDFormat>"#;
 
     let sp_role = format!(
-        r#"<SPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}"><NameIDFormat>&#x9; {TRANSIENT} &#xD;&#xA;</NameIDFormat><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/acs" index="0"/></SPSSODescriptor>"#
+        r#"<SPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}"><NameIDFormat>&#x9; {TRANSIENT} &#xD;&#xA;</NameIDFormat>{FOREIGN_NAME_ID_FORMAT}<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/acs" index="0"/></SPSSODescriptor>"#
     );
     let idp_only = format!(
-        r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://proxy.example.com/metadata"><IDPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}">{}<NameIDFormat>&#xA; {PERSISTENT} &#x9;&#xD;</NameIDFormat><NameIDFormat> urn:example:custom&#x9;  value </NameIDFormat><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/sso"/></IDPSSODescriptor></EntityDescriptor>"#,
+        r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://proxy.example.com/metadata"><IDPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}">{}<NameIDFormat>&#xA; {PERSISTENT} &#x9;&#xD;</NameIDFormat><NameIDFormat> urn:example:custom&#x9;  value </NameIDFormat>{FOREIGN_NAME_ID_FORMAT}<SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/sso"/></IDPSSODescriptor></EntityDescriptor>"#,
         signing_key_descriptor(IDP_ROLE_CERT)
     );
     for metadata in with_role_in_both_orders(&idp_only, "IDPSSODescriptor", &sp_role) {

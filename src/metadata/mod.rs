@@ -219,6 +219,10 @@ impl Metadata {
 
     /// `<NameIDFormat>` values of the SSO role descriptors read, in document
     /// order, after XML Schema whitespace collapse.
+    ///
+    /// Only `NameIDFormat` children in the SAML metadata namespace are
+    /// formats. A child with the same local name in another namespace is not
+    /// read.
     pub fn name_id_formats(&self) -> Vec<crate::NameIdFormat> {
         let values = match self.meta.get("nameIDFormat") {
             Some(Value::Array(items)) => items.as_slice(),
@@ -367,6 +371,11 @@ mod tests {
                 "{xml}"
             );
         }
+        assert!(Metadata::parse("<Other/>").is_ok());
+        assert!(matches!(
+            Metadata::parse("<Other/>tail"),
+            Err(SamlError::Xml { .. })
+        ));
     }
 
     #[test]

@@ -80,5 +80,6 @@ Check the topics that affect your integration.
 - [Encrypt logout and name identifier management for the receiving role](logout-and-nim-encryption-role.md)
 - [Handle NameID value errors in identity provider logout and management](identity-provider-name-id-checks.md)
 - [Repeat unsigned and refused requests without a replay error](replay-storage.md)
+- [Read metadata name identifier formats only in the metadata namespace](metadata-name-id-format-namespace.md)
 
 [All migration guides](../README.md)
