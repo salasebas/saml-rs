@@ -104,5 +104,6 @@ Check the topics that affect your integration.
 - [Handle peer metadata with a malformed indexed endpoint](indexed-endpoint-fields.md)
 - [Send AuthnRequests to a published https sign-on endpoint](sso-https-endpoint.md)
 - [Handle responses with undeclared attributes on `Conditions`](conditions-attributes.md)
+- [Handle requests whose `ID` cannot be written as `InResponseTo`](request-id-in-response-to.md)
 
 [All migration guides](../README.md)

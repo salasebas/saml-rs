@@ -936,6 +936,22 @@ fn a_later_sha1_assertion_signature_is_rejected_by_the_rsa_sha2_profile(
 }
 
 #[test]
+fn a_response_or_assertion_id_that_is_not_an_ncname_is_accepted(
+) -> Result<(), Box<dyn std::error::Error>> {
+    const UUID: &str = "0c5b1a3e-9f2d-4c7a-8b6e-2d4f1a9c3e70";
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
+    let original = response_xml(&exchange.response_fields)?;
+
+    let assertion = resigned(&replace_element_id(&original, "<saml:Assertion", UUID)?)?;
+    let session = accept(&exchange, &assertion)?;
+    assert_eq!(session.assertion_id().as_str(), UUID);
+
+    let response = resigned(&replace_element_id(&original, "<samlp:Response", UUID)?)?;
+    accept(&exchange, &response)?;
+    Ok(())
+}
+
+#[test]
 fn replay_stores_every_assertion_identifier() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let original = response_xml(&exchange.response_fields)?;

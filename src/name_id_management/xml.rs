@@ -5,6 +5,7 @@ use crate::error::SamlError;
 use crate::model::{
     is_name_id_format, validate_issued_name_id, validate_name_id_format, NameId, Status,
 };
+use crate::xml::name::check_in_response_to;
 use crate::xml::write::{Prefixes, XmlWriter};
 use crate::xml::OutboundNameIdQualifiers;
 
@@ -118,6 +119,7 @@ pub(crate) fn render_response(
     prefixes: &Prefixes<'_>,
     response: &ResponseXml<'_>,
 ) -> Result<String, SamlError> {
+    check_in_response_to(response.in_response_to)?;
     response.status.check_writable()?;
     let root = prefixes.protocol("ManageNameIDResponse");
     let xmlns_protocol = prefixes.xmlns_protocol();

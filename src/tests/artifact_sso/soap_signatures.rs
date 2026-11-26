@@ -194,9 +194,11 @@ fn artifact_resolve_signature_failure_is_denied_and_stays_outstanding() -> TestR
         validation(),
     )?;
     let request = resolution.request().envelope();
+    let padded_id = request.replacen(" ID=\"_", " ID=\"&#10; _", 1);
+    assert_ne!(padded_id, request);
     let denied = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
-        &sign_rsa(request, IDP_KEY)?,
+        &sign_rsa(&padded_id, IDP_KEY)?,
         &EndpointUrl::try_new(RESOLUTION_URL)?,
         &mut issued,
         channel,

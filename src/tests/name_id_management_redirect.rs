@@ -1322,6 +1322,36 @@ fn an_issuer_is_compared_by_its_value_whatever_its_format() -> TestResult {
 }
 
 #[test]
+fn a_request_id_that_is_not_an_ncname_is_received_but_not_answered() -> TestResult {
+    let sp = sp()?;
+    let idp_peer = idp_descriptor(&idp()?)?;
+    let request_xml = idp_request_xml(
+        r#"<saml:NameID>alice@example.com</saml:NameID>"#,
+        "<samlp:Terminate/>",
+    )
+    .replacen(r#"ID="_manage1""#, r#"ID="1bad:id""#, 1);
+    assert!(request_xml.contains(r#"ID="1bad:id""#));
+
+    let received = request(sp.receive_name_id_management_redirect(
+        &idp_peer,
+        signed_request_input(&request_xml)?,
+        ReceiveNameIdManagement::new(),
+        validation(),
+    )?)?;
+    let answered = sp.respond_name_id_management_redirect(
+        &idp_peer,
+        &received,
+        &Status::success(),
+        RespondNameIdManagement::new(),
+    );
+    assert!(
+        matches!(answered, Err(SamlError::Invalid(_))),
+        "{answered:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn request_goes_to_the_service_provider_role_of_a_dual_role_peer() -> TestResult {
     let dual_role = format!(
         concat!(

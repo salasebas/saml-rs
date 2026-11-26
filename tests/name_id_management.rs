@@ -775,6 +775,47 @@ fn a_version_other_than_2_0_is_answered_with_version_mismatch() -> TestResult {
 }
 
 #[test]
+fn a_request_id_that_is_not_an_ncname_is_received_but_not_answered() -> TestResult {
+    let idp = identity_provider(Some(IDP_NIM_URL))?;
+    let sp = soap_service_provider()?;
+    let terminate = format!("{}<samlp:Terminate/>", current_name_id_xml());
+    let request = sp_request(&terminate)?;
+
+    let malformed = request.replace(SP_REQUEST_ID, "1bad:id");
+    let received = received_request(idp.receive_name_id_management(
+        &sp,
+        &malformed,
+        authenticated(),
+        validation(),
+    )?)?;
+    assert_eq!(received.message().id().as_str(), "1bad:id");
+    let answered = idp.respond_name_id_management(&sp, &received, &Status::success());
+    assert!(
+        matches!(answered, Err(SamlError::Invalid(_))),
+        "{answered:?}"
+    );
+
+    let newer = sp_request_with(
+        r#"Version="3.0""#,
+        &format!("<saml:Issuer>{SP_ENTITY_ID}</saml:Issuer>"),
+        &terminate,
+    )?
+    .replace(SP_REQUEST_ID, "1bad:id");
+    let refused = idp.receive_name_id_management(&sp, &newer, authenticated(), validation());
+    assert!(matches!(refused, Err(SamlError::Invalid(_))), "{refused:?}");
+
+    let padded = request.replace(SP_REQUEST_ID, &format!(" {SP_REQUEST_ID}&#9;"));
+    let received = received_request(idp.receive_name_id_management(
+        &sp,
+        &padded,
+        authenticated(),
+        validation(),
+    )?)?;
+    idp.respond_name_id_management(&sp, &received, &Status::success())?;
+    Ok(())
+}
+
+#[test]
 fn an_identity_provider_without_the_service_neither_sends_nor_accepts() -> TestResult {
     let idp = identity_provider(None)?;
     let sp = soap_service_provider()?;

@@ -44,7 +44,7 @@ message against the SAML schemas.
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Read a returned request or response `ID`, and a returned `InResponseTo`, as a string with a character other than XML whitespace, without the `xs:ID` or `NCName` check. Collapse XML whitespace in an `AuthnRequest` `ID` and in a returned `InResponseTo` | Reason not recorded. | Core §1.3.4, `RequestAbstractType`, `StatusResponseType` | Always |
+| Read a returned request, response, or assertion `ID`, and a returned `InResponseTo`, as a string with a character other than XML whitespace, without the `xs:ID` or `NCName` check. Collapse XML whitespace in an `AuthnRequest` `ID` and in a returned `InResponseTo` | Peers that write an `ID` that is not an `NCName`, such as a UUID that starts with a digit, keep working, as they do with most compared SAML implementations. | Core §1.3.4, `RequestAbstractType`, `StatusResponseType`, `AssertionType` | Always |
 | Treat an entity ID, a message or assertion `ID`, a `SessionIndex`, or an instant as empty only when it holds nothing but XML whitespace: space, tab, carriage return, and line feed. Another character, such as U+00A0, is content | Core §1.3.1 counts only XML whitespace as whitespace, so treating another character as empty would refuse a valid SAML string. | Core §1.3.1, XML 1.0 §2.3 | Always |
 | Accept a name identifier management `Terminate` that holds only XML whitespace, and refuse one that holds another character, such as U+00A0 | Reason not recorded. | `TerminateType`, XML Schema Part 1 §3.4.4 | Always |
 | Read each returned `xs:boolean`, `xs:unsignedShort`, and `xs:dateTime` attribute by its datatype, and reject a value outside its lexical space | A typed result cannot hold a value that its datatype does not define, so the alternatives are to guess the value or to drop it. | Core §3.2.1, protocol and assertion schemas | Always |
@@ -64,4 +64,4 @@ Code: `src/xml/name.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Check an `xs:Name`, `xs:NCName`, or `xs:ID` value, such as a basic attribute name or the `InResponseTo` of an SSO response, against the XML 1.0 Fifth Edition name characters | The older table that XML Schema 1.0 cites rejects names that current XML accepts, such as one starting with U+037F, and generated IDs are ASCII. | XML 1.0 §2.3, XML Schema Part 2 §3.3.6, §3.3.7, §3.3.8 | Always |
+| Check an `xs:Name`, `xs:NCName`, or `xs:ID` value, such as a basic attribute name or a written `InResponseTo`, against the XML 1.0 Fifth Edition name characters | The older table that XML Schema 1.0 cites rejects names that current XML accepts, such as one starting with U+037F, and generated IDs are ASCII. | XML 1.0 §2.3, XML Schema Part 2 §3.3.6, §3.3.7, §3.3.8 | Always |
