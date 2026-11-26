@@ -162,10 +162,14 @@ fn login_response_assertion_prefix_can_be_overridden() -> Result<(), Box<dyn std
 #[test]
 fn login_response_both_prefixes_can_be_overridden_and_signed_post_parses(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (idp, sp, ctx, xml) = login_response_xml(prefixed_setting("samlp2", "saml2"))?;
+    let mut setting = prefixed_setting("samlp2", "saml2");
+    setting.signature_prefix = "sig".into();
+    let (idp, sp, ctx, xml) = login_response_xml(setting)?;
 
     assert!(xml.contains("<samlp2:Response"));
     assert!(xml.contains("<saml2:Assertion"));
+    assert!(xml.contains("<sig:Signature"));
+    assert!(!xml.contains("<ds:Signature"));
     let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
     let parsed =
         sp.parse_login_response_with_request_id(&idp, Binding::Post, &request, REQUEST_ID)?;

@@ -12,7 +12,6 @@ mod metadata_trust;
 mod policies;
 mod provider;
 
-pub use crate::entity::{SignatureAction, SignatureConfig};
 pub use crate::xml::XmlLimits;
 pub use algorithms::{
     DataEncryptionAlgorithm, DigestAlgorithm, KeyEncryptionAlgorithm, MaskGenerationFunction,

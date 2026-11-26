@@ -6,9 +6,7 @@ mod store;
 pub use store::{ArtifactChannelRequirement, ArtifactStore, IssuedArtifact, IssuedArtifacts};
 
 use crate::binding::sign_soap_message;
-use crate::config::{
-    HmacSecret, IdpDescriptor, SignatureConfig, SpDescriptor, XmlSignatureProfile,
-};
+use crate::config::{HmacSecret, IdpDescriptor, SpDescriptor, XmlSignatureProfile};
 use crate::constants::{namespace, status_code, CertUse};
 use crate::entity::{generate_id, now_iso8601, EntitySetting};
 use crate::error::SamlError;
@@ -459,17 +457,7 @@ pub(crate) fn resolve(
     let xml = writer.finish();
     let xml = match signing {
         ArtifactResolveSigning::Unsigned => xml,
-        ArtifactResolveSigning::Signed => {
-            let signature_config =
-                setting
-                    .signature_config
-                    .as_ref()
-                    .map(|config| SignatureConfig {
-                        prefix: config.prefix.clone(),
-                        ..SignatureConfig::default()
-                    });
-            sign_soap_message(setting, &xml, signature_config.as_ref())?
-        }
+        ArtifactResolveSigning::Signed => sign_soap_message(setting, &xml)?,
     };
     let request = SoapRequest::try_new(EndpointUrl::try_new(service.location())?, &xml)?;
     validation.check_and_store_message_replay(ReplayKey::Artifact(artifact.clone()))?;

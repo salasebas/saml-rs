@@ -3,12 +3,11 @@ use super::signature_profile::check_verification_key;
 use crate::binding::{encode_base64, xml_escape};
 use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::{digest_algorithm, namespace, signature_algorithm, transform_algorithm};
-use crate::entity::{EntitySetting, SignatureAction, SignatureConfig};
+use crate::entity::EntitySetting;
 use crate::error::{crypto_err, xml_err, SamlError};
 use crate::util::normalize_cert_string;
 use crate::xml::dom::{self, Node};
 use crate::xml::name::validate_namespace_prefix;
-use crate::xml::signature_placement::signature_reference_path;
 use bergshamra::keys::Key;
 use bergshamra::{sign, DsigContext, KeysManager};
 use quick_xml::events::Event;
@@ -40,58 +39,49 @@ fn find_assertion(root: &Node) -> Option<&Node> {
     root.children.iter().find(|c| c.local_name == "Assertion")
 }
 
-fn resolve_path<'a>(node: &'a Node, names: &[&str]) -> Option<&'a Node> {
-    let (&name, rest) = names.split_first()?;
-    if node.local_name != name {
-        return None;
-    }
-    if rest.is_empty() {
-        return Some(node);
-    }
-    node.children
-        .iter()
-        .find_map(|child| resolve_path(child, rest))
+enum SignatureSlot {
+    At(usize),
+    ExpandEmpty { name: String, end: usize },
 }
 
-fn place_signature(
-    xml: &str,
-    node: &Node,
-    action: SignatureAction,
-    signature: &str,
-) -> Result<String, SamlError> {
-    let pos = match action {
-        SignatureAction::After => node.end,
-        SignatureAction::Before => node.start,
-        SignatureAction::Prepend | SignatureAction::Append => {
-            let element = &xml[node.start..node.end];
-            let mut reader = Reader::from_str(element);
-            match reader.read_event().map_err(xml_err)? {
-                Event::Empty(tag) => {
-                    let name = tag.name().into_inner();
-                    let open = xml[..node.end].strip_suffix("/>").ok_or_else(|| {
-                        SamlError::xml("empty-element tag does not end with '/>'")
-                    })?;
-                    let rest = &xml[node.end..];
-                    return Ok(format!("{open}>{signature}</{name}>{rest}"));
-                }
-                Event::Start(_) if action == SignatureAction::Prepend => {
-                    node.start + usize::try_from(reader.buffer_position()).map_err(xml_err)?
-                }
-                Event::Start(_) => {
-                    node.start
-                        + element
-                            .rfind("</")
-                            .ok_or_else(|| SamlError::xml("element has no end tag"))?
-                }
-                other => {
-                    return Err(SamlError::xml(format!(
-                        "signature reference does not start with an element tag: {other:?}"
-                    )))
-                }
-            }
+fn signature_slot(xml: &str, target: &Node) -> Result<SignatureSlot, SamlError> {
+    if let Some(issuer) = target
+        .children
+        .first()
+        .filter(|child| child.local_name == "Issuer")
+    {
+        return Ok(SignatureSlot::At(issuer.end));
+    }
+    let element = &xml[target.start..target.end];
+    let mut reader = Reader::from_str(element);
+    match reader.read_event().map_err(xml_err)? {
+        Event::Empty(tag) => Ok(SignatureSlot::ExpandEmpty {
+            name: tag.name().into_inner().to_owned(),
+            end: target.end,
+        }),
+        Event::Start(_) => Ok(SignatureSlot::At(
+            target.start + usize::try_from(reader.buffer_position()).map_err(xml_err)?,
+        )),
+        other => Err(SamlError::xml(format!(
+            "signing target does not start with an element tag: {other:?}"
+        ))),
+    }
+}
+
+fn insert_signature(xml: &str, slot: SignatureSlot, signature: &str) -> Result<String, SamlError> {
+    match slot {
+        SignatureSlot::At(position) => Ok(format!(
+            "{}{signature}{}",
+            &xml[..position],
+            &xml[position..]
+        )),
+        SignatureSlot::ExpandEmpty { name, end } => {
+            let open = xml[..end]
+                .strip_suffix("/>")
+                .ok_or_else(|| SamlError::xml("empty-element tag does not end with '/>'"))?;
+            Ok(format!("{open}>{signature}</{name}>{}", &xml[end..]))
         }
-    };
-    Ok(format!("{}{signature}{}", &xml[..pos], &xml[pos..]))
+    }
 }
 
 #[cfg(test)]
@@ -102,7 +92,7 @@ pub(crate) fn sign_saml_xml(
     cert: &str,
     sig_alg: &str,
     transforms: &[String],
-    config: Option<&SignatureConfig>,
+    prefix: Option<&str>,
 ) -> Result<String, SamlError> {
     embed_signature(
         xml,
@@ -111,7 +101,7 @@ pub(crate) fn sign_saml_xml(
         Some(cert),
         sig_alg,
         transforms,
-        config,
+        prefix.unwrap_or("ds"),
     )
 }
 
@@ -122,7 +112,7 @@ fn embed_signature(
     cert: Option<&str>,
     sig_alg: &str,
     transforms: &[String],
-    config: Option<&SignatureConfig>,
+    prefix: &str,
 ) -> Result<String, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     let doc = dom::parse_document(xml, crate::XmlLimits::default())?;
@@ -138,8 +128,7 @@ fn embed_signature(
         .ok_or_else(|| SamlError::Invalid("signing target has no ID".into()))?;
     let digest = reference_digest_for_signature(sig_alg);
 
-    let prefix = config.map(|c| c.prefix.as_str()).unwrap_or("ds");
-    validate_namespace_prefix("SignatureConfig.prefix XML prefix", prefix)?;
+    validate_namespace_prefix("signature prefix", prefix)?;
     let key_info = cert
         .map(|cert| {
             let cert_b64 = xml_escape(&normalize_cert_string(cert));
@@ -171,23 +160,7 @@ fn embed_signature(
         exc = transform_algorithm::EXC_C14N,
     );
 
-    let (node, action) = match config.and_then(|c| c.reference.as_deref()) {
-        Some(reference) => {
-            let names = signature_reference_path(reference)?;
-            let node = resolve_path(&doc.root, &names)
-                .ok_or_else(|| SamlError::Invalid("signatureConfig reference not found".into()))?;
-            (node, config.map(|c| c.action).unwrap_or_default())
-        }
-        None => {
-            let issuer = target
-                .children
-                .iter()
-                .find(|c| c.local_name == "Issuer")
-                .ok_or_else(|| SamlError::Invalid("signing target has no Issuer".into()))?;
-            (issuer, SignatureAction::After)
-        }
-    };
-    let templated = place_signature(xml, node, action, &signature)?;
+    let templated = insert_signature(xml, signature_slot(xml, target)?, &signature)?;
 
     let mut manager = KeysManager::new();
     manager.add_key(key.clone());
@@ -252,7 +225,7 @@ impl<'a> SigningCredential<'a> {
         sign_message: bool,
         sig_alg: &str,
         transforms: &[String],
-        config: Option<&SignatureConfig>,
+        prefix: &str,
     ) -> Result<String, SamlError> {
         match self {
             Self::PrivateKey { key, certificate } => {
@@ -265,11 +238,11 @@ impl<'a> SigningCredential<'a> {
                     Some(certificate),
                     sig_alg,
                     transforms,
-                    config,
+                    prefix,
                 )
             }
             Self::HmacSecret(key) => {
-                embed_signature(xml, sign_message, key, None, sig_alg, transforms, config)
+                embed_signature(xml, sign_message, key, None, sig_alg, transforms, prefix)
             }
         }
     }
@@ -473,123 +446,31 @@ mod tests {
     }
 
     #[test]
-    fn custom_signature_config_prefix_and_location() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::entity::{SignatureAction, SignatureConfig};
+    fn signature_goes_after_issuer_or_first() -> Result<(), Box<dyn std::error::Error>> {
         let key = read_private_key(SP_PRIVKEY, None)?;
-        let config = SignatureConfig {
-            prefix: "ds2".into(),
-            reference: Some("/*[local-name(.)='AuthnRequest']/*[local-name(.)='Issuer']".into()),
-            action: SignatureAction::Before,
-        };
-        let signed = sign_saml_xml(
-            AUTHN_REQUEST,
-            true,
-            &key,
-            SP_CERT,
-            RSA_SHA256,
-            &[],
-            Some(&config),
-        )?;
-        assert!(signed.contains("<ds2:Signature"));
-        let (verified, _) = verify_signature(&signed, &[SP_CERT.to_string()])?;
-        assert!(verified, "custom-prefix signature should verify");
-        Ok(())
-    }
-
-    #[test]
-    fn signature_reference_uses_first_complete_path() -> Result<(), Box<dyn std::error::Error>> {
-        let xml = r#"<LogoutResponse xmlns="urn:oasis:names:tc:SAML:2.0:protocol">
-            <Extensions xmlns:ext="urn:example">
-                <ext:Group/>
-                <ext:Group><ext:Marker choice="first"/></ext:Group>
-                <ext:Group><ext:Marker choice="second"/></ext:Group>
-            </Extensions>
-        </LogoutResponse>"#;
-        let doc = dom::parse_document(xml, crate::XmlLimits::default())?;
-        let path = signature_reference_path(concat!(
-            "/*[local-name(.)='LogoutResponse']/*[local-name(.)='Extensions']",
-            "/*[local-name(.)='Group']/*[local-name(.)='Marker']",
-        ))?;
-        let anchor = resolve_path(&doc.root, &path).ok_or("no placement anchor")?;
-        assert_eq!(anchor.attr("choice"), Some("first"));
-        Ok(())
-    }
-
-    #[test]
-    fn child_placement_inside_reference_element() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::entity::{SignatureAction, SignatureConfig};
-        let key = read_private_key(SP_PRIVKEY, None)?;
+        let with_issuer = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_req1\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\" ProviderName=\"SP > portal\"><saml:Issuer>https://sp.example.com/metadata</saml:Issuer><samlp:Extensions/><samlp:NameIDPolicy/></samlp:AuthnRequest>";
+        let without_issuer = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" ID=\"_req1\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\" ProviderName=\"SP > portal\"><samlp:Extensions/><samlp:NameIDPolicy/></samlp:AuthnRequest>";
         let empty = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" ID=\"_req1\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\" ProviderName=\"SP > portal\" />";
-        let with_issuer = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_req1\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\" ProviderName=\"SP > portal\"><saml:Issuer>https://sp.example.com/metadata</saml:Issuer></samlp:AuthnRequest>";
-        let cases: [(&str, SignatureAction, &[&str]); 4] = [
-            (empty, SignatureAction::Prepend, &["Signature"]),
-            (empty, SignatureAction::Append, &["Signature"]),
+        let cases: [(&str, &[&str]); 3] = [
             (
                 with_issuer,
-                SignatureAction::Prepend,
-                &["Signature", "Issuer"],
+                &["Issuer", "Signature", "Extensions", "NameIDPolicy"],
             ),
-            (
-                with_issuer,
-                SignatureAction::Append,
-                &["Issuer", "Signature"],
-            ),
+            (without_issuer, &["Signature", "Extensions", "NameIDPolicy"]),
+            (empty, &["Signature"]),
         ];
-        for (request, action, expected_children) in cases {
-            let config = SignatureConfig {
-                reference: Some("/*[local-name(.)='AuthnRequest']".into()),
-                action,
-                ..SignatureConfig::default()
-            };
-            let signed =
-                sign_saml_xml(request, true, &key, SP_CERT, RSA_SHA256, &[], Some(&config))?;
+        for (request, expected_children) in cases {
+            let signed = sign_saml_xml(request, true, &key, SP_CERT, RSA_SHA256, &[], None)?;
             let root = dom::parse_document(&signed, crate::XmlLimits::default())?.root;
             let children: Vec<&str> = root
                 .children
                 .iter()
                 .map(|c| c.local_name.as_str())
                 .collect();
-            assert_eq!(children, expected_children, "{request} {action:?}");
+            assert_eq!(children, expected_children, "{request}");
             assert_eq!(root.attr("ProviderName"), Some("SP > portal"));
             let (verified, _) = verify_signature(&signed, &[SP_CERT.to_string()])?;
-            assert!(verified, "{request} {action:?} signature should verify");
-        }
-
-        let self_closing_child = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_req1\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\"><saml:Issuer>https://sp.example.com/metadata</saml:Issuer><samlp:Extensions/><samlp:NameIDPolicy/></samlp:AuthnRequest>";
-        for action in [SignatureAction::Prepend, SignatureAction::Append] {
-            let config = SignatureConfig {
-                reference: Some(
-                    "/*[local-name(.)='AuthnRequest']/*[local-name(.)='Extensions']".into(),
-                ),
-                action,
-                ..SignatureConfig::default()
-            };
-            let signed = sign_saml_xml(
-                self_closing_child,
-                true,
-                &key,
-                SP_CERT,
-                RSA_SHA256,
-                &[],
-                Some(&config),
-            )?;
-            let root = dom::parse_document(&signed, crate::XmlLimits::default())?.root;
-            let children: Vec<&str> = root
-                .children
-                .iter()
-                .map(|c| c.local_name.as_str())
-                .collect();
-            assert_eq!(
-                children,
-                ["Issuer", "Extensions", "NameIDPolicy"],
-                "{action:?}"
-            );
-            let extensions: Vec<&str> = root.children[1]
-                .children
-                .iter()
-                .map(|c| c.local_name.as_str())
-                .collect();
-            assert_eq!(extensions, ["Signature"], "{action:?}");
+            assert!(verified, "{request} signature should verify");
         }
         Ok(())
     }

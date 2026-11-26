@@ -11,12 +11,13 @@ use saml_rs::constants::{namespace, transform_algorithm};
 use saml_rs::crypto::keys::read_private_key;
 use saml_rs::crypto::sign_saml_xml;
 use saml_rs::error::SignatureVerificationReason;
+use saml_rs::tests::signature_relocation::{relocate_signature, Relocation};
 use saml_rs::util::normalize_cert_string;
+use saml_rs::XmlPolicy;
 use saml_rs::{
     AttributeScopePolicy, Attributes, CertificatePem, EntityId, IdpDescriptor, MetadataTrustPolicy,
     PairwiseId, RespondSso, SamlError, SpDescriptor, SsoAssertion, SubjectId,
 };
-use saml_rs::{SignatureAction, SignatureConfig, XmlPolicy};
 
 use super::identifier_formats::{alice, exchange};
 
@@ -34,22 +35,12 @@ fn sp_metadata_xml() -> &'static str {
 }
 
 fn sign_root_metadata(xml: &str) -> Result<String, SamlError> {
-    sign_metadata_root(xml, "EntityDescriptor", &[])
+    sign_metadata_root(xml, &[])
 }
 
-fn sign_metadata_root(
-    xml: &str,
-    root_local_name: &str,
-    transforms: &[String],
-) -> Result<String, SamlError> {
+fn sign_metadata_root(xml: &str, transforms: &[String]) -> Result<String, SamlError> {
     let key = read_private_key(PRIVKEY, None)?;
-    let reference = format!("/*[local-name(.)='{root_local_name}']");
-    let config = SignatureConfig {
-        prefix: "ds".into(),
-        reference: Some(reference),
-        action: SignatureAction::Prepend,
-    };
-    sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, transforms, Some(&config))
+    sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, transforms, None)
 }
 
 fn signed_child_metadata() -> Result<String, Box<dyn std::error::Error>> {
@@ -265,11 +256,6 @@ fn metadata_scopes_require_a_current_registration_authority_signature(
         include_str!("../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem"),
         None,
     )?;
-    let signature = SignatureConfig {
-        prefix: "ds".into(),
-        reference: Some("/*[local-name(.)='EntityDescriptor']".into()),
-        action: SignatureAction::Prepend,
-    };
     let authority_signed = sign_saml_xml(
         &xml,
         true,
@@ -277,7 +263,7 @@ fn metadata_scopes_require_a_current_registration_authority_signature(
         authority_certificate,
         RSA_SHA256,
         &[],
-        Some(&signature),
+        None,
     )?;
     let idp = import_idp(&authority_signed, authority_policy)?;
     let signed_by_peer = import_idp(&peer_signed, trust(&peer_certificates))?;
@@ -521,7 +507,6 @@ fn relaxed_policy_accepts_inclusive_canonicalization() -> Result<(), Box<dyn std
     let cert = CertificatePem::new(CERT);
     let signed = sign_metadata_root(
         idp_metadata_xml(),
-        "EntityDescriptor",
         &[
             transform_algorithm::ENVELOPED_SIGNATURE.to_string(),
             INCLUSIVE_C14N.to_string(),
@@ -555,7 +540,6 @@ fn allowing_weak_algorithms_keeps_the_profile_transforms() -> Result<(), Box<dyn
 
     let inclusive = sign_metadata_root(
         idp_metadata_xml(),
-        "EntityDescriptor",
         &[
             transform_algorithm::ENVELOPED_SIGNATURE.to_string(),
             INCLUSIVE_C14N.to_string(),
@@ -667,7 +651,7 @@ fn entities_descriptor_require_signature_accepts_the_profile_shape(
         "entityID=\"https://idp.example.com/metadata\"",
         "entityID=\" https://idp.example.com/metadata \"",
     );
-    let signed = sign_metadata_root(&xml, "EntitiesDescriptor", &[])?;
+    let signed = sign_metadata_root(&xml, &[])?;
     let descriptor = import_idp(&signed, trust(std::slice::from_ref(&cert)))?;
 
     assert_eq!(descriptor.signed_metadata_xml(), Some(signed.as_str()));
@@ -690,7 +674,7 @@ fn signed_aggregate_import_reads_the_group_entity_attributes(
         dsig = namespace::DSIG,
         role = idp_role(),
     );
-    let signed = sign_metadata_root(&document, "EntitiesDescriptor", &[])?;
+    let signed = sign_metadata_root(&document, &[])?;
 
     let descriptor = import_idp(&signed, trust(std::slice::from_ref(&cert)))?;
 
@@ -793,21 +777,10 @@ fn unverified_import_does_not_record_a_metadata_signature_as_verified(
 fn require_signature_rejects_a_nested_signature_ahead_of_the_root_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let key = read_private_key(PRIVKEY, None)?;
-    let config = SignatureConfig {
-        prefix: "ds".into(),
-        reference: Some(
-            "/*[local-name(.)='EntityDescriptor']/*[local-name(.)='IDPSSODescriptor']".into(),
-        ),
-        action: SignatureAction::Prepend,
-    };
-    let nested = sign_saml_xml(
-        idp_metadata_xml(),
-        true,
-        &key,
-        CERT,
-        RSA_SHA256,
-        &[],
-        Some(&config),
+    let nested = relocate_signature(
+        &sign_saml_xml(idp_metadata_xml(), true, &key, CERT, RSA_SHA256, &[], None)?,
+        &["EntityDescriptor", "IDPSSODescriptor"],
+        Relocation::FirstChildOf,
     )?;
     let close = "</EntityDescriptor>";
     let end = nested

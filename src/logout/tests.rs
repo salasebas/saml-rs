@@ -286,7 +286,6 @@ fn raw_logout_request_parser_does_not_infer_actual_recipient(
 mod signed_tests {
     use super::*;
     use crate::constants::signature_algorithm::RSA_SHA256;
-    use crate::entity::{SignatureAction, SignatureConfig};
     use crate::tests::engine::parse_logout_request;
 
     const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -339,34 +338,6 @@ mod signed_tests {
 
         assert!(matches!(result, Err(SamlError::IssuerMismatch { .. })));
         Ok(())
-    }
-
-    #[test]
-    fn signed_post_logout_response_rejects_signature_after_status(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut sender = idp()?;
-        let target = sp()?;
-        sender.setting = signing_setting();
-        sender.setting.signature_config = Some(SignatureConfig {
-            prefix: "ds".into(),
-            reference: Some("/*[local-name(.)='LogoutResponse']/*[local-name(.)='Status']".into()),
-            action: SignatureAction::After,
-        });
-
-        let result = create_logout_response(
-            &sender.setting,
-            sender.metadata.as_metadata(),
-            target.metadata.as_metadata(),
-            Binding::Post,
-            Some("_req1"),
-            None,
-            true,
-        );
-
-        assert_protocol_profile_error(
-            result,
-            "LogoutResponse children must be Issuer, optional Signature, optional Extensions, and exactly one final Status",
-        )
     }
 
     fn signed_idp() -> Result<idp::Engine, SamlError> {

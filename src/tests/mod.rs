@@ -47,6 +47,8 @@ mod provider_regression;
 mod redirect_inflate_limit;
 mod redirect_xml_limits;
 mod robustness;
+#[cfg(crypto)]
+pub(crate) mod signature_relocation;
 mod simplesign_xml_limits;
 mod sso_flow_document;
 mod sso_response_issuer;

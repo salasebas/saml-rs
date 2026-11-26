@@ -97,7 +97,7 @@ fn common_setting(
         schema_validator: xml.schema_validator,
         tag_prefix_protocol: templates.tag_prefix_protocol.clone(),
         tag_prefix_assertion: templates.tag_prefix_assertion.clone(),
-        signature_config: templates.signature_config.clone(),
+        signature_prefix: templates.signature_prefix.clone(),
         transformation_algorithms: transform_algorithm_uris(
             &algorithms.signed_reference_transforms,
         ),

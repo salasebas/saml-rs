@@ -561,3 +561,35 @@ fn outbound_logout_response_rejects_root_signature_before_library_signing(
 
     expect_profile_error(&response_xml(RESPONSE_ID, Some(DESTINATION), &children))
 }
+
+#[test]
+fn outbound_logout_response_after_signing_requires_the_signature_after_issuer(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let signature = "<ds:Signature><ds:SignedInfo/></ds:Signature>";
+    let issuer = issuer("", ISSUER);
+    let status = success_status();
+    let validate_signed = |children: &str| {
+        validate_logout_response_outbound(
+            &response_xml(RESPONSE_ID, Some(DESTINATION), children),
+            RESPONSE_ID,
+            Some(DESTINATION),
+            ISSUER,
+            None,
+            status_code::SUCCESS,
+            OutboundLogoutValidation::AfterEmbeddedSigning,
+        )
+    };
+
+    validate_signed(&format!("{issuer}{signature}{status}"))?;
+    for children in [
+        format!("{issuer}{status}{signature}"),
+        format!("{signature}{issuer}{status}"),
+    ] {
+        let result = validate_signed(&children);
+        assert!(
+            matches!(result, Err(SamlError::ProtocolProfile(_))),
+            "{children}: {result:?}"
+        );
+    }
+    Ok(())
+}

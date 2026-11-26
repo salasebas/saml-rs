@@ -58,6 +58,7 @@ service provider generate.
 | Write `ID` on the signed element, and reference it with one `ds:Reference` whose `URI` is `#` followed by that `ID` | Mandatory | Core §5.4.2 | Always |
 | Write one `SignedInfo` with one `CanonicalizationMethod`, one `SignatureMethod`, and one `Reference` with one `DigestMethod` | Mandatory | XMLDSig §4, Core §5.4.2 | Always |
 | Put the signature inside the element it signs, as an enveloped signature | Mandatory | Core §5.4.1 | Always |
+| Put `ds:Signature` right after the signed element's `Issuer`, or first when the element has no `Issuer` | Mandatory | `RequestAbstractType`, `StatusResponseType`, `AssertionType` | Always |
 | Write no `ds:Object` | Recommended | E91 | Always |
 | Write `KeyInfo` with the signing certificate as `X509Certificate`, and leave `KeyInfo` out of an HMAC signature | Optional | Core §5.4.5, E91 | Always |
 

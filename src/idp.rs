@@ -435,7 +435,7 @@ impl Engine {
             true,
             &self.setting.request_signature_algorithm,
             transforms,
-            self.setting.signature_config.as_ref(),
+            &self.setting.signature_prefix,
         )
     }
 
@@ -490,7 +490,13 @@ impl Engine {
             xml = encrypt_assertion_elements(&xml, &recipient, element_encryption)?;
         }
         if want_assertions_signed {
-            xml = credential.sign_xml(&xml, false, sig_alg, transforms, None)?;
+            xml = credential.sign_xml(
+                &xml,
+                false,
+                sig_alg,
+                transforms,
+                &self.setting.signature_prefix,
+            )?;
         }
         if self.setting.is_assertion_encrypted {
             xml = encrypt_assertion_with_key_transport(
@@ -505,7 +511,7 @@ impl Engine {
                 true,
                 sig_alg,
                 transforms,
-                self.setting.signature_config.as_ref(),
+                &self.setting.signature_prefix,
             )?;
         }
         Ok(xml)

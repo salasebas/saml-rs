@@ -1,5 +1,4 @@
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
-use crate::entity::SignatureConfig;
 use crate::xml::XmlLimits;
 
 use super::algorithms::{
@@ -641,7 +640,7 @@ impl Default for AlgorithmPolicy {
     }
 }
 
-/// XML tag prefixes and embedded-signature placement for both roles.
+/// XML tag prefixes for both roles.
 ///
 /// Start from [`Default`](Default::default) and assign the fields you change.
 #[derive(Debug, Clone)]
@@ -666,11 +665,14 @@ pub struct TemplatePolicy {
     /// Must be an XML NCName that does not begin with `xml` in any case, and
     /// must differ from `tag_prefix_protocol`.
     pub tag_prefix_assertion: String,
-    /// Embedded-signature placement and prefix.
+    /// Prefix of the generated XML-DSig elements, `ds` by default.
     ///
-    /// The prefix must be an XML NCName that does not begin with `xml` in
-    /// any case.
-    pub signature_config: Option<SignatureConfig>,
+    /// Applies to every embedded signature the entity generates. The
+    /// signature goes right after the signed element's `Issuer`, or first
+    /// when the element has no `Issuer`.
+    ///
+    /// Must be an XML NCName that does not begin with `xml` in any case.
+    pub signature_prefix: String,
 }
 
 impl Default for TemplatePolicy {
@@ -678,7 +680,7 @@ impl Default for TemplatePolicy {
         Self {
             tag_prefix_protocol: "samlp".to_string(),
             tag_prefix_assertion: "saml".to_string(),
-            signature_config: None,
+            signature_prefix: "ds".to_string(),
         }
     }
 }
