@@ -26,7 +26,7 @@ and its acceptance follows the HTTP-POST rows of
 | Unsolicited `Response` by artifact | Profiles §4.1.5 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
 | `RelayState` with a `Response` artifact | Bindings §3.6.3.1, Profiles §4.1.5 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
 | XML signature on the `Response` or on each assertion | Profiles §4.1.3.5, E93 | [Partial](#builds-without-a-crypto-provider) | [Partial](#builds-without-a-crypto-provider) |
-| `Response` without an XML signature, protected by the artifact resolution channel | Profiles §4.1.3.5, §4.1.4.4, E93 | Not supported | Not supported |
+| Successful `Response` without an XML signature, protected by the artifact resolution channel | Profiles §4.1.3.5, §4.1.4.4, E93 | Not supported | Not supported |
 | `AuthnRequest` by artifact, with its `RelayState` | Profiles §4.1.3.3, Bindings §3.6.3.1 | Not supported | Not supported |
 | HTTP-Artifact `AssertionConsumerService` in service provider metadata | Bindings §3.6.7, E2 | Supported | Supported |
 | `ArtifactResolutionService` in identity provider metadata | Profiles §4.1.6, Bindings §3.6.7, E2 | Supported | Supported |
@@ -41,8 +41,9 @@ use of the artifact, and its release only to the service provider the
 ### Builds without a crypto provider
 
 - **Supported:** on a build with a crypto provider, the identity provider
-  signs and stores the `Response` and delivers its artifact, and the service
-  provider verifies the resolved `Response` and establishes a session.
+  signs and stores the `Response` and delivers its artifact. The service
+  provider verifies the resolved `Response`, reports the status of an error,
+  and establishes a session from a `Success` response.
 - **Not supported:** on a build without a crypto provider, the identity
   provider writes no Web SSO `Response`, so it delivers no artifact. The
   service provider verifies no XML signature, so it establishes no session.
@@ -55,7 +56,7 @@ use of the artifact, and its release only to the service provider the
 
 ### Identity provider: `respond_sso_artifact`, `respond_sso_refusal_artifact`, `initiate_sso_artifact`
 
-Code: `src/api/idp.rs`, `src/api/response_acs.rs`, `src/artifact.rs`, `src/browser/outbound.rs`, `src/binding/redirect.rs`, `src/idp.rs`, `src/api/options.rs`, `src/api/sso_outcome.rs`, `src/metadata/generate.rs`
+Code: `src/api/idp.rs`, `src/api/response_acs.rs`, `src/artifact.rs`, `src/browser/outbound.rs`, `src/binding/redirect.rs`, `src/idp.rs`, `src/api/options.rs`, `src/metadata/generate.rs`
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
@@ -63,25 +64,27 @@ Code: `src/api/idp.rs`, `src/api/response_acs.rs`, `src/artifact.rs`, `src/brows
 | Publish at least one `ArtifactResolutionService` in this identity provider's metadata to deliver a response by artifact | Mandatory | Profiles §4.1.6 | `IdpConfigBuilder::artifact_resolution_service` |
 | Put the URL-encoded artifact in a `SAMLart` query parameter, and a present `RelayState`, URL-encoded, in a `RelayState` query parameter | Mandatory | Bindings §3.6.3.2 | `ArtifactDelivery::redirect` |
 | Put the artifact in a `SAMLart` field, and a present `RelayState` in a `RelayState` field, of one form whose action is the assertion consumer | Mandatory | Bindings §3.6.3.3 | `ArtifactDelivery::post_form` |
-| Send a `RelayState` the identity provider chooses when the request carried none, or with an unsolicited response | Optional | Bindings §3.4.3, §3.5.3, §3.6.3.1, CS-01 §2.3 | `RespondSso::relay_state` |
+| In `respond_sso_artifact` and `initiate_sso_artifact`, send a `RelayState` the identity provider chooses when the request carried none, or with an unsolicited response | Optional | Bindings §3.4.3, §3.5.3, §3.6.3.1, CS-01 §2.3 | `RespondSso::relay_state` |
 | Honor a requested binding and assertion consumer when possible, and verify that the consumer belongs to the service provider | Mandatory | Profiles §4.1.3.5, §4.1.4.1 | Always |
 | Deliver an unsolicited artifact to the default assertion consumer | Recommended | Profiles §4.1.5 | Always |
 | Sign the assertions or the `Response` | Optional | Profiles §4.1.3.5, E93 | Always |
 | Sign the `Response` when an `EncryptedAssertion` uses a CBC algorithm | Recommended | Profiles §4.1.3.5, E93 | `RespondSso::allow_unsigned_encrypted_cbc` |
 | Support error delivery by artifact when the user agent remains available and an acceptable response location exists | Recommended | Profiles §4.1.3.5, E85 | `SsoOutcome::Failure`, `respond_sso_refusal_artifact` |
-| Omit all assertions from an error `Response`, and reject `SsoOutcome::Failure` with a top-level `Success` status | Mandatory | Profiles §4.1.4.2, E26 | `SsoOutcome::Failure` |
 
 [Browser bindings](browser-bindings.md#sending-a-relaystate) keeps the rules
 that return a received `RelayState` unchanged, limit one the identity provider
 creates to 80 bytes, and refuse a form `RelayState` that the form cannot carry
 unchanged. It also keeps the cache headers that `Outbound::headers` returns
-with the artifact.
+with the artifact. [SSO generation](web-browser-sso-generation.md#identity-provider-response)
+keeps the rules for the `Response` content, such as an error without
+assertions and the refusal of `SsoOutcome::Failure` with a top-level `Success`
+status.
 
 <a id="service-provider-receipt"></a>
 
 ### Service provider: `DeliveredArtifact`, `finish_sso`, `accept_unsolicited_sso`
 
-Code: `src/browser/artifact.rs`, `src/artifact.rs`, `src/api/sp.rs`, `src/api/peer.rs`, `src/flow.rs`, `src/assertion_acceptance.rs`, `src/browser/endpoints.rs`, `src/metadata/generate.rs`
+Code: `src/browser/artifact.rs`, `src/api/sp.rs`, `src/api/peer.rs`, `src/flow.rs`, `src/assertion_acceptance.rs`, `src/browser/endpoints.rs`, `src/metadata/generate.rs`
 
 These rows cover `finish_sso`, `finish_sso_with_outstanding_logout`,
 `accept_unsolicited_sso`, and `accept_unsolicited_sso_with_outstanding_logout`
@@ -91,7 +94,6 @@ with `Inbound::artifact`.
 | --- | --- | --- | --- |
 | Accept the artifact from an HTTP GET query and from an HTTP POST form | Mandatory | Bindings §3.6.3 | `DeliveredArtifact::from_query`, `DeliveredArtifact::from_form` |
 | Publish an assertion consumer with the HTTP-Artifact binding | Recommended | Bindings §3.6.7, E2 | `AcsEndpoint::artifact` |
-| Reject an artifact that is not the SAML V2.0 type `0x0004` | Mandatory | Bindings §3.6.4.2, E4 | Always |
 | Accept only a dereferenced `samlp:Response` as the Web SSO message | Mandatory | Profiles §4.1.3.5, Core §3.5.3 | Always |
 | Compare a present `Destination` and the bearer `Recipient`, after XML whitespace collapse, with the assertion consumer the artifact was delivered to | Mandatory | Core §3.2.2, Profiles §4.1.4.3, E26, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Allow `Destination` to be omitted from a signed `Response` | Optional | Core §3.2.2, Bindings §3.6.5.2, E59 | Always |
@@ -115,12 +117,13 @@ status other than `Success` establishes no session, under the shared
 
 ### Identity provider: `respond_sso_artifact`, `respond_sso_refusal_artifact`, `initiate_sso_artifact`
 
-Code: `src/artifact.rs`, `src/api/idp.rs`, `src/api/response_acs.rs`, `src/idp.rs`
+Code: `src/artifact.rs`, `src/api/idp.rs`, `src/api/response_acs.rs`, `src/idp.rs`, `src/idp/login_response.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
 | Reject a delivery whose index does not name a SOAP `ArtifactResolutionService` in the local metadata, and store nothing | SOAP is the only synchronous resolution binding the crate implements, so an artifact for another endpoint could not be resolved. | Bindings §3.6.4 | `ArtifactDelivery::redirect`, `ArtifactDelivery::post_form` |
 | Reject an explicit `RespondSso::relay_state` whenever the request supplied a `RelayState` | The response must carry the received value exactly, so the crate copies it, and refusing every explicit value reports the misuse even when a test request carries the same value. | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | Always |
+| In `respond_sso_refusal_artifact`, reject every explicit `RespondSso::relay_state`, also when the refused request carried none | Reason not recorded. | Bindings §3.4.3, §3.5.3, §3.6.3.1, CS-01 §2.3 | Always |
 | Require the selected consumer to appear in the service provider metadata | The identity provider uses the service provider metadata to establish endpoint ownership. | Profiles §4.1.3.5, §4.1.4.1 | Always |
 | Reject an unsolicited artifact when the default assertion consumer does not use HTTP-Artifact | Another consumer would depart from the recommended default, and `initiate_sso` serves a default that uses another binding. | Profiles §4.1.5 | Always |
 | For `Success`, sign the assertion when the SP metadata sets `WantAssertionsSigned`, and sign the `Response` otherwise. For an error, sign the `Response` | A service provider that requires an XML signature, as this crate's does, rejects an unsigned response, and an error has no assertion to sign. | Profiles §4.1.3.5 | `RespondSso::sign_response` also signs a `Success` `Response` |
@@ -133,11 +136,12 @@ query parameters before `SAMLart`.
 
 ### Service provider: `DeliveredArtifact`, `finish_sso`, `accept_unsolicited_sso`
 
-Code: `src/browser/artifact.rs`, `src/binding/parameters.rs`, `src/api/sp.rs`, `src/api/peer.rs`, `src/sp.rs`, `src/flow/error_response.rs`
+Code: `src/browser/artifact.rs`, `src/binding/parameters.rs`, `src/artifact.rs`, `src/api/sp.rs`, `src/api/peer.rs`, `src/sp.rs`, `src/flow/error_response.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Reject a second `SAMLart` | Two artifact values refer to two stored messages. | Bindings §3.6.3 | Always |
+| Require exactly one `SAMLart` | The service provider resolves one artifact, and two values refer to two stored messages. | Bindings §3.6.3 | Always |
+| Accept only an artifact of the SAML V2.0 type `0x0004` | The crate reads the issuer only from the `SourceID` of that type, so it could not resolve another type, and E4 already excludes the formats of earlier SAML versions. | Bindings §3.6.4, §3.6.4.2, E4 | Always |
 | Compare the `RelayState` with the pending login when the SP sent one | Nothing protects the pairing of an artifact and its `RelayState`. | Bindings §3.6.5.2 | `ServiceProvider::finish_sso` |
 | Accept only the message that the accepted IdP returned for the delivered artifact | `Inbound::artifact` pairs two caller values, and a mismatched pair would accept a message for another artifact or identity provider. | Profiles §4.1.3.5 | `Inbound::artifact` |
 | Require an XML signature on the `Response` or on each assertion of a `Success` response | `SsoSession` takes the subject, conditions, and attributes only from XML verified against the IdP signing key. | Profiles §4.1.3.5, §4.1.4.4, E93, `StatusResponseType`, `AssertionType` | Always |
@@ -175,7 +179,7 @@ check, and the integrity of a `RelayState` the application sets.
   those bindings, as
   [exchanges not implemented](idp-sp-operational-modes.md#exchanges-not-implemented)
   also lists.
-- A `Response` without an XML signature, protected only by the artifact
-  resolution channel. Optional, Profiles §4.1.3.5, §4.1.4.4, E93. The
-  identity provider always signs the `Response` or its assertions, and the
-  service provider requires that signature.
+- A successful `Response` without an XML signature, protected only by the
+  artifact resolution channel. Optional, Profiles §4.1.3.5, §4.1.4.4, E93.
+  The identity provider always signs the `Response` or its assertions, and
+  the service provider requires that signature to establish a session.
