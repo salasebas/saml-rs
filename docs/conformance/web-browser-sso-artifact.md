@@ -17,6 +17,7 @@ Where this record states no difference, the `Response` follows
 and its acceptance follows the HTTP-POST rows of
 [SSO acceptance](web-browser-sso-acceptance.md).
 
+<a id="partial-support"></a>
 <a id="builds-without-a-crypto-provider"></a>
 
 The statuses hold on builds with a crypto provider. A build without one

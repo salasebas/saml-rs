@@ -26,6 +26,7 @@ and [Registration and Publication Information](https://docs.oasis-open.org/secur
 (RPI) specifications. The [saml2int](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html)
 rows name their requirement.
 
+<a id="partial-support"></a>
 <a id="signature-on-the-document-root"></a>
 
 The statuses hold on builds with a crypto provider. A build without one
