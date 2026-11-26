@@ -19,11 +19,12 @@ use saml_rs::crypto::{
 };
 use saml_rs::OutboundDelivery;
 use saml_rs::{
-    AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdentityProvider, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat,
-    PrivateKeyPem, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, SamlError,
-    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartSso, X509Credential,
+    AcsEndpoint, AuthnRequest, AuthnRequestRefusalReason, CertificatePem, Credentials, EntityId,
+    FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem, Received, ReplayPolicy,
+    RequestedSubject, RequestedSubjectIdentifier, SamlError, SamlValidationContext,
+    ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso,
+    X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -102,9 +103,20 @@ fn encrypted_id_for(
     encryption_cert: &str,
     data_alg: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let name_id = format!(
-        "<saml:NameID xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" Format=\"{EMAIL_FORMAT}\">alice@example.com</saml:NameID>"
-    );
+    encrypted_name_id(
+        encryption_cert,
+        data_alg,
+        &format!(
+            "<saml:NameID xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" Format=\"{EMAIL_FORMAT}\">alice@example.com</saml:NameID>"
+        ),
+    )
+}
+
+fn encrypted_name_id(
+    encryption_cert: &str,
+    data_alg: &str,
+    name_id: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
     let template = format!(
         "<xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\" Type=\"http://www.w3.org/2001/04/xmlenc#Element\"><xenc:EncryptionMethod Algorithm=\"{data_alg}\"/><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm=\"{RSA_OAEP}\"/><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedData>"
     );
@@ -128,6 +140,22 @@ fn received_by(
     subject: &str,
     signing: Signing,
 ) -> Result<RequestedSubjectIdentifier, Box<dyn std::error::Error>> {
+    let received = receive_subject(idp, subject, signing)??;
+    Ok(received
+        .message()
+        .requested_subject()
+        .map(RequestedSubject::identifier)
+        .cloned()
+        .ok_or("missing requested Subject")?)
+}
+
+/// What `receive_sso` returns for a request from the service provider whose
+/// requested `Subject` holds `subject`. The outer error is a setup failure.
+fn receive_subject(
+    idp: &saml_rs::IdentityProvider,
+    subject: &str,
+    signing: Signing,
+) -> Result<Result<Received<AuthnRequest>, SamlError>, Box<dyn std::error::Error>> {
     let sp = sp()?;
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -166,20 +194,14 @@ fn received_by(
         )?,
         Signing::Unsigned => xml,
     };
-    let received = idp.receive_sso(
+    Ok(idp.receive_sso(
         &sp_descriptor,
         Inbound::post(vec![FormField::new(
             "SAMLRequest",
             STANDARD.encode(xml.as_bytes()),
         )]),
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::NoCache),
-    )?;
-    Ok(received
-        .message()
-        .requested_subject()
-        .map(RequestedSubject::identifier)
-        .cloned()
-        .ok_or("missing requested Subject")?)
+    ))
 }
 
 fn alice() -> RequestedSubjectIdentifier {
@@ -249,4 +271,33 @@ fn encrypted_id_that_does_not_decrypt_stays_unread() -> Result<(), Box<dyn std::
         RequestedSubjectIdentifier::EncryptedId
     );
     Ok(())
+}
+
+#[test]
+fn encrypted_id_whose_name_id_breaks_the_profile_is_refused_as_malformed(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let encrypted = encrypted_name_id(
+        CERT,
+        AES128_GCM,
+        "<saml:NameID xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" xmlns:x=\"urn:example:foreign\" x:NameQualifier=\"https://idp.example.com\">alice@example.com</saml:NameID>",
+    )?;
+    match receive_subject(&idp()?, &encrypted, Signing::Signed)? {
+        Err(SamlError::AuthnRequestRefused { refusal, .. }) => {
+            assert_eq!(
+                refusal.reason(),
+                AuthnRequestRefusalReason::MalformedRequest
+            );
+            assert!(
+                matches!(
+                    refusal.content_error(),
+                    Some(SamlError::ProtocolProfile(message))
+                        if message.contains("NameQualifier") && message.contains("unqualified")
+                ),
+                "{:?}",
+                refusal.content_error()
+            );
+            Ok(())
+        }
+        other => Err(format!("expected refusal data, got {other:?}").into()),
+    }
 }

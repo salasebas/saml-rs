@@ -7,6 +7,7 @@ use saml_rs::entity::EntitySetting;
 use saml_rs::flow::FlowResult;
 use saml_rs::idp;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
+use saml_rs::model::ContentFault;
 use saml_rs::sp;
 use saml_rs::sp::LoginRequestOptions;
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
@@ -15,9 +16,10 @@ use saml_rs::XmlLimits;
 #[cfg(crypto)]
 use saml_rs::{entity::User, idp::LoginResponseOptions};
 use saml_rs::{
-    AuthnRequest, EndpointUrl, EntityId, FormField, Inbound, LogoutRequest, LogoutResponse,
-    MessageId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, RelayState, SamlError,
-    SamlInstant, SessionIndex, SsoResponse, SsoResponseBinding, SsoSession, Status,
+    AuthnRequest, AuthnRequestRefusalReason, EndpointUrl, EntityId, FormField, Inbound,
+    LogoutRequest, LogoutResponse, MessageId, NameIdCreationRequest, NameIdFormat, NameIdPolicy,
+    Outbound, RelayState, SamlError, SamlInstant, SessionIndex, SsoResponse, SsoResponseBinding,
+    SsoSession, Status,
 };
 
 #[cfg(crypto)]
@@ -972,7 +974,9 @@ fn typed_models_authn_request_from_flow_result_exposes_typed_fields(
         ]),
     };
 
-    let request = AuthnRequest::from_flow(&flow)?;
+    let read = AuthnRequest::from_flow(&flow)?;
+    assert!(read.fault.is_none());
+    let request = read.request;
 
     assert_eq!(request.id().as_str(), "_request123");
     assert_eq!(request.issue_instant().as_str(), "2024-01-01T00:00:00Z");
@@ -998,7 +1002,8 @@ fn typed_models_authn_request_from_flow_result_exposes_typed_fields(
 }
 
 #[test]
-fn typed_models_authn_request_rejects_invalid_name_id_policy_allow_create() {
+fn typed_models_authn_request_refuses_invalid_name_id_policy_allow_create(
+) -> Result<(), Box<dyn std::error::Error>> {
     let flow = FlowResult {
         saml_content: "<samlp:AuthnRequest/>".to_string(),
         sig_alg: None,
@@ -1018,10 +1023,16 @@ fn typed_models_authn_request_rejects_invalid_name_id_policy_allow_create() {
         ]),
     };
 
+    let read = AuthnRequest::from_flow(&flow)?;
     assert!(matches!(
-        AuthnRequest::from_flow(&flow),
-        Err(SamlError::Invalid(_))
+        read.fault,
+        Some(ContentFault {
+            reason: AuthnRequestRefusalReason::MalformedRequest,
+            error: SamlError::Invalid(_),
+        })
     ));
+    assert_eq!(read.request.name_id_policy(), None);
+    Ok(())
 }
 
 #[test]
@@ -1096,7 +1107,7 @@ fn typed_models_authn_request_name_id_policy_without_allow_create_is_unspecified
         ]),
     };
 
-    let request = AuthnRequest::from_flow(&flow)?;
+    let request = AuthnRequest::from_flow(&flow)?.request;
 
     assert_eq!(
         request.name_id_policy().map(NameIdPolicy::creation_request),
@@ -1123,7 +1134,7 @@ fn typed_models_authn_request_without_name_id_policy_stays_absent(
         ]),
     };
 
-    let request = AuthnRequest::from_flow(&flow)?;
+    let request = AuthnRequest::from_flow(&flow)?.request;
 
     assert_eq!(request.name_id_policy(), None);
     Ok(())
@@ -1703,7 +1714,7 @@ fn typed_models_existing_authn_request_flow_converts_to_typed_request(
     )]);
 
     let parsed = idp.parse_login_request(&sp, Binding::Post, &request)?;
-    let typed = AuthnRequest::from_flow(&parsed)?;
+    let typed = AuthnRequest::from_flow(&parsed)?.request;
 
     assert_eq!(typed.id().as_str(), context.id.as_str());
     assert_eq!(typed.issuer().as_str(), "https://sp.example.com/metadata");

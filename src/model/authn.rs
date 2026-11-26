@@ -4,6 +4,7 @@ use super::extract::{
     required_str, subject_confirmations_at,
 };
 use super::identifiers::{MessageId, SamlInstant};
+use super::status::{Status, SubordinateStatusCode};
 use super::subject::{NameId, NameIdPolicy, RequestedSubject, RequestedSubjectIdentifier};
 use super::EndpointUrl;
 use crate::browser::SsoResponseBinding;
@@ -15,6 +16,7 @@ use crate::util::Value;
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::fields::{authn_request, request, ISSUER};
 use crate::xml::xs_boolean;
+use std::sync::Arc;
 
 /// Whether the request has more than one `NameIDPolicy`.
 pub(crate) fn repeats_name_id_policy(raw_flow: &FlowResult) -> bool {
@@ -115,12 +117,22 @@ pub struct RefusedAuthnRequest {
     pub(crate) request: AuthnRequest,
     pub(crate) relay_state: Option<super::RelayState>,
     pub(crate) reason: AuthnRequestRefusalReason,
+    pub(crate) content_error: Option<Arc<SamlError>>,
 }
 
 impl RefusedAuthnRequest {
     /// Why the identity provider refuses the request.
     pub fn reason(&self) -> AuthnRequestRefusalReason {
         self.reason
+    }
+
+    /// Why the request content was refused, for
+    /// [`AuthnRequestRefusalReason::MalformedRequest`] and
+    /// [`AuthnRequestRefusalReason::UnsupportedProtocolBinding`].
+    ///
+    /// The error stays local: the response carries only the SAML status.
+    pub fn content_error(&self) -> Option<&SamlError> {
+        self.content_error.as_deref()
     }
 }
 
@@ -148,6 +160,40 @@ pub enum AuthnRequestRefusalReason {
     /// The request has more than one `NameIDPolicy`, which `AuthnRequestType`
     /// allows once.
     RepeatedNameIdPolicy,
+    /// The request's `ProtocolBinding` names a binding that the `Response`
+    /// cannot use: HTTP-Redirect, SOAP, or a URI that is not HTTP-POST,
+    /// HTTP-POST-SimpleSign, or HTTP-Artifact. The status is `Requester` with
+    /// `UnsupportedBinding`, and the response goes to the service provider's
+    /// default assertion consumer service.
+    UnsupportedProtocolBinding,
+    /// The request has content that the identity provider cannot read: a
+    /// second `Subject` or `RequestedAuthnContext`, a `Subject` with more than
+    /// one identifier, a `RequestedAuthnContext` without references or with
+    /// both kinds, a `Comparison`, `ForceAuthn`, `IsPassive`, `AllowCreate`, or
+    /// `AssertionConsumerServiceIndex` outside its schema type, an
+    /// `AssertionConsumerServiceURL` that is not an absolute HTTP(S) URL, or a
+    /// decrypted requested `NameID` that breaks the protocol profile. The
+    /// status is `Requester`.
+    /// [`RefusedAuthnRequest::content_error`] says what was wrong.
+    ///
+    /// When the fault is in `AssertionConsumerServiceURL` or
+    /// `AssertionConsumerServiceIndex`, the response goes to the service
+    /// provider's default assertion consumer service.
+    MalformedRequest,
+}
+
+impl AuthnRequestRefusalReason {
+    pub(crate) fn status(self) -> Status {
+        match self {
+            Self::UnsupportedProtocolBinding => {
+                Status::requester().with_subordinate(SubordinateStatusCode::unsupported_binding())
+            }
+            Self::Unsigned
+            | Self::OutsideAgeWindow
+            | Self::RepeatedNameIdPolicy
+            | Self::MalformedRequest => Status::requester(),
+        }
+    }
 }
 
 impl std::fmt::Display for AuthnRequestRefusalReason {
@@ -158,8 +204,31 @@ impl std::fmt::Display for AuthnRequestRefusalReason {
                 f.write_str("the request IssueInstant is outside the age window")
             }
             Self::RepeatedNameIdPolicy => f.write_str("the request has more than one NameIDPolicy"),
+            Self::UnsupportedProtocolBinding => {
+                f.write_str("the request ProtocolBinding cannot carry the response")
+            }
+            Self::MalformedRequest => f.write_str("the request content is malformed"),
         }
     }
+}
+
+pub(crate) struct ContentFault {
+    pub(crate) reason: AuthnRequestRefusalReason,
+    pub(crate) error: SamlError,
+}
+
+impl ContentFault {
+    pub(crate) fn malformed(error: SamlError) -> Self {
+        Self {
+            reason: AuthnRequestRefusalReason::MalformedRequest,
+            error,
+        }
+    }
+}
+
+pub(crate) struct ReadAuthnRequest {
+    pub(crate) request: AuthnRequest,
+    pub(crate) fault: Option<ContentFault>,
 }
 
 impl AuthnRequest {
@@ -232,48 +301,86 @@ impl AuthnRequest {
 }
 
 impl AuthnRequest {
-    pub(crate) fn from_flow(raw_flow: &FlowResult) -> Result<Self, SamlError> {
-        let id = MessageId::try_new(collapse_whitespace(required_str(
-            &raw_flow.extract,
-            request::ID,
-        )?))?;
+    pub(crate) fn from_flow(raw_flow: &FlowResult) -> Result<ReadAuthnRequest, SamlError> {
+        let extract = &raw_flow.extract;
+        let id = MessageId::try_new(collapse_whitespace(required_str(extract, request::ID)?))?;
         let issue_instant = required_saml_utc_instant(
-            raw_flow.extract.get_str(request::ISSUE_INSTANT),
+            extract.get_str(request::ISSUE_INSTANT),
             "AuthnRequest",
             "IssueInstant",
         )?;
-        let issuer = EntityId::try_new(required_str(&raw_flow.extract, ISSUER)?)?;
-        let destination = optional_endpoint(&raw_flow.extract, request::DESTINATION)?;
-        let acs_url =
-            optional_endpoint(&raw_flow.extract, request::ASSERTION_CONSUMER_SERVICE_URL)?;
-        let protocol_binding = optional_response_binding(&raw_flow.extract)?;
-        let acs_index = optional_u16(&raw_flow.extract, request::ASSERTION_CONSUMER_SERVICE_INDEX)?;
-        let name_id_policy = name_id_policy_from_extract(&raw_flow.extract)?;
-        let force_authn = optional_flag(&raw_flow.extract, request::FORCE_AUTHN, "ForceAuthn")?
-            .map(ForceAuthn::from_bool);
-        let passive = optional_flag(&raw_flow.extract, request::IS_PASSIVE, "IsPassive")?
-            .map(IsPassive::from_bool);
-        let requested_subject = requested_subject_from_extract(&raw_flow.extract)?;
-        let requested_authn_context = requested_authn_context_from_extract(&raw_flow.extract)?;
+        let issuer = EntityId::try_new(required_str(extract, ISSUER)?)?;
+        let destination = optional_endpoint(extract, request::DESTINATION)?;
+        let (endpoint, mut fault) = match RequestedEndpoint::read(extract) {
+            Ok(endpoint) => (endpoint, None),
+            Err(endpoint_fault) => (RequestedEndpoint::default(), Some(endpoint_fault)),
+        };
+        let name_id_policy = readable(&mut fault, name_id_policy_from_extract(extract));
+        let force_authn = readable(
+            &mut fault,
+            optional_flag(extract, request::FORCE_AUTHN, "ForceAuthn"),
+        )
+        .map(ForceAuthn::from_bool);
+        let passive = readable(
+            &mut fault,
+            optional_flag(extract, request::IS_PASSIVE, "IsPassive"),
+        )
+        .map(IsPassive::from_bool);
+        let requested_subject = readable(&mut fault, requested_subject_from_extract(extract));
+        let requested_authn_context =
+            readable(&mut fault, requested_authn_context_from_extract(extract));
+        Ok(ReadAuthnRequest {
+            request: Self {
+                id,
+                issue_instant,
+                issuer,
+                destination,
+                acs_url: endpoint.acs_url,
+                protocol_binding: endpoint.protocol_binding,
+                acs_index: endpoint.acs_index,
+                name_id_policy,
+                force_authn,
+                passive,
+                provider_name: extract.get_str(request::PROVIDER_NAME).map(str::to_string),
+                requested_subject,
+                requested_authn_context,
+            },
+            fault,
+        })
+    }
+}
+
+#[derive(Default)]
+struct RequestedEndpoint {
+    acs_url: Option<EndpointUrl>,
+    protocol_binding: Option<SsoResponseBinding>,
+    acs_index: Option<u16>,
+}
+
+impl RequestedEndpoint {
+    fn read(extract: &crate::util::Value) -> Result<Self, ContentFault> {
+        let acs_url = optional_endpoint(extract, request::ASSERTION_CONSUMER_SERVICE_URL)
+            .map_err(ContentFault::malformed)?;
+        let protocol_binding =
+            optional_response_binding(extract).map_err(|error| ContentFault {
+                reason: AuthnRequestRefusalReason::UnsupportedProtocolBinding,
+                error,
+            })?;
+        let acs_index = optional_u16(extract, request::ASSERTION_CONSUMER_SERVICE_INDEX)
+            .map_err(ContentFault::malformed)?;
         Ok(Self {
-            id,
-            issue_instant,
-            issuer,
-            destination,
             acs_url,
             protocol_binding,
             acs_index,
-            name_id_policy,
-            force_authn,
-            passive,
-            provider_name: raw_flow
-                .extract
-                .get_str(request::PROVIDER_NAME)
-                .map(str::to_string),
-            requested_subject,
-            requested_authn_context,
         })
     }
+}
+
+fn readable<T>(fault: &mut Option<ContentFault>, read: Result<Option<T>, SamlError>) -> Option<T> {
+    read.unwrap_or_else(|error| {
+        fault.get_or_insert(ContentFault::malformed(error));
+        None
+    })
 }
 
 fn optional_flag(

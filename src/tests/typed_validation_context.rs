@@ -199,6 +199,7 @@ fn authn_request() -> Result<AuthnRequest, SamlError> {
             ("issuer", value_str("https://sp.example.com/metadata")),
         ]),
     })
+    .map(|read| read.request)
 }
 
 fn remove_extract_keys(flow: &mut FlowResult, keys: &[&str]) {

@@ -190,6 +190,25 @@ fn response_xml(
     )?)
 }
 
+/// The refusal reason of `received` and the text of its content error.
+fn content_refusal(
+    received: Result<Receipt, Box<dyn std::error::Error>>,
+) -> Result<(AuthnRequestRefusalReason, String), Box<dyn std::error::Error>> {
+    let Err(error) = received else {
+        return Err("expected refusal data, got a request".into());
+    };
+    match *error.downcast::<SamlError>()? {
+        SamlError::AuthnRequestRefused { refusal, .. } => Ok((
+            refusal.reason(),
+            refusal
+                .content_error()
+                .ok_or("refusal without a content error")?
+                .to_string(),
+        )),
+        other => Err(format!("expected refusal data, got {other}").into()),
+    }
+}
+
 #[test]
 fn received_authn_request_exposes_force_authn_when_set_and_leaves_it_absent_when_omitted(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -445,29 +464,31 @@ fn unsigned_authn_request_fields_are_accepted_under_default_policy(
 }
 
 #[test]
-fn received_authn_request_rejects_a_non_boolean_flag_or_a_non_integer_index() {
-    let force_authn = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
-        insert_root_attribute(xml, "ForceAuthn", "maybe")
-    });
-    assert!(matches!(force_authn, Err(error) if error.to_string().contains("ForceAuthn")));
-
-    let is_passive = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
-        insert_root_attribute(xml, "IsPassive", "TRUE")
-    });
-    assert!(matches!(is_passive, Err(error) if error.to_string().contains("IsPassive")));
-
-    let non_xml_space = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
-        insert_root_attribute(xml, "ForceAuthn", "\u{a0}true")
-    });
-    assert!(matches!(non_xml_space, Err(error) if error.to_string().contains("ForceAuthn")));
-
-    let padded_inner_space = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
-        insert_root_attribute(xml, "AssertionConsumerServiceIndex", " 1 0 ")
-    });
-    assert!(matches!(
-        padded_inner_space,
-        Err(error) if error.to_string().contains("assertionConsumerServiceIndex")
-    ));
+fn received_authn_request_refuses_a_non_boolean_flag_or_a_non_integer_index(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for (attribute, value, expected) in [
+        ("ForceAuthn", "maybe", "ForceAuthn"),
+        ("IsPassive", "TRUE", "IsPassive"),
+        ("ForceAuthn", "\u{a0}true", "ForceAuthn"),
+        (
+            "AssertionConsumerServiceIndex",
+            " 1 0 ",
+            "assertionConsumerServiceIndex",
+        ),
+    ] {
+        let (reason, error) = content_refusal(receive(
+            IdpValidationPolicy::default(),
+            StartSso::post(),
+            |xml| insert_root_attribute(xml, attribute, value),
+        ))?;
+        assert_eq!(
+            reason,
+            AuthnRequestRefusalReason::MalformedRequest,
+            "{value}"
+        );
+        assert!(error.contains(expected), "{value}: {error}");
+    }
+    Ok(())
 }
 
 #[test]
@@ -514,12 +535,14 @@ fn received_authn_request_collapses_protocol_binding_whitespace(
         Some(SsoResponseBinding::Post)
     );
 
-    let unknown = receive_with_binding(UNKNOWN);
-    assert!(matches!(
-        unknown,
-        Err(error) if matches!(error.downcast_ref::<SamlError>(), Some(SamlError::Invalid(message))
-            if message == &format!("unsupported AuthnRequest ProtocolBinding {UNKNOWN}"))
-    ));
+    let (reason, error) = content_refusal(receive_with_binding(UNKNOWN))?;
+    assert_eq!(
+        reason,
+        AuthnRequestRefusalReason::UnsupportedProtocolBinding
+    );
+    assert!(error.ends_with(&format!(
+        "unsupported AuthnRequest ProtocolBinding {UNKNOWN}"
+    )));
 
     let padded = receive_with_binding(&format!(" &#x9;{POST}&#xD;&#xA; "))?;
     assert_eq!(
@@ -530,31 +553,30 @@ fn received_authn_request_collapses_protocol_binding_whitespace(
 }
 
 #[test]
-fn received_authn_request_rejects_two_identifiers_or_two_subjects() {
-    let two_identifiers = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
-        insert_before_name_id_policy(
-            xml,
+fn received_authn_request_refuses_two_identifiers_or_two_subjects(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for (subject, expected) in [
+        (
             "<saml:Subject><saml:NameID>alice@example.com</saml:NameID><saml:EncryptedID/></saml:Subject>",
-        )
-    });
-    assert!(matches!(
-        two_identifiers,
-        Err(error) if error.to_string().contains("one identifier")
-    ));
-
-    let two_subjects = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
-        insert_before_name_id_policy(
-            xml,
+            "one identifier",
+        ),
+        (
             concat!(
                 "<saml:Subject><saml:NameID>alice@example.com</saml:NameID></saml:Subject>",
                 "<saml:Subject><saml:NameID>bob@example.com</saml:NameID></saml:Subject>"
             ),
-        )
-    });
-    assert!(matches!(
-        two_subjects,
-        Err(error) if error.to_string().contains("Subject must occur once")
-    ));
+            "Subject must occur once",
+        ),
+    ] {
+        let (reason, error) = content_refusal(receive(
+            IdpValidationPolicy::default(),
+            StartSso::post(),
+            |xml| insert_before_name_id_policy(xml, subject),
+        ))?;
+        assert_eq!(reason, AuthnRequestRefusalReason::MalformedRequest, "{expected}");
+        assert!(error.contains(expected), "{expected}: {error}");
+    }
+    Ok(())
 }
 
 #[test]
@@ -811,9 +833,9 @@ fn received_authn_request_exposes_the_requested_authn_context_in_request_order(
 }
 
 #[test]
-fn received_authn_request_rejects_a_requested_authn_context_outside_its_schema(
+fn received_authn_request_refuses_a_requested_authn_context_outside_its_schema(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let cases = [
+    let refused = [
         (
             requested_authn_context(" Comparison=\"Exact\"", &class_ref(SMARTCARD)),
             "Comparison",
@@ -830,12 +852,25 @@ fn received_authn_request_rejects_a_requested_authn_context_outside_its_schema(
             "must not mix",
         ),
         (
-            format!(
-                "{0}{0}",
-                requested_authn_context("", &class_ref(SMARTCARD))
-            ),
+            format!("{0}{0}", requested_authn_context("", &class_ref(SMARTCARD))),
             "must occur once",
         ),
+    ];
+    for (element, expected) in refused {
+        let (reason, error) = content_refusal(receive(
+            IdpValidationPolicy::default(),
+            StartSso::post(),
+            |xml| insert_after_name_id_policy(xml, &element),
+        ))?;
+        assert_eq!(
+            reason,
+            AuthnRequestRefusalReason::MalformedRequest,
+            "{element}"
+        );
+        assert!(error.contains(expected), "{element} produced {error}");
+    }
+
+    let rejected_before_the_signature_check = [
         (
             requested_authn_context(
                 " xmlns:x=\"urn:example:foreign\" x:Comparison=\"minimum\"",
@@ -851,16 +886,20 @@ fn received_authn_request_rejects_a_requested_authn_context_outside_its_schema(
             "namespace",
         ),
     ];
-    for (element, expected) in cases {
+    for (element, expected) in rejected_before_the_signature_check {
         let received = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
             insert_after_name_id_policy(xml, &element)
         });
         let Err(error) = received else {
             return Err(format!("{element} was accepted").into());
         };
-        if !error.to_string().contains(expected) {
-            return Err(format!("{element} produced {error}").into());
-        }
+        assert!(
+            matches!(
+                error.downcast_ref::<SamlError>(),
+                Some(SamlError::ProtocolProfile(message)) if message.contains(expected)
+            ),
+            "{element} produced {error}"
+        );
     }
     Ok(())
 }
