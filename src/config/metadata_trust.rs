@@ -55,10 +55,10 @@ pub enum MetadataTrustPolicy<'a> {
     /// The signature must be an enveloped `#id` signature over the metadata
     /// root, and the only `ds:Signature` in the document. An element named
     /// `Signature` or `Object` in another namespace, such as extension
-    /// content, is not an XML signature element. On a build that verifies MD5 or RIPEMD-160, a signature that uses
-    /// one as its signature or digest algorithm is rejected with
-    /// [`SamlError::AlgorithmUnsupported`]. A pinned RSA certificate shorter
-    /// than 2048 bits is not used to verify.
+    /// content, is not an XML signature element. On a build that verifies MD5
+    /// or RIPEMD-160, a signature that uses one as its signature or digest
+    /// algorithm is rejected with [`SamlError::AlgorithmUnsupported`]. A
+    /// pinned RSA certificate shorter than 2048 bits is not used to verify.
     /// See `docs/conformance/metadata-and-replay.md`.
     RequireSignature {
         /// Caller-pinned certificates trusted to sign the metadata.
