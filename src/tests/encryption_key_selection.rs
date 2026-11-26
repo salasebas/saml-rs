@@ -357,3 +357,32 @@ fn identity_provider_encrypts_for_a_key_of_the_role_that_receives_the_response(
     }
     Ok(())
 }
+
+#[test]
+fn identity_provider_encrypts_for_the_first_role_that_publishes_the_receiving_acs(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for encryption in each_encrypted_element() {
+        let sp = sp(XmlEncryptionPolicy::default())?;
+        let idp = idp(encryption)?;
+        let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+        let published = sp.metadata_xml();
+        let role_start = published
+            .find("<SPSSODescriptor")
+            .ok_or("metadata has no SP role")?;
+        let role_end = published
+            .find("</SPSSODescriptor>")
+            .ok_or("metadata has no SP role")?
+            + "</SPSSODescriptor>".len();
+        let later_role = published[role_start..role_end].replace(
+            &normalize_cert_string(CERT),
+            &normalize_cert_string(UNKNOWN_CERT),
+        );
+        let mut metadata = published.to_string();
+        metadata.insert_str(role_end, &later_role);
+        let exchange = exchange_between(&sp, &sp_descriptor(&metadata)?, &idp, &idp_descriptor)?;
+        assert_encrypted(encryption, &exchange.xml);
+        assert_each_encrypted_key_names(&exchange.xml, CERT);
+        assert_eq!(exchange.session?.name_id(), Some(&alice()));
+    }
+    Ok(())
+}
