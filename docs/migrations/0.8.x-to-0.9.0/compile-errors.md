@@ -254,9 +254,11 @@ Two other variants were still returned:
 
 **Now:** all eleven variants are removed. `BergshamraBackend::verify_signature`
 returns `SignatureVerification` with `SignatureVerificationReason::XmlSignature`.
-A SimpleSign input without `SigAlg` returns
-`MissingBindingParameter { name: "SigAlg" }`. The same inputs are rejected as
-in 0.8.
+A SimpleSign input with `Signature` and without `SigAlg` returns
+`MissingBindingParameter { name: "SigAlg" }`. A SimpleSign input with neither
+field is unsigned, as
+[Handle unsigned HTTP-POST-SimpleSign messages](unsigned-simplesign.md)
+describes.
 
 **Upgrade:** delete the arms for the nine variants that were never returned,
 or match the variant in the right column of the first table. Replace the other

@@ -414,7 +414,7 @@ fn http_request_from_transport(
         Transport::SimpleSign { fields } => {
             let octet_string = simplesign_octet_from_fields(&fields, expected_message, limits)?;
             let mut request = HttpRequest::post(fields_to_pairs(fields));
-            request.octet_string = Some(octet_string);
+            request.octet_string = octet_string;
             Ok(request)
         }
         Transport::Artifact { .. } => Err(SamlError::UnsupportedBinding {
@@ -540,19 +540,26 @@ fn simplesign_octet_from_fields(
     fields: &[FormField],
     expected_message: MessageField,
     limits: XmlLimits,
-) -> Result<String, SamlError> {
+) -> Result<Option<String>, SamlError> {
     let message_name = expected_message.param_name();
     let encoded = validate_form_message_kind(fields, expected_message)?;
+    let Some(sig_alg) = field_value(fields, url_params::SIG_ALG)? else {
+        if fields
+            .iter()
+            .any(|field| field.name() == url_params::SIGNATURE)
+        {
+            return Err(SamlError::MissingBindingParameter {
+                name: url_params::SIG_ALG,
+            });
+        }
+        return Ok(None);
+    };
     let raw_xml = crate::xml::decode_utf8(decode_base64_with_limit(encoded, limits.max_bytes)?)?;
-    let sig_alg =
-        field_value(fields, url_params::SIG_ALG)?.ok_or(SamlError::MissingBindingParameter {
-            name: url_params::SIG_ALG,
-        })?;
     let relay_state = field_value(fields, url_params::RELAY_STATE)?;
-    Ok(build_simplesign_octet(
+    Ok(Some(build_simplesign_octet(
         message_name,
         &raw_xml,
         relay_state,
         sig_alg,
-    ))
+    )))
 }
