@@ -19,11 +19,10 @@ minimal set.
 
 An implementation of a mode implements every feature that the mode's column
 marks `MUST` and none that it marks `MUST NOT` (Conformance §1, §3.1), and
-§§3.3 to 5 add requirements for every relevant mode. Each status below is
-the status that the record in the Record column gives, and that record holds
-the rules. A cell takes the status of the record's row for the message on
-that binding, and drops to `Partial` when a form of the message that a
-Mandatory rule requires of the role is `Partial` or `Not supported` there.
+§§3.3 to 5 add requirements for every relevant mode. Each cell combines the
+rows of the records in its Record column, as
+[Standards conformance](https://github.com/salasebas/saml-rs/blob/main/docs/standards-conformance.md#operational-mode-cells)
+describes, and those records hold the rules.
 
 The statuses hold on builds with a crypto provider. A build without one
 signs, verifies, encrypts, and decrypts nothing, so its identity provider
@@ -38,8 +37,8 @@ Table 4 gives those of the SAML authorities and the requester.
 
 | Mode | Table | Role in saml-rs | Required features not fully supported |
 | --- | --- | --- | --- |
-| IdP | 2 | `IdentityProvider` | [1 of 14](#idp), and the [algorithms](#all-four-modes) on some builds |
-| IdP Lite | 2 | `IdentityProvider` | [1 of 8](#idp-lite), and the algorithms on some builds. 4 `MUST NOT` features to leave off |
+| IdP | 2 | `IdentityProvider` | [2 of 14](#idp), and the [algorithms](#all-four-modes) on some builds |
+| IdP Lite | 2 | `IdentityProvider` | [2 of 8](#idp-lite), and the algorithms on some builds. 4 `MUST NOT` features to leave off |
 | SP | 2 | `ServiceProvider` | [6 of 11](#sp), §3.3 and §3.4, and the algorithms on some builds |
 | SP Lite | 2 | `ServiceProvider` | [4 of 7](#sp-lite), §3.3 and §3.4, and the algorithms on some builds. 2 `MUST NOT` features to leave off |
 | IdP Extended | 3 | Not implemented | [2 of 2](#extended-idp-and-sp) in Table 3, with each gap of IdP |
@@ -60,7 +59,7 @@ requires only Enhanced Client/Proxy SSO.
 
 | Feature | IdP | IdP Lite | SP | SP Lite | Identity provider | Service provider | Record |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Web SSO, `<AuthnRequest>`, HTTP redirect | `MUST` | `MUST` | `MUST` | `MUST` | Supported | Supported | [SSO generation](web-browser-sso-generation.md#authnrequest), [SSO acceptance](web-browser-sso-acceptance.md#identity-provider-authnrequest) |
+| Web SSO, `<AuthnRequest>`, HTTP redirect | `MUST` | `MUST` | `MUST` | `MUST` | Partial | Supported | [SSO generation](web-browser-sso-generation.md#authnrequest), [SSO acceptance](web-browser-sso-acceptance.md#identity-provider-authnrequest) |
 | Web SSO, `<Response>`, HTTP POST | `MUST` | `MUST` | `MUST` | `MUST` | Supported | Partial | [SSO generation](web-browser-sso-generation.md#response), [SSO acceptance](web-browser-sso-acceptance.md#service-provider-delivery-and-signatures) |
 | Web SSO, `<Response>`, HTTP artifact | `MUST` | `MUST` | `MUST` | `MUST` | Supported | Partial | [HTTP-Artifact response](web-browser-sso-artifact.md#support), [SSO acceptance](web-browser-sso-acceptance.md#service-provider-delivery-and-signatures) |
 | Artifact Resolution, SOAP | `MUST` | `MUST` | `MUST` | `MUST` | Supported | Supported | [Artifact resolution](artifact-resolution.md#artifact-exchange) |
@@ -86,17 +85,6 @@ variant. The flow records also cover the `AuthnRequest` over HTTP-POST and
 HTTP-POST-SimpleSign, the `Response` over HTTP-POST-SimpleSign, and Single
 Logout over HTTP-POST and HTTP-POST-SimpleSign.
 
-The `SigAlg` methods of HTTP redirect depend on the build, so one
-[requirement row](#requirements-outside-the-matrix) holds them and the HTTP
-redirect rows do not count them.
-[Browser bindings](browser-bindings.md#detached-signatures) marks the
-HTTP-Redirect signature `Partial` for the same reason.
-
-Single Logout marks a `BaseID` principal `Partial` at both roles. No cell
-here drops for it, because Core §3.7.1 lets the requester choose that
-identifier and neither role issues or accepts an assertion whose `Subject`
-names one.
-
 Metadata Structures (§3.6) asks a mode that elects it to make its metadata
 available to each peer that may depend on it, and to use a peer's metadata
 again when the cached copy has expired or is no longer valid, if a copy is
@@ -114,11 +102,18 @@ that the four modes share.
 
 ### IdP
 
+- Web SSO, `<AuthnRequest>`, HTTP redirect: Partial. `receive_sso` returns
+  an error and no refusal for a request of a newer version, so the identity
+  provider cannot answer it with the `VersionMismatch` status of Core
+  §4.1.3.2, as
+  [SSO acceptance](web-browser-sso-acceptance.md#error-response-to-a-refused-request)
+  records.
 - Enhanced Client/Proxy SSO, PAOS: Not supported. The crate implements no
   end of the ECP profile and no PAOS binding.
 
 ### IdP Lite
 
+- Web SSO, `<AuthnRequest>`, HTTP redirect: Partial, as for IdP.
 - Enhanced Client/Proxy SSO, PAOS: Not supported, as for IdP.
 - The four name identifier management features are `MUST NOT`, and the
   identity provider supports all four. Configure no `ManageNameIDService`
@@ -133,7 +128,9 @@ that the four modes share.
   artifact: Partial. A `Response` whose namespace declaration spells the
   protocol or assertion namespace with an XML character reference can fail,
   as [SSO acceptance](web-browser-sso-acceptance.md#namespace-declarations-with-character-references)
-  records, and an artifact `Response` follows the same rows.
+  records for every binding, and
+  [HTTP-Artifact response](web-browser-sso-artifact.md#support) applies that
+  gap to the resolved `Response`.
 - Enhanced Client/Proxy SSO, PAOS: Not supported, as for IdP.
 - Name Identifier Management (SP-Initiated), HTTP Redirect: Partial. The
   service provider writes an `entity` `NameID` that breaks Core §8.3.6 into

@@ -42,7 +42,8 @@ A status covers the role's part in the feature: sending, receiving, or both.
 | `LogoutRequest` over SOAP, sent and received | Profiles §4.4.3.1, §4.4.3.3, Bindings §3.2 | Supported | Supported |
 | `LogoutResponse` over SOAP, sent and received | Profiles §4.4.3.4, §4.4.3.5, Bindings §3.2 | Supported | Supported |
 | `LogoutRequest` and `LogoutResponse` over HTTP-Artifact | Profiles §4.4.3.1, §4.4.3.4, Bindings §3.6 | Not supported | Not supported |
-| A signature on each sent message, and its verification on a received one | Core §3.7.1, §3.7.2, Profiles §4.4.4.1, §4.4.4.2 | Supported | Supported |
+| An XML signature on each message sent over HTTP-POST or SOAP, and its verification on a received one | Core §3.7.1, §3.7.2, Profiles §4.4.4.1, §4.4.4.2 | Supported | Supported |
+| `SigAlg` and `Signature` on each message sent over HTTP-Redirect or HTTP-POST-SimpleSign, and their verification on a received one | Profiles §4.4.4.1, §4.4.4.2, Bindings §3.4.4.1, CS-01 §2.4 | [Partial](browser-bindings.md#detached-signatures) | [Partial](browser-bindings.md#detached-signatures) |
 | An unsigned SOAP message that the channel authenticates, received | Profiles §4.4.3.1, §4.4.3.4, §4.4.4.1, §4.4.4.2 | Supported | Supported |
 | An unsigned SOAP message that the channel authenticates, sent | Profiles §4.4.3.1, §4.4.3.4, §4.4.4.1, §4.4.4.2 | Not supported | Not supported |
 | `SingleLogoutService` endpoints of the peer's metadata, `ResponseLocation` included | Profiles §4.4.3.1, §4.4.5, Metadata §2.2.2, §2.4.2, E41 | Supported | Supported |
@@ -92,8 +93,8 @@ provider sends it. `Consent`, caller extensions, and `StatusDetail` are in
 
 | Feature | Section | Identity provider | Service provider |
 | --- | --- | --- | --- |
-| Matching a received request with a stored service provider session | Core §3.7.3.1 | — | [Partial](#baseid-principal-identifier) |
-| Applying a received request to an assertion that arrives later | Core §3.7.3.1 | — | [Partial](#baseid-principal-identifier) |
+| Matching a received request with a stored service provider session | Core §3.7.3.1 | — | [Partial](#session-matching) |
+| Applying a received request to an assertion that arrives later | Core §3.7.3.1 | — | [Partial](#session-matching) |
 | Propagation to the other session participants, one `LogoutRequest` each | Core §3.7.3.2, Profiles §4.4.3.2, §4.4.3.3 | Supported | — |
 | A `LogoutRequest` to an upstream session authority that the identity provider proxied | Core §3.7.3.2 | Not supported | — |
 
@@ -114,10 +115,27 @@ provider sends it. `Consent`, caller extensions, and `StatusDetail` are in
 
 - **Supported:** both roles accept an authenticated request whose principal
   is a `BaseID`, a decrypted one included, and answer it with `respond_slo`.
-- **Not supported:** neither role returns the `BaseID`, so
-  `LogoutRequest::name_id` is `None`, `matches_sp_session` matches no
-  session, and `OutstandingLogout::try_new`, which takes a `NameId`, cannot
-  record the request. Neither role sends a `BaseID`.
+  Such a request names no session of either role: a `BaseID` strongly
+  matches only an identical `BaseID` (Core §3.3.4, Profiles §4.4.4.1), and
+  neither role issues or accepts an assertion whose `Subject` holds one.
+  `matches_sp_session` matches no session, and `OutstandingLogout::try_new`,
+  which takes a `NameId`, cannot record the request. No later assertion
+  could match it.
+- **Not supported:** neither role sends a `BaseID` or returns the identifier
+  in one, as [identifiers](identifiers.md#not-supported) records, so
+  `LogoutRequest::name_id` is `None`.
+
+### Session matching
+
+- **Supported:** `matches_sp_session` matches a stored session, and
+  `OutstandingLogout::try_new` records the request for a later assertion, by
+  the plaintext `NameID` or the one decrypted from the `EncryptedID`. A
+  `BaseID` principal names no session, as the
+  [`BaseID` entry](#baseid-principal-identifier) explains.
+- **Not supported:** a request whose `EncryptedID` no configured key
+  decrypts carries no `NameID`, so `matches_sp_session` matches no session
+  and `OutstandingLogout::try_new` cannot record it, as the
+  [session matching policy](#session-matching-policies) records.
 
 ## Rules
 
@@ -427,6 +445,8 @@ Code: `src/logout/parsing.rs`
 | --- | --- | --- | --- |
 | Recognize the marker by its element name whatever its `xsi:type` value names | The element name identifies the extension, as Shibboleth IdP 5.2.3 and simplesamlphp/saml2 at `9576aff` also read it, so the type value is not compared. | Async SLO §2.1, XML Schema Part 1 §3.3.4 | Always |
 | Treat a marker with any other attribute, `xsi:nil` included, as absent, and keep the request on the response path | `AsynchronousType` declares no attributes and the element is not nillable, so that element is not the empty marker §2.1 defines. | Async SLO §2.1, XML Schema Part 1 §3.3.4 | Always |
+
+<a id="session-matching-policies"></a>
 
 ### Service provider: `matches_sp_session`, `OutstandingLogout::try_new`
 

@@ -299,9 +299,9 @@ Code: `src/model/subject_identifier.rs`, `src/model/attributes.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Match each attribute by its profile name and the `uri` format. Also accept an omitted or `unspecified` format for that name | Reason not recorded. | Subject Identifier §3.3, §3.4, Core §2.7.3.1 | Always |
-| Require exactly one value across matching attributes, in the profile grammar, when the caller reads the identifier | the typed accessor needs one identifier. | Subject Identifier §3.2, §3.3.1 | Always |
-| Read a received identifier by its text regardless of `xsi:type` | the type requirement applies to the producer. | Subject Identifier §3.3.1 | Always |
+| Match each attribute by its profile name and the `uri` format. Also accept an omitted or `unspecified` format for that name | An identity provider that sends these attributes with the `unspecified` format, as Okta does by default, or with none, still has its identifiers read. | Subject Identifier §3.3, §3.4, Core §2.7.3.1 | Always |
+| Require exactly one value across matching attributes, in the profile grammar, when the caller reads the identifier | The typed accessor needs one identifier. | Subject Identifier §3.2, §3.3.1 | Always |
+| Read a received identifier by its text regardless of `xsi:type` | Reason not recorded. | Subject Identifier §3.3.1 | Always |
 
 [Shibboleth SP 3.5.0](https://codeberg.org/Shibboleth/cpp-sp/src/tag/3.5.0/shibsp/attribute/resolver/impl/XMLAttributeExtractor.cpp#L516-L543)
 maps an attribute with an omitted or `unspecified` `NameFormat` that has no
@@ -387,9 +387,10 @@ cover the `SPProvidedID` after a `NewID`.
 
 - The identifier in a `BaseID`, and in an `EncryptedID` that carries a
   `BaseID` or an `Assertion`, for both roles. Core §2.2.1 defines `BaseID` as
-  an extension point with no SAML-defined type, and neither role writes one.
-  A `LogoutRequest` that carries a `BaseID` has no `LogoutRequest::name_id`,
-  and the receiver can still answer it with `respond_slo`. The identity
-  provider reports a requested `BaseID` as
-  `RequestedSubjectIdentifier::BaseId`, and the service provider refuses an
-  assertion whose `Subject` carries one.
+  an extension point with no SAML-defined type. Neither role writes one, and
+  no API returns the identifier in one. The identity provider reports a
+  requested `BaseID` as `RequestedSubjectIdentifier::BaseId`, the service
+  provider [refuses an assertion](web-browser-sso-acceptance.md#assertion-selection-policies)
+  whose `Subject` carries one, and both roles
+  [answer a `LogoutRequest`](single-logout.md#baseid-principal-identifier)
+  that carries one without a `LogoutRequest::name_id`.

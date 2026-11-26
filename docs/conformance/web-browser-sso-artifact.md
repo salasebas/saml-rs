@@ -35,6 +35,7 @@ a signed one.
 | Unsolicited `Response` by artifact | Profiles §4.1.5 | Supported | Supported |
 | `RelayState` with a `Response` artifact | Bindings §3.6.3.1, Profiles §4.1.5 | Supported | Supported |
 | XML signature on the `Response` or on each assertion | Profiles §4.1.3.5, E93 | Supported | Supported |
+| Namespace names in the resolved `Response` compared after normalizing the declaration value | Namespaces in XML 1.0 §2.3 | — | [Partial](web-browser-sso-acceptance.md#namespace-declarations-with-character-references) |
 | Successful `Response` without an XML signature, protected by the artifact resolution channel | Profiles §4.1.3.5, §4.1.4.4, E93 | Not supported | Not supported |
 | `AuthnRequest` by artifact, with its `RelayState` | Profiles §4.1.3.3, Bindings §3.6.3.1 | Not supported | Not supported |
 | HTTP-Artifact `AssertionConsumerService` in service provider metadata | Bindings §3.6.7, E2 | Supported | Supported |
@@ -124,10 +125,13 @@ Code: `src/artifact.rs`, `src/api/idp.rs`, `src/api/response_acs.rs`, `src/idp.r
 | For `Success`, sign the assertion when the SP metadata sets `WantAssertionsSigned`, and sign the `Response` otherwise. For an error, sign the `Response` | A service provider that requires an XML signature, as this crate's does, rejects an unsigned response, and an error has no assertion to sign. | Profiles §4.1.3.5 | `RespondSso::sign_response` also signs a `Success` `Response` |
 | Write the assertion consumer URL in `Destination` | E59 leaves the value unspecified for the dereferenced message, and the URL the artifact was delivered to is the one a receiver that compares a present `Destination` can match. | Core §3.2.2, Bindings §3.6.5.2, E59 | Always |
 
-[Browser bindings](browser-bindings.md#library-policies) keeps the policies
-that refuse a form `RelayState` with a CR or LF outside a CRLF pair, return a
-received `RelayState` over 80 bytes unchanged, and keep the endpoint's own
-query parameters before `SAMLart`.
+[Browser bindings](browser-bindings.md) keeps the policies that
+[refuse a form `RelayState`](browser-bindings.md#sending-relaystate-policies)
+with a CR or LF outside a CRLF pair,
+[return a received `RelayState`](browser-bindings.md#returning-relaystate-policies)
+over 80 bytes unchanged, and keep the
+[endpoint's own query parameters](browser-bindings.md#redirect-endpoint-query-policies)
+before `SAMLart`.
 
 ### Service provider: `DeliveredArtifact`, `finish_sso`, `accept_unsolicited_sso`
 
@@ -143,9 +147,9 @@ Code: `src/browser/artifact.rs`, `src/binding/parameters.rs`, `src/artifact.rs`,
 | Without a recipient endpoint, expect the assertion consumer of the pending request in `finish_sso`, and the default HTTP-Artifact assertion consumer in `accept_unsolicited_sso` | Without a supplied URL, the library is not told which URL received the artifact. | Profiles §4.1.4.3 | `SamlValidationContext::with_recipient_endpoint` |
 | Expose a login error diagnostic only if an XML signature covers the inner `Response` and its issuer, recipient, and correlation checks pass | Evidence for the resolution exchange alone cannot authorize disclosure of login diagnostics. | Core §3.2.2.3, Bindings §3.6.4, Profiles §4.1.4.4 | Always |
 
-[Browser bindings](browser-bindings.md#library-policies) keeps the policies
-that reject a second `RelayState`, a received `RelayState` over 4096 bytes,
-and a query `SAMLart` or `RelayState` that is not UTF-8.
+[Browser bindings](browser-bindings.md) keeps the policies that
+[reject a second `RelayState` and a received `RelayState` over 4096 bytes](browser-bindings.md#received-value-policies),
+and [a query `SAMLart` or `RelayState` that is not UTF-8](browser-bindings.md#received-query-policies).
 [Metadata and replay](metadata-and-replay.md#sso-replay-deadlines) keeps the
 policy that stores the bearer assertion `ID` of an artifact response only when
 the caller passes a replay cache.

@@ -42,7 +42,8 @@ success or error.
 | `AuthnRequest` over HTTP-POST-SimpleSign without `SigAlg` and `Signature` | CS-01 §2.4 | Not supported |
 | `AuthnRequest` by HTTP-Artifact | Bindings §3.6, Profiles §4.1.3.3 | Not supported |
 | `RelayState` with the request | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | Supported |
-| Signature on the request: an XML signature over HTTP-POST, and `SigAlg` and `Signature` over HTTP-Redirect and SimpleSign | Profiles §4.1.3.3, §4.1.4.1, Bindings §3.4.4.1, §3.5.5.2, CS-01 §2.4 | Supported |
+| XML signature on the request over HTTP-POST | Profiles §4.1.3.3, §4.1.4.1, Bindings §3.5.5.2 | Supported |
+| `SigAlg` and `Signature` on the request over HTTP-Redirect and HTTP-POST-SimpleSign | Profiles §4.1.3.3, §4.1.4.1, Bindings §3.4.4.1, CS-01 §2.4 | [Partial](browser-bindings.md#detached-signatures) |
 | `Destination` | Core §3.2.1 | Supported |
 | `Consent` | Core §3.2.1, §8.4 | Not supported |
 | `Extensions` | Core §3.2.1 | Supported |
@@ -76,7 +77,7 @@ success or error.
 | `Consent` | Core §3.2.2, §8.4 | Not supported |
 | `Extensions` | Core §3.2.2 | Not supported |
 | XML signature on the `Response` or on each assertion | Profiles §4.1.3.5, §4.1.4.5, E26, E93 | Supported |
-| SimpleSign signature on the `Response` | CS-01 §2.4, §2.5 | Supported |
+| SimpleSign signature on the `Response` | CS-01 §2.4, §2.5 | [Partial](browser-bindings.md#detached-signatures) |
 | One bearer assertion with an `AuthnStatement` and an `AudienceRestriction` for the service provider | Profiles §4.1.4.2, E26 | Supported |
 | More than one assertion | Profiles §4.1.4.2, E26 | Not supported |
 | `EncryptedAssertion` | Core §2.3.4, §6.1 | Supported |
@@ -330,18 +331,21 @@ Code: `src/sp.rs`, `src/sp/authn_request.rs`, `src/browser/outbound.rs`, `src/co
 | Return an error when a qualifier is set and the requested format is `entity` | No issued entity identifier can satisfy both request conditions. | Core §8.3.6, E15 | Always |
 | Write `AssertionConsumerServiceURL` and `ProtocolBinding` from the default endpoint of the response binding, unless an index is set | The request then names its endpoint explicitly. | Core §3.4.1 | `StartSso::acs_index` |
 
-[Browser bindings](browser-bindings.md#library-policies) keeps the policies
-for the `RelayState` and the endpoint query of the request.
+[Browser bindings](browser-bindings.md#sending-relaystate-policies) keeps the
+policies for the `RelayState` of the request, and
+[for its endpoint query](browser-bindings.md#redirect-endpoint-query-policies).
 
 ### Identity provider: `respond_sso`, `respond_sso_refusal`, `initiate_sso`
 
 Code: `src/api/idp.rs`, `src/api/response_acs.rs`, `src/metadata/sp.rs`, `src/idp.rs`, `src/idp/login_response.rs`, `src/model/authn.rs`, `src/entity.rs`, `src/browser/outbound.rs`
 
+<a id="refusal-status-policies"></a>
+
 #### Status and errors
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Write top-level `Requester` for a request refused for its age, for a `ProtocolBinding` URI this identity provider does not support, for an `AssertionConsumerServiceURL` that is not an absolute HTTP(S) URL, or for a missing signature that only this identity provider requires | The fault lies in the request, which the service provider can send again fresh, signed, or with another binding or location. | Core §3.2.2.2, Profiles §4.1.4.1 | Always |
+| Write top-level `Requester` for a request refused for its age, for a `ProtocolBinding` URI other than HTTP-Redirect and SOAP that this identity provider does not support, for an `AssertionConsumerServiceURL` that is not an absolute HTTP(S) URL, or for a missing signature that only this identity provider requires | The fault lies in the request, which the service provider can send again fresh, signed, or with another binding or location. | Core §3.2.2.2, Profiles §4.1.4.1 | Always |
 | Add the subordinate `UnsupportedBinding` to the error `Response` to a request refused for its `ProtocolBinding` | It tells the service provider that the request asked for a response binding this identity provider cannot use. | Core §3.2.2.2 | Always |
 
 [crewjam/saml v0.6.3](https://github.com/crewjam/saml/blob/v0.6.3/identity_provider_error_response.go#L194-L206)
@@ -382,8 +386,8 @@ shows a local error page when it cannot resolve the requested endpoint.
 | Reject `RespondSso::relay_state` on a request that carried a `RelayState`, even with the same value | The response returns the received value, so a second value from the caller is either the same or a value the response must not send. | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | Always |
 | In `respond_sso_refusal`, reject every explicit `RespondSso::relay_state`, also when the refused request carried none | Reason not recorded. | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | Always |
 
-[Browser bindings](browser-bindings.md#library-policies) keeps the policy
-that returns a received `RelayState` over 80 bytes unchanged, and
+[Browser bindings](browser-bindings.md#returning-relaystate-policies) keeps
+the policy that returns a received `RelayState` over 80 bytes unchanged, and
 [HTTP-Artifact response](web-browser-sso-artifact.md#library-policies) the
 `Destination` of a stored `Response`.
 

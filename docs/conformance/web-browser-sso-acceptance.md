@@ -18,10 +18,7 @@ Normative text is Core 2.0, Profiles 2.0 §4.1, and Bindings 2.0 as corrected
 by [Approved Errata 05](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/),
 and the HTTP-POST-SimpleSign
 [Committee Specification 01](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cs-01.html)
-(CS-01).
-[Committee Draft 04 §2.5](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cd-04.html)
-(CD-04) clarifies the signature input without `RelayState`. The scoped
-attribute rows cite the
+(CS-01). The scoped attribute rows cite the
 [Subject Identifier Attributes Profile](https://docs.oasis-open.org/security/saml-subject-id-attr/v1.0/saml-subject-id-attr-v1.0.html)
 and the [saml2int deployment profile](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html).
 [Browser bindings](browser-bindings.md) has the decoding,
@@ -58,7 +55,7 @@ and refuses a signed one. Its identity provider refuses a signed
 | `RelayState` with the `Response` | Bindings §3.5.3, CS-01 §2.3, Profiles §4.1.5 | Supported |
 | `InResponseTo` and `Destination` of the `Response` | Core §3.2.2 | Supported |
 | XML signature on the `Response` or on each assertion | Profiles §4.1.4.5, E26 | Supported |
-| SimpleSign `SigAlg` and `Signature` on the `Response` | CS-01 §2.4 to §2.6 | [Partial](#detached-signatures) |
+| SimpleSign `SigAlg` and `Signature` on the `Response` | CS-01 §2.4 to §2.6 | [Partial](browser-bindings.md#detached-signatures) |
 | Unsigned error `Response` | Core §3.2.2, Profiles §4.1.4.5, E26 | Supported |
 | `WantAssertionsSigned` in the service provider's metadata | Metadata §2.4.4, Profiles §4.1.6 | Supported |
 | Namespace names compared after normalizing the declaration value | Namespaces in XML 1.0 §2.3 | [Partial](#namespace-declarations-with-character-references) |
@@ -116,7 +113,7 @@ applying a logout to an assertion that arrives later.
 | `RelayState` with the request | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | Supported |
 | Unsigned `AuthnRequest` | Profiles §4.1.4.1 | Supported |
 | XML signature on the request | Profiles §4.1.4.1, Core §3.2.1 | Supported |
-| HTTP-Redirect or SimpleSign `SigAlg` and `Signature` on the request | Bindings §3.4.4.1, CS-01 §2.4 to §2.6 | [Partial](#detached-signatures) |
+| HTTP-Redirect or SimpleSign `SigAlg` and `Signature` on the request | Bindings §3.4.4.1, CS-01 §2.4 to §2.6 | [Partial](browser-bindings.md#detached-signatures) |
 | `WantAuthnRequestsSigned` in the identity provider's metadata | Metadata §2.4.3, E7 | Supported |
 | `AuthnRequestsSigned` in the service provider's metadata | Metadata §2.4.4, E7 | Supported |
 | Error `Response` to a request that the identity provider refuses | Profiles §4.1.4.1, Core §3.2.1 | [Partial](#error-response-to-a-refused-request) |
@@ -128,7 +125,7 @@ applying a logout to an assertion that arrives later.
 | Requested `Subject` with a `NameID` | Core §3.4.1 | Supported |
 | Requested `Subject` with an `EncryptedID` that carries a `NameID` | Core §2.2.4, §3.4.1, Conformance §3.4 | Supported |
 | Requested `Subject` with an `EncryptedID` that carries a `BaseID` or an `Assertion` | Core §2.2.4, §3.4.1 | Not supported |
-| Requested `Subject` with a `BaseID` | Core §2.2.1, §3.4.1 | Not supported |
+| Requested `Subject` with a `BaseID` | Core §2.2.1, §3.4.1 | [Partial](#requested-baseid) |
 | `SubjectConfirmation` in the requested `Subject` | Core §3.4.1, Profiles §4.1.4.1, E75 | Supported |
 | `AssertionConsumerServiceURL`, `AssertionConsumerServiceIndex`, and `ProtocolBinding` | Core §3.4.1, Profiles §4.1.4.1 | Supported |
 | `AttributeConsumingServiceIndex` | Core §3.4.1, Metadata §2.4.4.1 | Not supported |
@@ -142,14 +139,10 @@ has how `respond_sso` answers the request.
 
 ## Partial support
 
-### Detached signatures
+<a id="detached-signatures"></a>
 
-- **Supported:** the service provider verifies the `SigAlg` signature of a
-  SimpleSign `Response`, and the identity provider that of an HTTP-Redirect
-  or SimpleSign `AuthnRequest`.
-- **Not supported:** RSAwithSHA1 and DSAwithSHA1, which both bindings
-  require, depend on the crypto provider and its feature flags, as
-  [browser bindings](browser-bindings.md#detached-signatures) states.
+[Browser bindings](browser-bindings.md#detached-signatures) explains the
+`Partial` detached signatures of both roles.
 
 ### Identity provider lookup for an unsolicited `Response`
 
@@ -164,7 +157,8 @@ has how `respond_sso` answers the request.
 - **Supported:** the service provider reads a `Response` whose protocol and
   assertion namespace declarations spell the namespace without character
   references.
-- **Not supported:** an otherwise valid `Response` can fail when a
+- **Not supported:** an otherwise valid `Response`, over HTTP-POST or
+  HTTP-POST-SimpleSign or resolved from an artifact, can fail when a
   declaration spells the protocol or assertion namespace with an XML
   character reference, because the protocol profile and assertion condition
   checks compare raw namespace bindings. No option changes it, and Namespaces
@@ -182,15 +176,27 @@ passes normalized DOM names to its HTTP-POST message reader.
   identity provider refuses for its signature policy, a `ProtocolBinding`
   the `Response` cannot use, content it cannot read, a repeated
   `NameIDPolicy`, or its age. `respond_sso_refusal` and
-  `respond_sso_refusal_artifact` send the error `Response`.
+  `respond_sso_refusal_artifact` build the error `Response` and return the
+  browser action that the application sends.
 - **Not supported:** an error `Response` to a request that fails a check made
   before its signature is verified: the `XmlPolicy` schema check and the
   protocol profile, which covers qualified attributes, elements in a
   foreign namespace, and a `Version` other than `2.0`. Nor to a request
-  whose signature does not verify: Core §3.2.1 recommends an error but
-  forbids relying on the content that names the requester and the `ID` to
-  answer. `receive_sso` returns the error, and the identity provider
+  whose decrypted requested `Subject` the `XmlPolicy` schema check refuses.
+  Nor to a request whose signature does not verify: Core §3.2.1 recommends
+  an error but forbids relying on the content that names the requester and
+  the `ID` to answer. `receive_sso` returns the error, and the identity provider
   application shows a local error page.
+
+### Requested `BaseID`
+
+- **Supported:** `receive_sso` accepts a requested `Subject` that holds a
+  `BaseID` and reports it as `RequestedSubjectIdentifier::BaseId`, and the
+  identity provider answers it with an error `Response`.
+- **Not supported:** a successful `Response`, whose assertion `Subject`
+  would need an identical `BaseID` (Core §3.3.4, §3.4.1.4), and the
+  identifier in the `BaseID`, as [identifiers](identifiers.md#not-supported)
+  records.
 
 ### `AuthnContextDecl` by value
 
@@ -468,7 +474,7 @@ Code: `src/flow.rs`, `src/flow/embedded.rs`, `src/flow/detached.rs`, `src/crypto
 | Reject the whole response when a signature on the `Response` or on one of its assertions, a decrypted one included, fails, even when another assertion verifies | The service provider does not choose among the assertions of one response by their signature result. | Profiles §4.1.4.3, E26 | Always |
 | Treat a SimpleSign `Response` without `Signature` as carrying no detached signature, with or without `SigAlg` | CS-01 §2.10 identifies a SimpleSign signature by the `Signature` field, and a `SigAlg` alone leaves nothing to verify. | CS-01 §2.4, §2.10 | Always |
 | Require a verified detached signature on a successful SimpleSign `Response`, even if it carries an XML signature | The detached signature authenticates the full response and covers any `RelayState`. | CS-01 §2.4, §2.7.2 | Always |
-| For a SimpleSign error `Response`, allow `Signature` to be absent only if neither the response nor its assertions carry an XML signature | Unsigned errors cannot establish sessions. | CD-04 §2.4, §2.6, Profiles §4.1.4.3 | Always |
+| For a SimpleSign error `Response`, allow `Signature` to be absent only if neither the response nor its assertions carry an XML signature | Unsigned errors cannot establish sessions. | CS-01 §2.4, §2.6, Profiles §4.1.4.3 | Always |
 
 ### Service provider: encrypted elements
 
@@ -482,6 +488,8 @@ Code: `src/flow.rs`, `src/flow/embedded.rs`, `src/encrypted_elements.rs`, `src/c
 | Verify a signature that covers an `EncryptedID` or `EncryptedAttribute` before decrypting it under every non-CBC data-encryption algorithm | On every supported binding an accepted assertion is covered by a verified signature, so decrypting first would only expose the decryption key to ciphertext no signature covers, and an AES-GCM tag does not show who encrypted. | Core §6.2, E93 | Always |
 | With several assertions, refuse an `EncryptedID` or `EncryptedAttribute` unless a `Response` signature or a SimpleSign detached signature authenticates the message | The nested decryption step learns only whether the `Response` is authenticated, not whether each assertion's own signature covers it. | Core §6.2, Profiles §4.1.4.5, E26, E93 | Always |
 | Reject an `EncryptedAssertion` whose plaintext is not one `Assertion`, and an `EncryptedID` or `EncryptedAttribute` whose plaintext is not one `NameID` or `Attribute` in the assertion namespace | The decrypted element takes the place of its wrapper, so the service provider reads it only by the rules of the plaintext element it replaces. | Core §2.3.4, §2.2.4, §2.7.3.2 | Always |
+
+<a id="assertion-selection-policies"></a>
 
 ### Service provider: assertion selection and content
 
@@ -516,7 +524,7 @@ Code: `src/api/sp.rs`, `src/api/peer.rs`, `src/flow.rs`, `src/flow/response_issu
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Reject a present `Response` issuer other than the IdP's entity ID. An omitted issuer is accepted with a supplied descriptor, or by the resolver only through the plaintext fallback | Reason not recorded. | Profiles §4.1.4.2, E17, Core §3.2.2 | Always |
+| Reject a present `Response` issuer other than the IdP's entity ID. An omitted issuer is accepted with a supplied descriptor, or by the resolver only through the plaintext fallback | A successful response then gets the `Issuer` check that an error response gets, so no session is accepted from a `Response` whose `Issuer` names another entity. | Profiles §4.1.4.2, E17, Core §3.2.2 | Always |
 | Require a successful solicited `Response` to carry the pending request ID in `InResponseTo`, compared after XML whitespace collapse | Otherwise an assertion with a matching bearer confirmation could complete a pending login inside a response whose own request correlation is missing or inconsistent. | Core §3.2.2, Profiles §4.1.4.3, E26 | Always |
 | Reject a response-level `InResponseTo` on an unsolicited `Success` response, empty or not | Profiles §4.1.4.3 names only the bearer confirmation, and a reply tied to a request must pass the pending request's correlation checks. | Core §3.2.2, Profiles §4.1.5 | Always |
 | In `finish_sso`, require the response to name the assertion consumer the pending request asked for, and reject a supplied receiving URL other than that one | The `AuthnRequest` selected that consumer, so a response that names or reaches another one does not answer the request as sent. | Profiles §4.1.4.1, §4.1.4.3 | Always |
@@ -553,7 +561,7 @@ HTTP-POST-SimpleSign `Response`, as the error response rules do.
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Report a status other than `Success` as an error after the signature, `Issuer`, correlation, and `Destination` checks | Reason not recorded. | Core §3.2.2.2, Profiles §4.1.4.3 | Always |
+| Report a status other than `Success` as an error after the signature, `Issuer`, correlation, and `Destination` checks | A failed check then takes precedence over the peer's status, so an unrelated or tampered error response reports the check it fails. | Core §3.2.2.2, Profiles §4.1.4.3 | Always |
 | Permit omission of `InResponseTo` on an error `Response`. Compare a present value with the pending request ID after XML whitespace collapse for solicited errors, empty or not. Skip correlation for unsolicited errors | A value for another request indicates a different exchange. | Core §3.2.2 | Always |
 | Expose the diagnostic after issuer and recipient checks only if a response signature or detached SimpleSign signature covers it | The text must be attributable to the peer. | Core §3.2.2, Bindings §3.5.5.2, CS-01 §2.4 | Always |
 | For solicited errors, expose the diagnostic only when `InResponseTo` and any requested `RelayState` match. For unsolicited errors, require an absent `InResponseTo` to expose it | The text is then attached only to an error attributable to the current exchange. | Core §3.2.2, Bindings §3.5.3, CS-01 §2.3 | Always |
@@ -632,8 +640,7 @@ decisions are in
 - Both roles: the identifier in a `BaseID`, and in an `EncryptedID` that
   carries a `BaseID` or an `Assertion`, as
   [identifiers](identifiers.md#not-supported) records. Decoding a `BaseID` in
-  a requested `Subject` is Optional, Core §3.4.1, and the identity provider
-  reports one as `RequestedSubjectIdentifier::BaseId`. An `EncryptedID` that
+  a requested `Subject` is Optional, Core §3.4.1. An `EncryptedID` that
   carries a `BaseID` or an `Assertion` is Optional, Core §2.2.4.
 - Service provider: a successful `Response` by HTTP-Artifact without an XML
   signature. Optional, Profiles §4.1.3.5, §4.1.4.4, E93. Identity provider:

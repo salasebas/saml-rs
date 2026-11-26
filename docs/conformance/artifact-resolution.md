@@ -316,6 +316,8 @@ Code: `src/soap.rs`
 | --- | --- | --- | --- |
 | Write an empty `detail` in a `Client` or `Server` fault, and none in a `VersionMismatch` or `MustUnderstand` fault | SOAP 1.1 requires `detail` when the `Body` was not processed, and an empty one carries no header information when the failure was elsewhere in the envelope. | SOAP 1.1 §4.4 | `SoapFault::new` |
 
+<a id="soap-receiver-policies"></a>
+
 ### SOAP receiver: SOAP receive operations
 
 Code: `src/soap.rs`, `src/xml/dom.rs`, `src/xml/schema_value.rs`

@@ -364,7 +364,7 @@ Code: `src/crypto/signature_profile.rs`, `src/crypto/verify.rs`, `src/crypto/ver
 | --- | --- | --- | --- |
 | Accept an embedded signature only with RSA-SHA256, RSA-SHA384, or RSA-SHA512, a SHA-256, SHA-384, or SHA-512 digest, one `Reference`, and no canonicalization or transform but exclusive canonicalization and enveloped-signature | The opt-in allowlist refuses SHA-1, which saml2int SDP-ALG01 calls weakening, and forms that Core §5.4.2 to §5.4.4 do not ask of a signer. | Core §5.4.2–§5.4.4, E50 | `XmlSignatureProfile::StrictRsaSha2` |
 | Under `StrictRsaSha2`, also reject `xml-exc-c14n#WithComments` as the `CanonicalizationMethod` and as a reference transform | Reason not recorded. | Core §5.4.3, §5.4.4 | `XmlSignatureProfile::StrictRsaSha2` |
-| Accept a detached `SigAlg` only when it is RSA-SHA256, RSA-SHA384, or RSA-SHA512, and reject another before verifying the signature. This profile omits both SHA-1 algorithms required by those bindings | Reason not recorded. | Bindings §3.4.4.1, CS-01 §2.5 | `XmlSignatureProfile::StrictRsaSha2` |
+| Accept a detached `SigAlg` only when it is RSA-SHA256, RSA-SHA384, or RSA-SHA512, and reject another before verifying the signature. This profile omits both SHA-1 algorithms required by those bindings | A caller who selects the strict profile as hardening gets the same RSA-SHA2 restriction on HTTP-Redirect and HTTP-POST-SimpleSign as on an embedded signature, so a detached RSA-SHA1 signature is refused there too. | Bindings §3.4.4.1, CS-01 §2.5 | `XmlSignatureProfile::StrictRsaSha2` |
 | Reject an explicit `ds:HMACOutputLength` below 160 bits, where the [HMAC truncation](#hmac-truncation) rule applies | A lower floor would let a peer choose a shorter tag and reduce the number of bits an attacker must guess for an accepted signature. | XMLDSig 1.1 §6.3.1 | Always |
 
 #### Verification keys
@@ -442,7 +442,7 @@ Code: `src/config/algorithms.rs`, `src/config/encryption.rs`
 | Encrypt with AES-256-CBC unless the caller selects another data-encryption algorithm | Every peer must decrypt AES-CBC under Conformance §4.2 but not AES-GCM, and the identity provider reads no `md:EncryptionMethod` that would show a peer supports AES-GCM. | Conformance §4.2, E50, XML Encryption 1.1 §5.1.1 | `AlgorithmPolicy::data_encryption` |
 | Encrypt with XML Encryption 1.1 RSA-OAEP, SHA-256, and MGF1 with SHA-256 by default on FIPS | The FIPS provider refuses SHA-1 in RSA-OAEP, and SHA-256 with MGF1-SHA-256 is the smallest digest pair it encrypts with. | Conformance §4.2, E50 | `KeyEncryptionAlgorithm::RsaOaep` (FIPS default) |
 | Generate Triple DES and RSA-v1.5 only when the caller selects them | Every peer must also decrypt AES and RSA-OAEP, and XML Encryption 1.1 §5.5.1 recommends RSA-OAEP for AES keys and calls implementing RSA-v1.5 `NOT RECOMMENDED`. | Conformance §4.2, XML Encryption 1.1 §5.1.1, §5.5.1 | `DataEncryptionAlgorithm::TripleDesCbc`, `KeyEncryptionAlgorithm::Rsa15` |
-| Reject in the config builders a key transport that the crypto provider does not encrypt with: RSA-OAEP-MGF1P on `crypto-fips`, and XML Encryption 1.1 RSA-OAEP parameters that the provider does not support | Reason not recorded. | XML Encryption 1.1 §5.5.2 | Always |
+| Reject in the config builders a key transport that the crypto provider does not encrypt with: RSA-OAEP-MGF1P on `crypto-fips`, and XML Encryption 1.1 RSA-OAEP parameters that the provider does not support | The provider cannot encrypt with it, so every encrypted assertion, identifier, or attribute would otherwise fail when its message is built. | XML Encryption 1.1 §5.5.2 | Always |
 
 ### Decrypter: `XmlEncryptionPolicy`
 
@@ -474,4 +474,7 @@ Code: `src/crypto/enc/decrypt.rs`, `src/crypto/enc/work.rs`
   XML Encryption 1.0 §3.2. The decrypter checks neither. For example, it
   applies an `xenc11:MGF` under `rsa-oaep-mgf1p`.
 - A `CipherReference` to ciphertext outside the encrypted element, elsewhere
-  in the message. Mandatory, XML Encryption 1.0 §3.3.1.
+  in the message. Mandatory, XML Encryption 1.0 §3.3.1. Core §6, the SAML
+  profiles and bindings, and Approved Errata 05 do not mention
+  `CipherReference`, and the E43 examples carry the ciphertext in
+  `CipherValue`.
