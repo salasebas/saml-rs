@@ -327,8 +327,8 @@ Code: `src/model/attribute_scope.rs`
 | Check the named attributes after acceptance against the assertion issuer's explicit policy or its unexpired registration-authority-signed metadata. Compare literal scopes case-sensitively | Mandatory | Subject Identifier §3.5.2, §4.2, saml2int SDP-SP17, E94 | Always |
 | Ignore regular expression declarations for authorization | Optional | saml2int SDP-SP17 | Always |
 
-Subject Identifier §4.2 requires this check of a relying party that consumes
-metadata.
+Subject Identifier §4.2 requires a relying party that consumes metadata to
+support this check.
 
 <a id="operator-diagnostics"></a>
 
@@ -399,7 +399,7 @@ included.
 
 ### Identity provider: requested assertion consumer
 
-Code: `src/api/response_acs.rs`, `src/metadata/sp.rs`
+Code: `src/api/response_acs.rs`, `src/metadata/sp.rs`, `src/model/extract.rs`
 
 `receive_sso` returns the requested URL and index without checking them
 against the service provider metadata.
@@ -614,9 +614,10 @@ decisions are in
   reports one as `RequestedSubjectIdentifier::BaseId`. An `EncryptedID` that
   carries a `BaseID` or an `Assertion` is Optional, Core §2.2.4.
 - Service provider: a successful `Response` by HTTP-Artifact without an XML
-  signature. Identity provider: an `AuthnRequest` by HTTP-Artifact. Both are
-  in the [HTTP-Artifact response](web-browser-sso-artifact.md#not-supported)
-  record.
+  signature. Optional, Profiles §4.1.3.5, §4.1.4.4, E93. Identity provider:
+  an `AuthnRequest` by HTTP-Artifact. Optional, Profiles §4.1.3.3, Bindings
+  §3.6. The [HTTP-Artifact response](web-browser-sso-artifact.md#not-supported)
+  record says what each side does instead.
 - Identity provider: reading `Conditions`, `Scoping`, and
   `AttributeConsumingServiceIndex` in a received request. Optional, Core
   §3.4.1, §3.4.1.2. `receive_sso` exposes none of them.
