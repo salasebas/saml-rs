@@ -184,7 +184,7 @@ no trust policy and no `validUntil` check.
 | Reject a `ds:Object` in a metadata signature | Recommended | Metadata §3.1.5 (E91) | All `RequireSignature` variants. `Unverified` skips the check |
 
 The `ds:Object` rule for message signatures is in
-[reference and coverage processing](xml-security-algorithms.md#reference-and-coverage-processing).
+[inbound XML signature verification](xml-security-algorithms.md#inbound-xml-signature-verification).
 
 <a id="reading-peer-metadata"></a>
 <a id="federation-aggregate-import"></a>
