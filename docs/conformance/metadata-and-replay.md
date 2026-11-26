@@ -4,9 +4,9 @@
 crate's own role, and `SpConfigBuilder::build` and `IdpConfigBuilder::build`
 call them. `IdpDescriptor::from_metadata_xml`, `SpDescriptor::from_metadata_xml`,
 and `MetadataAggregate::from_xml` import a peer's metadata under a
-caller-chosen `MetadataTrustPolicy`. Every typed receive operation refuses a
-repeated message, assertion, or artifact under the `ReplayPolicy` that
-`SamlValidationContext::new` takes, and neither policy is part of the
+caller-chosen `MetadataTrustPolicy`. With `ReplayPolicy::RequireCache` in the
+`SamlValidationContext`, every typed receive operation refuses a repeated
+message, assertion, or artifact, and neither policy is part of the
 [role validation defaults](https://samlrs.vercel.app/explanation/validation-presets/).
 
 Normative text is [SAML Metadata 2.0](https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf)
@@ -52,8 +52,10 @@ descriptor imports and `MetadataAggregate`.
 | A role that extends `RoleDescriptorType` | Metadata §2.4.1 | Not supported | Not supported |
 | `errorURL` on a role | Metadata §2.4.1 | Supported | Not supported |
 | `ResponseLocation` on an endpoint | Metadata §2.2.2, E41 | Not supported | Supported |
-| `index` and `isDefault` on an `AssertionConsumerService`, and `index` on an `ArtifactResolutionService` | Metadata §2.2.3, E37 | Supported | Supported |
-| `KeyDescriptor` with an X.509 certificate for signing, encryption, or both | Metadata §2.4.1.1, E62, E68 | Supported | Supported |
+| `index` on an `AssertionConsumerService` and an `ArtifactResolutionService`, and `isDefault="true"` on an `AssertionConsumerService` | Metadata §2.2.3, E37 | Supported | Supported |
+| `isDefault="false"` on an `AssertionConsumerService` | Metadata §2.2.3, E37 | Not supported | Supported |
+| `KeyDescriptor` with an X.509 certificate and a `use` of `signing` or `encryption` | Metadata §2.4.1.1, E62, E68 | Supported | Supported |
+| `KeyDescriptor` without `use`, for signing and encryption | Metadata §2.4.1.1, E62 | Not supported | Supported |
 | Other `ds:KeyInfo` content, such as `ds:KeyValue` or `ds:KeyName` | Metadata §2.4.1.1, E69 | Not supported | Not supported |
 | `EncryptionMethod` in a `KeyDescriptor` | Metadata §2.4.1.1 | Not supported | Not supported |
 | `validUntil` | Metadata §2.3.1, §2.3.2, §2.4.1, E76, E94 | Supported | Supported |
@@ -67,7 +69,8 @@ descriptor imports and `MetadataAggregate`.
 
 | Feature | Section | Publisher | Consumer |
 | --- | --- | --- | --- |
-| `mdattr:EntityAttributes` holding `saml:Attribute` elements | MDAttr §2.2, §2.3 | Supported | Supported |
+| `saml:Attribute` with text values in `mdattr:EntityAttributes` | MDAttr §2.2, §2.3 | Supported | Supported |
+| `saml:Attribute` with element content in an `AttributeValue`, in `mdattr:EntityAttributes` | MDAttr §2.2, Core §2.7.3.1.1 | Not supported | Not supported |
 | `saml:Assertion` in `mdattr:EntityAttributes` | MDAttr §2.3, §2.4 | Not supported | Not supported |
 | Entity category, entity category support, and assurance certification attributes | RFC 8409 §3, §4, Identity Assurance §3 | Supported | Supported |
 | `subject-id:req` | Subject Identifier §3.5.1 | Supported | Supported |
@@ -75,7 +78,7 @@ descriptor imports and `MetadataAggregate`.
 | REFEDS security contact | REFEDS Security Contact | Supported | Supported |
 | `mdui:UIInfo` and `mdui:DiscoHints` | MDUI §2.1, §2.2 | Not supported | Not supported |
 | `alg:DigestMethod` and `alg:SigningMethod` | Algorithm Support §2.4 | Not supported | Not supported |
-| `mdrpi:RegistrationInfo` and `mdrpi:PublicationInfo` | RPI §2.1, §2.2 | Not supported | Not supported |
+| `mdrpi:RegistrationInfo`, `mdrpi:PublicationInfo`, and `mdrpi:PublicationPath` | RPI §2.1 to §2.3 | Not supported | Not supported |
 
 ### Replay detection
 
@@ -94,15 +97,15 @@ in [Artifact resolution](artifact-resolution.md).
 - **Supported:** on a build with a crypto provider, every signature-requiring
   `MetadataTrustPolicy` verifies the root signature against the caller's
   pinned certificates.
-- **Not supported:** on a build without a crypto provider, a
-  signature-requiring policy returns `SamlError::Unsupported`, so only
+- **Not supported:** on a build without a crypto provider, no
+  signature-requiring policy completes an import, so only
   `MetadataTrustPolicy::Unverified` imports metadata there.
 
 ## Rules
 
 ### Metadata publisher: `generate_sp_metadata`, `generate_idp_metadata`
 
-Code: `src/metadata/generate.rs`, `src/metadata/description.rs`, `src/metadata/lifetime.rs`, `src/metadata/entity_attributes.rs`, `src/metadata/scope.rs`, `src/config/provider.rs`, `src/crypto/enc/decrypt.rs`
+Code: `src/metadata/generate.rs`, `src/metadata/description.rs`, `src/metadata/lifetime.rs`, `src/metadata/entity_attributes.rs`, `src/metadata/scope.rs`, `src/config/provider.rs`
 
 #### Roles, endpoints, and keys
 
@@ -117,7 +120,6 @@ Code: `src/metadata/generate.rs`, `src/metadata/description.rs`, `src/metadata/l
 | Write `errorURL` on the SSO role descriptor | Optional | Metadata §2.4.1 | `error_url` on `SpConfigBuilder` and `IdpConfigBuilder` |
 | Publish several signing and several encryption `KeyDescriptor` elements | Optional | Metadata §2.4.1, E68 | `Credentials::with_additional_signing_certificate`, `Credentials::with_decryption_credential` |
 | Check that every published `ds:X509Certificate` contains nonempty standard base64. The caller supplies the X.509 certificate bytes | Mandatory | Metadata §2.4.1.1, XML Signature §4.4.4, XML Schema Datatypes §3.2.16 | Always |
-| Allow decryption with any locally configured key published for encryption. Keys are tried in the order added | Recommended | E68 | `Credentials::with_decryption_credential` |
 
 #### Organization and contacts
 
@@ -153,6 +155,14 @@ Code: `src/metadata/generate.rs`, `src/metadata/description.rs`, `src/metadata/l
 | --- | --- | --- | --- |
 | Support publishing scopes in the IdP role's `Extensions` | Mandatory | Subject Identifier §3.5.2, §4.1, `RoleDescriptorType` | `IdpConfigBuilder::scopes`, `IdpMetadataInput::scopes` |
 | Write `regexp` explicitly on every declaration, as metadata that is signed needs | Recommended | Subject Identifier §3.5.2.2 | Always |
+
+### Identity provider and service provider: decryption with published keys
+
+Code: `src/crypto/keys.rs`, `src/crypto/enc/decrypt.rs`
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Allow decryption with any locally configured key published for encryption. Keys are tried in the order added | Recommended | E68 | `Credentials::with_decryption_credential` |
 
 ### Metadata consumer: signed metadata
 
@@ -274,7 +284,8 @@ signature, issuer, correlation, destination, and time checks still run.
 | Treat `OneTimeUse` as always valid | Mandatory | Core §2.5.1.5 | Always |
 | Report whether the consumed assertion carries `OneTimeUse` | Optional | Core §2.5.1.5 | `SsoSession::is_one_time_use` |
 
-Artifact and name identifier management replay rows are in
+The [SSO replay policies](#sso-replay-deadlines) set the deadline of each
+stored key. Artifact and name identifier management replay rows are in
 [Artifact resolution](artifact-resolution.md) and
 [Name identifier management](name-id-management.md). The `ReplayCache`
 contract defines the result when an assertion deadline passes before storage.
@@ -349,7 +360,8 @@ Code: `src/metadata/sp.rs`, `src/metadata/idp.rs`, `src/config/descriptors.rs`
 | --- | --- | --- | --- |
 | Select a default `AssertionConsumerService` within one SAML 2.0 `SPSSODescriptor`: the first one for a lookup without a binding, else the first one that publishes the binding | E37 defines the default within one role, and Metadata §2.3.2 leaves the choice among roles undefined. | Metadata §2.2.3, §2.3.2, E37 | Always |
 | Look up an `AssertionConsumerServiceIndex` in each selected `SPSSODescriptor`, counting endpoints of every binding. Refuse an index that one of them publishes twice or that more than one of them publishes | The request names the index but not the role, so a guessed endpoint could receive an assertion the requester did not route there. | Core §3.4.1, Metadata §2.2.3, §2.3.2 | Always |
-| Import an `AssertionConsumerService` with a malformed field. Read an `index` that is missing or not an `unsignedShort` as no index, an `isDefault` that is not an `xs:boolean` as absent, and an empty `Location` as published. A lookup skips an endpoint without a `Binding` or `Location` | Reason not recorded. | Metadata §2.2.2, §2.2.3 | Always |
+| Import an `AssertionConsumerService` with a malformed field. Read an `index` that is missing or not an `unsignedShort` as no index, an `isDefault` that is not an `xs:boolean` as absent, and an empty `Location` as published | Reason not recorded. | Metadata §2.2.2, §2.2.3 | Always |
+| Skip an `AssertionConsumerService` without a supported `Binding` or a `Location` in a lookup by binding or URL. Refuse the default for a lookup without a binding when the endpoint it selects lacks them | Reason not recorded. | Metadata §2.2.2, §2.2.3, E37 | Always |
 | Look up an artifact's `EndpointIndex` in each selected `IDPSSODescriptor`, and refuse an index that more than one of them publishes | The artifact names its issuer and index but not the role, so a guessed role could receive an `ArtifactResolve` for an artifact it did not issue. | Metadata §2.2.3, §2.3.2, Bindings §3.6.4 | `IdpMetadata::artifact_resolution_service` |
 | Reject an `ArtifactResolutionService` whose `Binding` or `Location` is empty after whitespace collapse | Reason not recorded. | Core §1.3.2, Metadata §2.2.2 | `IdpMetadata::artifact_resolution_services` |
 | Return a selected endpoint as an `EndpointUrl`. A non-HTTP(S) URL is an error from the accessor, and import accepts it | The typed endpoint contract is absolute HTTP(S), and Metadata §2.2.2 and §2.2.3 use `anyURI` without that restriction. | Metadata §2.2.2, §2.2.3 | Always |
@@ -388,6 +400,8 @@ Code: `src/metadata/entity_attributes.rs`
 | Match a well-known entity attribute by its `Name` with the URI `NameFormat`, no `NameFormat`, or `unspecified`, and ignore `FriendlyName` | Core §2.7.3.1 gives an absent `NameFormat` the unspecified meaning, and the Shibboleth `EntityAttributes` predicate matches such an attribute. | RFC 8409 §§3.1, 4.1, Identity Assurance §3.3, Subject Identifier §3.5.1 | Always |
 | Include the values that an enclosing `EntitiesDescriptor` binds | RFC 8409 §3.1 defines the attribute only in the entity's own `Extensions`, and MDAttr §2.3 binds a group's attributes to each member. | RFC 8409 §3.1, MDAttr §2.3 | Always |
 | Reject a read `subject-id:req` without exactly one value, with a value outside the four, or repeated with a different requirement. Import does not reject it | The profile rules these out, and one requirement cannot be chosen from them. | Subject Identifier §3.5.1 | `EntityAttributes::subject_id_requirement` |
+
+<a id="sso-replay-deadlines"></a>
 
 ### Service provider: SSO replay
 
@@ -436,26 +450,28 @@ application that keeps the session keeps its assertions and owns the
 | Give the entity an `entityID` that no other entity in the deployment uses | Mandatory | Metadata §2.2.1 |
 | Under `MetadataTrustPolicy::Unverified`, establish trust in the document through another channel, such as a file the operator provisions, before the import | Recommended | Metadata §4 |
 | In a saml2int deployment, pass each scope of the subject identifiers the identity provider issues to `IdpConfigBuilder::scopes` as a `MetadataScope` with `regexp: false` | Mandatory | saml2int SDP-IDP14 |
-| Pass a `ReplayCache` whose storage every node that accepts SSO responses shares, such as `InMemoryReplayCache` in a single process. It atomically refuses a duplicate key and keeps each key until the `expires_at` it receives | Mandatory | Profiles §4.1.4.5 |
-| When `SsoSession::is_one_time_use` returns `true`, do not keep the assertion, or the information it carries in another form, for future use | Mandatory | Core §2.5.1.5 |
+| For HTTP-POST SSO, pass a `ReplayCache` whose storage every node that accepts HTTP-POST responses shares, such as `InMemoryReplayCache` in a single process. It atomically refuses a duplicate bearer assertion `ID` and keeps each key until the `expires_at` it receives | Mandatory | Profiles §4.1.4.5 |
+| Do not keep an assertion that carries `OneTimeUse`, or the information it carries in another form, for future use. `SsoSession::is_one_time_use` reports the condition on the consumed assertion only | Mandatory | Core §2.5.1.5 |
 | Use an assertion that carries `OneTimeUse` immediately | Recommended | Core §2.5.1.5 |
 
 <a id="not-implemented"></a>
 
 ## Not supported
 
-- Signing published metadata. Recommended, Metadata §3 and §4.3.3.2, when no
-  authenticated channel delivers the document. The application signs the XML
-  that `metadata_xml` returns, or delivers it over an authenticated channel.
+- Signing at least the root element of published metadata. Recommended,
+  Metadata §3, when no other context authenticates the document. The
+  application signs the XML that `metadata_xml` returns, or delivers it over
+  an authenticated channel.
 - Publication at, and resolution from, the well-known location or DNS,
   Metadata §4.1 and §4.2. The application serves the XML that `metadata_xml`
   returns, fetches a peer's document, and passes it to a descriptor import.
-- Trust processing for Metadata §4 resolution: document integrity at the
-  publisher (Mandatory, Metadata §4.3.3), validation of a signature present on
-  a resolved document at the consumer (Mandatory, Metadata §4.3.3.2), and
-  server-authenticated TLS for retrieval (Recommended, Metadata §4,
-  §4.3.3.3). The caller chooses a `MetadataTrustPolicy` for the document it
-  fetched.
+- Trust processing for Metadata §4 publication and resolution: document
+  integrity at the publisher (Mandatory, Metadata §4.3.3), a signature on
+  each published document (Recommended, Metadata §4.3.3.2), validation of a
+  signature present on a resolved document at the consumer (Mandatory,
+  Metadata §4.3.3.2), and server-authenticated TLS for retrieval
+  (Recommended, Metadata §4, §4.3.3.3). The caller chooses a
+  `MetadataTrustPolicy` for the document it fetched.
 - Caching peer metadata by its `cacheDuration`. Mandatory for a consumer that
   caches, Metadata §4.3.1 as amended by E94. The application decides when to
   fetch a fresh copy and import it again.
@@ -463,3 +479,10 @@ application that keeps the session keeps its assertions and owns the
   consumer. Import ignores it. A relying party that reads one processes it by
   the Core rules (MDAttr §2.3). A publisher signs each one (MDAttr §2.4) and
   puts none in a group's `EntityAttributes` (MDAttr §2.3), both Mandatory.
+- The login and discovery user interface elements `mdui:UIInfo` and
+  `mdui:DiscoHints` (MDUI §2.1, §2.2), the algorithm support elements
+  `alg:DigestMethod` and `alg:SigningMethod` (Algorithm Support §2.4), and the
+  registration and publication elements `mdrpi:RegistrationInfo`,
+  `mdrpi:PublicationInfo`, and `mdrpi:PublicationPath` (RPI §2.1 to §2.3), at
+  the publisher and the consumer. The generators write none of them, and
+  import ignores them.
