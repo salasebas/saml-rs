@@ -61,6 +61,8 @@ service provider generate.
 | Put `ds:Signature` right after the signed element's `Issuer`, or first when the element has no `Issuer` | Mandatory | `RequestAbstractType`, `StatusResponseType`, `AssertionType` | Always |
 | Write no `ds:Object` | Recommended | E91 | Always |
 | Write `KeyInfo` with the signing certificate as `X509Certificate`, and leave `KeyInfo` out of an HMAC signature | Optional | Core §5.4.5, E91 | Always |
+| Write the enveloped-signature transform in every embedded signature. The signer writes no transform parameters, so no other transform can take the signature out of its own digest | Mandatory | Core §5.4.1, XMLDSig §6.6.4 | Always |
+| Reject a non-empty `signed_reference_transforms` that does not start with the enveloped-signature transform, in the SP and IdP config builders | Library policy: the signer fails on that transform after a canonicalization transform, so the builders refuse the order before the first message. | XMLDSig §6.6.4 | Always |
 
 ### Signature algorithms by build
 

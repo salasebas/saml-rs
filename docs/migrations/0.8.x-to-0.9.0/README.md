@@ -100,5 +100,6 @@ Check the topics that affect your integration.
 - [Handle relative status codes in name identifier management responses](name-id-management-status.md)
 - [Set the signature prefix on `TemplatePolicy`](signature-placement.md)
 - [Answer malformed name identifier management requests](name-id-management-malformed-requests.md)
+- [Start reference transform lists with the enveloped-signature transform](enveloped-signature-transform.md)
 
 [All migration guides](../README.md)
