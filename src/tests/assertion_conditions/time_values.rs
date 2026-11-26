@@ -210,3 +210,26 @@ fn replay_ignores_a_bearer_deadline_with_an_offset() -> Result<(), Box<dyn std::
     );
     Ok(())
 }
+
+#[test]
+fn a_bearer_confirmation_without_not_on_or_after_does_not_confirm_the_assertion(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for unsolicited in [false, true] {
+        let exchange = exchange_for(SpValidationPolicy::default(), unsolicited)?;
+        let xml = response_xml(&exchange.response_fields)?;
+        let value = attribute_range(&xml, BEARER_DATA, "NotOnOrAfter")?;
+        let attribute_start = value.start - " NotOnOrAfter=\"".len();
+        let mut omitted = xml.clone();
+        omitted.replace_range(attribute_start..value.end + 1, "");
+        expect_error(accept(&exchange, &resigned(&omitted)?), |error| {
+            matches!(
+                error,
+                SamlError::SubjectConfirmationInvalid {
+                    reason: SubjectConfirmationReason::MissingNotOnOrAfter,
+                    ..
+                }
+            )
+        })?;
+    }
+    Ok(())
+}

@@ -288,7 +288,10 @@ impl Attributes {
     /// Find the first attribute with `name`.
     ///
     /// A received response has one attribute for each `Name` and `NameFormat`
-    /// pair, so the same name can appear more than once.
+    /// pair, so the same name can appear more than once. To select an
+    /// attribute by both, compare [`Attribute::name`] and
+    /// [`Attribute::name_format`] in [`Self::iter`], and read a `None` format
+    /// as [`AttributeNameFormat::Unspecified`].
     pub fn get(&self, name: &str) -> Option<&Attribute> {
         self.0.iter().find(|attribute| attribute.name() == name)
     }

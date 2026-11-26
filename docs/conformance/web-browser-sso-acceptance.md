@@ -7,7 +7,7 @@ Inbound rules for typed Web Browser SSO cover `ServiceProvider::finish_sso`,
 `SpValidationPolicy` and `IdpValidationPolicy` select the options. The
 [validation defaults](https://samlrs.vercel.app/explanation/validation-presets/)
 list their defaults.
-Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0 as corrected by Approved Errata 05, and the HTTP-POST-SimpleSign CD-04 binding.
+Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0 as corrected by Approved Errata 05, and HTTP-POST-SimpleSign Committee Specification 01. Committee Draft 04 §2.5 clarifies the signature input without `RelayState`.
 [Single Logout](single-logout.md), [metadata trust and replay](metadata-and-replay.md),
 and [HTTP-Artifact](web-browser-sso-artifact.md) have their own records.
 Artifact acceptance follows the HTTP-POST rows where its record specifies no
@@ -15,8 +15,9 @@ difference.
 
 ## Service provider
 
-`finish_sso` and both unsolicited SSO entry points apply the relevant rows
-for their binding. The SP compares a received `Issuer` as described in
+`finish_sso`, `accept_unsolicited_sso`, `accept_unsolicited_sso_with_resolver`,
+and the outstanding-logout variants apply the relevant rows for their binding.
+The SP compares a received `Issuer` as described in
 [entity identifiers](identifiers.md#entity-identifiers).
 
 An otherwise valid browser `Response` can fail when a declaration spells the
@@ -62,7 +63,7 @@ names to its HTTP-POST message reader. [Namespaces in XML 1.0 §2.3](https://www
 | Reject the selected bearer assertion when any `AudienceRestriction` lacks the SP's entity ID among its whitespace-collapsed `Audience` values | Mandatory | Core §2.5.1.1, §2.5.1.4, E46, XML Schema Part 2 §4.3.6 | Always |
 | Require an `AudienceRestriction` in the selected bearer assertion | Library policy: the deployment requires explicit audience targeting. | Profiles §4.1.4.2, E26 | `AudienceValidationPolicy::RequireRestriction` |
 | Evaluate the selected bearer assertion on its own: bearer confirmation, audience, `Conditions` children and window, and `SessionNotOnOrAfter` | Mandatory | Profiles §4.1.4.3, E26 | Always |
-| Discard another assertion that fails its own bearer confirmation, audience, `Conditions`, or `SessionNotOnOrAfter` check, without rejecting the response | Recommended | Profiles §4.1.4.3, E26 | Always |
+| Discard an unselected assertion that is invalid or cannot be confirmed: the session reads no value from it, and its bearer confirmation, audience, `Conditions`, and `SessionNotOnOrAfter` do not reject the response | Recommended | Profiles §4.1.4.3, E26 | Always |
 | Reject a response whose assertions repeat an `ID`, compared after XML whitespace collapse, including after decryption and without an embedded signature | Mandatory | XML 1.0 VC: ID, `AssertionType`, XML Schema Part 2 §3.3.8 | Always |
 | Permit other assertions beside the selected one, with or without a bearer confirmation. Apply the issuer, principal, and signature rules to each | Library policy: E26 leaves their processing outside the profile, and these rules keep every assertion of one response tied to one IdP and one principal. | Profiles §4.1.4.2, E26 | Always |
 | Reject the whole response if any assertion's `Issuer` differs from the responding identity provider's entity ID | Library policy: all assertion IDs recorded for one session must belong to the same identity provider. | Profiles §4.1.4.2, §4.1.4.3, E26 | Always |
@@ -81,7 +82,7 @@ names to its HTTP-POST message reader. [Namespaces in XML 1.0 §2.3](https://www
 | Identify bearer confirmations by the bearer URI after collapsing XML whitespace in `Method`. Use the same comparison for assertion selection, confirmation, and replay expiry | Mandatory | Core §1.3.2, §2.4.1.1, `SubjectConfirmationType`, Profiles §4.1.4.3, E26 | Always |
 | Verify that a bearer confirmation's `NotOnOrAfter` has not passed and its whitespace-collapsed `Recipient` matches the assertion consumer URL. For a solicited response, also match the whitespace-collapsed `InResponseTo` to the request ID | Mandatory | Profiles §4.1.4.3, E26, `SubjectConfirmationDataType`, XML Schema Part 2 §4.3.6 | Always |
 | Accept one satisfied confirmation as sufficient to confirm the assertion | Mandatory | Profiles §4.1.4.3, E26 | Always |
-| Reject a bearer confirmation without `NotOnOrAfter` | Library policy: reason not recorded. | Profiles §4.1.4.2, §4.1.4.3, E26 | Always |
+| Leave a bearer confirmation without `NotOnOrAfter` unsatisfied, because its expiry cannot be verified | Mandatory | Profiles §4.1.4.3, E26, E52 | Always |
 | Require a successful solicited `Response` to carry the pending request ID in `InResponseTo`, compared after XML whitespace collapse | Library policy: otherwise an assertion with a matching bearer confirmation could complete a pending login inside a response whose own request correlation is missing or inconsistent. | Core §3.2.2, Profiles §4.1.4.3, E26 | Always |
 | Leave a bearer confirmation of an unsolicited response unsatisfied when it carries `InResponseTo`, empty or not. Another bearer confirmation can still confirm the assertion | Mandatory | Profiles §4.1.4.3, E26 | Always |
 | Reject a response-level `InResponseTo` on an unsolicited `Success` response, empty or not | Library policy: Profiles §4.1.4.3 names only the bearer confirmation, and a reply tied to a request must pass the pending request's correlation checks. | Core §3.2.2, Profiles §4.1.5 | Always |
@@ -91,8 +92,9 @@ names to its HTTP-POST message reader. [Namespaces in XML 1.0 §2.3](https://www
 | Require `NotBefore` to precede `NotOnOrAfter` when both appear in `Conditions` or bearer `SubjectConfirmationData`. Compare the bounds before applying clock skew | Mandatory | Core §2.4.1.2, §2.5.1.1, §2.5.1.2, E92 | Always |
 | Allow five minutes of clock skew on `NotBefore` and `NotOnOrAfter` | Recommended | Core §1.3.3, E92 | `SamlValidationContext::with_clock_skew`, `ClockSkew::strict` |
 | For `Conditions` and bearer confirmation, treat an upper bound shifted past year 9999 as open and reject an unrepresentable shifted `NotBefore`. Reject an unrepresentable shifted session or replay deadline | Library policy: the runtime cannot represent the shifted instant. | Core §1.3.3, E92 | `SamlValidationContext::with_clock_skew` |
-| Reject an assertion whose earliest `SessionNotOnOrAfter`, widened by the `NotOnOrAfter` skew, has passed | Library policy: reason not recorded. | Profiles §4.1.4.3, E26, E79 | `SamlValidationContext::with_clock_skew` |
+| Reject an assertion whose earliest `SessionNotOnOrAfter`, widened by the `NotOnOrAfter` skew, has passed | Recommended | Profiles §4.1.4.3, E26, E79, E92 | `SamlValidationContext::with_clock_skew` |
 | Expose the earliest explicit `SessionNotOnOrAfter` of the consumed assertion before clock skew so the application can cap its session | Optional | Profiles §4.1.4.3, E26, E79 | `SsoSession::session_not_on_or_after` |
+| End the application session at that earliest `SessionNotOnOrAfter` unless the principal signs in again | Recommended | Profiles §4.1.4.3, E26 | SP application |
 | Reject an otherwise valid later assertion that matches a caller-supplied unexpired logout from the assertion issuer | Mandatory | Core §3.7.3.1 | `finish_sso_with_outstanding_logout`, `accept_unsolicited_sso_with_outstanding_logout` |
 | Match the `NameID` value, `NameQualifier`, `SPNameQualifier`, `SPProvidedID`, and effective `Format`. Collapse XML whitespace in the format URI and read an omitted format as `unspecified`. An assertion without a `NameID` does not match | Mandatory | Core §2.2.2, §3.3.4, §3.7.3.1, E60, `NameIDType` | Same methods |
 | Require at least one matching `SessionIndex` when the request lists indexes. Apply a request without indexes to all sessions for that issuer and principal | Mandatory | Core §3.7.3.1, Profiles §4.4.4.1, E38, `LogoutRequestType` | Same methods |
@@ -103,7 +105,7 @@ names to its HTTP-POST message reader. [Namespaces in XML 1.0 §2.3](https://www
 | Reject a supplied recipient endpoint that this SP does not publish as an `AssertionConsumerService` for the incoming binding | Library policy: the URL is caller input, and the restriction keeps a value derived from the request from naming an endpoint this SP does not operate for that binding. | Core §3.2.2 | `SamlValidationContext::with_recipient_endpoint` |
 | Without a supplied URL, expect the assertion consumer the pending request asked for in `finish_sso`, and the default `AssertionConsumerService` for the incoming binding in `accept_unsolicited_sso` | Library policy: the library is not told which endpoint received the response. | Profiles §4.1.4.1, §4.1.5 | `SamlValidationContext::with_recipient_endpoint` |
 | Report a status other than `Success` as an error after the signature, `Issuer`, correlation, and `Destination` checks. Reject a top-level code outside the four in Core | Library policy: a failed check takes precedence over the reported status, and no OASIS rule orders them. | Core §3.2.2.2, Profiles §4.1.4.3 | Always |
-| Permit an unsigned error `Response` | Library policy: identity providers often send unsigned error responses. | Profiles §4.1.4.3 | Always |
+| Permit an unsigned error `Response` | Optional | Core §3.2.2, Profiles §4.1.4.5, E26 | Always |
 | Permit omission of `InResponseTo` on an error `Response`. Compare a present value with the pending request ID after XML whitespace collapse for solicited errors, empty or not. Skip correlation for unsolicited errors | Library policy: a value for another request indicates a different exchange. | Core §3.2.2 | Always |
 | Reject a received `RelayState` longer than 4096 bytes | Library policy: a resource limit on unauthenticated input. The bindings limit the sender to 80 bytes and set no receiver rule. | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
 | Reject a second `RelayState` value | Library policy: saml-rs compares, reports, or echoes only one value, and a caller's framework may read another. | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
@@ -122,11 +124,13 @@ using them for account lookup or access decisions. It decides whether to discard
 reported values or decline the login. The [Subject Identifier Attributes Profile](https://docs.oasis-open.org/security/saml-subject-id-attr/v1.0/saml-subject-id-attr-v1.0.html)
 recommends discarding unauthorized subject identifiers. The [saml2int deployment profile](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html)
 requires an issuer-specific policy and restricts when the SP can rely on
-metadata scopes.
+metadata scopes. Subject Identifier §4.2 requires a relying party that consumes
+metadata to support this check. It applies when the application calls
+`SsoSession::scoped_attribute_violations`.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Check the named attributes after acceptance against the assertion issuer's explicit policy or its unexpired registration-authority-signed metadata. Compare literal scopes case-sensitively | Mandatory capability | Subject Identifier §3.5.2, §4.2, saml2int SDP-SP17, E94 | `SsoSession::scoped_attribute_violations` |
+| Check the named attributes after acceptance against the assertion issuer's explicit policy or its unexpired registration-authority-signed metadata. Compare literal scopes case-sensitively | Mandatory | Subject Identifier §3.5.2, §4.2, saml2int SDP-SP17, E94 | `SsoSession::scoped_attribute_violations` |
 | Ignore regular expression declarations for authorization | Optional | saml2int SDP-SP17 | Always |
 | Report unscoped and unauthorized values. The application applies its policy to the reported values | Library policy: applications choose which attributes they use and how to handle violations. | Subject Identifier §3.5.2 | `SsoSession::scoped_attribute_violations` |
 
@@ -155,6 +159,7 @@ HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
 ### Not implemented in the service provider
 
 - Check of the bearer `Address` against the client address. Optional, Profiles §4.1.4.3.
+- Lookup of the identity provider by issuer for an unsolicited HTTP-POST-SimpleSign or HTTP-Artifact response. `accept_unsolicited_sso_with_resolver` accepts HTTP-POST only. Optional, Profiles §4.1.5.
 - Association of an `EncryptedKey` positioned beside `EncryptedData` without a `RetrievalMethod`. Optional, Core §6.2, E43.
 - Multicast reference from `ds:KeyName` to `xenc:CarriedKeyName`. Recommended, Core §6.2, E43.
 - An `EncryptedID` that carries a `BaseID` or an `Assertion`. Optional, Core §2.2.4.
