@@ -29,6 +29,7 @@ members = [
     "crates/opensaml",
     "crates/samlify",
     "crates/samlet",
+    "examples/axum-sp",
 ]
 
 [package.metadata.docs.rs]

@@ -193,6 +193,7 @@ The stored format is in
 | Guides | [Stable](https://samlrs.vercel.app), [Next](https://samlrs.vercel.app/next/) |
 | Published API reference | [docs.rs](https://docs.rs/saml-rs/latest/saml_rs/) |
 | Identity provider and logout examples | [`examples/sso.rs`](examples/sso.rs), [`examples/slo.rs`](examples/slo.rs) |
+| A web service provider that signs in through Keycloak | [`examples/axum-sp`](examples/axum-sp/README.md) |
 | Upgrade an existing integration | [Migration guides](docs/migrations/README.md) |
 | See the rules each flow claims | [Conformance records](docs/conformance/README.md) |
 | Contribute | [Contributing](CONTRIBUTING.md) |
