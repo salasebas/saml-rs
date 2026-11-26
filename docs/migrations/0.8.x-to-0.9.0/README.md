@@ -78,7 +78,7 @@ Check the topics that affect your integration.
 - [Read metadata endpoints only in the metadata namespace](metadata-endpoint-namespace.md)
 - [Require a `validUntil` on the metadata root](root-valid-until.md)
 - [Encrypt logout and name identifier management for the receiving role](logout-and-nim-encryption-role.md)
-- [Handle NameID value errors in identity provider logout and management](identity-provider-name-id-checks.md)
+- [Handle NameID value errors from the identity provider](identity-provider-name-id-checks.md)
 - [Repeat unsigned and refused requests without a replay error](replay-storage.md)
 - [Read metadata name identifier formats only in the metadata namespace](metadata-name-id-format-namespace.md)
 - [Give each published contact a detail](contact-person-detail.md)
