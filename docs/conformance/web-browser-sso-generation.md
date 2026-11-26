@@ -2,9 +2,9 @@
 
 `ServiceProvider::start_sso` writes the `AuthnRequest`. `IdentityProvider::respond_sso`, `initiate_sso`, `respond_sso_artifact`, and `initiate_sso_artifact` write the `Response`.
 
-Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Errata 05, and the HTTP-POST-SimpleSign CD-04 binding. [HTTP-Artifact response](web-browser-sso-artifact.md) covers delivery of a stored response, and [acceptance rules](web-browser-sso-acceptance.md) cover the receiving side. See [validation defaults](https://samlrs.vercel.app/explanation/validation-presets/) for the initial role policies.
+Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Errata 05, and the HTTP-POST-SimpleSign Committee Specification 01 (CS-01). [Browser bindings](browser-bindings.md) has the encoding, `RelayState`, cache-header, and HTTP delivery rules that every flow shares. [HTTP-Artifact response](web-browser-sso-artifact.md) covers delivery of a stored response, and [acceptance rules](web-browser-sso-acceptance.md) cover the receiving side. See [validation defaults](https://samlrs.vercel.app/explanation/validation-presets/) for the initial role policies.
 
-[SimpleSign CD-04 §2.4](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cd-04.html) makes the detached signature optional. For Web SSO messages that need no detached signature, use HTTP-POST if the peer supports it. The [Single Logout profile](single-logout.md) has its own authentication requirements.
+[SimpleSign CS-01 §2.4](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cs-01.html) makes the detached signature optional. For Web SSO messages that need no detached signature, use HTTP-POST if the peer supports it. The [Single Logout profile](single-logout.md) has its own authentication requirements.
 
 ## Service provider AuthnRequest
 
@@ -17,13 +17,7 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Write every time value in UTC, and never a leap second | Mandatory | Core §1.3.3 | Always |
 | Write `Destination` on a signed request as the URL the user agent is sent to | Mandatory | Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4 | Always |
 | Write `Destination` on an unsigned request too | Library policy: without it, the identity provider cannot discard a request that reaches an endpoint other than the one the service provider chose. | Core §3.2.1 | Always |
-| Limit `RelayState` to 80 bytes | Mandatory | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | `RelayState::try_new` |
-| Refuse a form `RelayState` with a CR or LF outside a CRLF pair | Library policy: HTML form submission sends the character as CRLF, so the receiver gets another value and a SimpleSign signature over it fails. | Bindings §3.5.4, CD-04 §2.3 | Always |
-| Refuse a form `RelayState` with a character outside the XML `Char` production, such as U+0000 | Mandatory | Bindings §3.5.4, XML 1.0 §2.2 | Always |
-| Keep the endpoint's own query parameters before the SAML parameters, and refuse an endpoint query that already has `SAMLRequest`, `SAMLResponse`, `SAMLart`, `RelayState`, `SigAlg`, `Signature`, or `SAMLEncoding`, by decoded name | Library policy: the bindings name these parameters, so a configured one can repeat a message field or be read as one by an endpoint that serves several bindings. | Bindings §3.4.4 | Always |
-| Sign a request over HTTP-Redirect by removing any protocol `ds:Signature`, DEFLATE-encoding the XML, and signing `SAMLRequest`, `RelayState` when present, then `SigAlg` | Mandatory | Bindings §3.4.4.1 | `SpValidationPolicy::authn_request_signing` |
-| When signing a SimpleSign request, sign the raw XML, then `RelayState` when present, then `SigAlg`. Preserve any XML signature | Mandatory | CD-04 §2.4, §2.5 | Always |
-| Require `SigAlg` and `Signature` to send an `AuthnRequest` over SimpleSign | Library policy: choosing SimpleSign commits the SP to authenticating the request and binding any `RelayState` to it. | CD-04 §2.4, §2.7.2 | Always |
+| Require `SigAlg` and `Signature` to send an `AuthnRequest` over SimpleSign | Library policy: choosing SimpleSign commits the SP to authenticating the request and binding any `RelayState` to it. | CS-01 §2.4, §2.7.2 | Always |
 | Sign the request, and publish `AuthnRequestsSigned="true"` in the service provider metadata | Optional | Profiles §4.1.4.1, Bindings §3.4.5.2, §3.5.5.2, Metadata §2.4.4, E7 | `SpValidationPolicy::authn_request_signing` |
 | Refuse to build an unsigned request when the identity provider publishes `WantAuthnRequestsSigned` as `true` or `1` | Library policy: E7 does not require the refusal, but the service provider can reasonably expect the identity provider to reject an unsigned request. | Metadata §2.4.3, E7 | `SpValidationPolicy::authn_request_signing` |
 | Write `ForceAuthn` | Optional | Core §3.4.1 | `StartSso::force_authn` |
@@ -44,7 +38,6 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Require the qualifier to be an absolute URI reference of at most 1024 characters with collapsed whitespace | Library policy: the API uses the syntax of a SAML entity identifier for the requested namespace. | Core §3.4.1.1, §8.3.6 | Always |
 | Return an error when a qualifier is set and the requested format is `entity` | Library policy: no issued entity identifier can satisfy both request conditions. | Core §8.3.6, E15 | Always |
 | Write `AssertionConsumerServiceURL` and `ProtocolBinding` from the default endpoint of the response binding, unless an index is set | Library policy: the request then names its endpoint explicitly. | Core §3.4.1 | `StartSso::acs_index` |
-| Return `Cache-Control: no-cache, no-store` and `Pragma: no-cache` for the redirect, the POST form, and the SimpleSign form | Recommended | Bindings §3.4.5.1, §3.5.5.1, CD-04 §2.7.1 | Always |
 
 ### Not implemented in the service provider request
 
@@ -111,17 +104,12 @@ request that `receive_sso` refuses.
 | Reject a success response to a requested `<EncryptedID>` that was not decrypted | Mandatory | Core §3.4.1.4, §3.3.4, E75 | Always |
 | Reject a success response when the requested `Subject` has `<SubjectConfirmation>` elements and none uses the bearer `Method`, the only one the assertion carries. Compare `Method` after `xs:anyURI` whitespace collapse | Mandatory | Core §3.4.1.4, §3.3.4, E75 | Always |
 | Also reject it when every requested bearer `<SubjectConfirmation>` has an identifier or `<SubjectConfirmationData>` | Library policy: such data can constrain the recipient, time, or address in ways the issued bearer confirmation does not meet, and service providers must not send `<SubjectConfirmation>` (Profiles §4.1.4.1), so the crate does not compare it. | Core §3.3.4, §2.4.1.2 | Always |
-| Return the exact `RelayState` received with the request, including a value over 80 bytes. Reject `RespondSso::relay_state` on a request that carried one | Mandatory | Bindings §3.1.1, §3.4.3, §3.5.3, CD-04 §2.3 | Always |
-| Send a `RelayState` the identity provider chooses, when the request carried none or the response is unsolicited | Optional | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | `RespondSso::relay_state` |
-| Limit a `RelayState` the identity provider chooses to 80 bytes | Mandatory | Bindings §3.5.3, CD-04 §2.3 | `RespondSso::relay_state` |
-| Refuse a form `RelayState` with a CR or LF outside a CRLF pair, a received one included | Library policy: HTML form submission sends the character as CRLF, so the form cannot return the exact value. | Bindings §3.1.1, §3.5.4, CD-04 §2.3 | Always |
-| Refuse a form `RelayState` with a character outside the XML `Char` production, such as U+0000, a received one included | Mandatory | Bindings §3.5.4, XML 1.0 §2.2 | Always |
+| Reject `RespondSso::relay_state` on a request that carried a `RelayState`, even with the same value | Library policy: the response returns the received value, so a second value from the caller is either the same or a value the response must not send. | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | Always |
+| Send a `RelayState` the identity provider chooses, when the request carried none or the response is unsolicited | Optional | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | `RespondSso::relay_state` |
 | Protect each assertion over HTTP-POST by a signature on the assertion or on the `Response` | Mandatory | Profiles §4.1.4.5, §4.1.3.5, E26, E93 | Always |
 | Protect each assertion in a stored HTTP-Artifact response with an assertion or `Response` signature | Optional | Profiles §4.1.3.5, E93 | Always |
-| When signing a SimpleSign response, sign the raw XML, then `RelayState` when present, then `SigAlg`. Preserve any XML signatures | Mandatory | CD-04 §2.4, §2.5 | Always |
-| Require `SigAlg` and `Signature` to send any `Response` over SimpleSign, including an error response | Library policy: the detached signature authenticates the response and binds any `RelayState` to it. | CD-04 §2.4, §2.7.2 | Always |
+| Require `SigAlg` and `Signature` to send any `Response` over SimpleSign, including an error response | Library policy: the detached signature authenticates the response and binds any `RelayState` to it. | CS-01 §2.4, §2.7.2 | Always |
 | Sign the `Response` that contains a CBC-encrypted assertion | Recommended | Profiles §4.1.3.5, E93 | `RespondSso::allow_unsigned_encrypted_cbc` |
-| Return `Cache-Control: no-cache, no-store` and `Pragma: no-cache` for the POST form and the SimpleSign form | Recommended | Bindings §3.5.5.1, CD-04 §2.7.1 | Always |
 
 ### Encryption
 
@@ -169,7 +157,6 @@ The caller or the deployment handles these duties. The crate exposes the request
 - Return an error `Response` with no assertions when authentication fails, the requested principal is unrecognized, or identity provider policy prevents issuance. Mandatory, Core §3.4.1.4, Profiles §4.1.4.1, §4.1.4.2, E75.
 - Return an error `Response` with no assertions when the `NameIDPolicy` cannot be met, optionally with `InvalidNameIDPolicy`. Mandatory, Core §3.4.1.1.
 - Return an error `Response` when `NameIDPolicy` requests both the `entity` format and an `SPNameQualifier`. No issued entity identifier can satisfy both. Mandatory, Core §8.3.6, E15.
-- Provide independent `RelayState` integrity protection for HTTP-POST and unsigned Redirect. Recommended, Bindings §3.4.3, §3.5.3, E1. A signed Redirect or SimpleSign message already protects `RelayState` with the binding signature (CD-04 §2.3).
 
 The assertion builder writes one assertion with one bearer `SubjectConfirmation`, one `AudienceRestriction` for the service provider, one `AuthnStatement`, and an `AttributeStatement` when the caller sets attributes. It does not write these optional forms:
 

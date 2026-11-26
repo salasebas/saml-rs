@@ -78,7 +78,8 @@ impl DeliveredArtifact {
     /// `RelayState` is longer than
     /// [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES),
     /// and [`SamlError::Invalid`] when `SAMLart` is not a type 0x0004 artifact
-    /// or `SAMLart` or `RelayState` is not UTF-8 after percent-decoding.
+    /// or `SAMLart` or `RelayState` is not UTF-8 after form-URL-decoding,
+    /// which reads `+` as a space.
     pub fn from_query(raw_query: &str) -> Result<Self, SamlError> {
         let params = saml_query_params(raw_query, ARTIFACT_PARAMETERS)?;
         Self::from_pairs(

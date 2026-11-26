@@ -1,6 +1,6 @@
 # Single Logout rules
 
-`ServiceProvider` and `IdentityProvider` run Single Logout through `start_slo`, `receive_slo`, `respond_slo`, and `finish_slo`. Normative text is Core §3.7, Profiles §4.4, and Bindings §3.2, §3.4, and §3.5, as corrected by Approved Errata 05, plus the HTTP-POST-SimpleSign Committee Draft 04 (CD-04). Both roles sign outgoing messages, and the role sets the `SessionIndex` and `NotOnOrAfter` duties. Principal identifiers are in [identifiers](identifiers.md#name-identifier-formats), and SOAP logout uses the shared [SOAP envelope rules](artifact-resolution.md#soap-envelope-rules) for header order, `mustUnderstand`, and body contents.
+`ServiceProvider` and `IdentityProvider` run Single Logout through `start_slo`, `receive_slo`, `respond_slo`, and `finish_slo`. Normative text is Core §3.7, Profiles §4.4, and Bindings §3.2, §3.4, and §3.5, as corrected by Approved Errata 05, plus the HTTP-POST-SimpleSign Committee Specification 01 (CS-01). Both roles sign outgoing messages, and the role sets the `SessionIndex` and `NotOnOrAfter` duties. Principal identifiers are in [identifiers](identifiers.md#name-identifier-formats), and SOAP logout uses the shared [SOAP envelope rules](artifact-resolution.md#soap-envelope-rules) for header order, `mustUnderstand`, and body contents.
 
 Find the rules by operation.
 
@@ -197,26 +197,7 @@ and invalidates each match.
 
 ## Browser bindings
 
-Typed logout send and receive use HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign for `LogoutRequest` and `LogoutResponse`.
-
-| Rule | Level | Section | Option |
-| --- | --- | --- | --- |
-| Reject a request `RelayState` over 80 bytes | Mandatory | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | `StartSlo::relay_state` |
-| Accept a received `RelayState` up to `MAX_RECEIVED_RELAY_STATE_BYTES`, 4096 bytes | Library policy: a resource limit on unauthenticated input, because the bindings bind the sender only. | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
-| Reject a second `RelayState`, matched by its decoded name | Library policy: the library compares, reports, or echoes one value, and a caller's framework may read another. | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
-| HTTP-Redirect: remove a protocol `ds:Signature`, DEFLATE, then sign `SAMLRequest` or `SAMLResponse`, `RelayState` when present, and `SigAlg` | Mandatory | Bindings §3.4.4.1 | Always |
-| HTTP-Redirect: verify the signature over the original URL-encoded values of the parameters found by decoded name, omitting an absent `RelayState` | Mandatory | Bindings §3.4.4.1 | Always |
-| HTTP-Redirect: raw-inflate the message when `SAMLEncoding` is absent or names DEFLATE | Mandatory | Bindings §3.4.4 | Always |
-| HTTP-Redirect: reject a repeated `SAMLEncoding`, or one that names another encoding, an empty value included | Library policy: saml-rs implements only DEFLATE, and inflating another encoding misreads the message. | Bindings §3.4.4 | Always |
-| HTTP-Redirect: reject a received `RelayState`, or another SAML parameter the message reads, that is not UTF-8 after percent-decoding | Library policy: `RelayState` is text, and replacing the bytes would change the value the responder returns. | Bindings §3.4.3 | Always |
-| HTTP-Redirect: keep the endpoint's own query parameters before the SAML parameters, and refuse an endpoint query that already has `SAMLRequest`, `SAMLResponse`, `SAMLart`, `RelayState`, `SigAlg`, `Signature`, or `SAMLEncoding`, by decoded name | Library policy: the bindings name these parameters, so a configured one can repeat a message field or be read as one by an endpoint that serves several bindings. | Bindings §3.4.4 | Always |
-| Refuse a form `RelayState` with a CR or LF outside a CRLF pair, a received one included | Library policy: HTML form submission sends the character as CRLF, so the form cannot return the exact value. | Bindings §3.1.1, §3.5.4, CD-04 §2.3 | Always |
-| Refuse a form `RelayState` with a character outside the XML `Char` production, such as U+0000, a received one included | Mandatory | Bindings §3.5.4, XML 1.0 §2.2 | Always |
-| HTTP-POST-SimpleSign: sign and verify the raw XML octets, `RelayState` when present, then `SigAlg`, and leave an XML signature in the message intact | Mandatory | CD-04 §2.4, §2.5, §2.6 | Always |
-| Ignore space, tab, LF, FF, and CR in a received base64 message, detached `Signature`, or artifact | Mandatory | Bindings §3.4.4.1, §3.5.4, §3.6.4, CS-01 §2.4, §2.5, RFC 2045 §6.8 | Always |
-| Accept a received base64 value without its final `=` padding | Library policy: RFC 2045 §6.8 binds only the encoder to pad, and OpenSAML 5.2.3 also decodes an unpadded value. | RFC 2045 §6.8 | Always |
-| Reject incomplete padding, a last character whose unused bits are not zero, and any other character outside the base64 alphabet, U+000B and non-ASCII whitespace included | Library policy: RFC 2045 §6.8 lets a decoder reject a value that shows a transmission error, and an RFC 2045 encoder writes neither these characters nor nonzero unused bits. | RFC 2045 §6.8 | Always |
-| Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Recommended | Bindings §3.4.5.1, §3.5.5.1, CD-04 §2.7.1 | `Outbound::headers` |
+Typed logout send and receive use HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign for `LogoutRequest` and `LogoutResponse`. [Browser bindings](browser-bindings.md) has their encoding, base64, `RelayState`, signature-input, and cache-header rules, and the HTTP duties of the application. `StartSlo::relay_state` sends a `RelayState` under the [creator limit](browser-bindings.md#sending-a-relaystate), and `respond_slo` returns a received one unchanged.
 
 ## SOAP binding
 

@@ -581,6 +581,18 @@ fn typed_models_redirect_browser_input_rejects_duplicate_signed_fields() {
 }
 
 #[test]
+fn typed_models_redirect_browser_input_rejects_one_signature_field_without_the_other(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for raw_query in [
+        "SAMLRequest=abc&SigAlg=alg",
+        "SAMLRequest=abc&Signature=sig",
+    ] {
+        assert_browser_input_invalid(Inbound::<AuthnRequest>::redirect(raw_query));
+    }
+    Ok(())
+}
+
+#[test]
 fn typed_models_redirect_browser_input_rejects_missing_or_both_message_fields() {
     assert!(matches!(
         browser_input_error(Inbound::<AuthnRequest>::redirect(

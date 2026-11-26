@@ -14,6 +14,7 @@ See [Standards conformance](https://github.com/salasebas/saml-rs/blob/main/docs/
 | [Artifact resolution over SOAP](artifact-resolution.md) | `issue_artifact`, `resolve_artifact`, `resolve_artifact_with_signed_request`, `answer_artifact_resolve` |
 | [Single Logout](single-logout.md) | `start_slo`, `receive_slo`, `respond_slo`, `finish_slo`. See [asynchronous logout](single-logout.md#asynchronous-single-logout) for `start_async_slo` and `receive_slo_with_async`, and [SOAP](single-logout.md#soap-binding) for back-channel logout. |
 | [Name identifier management](name-id-management.md) | `start_name_id_management`, `receive_name_id_management`, and `respond_name_id_management`, including their Redirect variants and `finish_name_id_management_redirect` |
+| [Browser bindings](browser-bindings.md) | `Outbound`, `Inbound::redirect`, `Inbound::post`, `Inbound::simple_sign`, `DeliveredArtifact`, `RelayState`, and `Artifact` encoding, shared by every browser flow |
 | [Identity Provider Discovery](identity-provider-discovery.md) | `common_domain_cookie` and unsupported discovery exchanges |
 | [Identifiers](identifiers.md) | `NameId`, `AttributeNameFormat`, subject identifier attributes, and generated IDs |
 | [Metadata and replay](metadata-and-replay.md) | Peer descriptor and aggregate imports, `MetadataTrustPolicy`, and `ReplayPolicy` |
