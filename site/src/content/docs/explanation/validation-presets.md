@@ -24,7 +24,7 @@ Metadata trust and replay storage are explicit caller choices.
 exclusions to signed metadata. `RequireSignatureAllowingWeakAlgorithms`
 relaxes them.
 
-Earlier releases had a permissive `compatibility()` preset. Selecting it for unsigned logout also allowed weak signature algorithms and skipped audience evaluation. Browser logout now requires a verified signature, and the SP checks every present audience restriction. To keep an individual relaxation, such as allowing weak signature algorithms, see the [0.8 to 0.9 migration guide](https://github.com/salasebas/saml-rs/blob/main/docs/migrations/0.8-to-0.9/compile-errors.md#126-replace-compatibility-with-the-fields-it-relaxed).
+Earlier releases had a permissive `compatibility()` preset. Selecting it for unsigned logout also allowed weak signature algorithms and skipped audience evaluation. Browser logout now requires a verified signature, and the SP checks every present audience restriction. To keep an individual relaxation, such as allowing weak signature algorithms, see the [0.8 to 0.9 migration guide](https://github.com/salasebas/saml-rs/blob/main/docs/migrations/0.8.x-to-0.9.0/compile-errors.md#126-replace-compatibility-with-the-fields-it-relaxed).
 
 See [Configure validation](../guides/validation-preset.md) for examples.
 See [0.6 to 0.7](../guides/upgrade/v0-6-to-v0-7.md) for the older presets.

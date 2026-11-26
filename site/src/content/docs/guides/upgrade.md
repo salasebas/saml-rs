@@ -13,4 +13,4 @@ The [changelog](https://github.com/salasebas/saml-rs/blob/main/CHANGELOG.md) lis
 - [0.5 to 0.6](upgrade/v0-5-to-v0-6.md)
 - [0.6 to 0.7](upgrade/v0-6-to-v0-7.md)
 - [0.7 to 0.8](https://github.com/salasebas/saml-rs/blob/v0.8.0/docs/migrations/0.7-to-0.8.md)
-- [0.8 to 0.9 (unreleased)](https://github.com/salasebas/saml-rs/tree/main/docs/migrations/0.8-to-0.9)
+- [0.8 to 0.9 (unreleased)](https://github.com/salasebas/saml-rs/tree/main/docs/migrations/0.8.x-to-0.9.0)

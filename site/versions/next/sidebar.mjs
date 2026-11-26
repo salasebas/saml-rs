@@ -29,7 +29,7 @@ export const sidebar = [
 					},
 					{
 						label: 'Unreleased migration',
-						link: 'https://github.com/salasebas/saml-rs/tree/main/docs/migrations/0.8-to-0.9',
+						link: 'https://github.com/salasebas/saml-rs/tree/main/docs/migrations/0.8.x-to-0.9.0',
 					},
 				],
 			},

@@ -6,38 +6,23 @@ additions.
 
 ## Guides
 
-- [How to upgrade from 0.2 to 0.3](0.2-to-0.3/README.md)
-- [How to upgrade from 0.3 to 0.4](0.3-to-0.4/README.md)
-- [How to upgrade from 0.4 to 0.5](0.4-to-0.5/README.md)
-- [How to upgrade from 0.5 to 0.6](0.5-to-0.6/README.md)
-- [How to upgrade from 0.6 to 0.7](0.6-to-0.7/README.md)
-- [How to upgrade from 0.7 to 0.8](0.7-to-0.8/README.md)
-- [How to upgrade from 0.8 to 0.9](0.8-to-0.9/README.md)
+- [How to upgrade from 0.2 to 0.3](0.2.x-to-0.3.0/README.md)
+- [How to upgrade from 0.3 to 0.4](0.3.x-to-0.4.0/README.md)
+- [How to upgrade from 0.4 to 0.5](0.4.x-to-0.5.0/README.md)
+- [How to upgrade from 0.5 to 0.6](0.5.x-to-0.6.0/README.md)
+- [How to upgrade from 0.6 to 0.7](0.6.x-to-0.7.0/README.md)
+- [How to upgrade from 0.7 to 0.8](0.7.x-to-0.8.0/README.md)
+- [How to upgrade from 0.8 to 0.9](0.8.x-to-0.9.0/README.md)
 
-## Unreleased changes
+## Add a topic for a caller-visible change
 
-- [Handle SOAP artifact response size errors](unreleased-artifact-response-budget.md)
-- [Configure ECDSA and Ed25519 signing](unreleased-elliptic-curve-signing.md)
-- [Read received formats without surrounding whitespace](unreleased-format-whitespace.md)
-- [Handle browser binding parameter errors](unreleased-browser-binding-parameters.md)
-- [Import peers from a federation aggregate](unreleased-metadata-aggregate.md)
-- [Check messages against the URL that received them](unreleased-receiving-url-checks.md)
-- [Look up artifact resolution endpoints by role](unreleased-artifact-index-per-role.md)
-- [Handle identity provider response value errors](unreleased-idp-response-values.md)
-- [Send timeout logout reasons only from the identity provider](unreleased-session-authority-logout-reasons.md)
-- [Keep AllowCreate false in AuthnRequests](unreleased-allow-create-default.md)
-- [Handle status shape errors and SOAP replies](unreleased-status-and-soap-replies.md)
-- [Handle attribute name errors and encryption key choice](unreleased-attribute-output.md)
-- [Handle SSO responses with alternative assertions and confirmations](unreleased-bearer-alternatives.md)
-- [Read requested formats without surrounding whitespace](unreleased-requested-format-whitespace.md)
-- [Select assertion consumer services within one SP role](unreleased-acs-index-per-role.md)
-- [Handle logout endpoint choice, status messages, and asynchronous markers](unreleased-slo-endpoint-status-async.md)
-- [Encrypt for a usable key and write its certificate](unreleased-outbound-encryption-keys.md)
-- [Handle SSO sessions without a NameID](unreleased-sso-without-name-id.md)
-- [Replace calls to `constants::digest_for_signature`](unreleased-remove-digest-for-signature.md)
-- [Use plural names for metadata generation collections](unreleased-metadata-generation-collections.md)
-- [Sign encrypted assertions for the response they arrive in](unreleased-decrypted-assertion-signatures.md)
-- [Read metadata endpoints only in the metadata namespace](unreleased-metadata-endpoint-namespace.md)
-- [Require a `validUntil` on the metadata root](unreleased-root-valid-until.md)
+Each upgrade has one directory here, named `<current>.x-to-<next>.0`.
+`<current>` is the latest published minor release, and `<next>` is the release
+that ships the change. A caller-visible change adds a topic file to the
+directory of its upgrade and links the file from that directory's `README.md`.
+The file name says what the topic covers and has no `unreleased-` prefix.
+
+If the directory for the next release does not exist yet, create it with an
+overview in `README.md` and add it to the list above.
 
 [How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

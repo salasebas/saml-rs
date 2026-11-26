@@ -6,7 +6,7 @@ profiles. Each supported exchange links to its record.
 
 The crate claims individual exchanges. [Conformance Requirements Table 2](https://docs.oasis-open.org/security/saml/v2.0/saml-conformance-2.0-os.pdf#page=9)
 requires Enhanced Client/Proxy SSO over PAOS for all four IdP and SP modes.
-[ECP was removed](https://github.com/salasebas/saml-rs/blob/main/docs/migrations/0.8-to-0.9/ecp-removal.md),
+[ECP was removed](https://github.com/salasebas/saml-rs/blob/main/docs/migrations/0.8.x-to-0.9.0/ecp-removal.md),
 so the crate claims none of those modes. The HTTP-Redirect claims apply to
 the default build only.
 

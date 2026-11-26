@@ -69,19 +69,23 @@ Historical fixture provenance is recorded in
 ## How to add a migration guide
 
 Add a guide in the same change that forces consumers to change code, runtime
-behaviour, feature flags, or the minimum supported Rust version. Group new
-changes in a directory named for the upgrade, such as
-`docs/migrations/0.8-to-0.9/`. Cover the upgrade from the latest patch of the
-source minor release.
+behaviour, feature flags, or the minimum supported Rust version. Cover the
+upgrade from the latest patch of the source minor release.
 
-Put the overview in `README.md`. If the guide covers several topics, put the
-details in topic files such as `metadata-api.md` and link to them from the
-overview. Keep a short guide for a single topic in `README.md`.
+Put the guide in the directory of the upgrade that the change belongs to. The
+directory is named `<current>.x-to-<next>.0`, where `<current>` is the latest
+published minor release and `<next>` is the release that ships the change. For
+example, the guides for 0.8.0 are in `docs/migrations/0.7.x-to-0.8.0/`. Name the
+guide's file for what it covers, such as `metadata-api.md`, without an
+`unreleased-` prefix. Link the file from the directory's `README.md`.
+
+If the directory does not exist yet, create it with an overview in `README.md`.
+Link that `README.md` from [How to upgrade saml-rs](docs/migrations/README.md),
+with the title `How to upgrade from X to Y`. If the upgrade has only one short
+topic, keep it in that `README.md`.
 
 In the guide, state what breaks, who must change, and the steps to upgrade.
-The changelog records compatible features. Link the version's `README.md`
-from [How to upgrade saml-rs](docs/migrations/README.md). Use the title
-`How to upgrade from X to Y` for the link.
+The changelog records compatible features.
 
 ## How to open a pull request
 

@@ -33,7 +33,7 @@ The replacement variants are:
 - `AllowUnsignedEncryptedCbcForCompatibility`, which relaxes that CBC case.
   This variant is the default of the standalone enum. From 0.6, use
   `AllowUnsignedEncryptedCbc` and `RespondSso::allow_unsigned_encrypted_cbc`
-  ([0.5 to 0.6](../0.5-to-0.6/validation.md#rename-the-cbc-response-signature-relaxation)).
+  ([0.5 to 0.6](../0.5.x-to-0.6.0/validation.md#rename-the-cbc-response-signature-relaxation)).
 
 `SpValidationPolicy::strict()` still requires a trusted signature directly
 over the consumed Assertion, and it uses

@@ -79,5 +79,5 @@ the response failed with `SamlError::MissingMetadata`.
 
 You do not need to change code for these changes. Logout and name
 identifier management requests read keys from a role the same way, as
-[Encrypt for a usable key and write its certificate](unreleased-outbound-encryption-keys.md)
+[Encrypt for a usable key and write its certificate](outbound-encryption-keys.md)
 describes.
