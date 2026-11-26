@@ -20,6 +20,6 @@ To upgrade, answer such a request with `SsoOutcome::Failure` and
 requested `SubjectConfirmation` elements.
 
 A request whose `Subject` has no `SubjectConfirmation`, or has at least one
-bearer confirmation with only its `Method`, is answered as before. Service providers must not send
-`SubjectConfirmation` in an `AuthnRequest` for Web Browser SSO, so requests
-from conforming service providers are unaffected.
+bearer confirmation with only its `Method`, is answered as before. Service
+providers must not send `SubjectConfirmation` in an `AuthnRequest` for Web
+Browser SSO, so requests from conforming service providers are unaffected.
