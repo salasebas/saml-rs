@@ -15,6 +15,7 @@ const site = 'https://samlrs.vercel.app';
 const base = isNext ? nextBase : '/';
 const docsDir = new URL(isNext ? './src/content/docs/' : './versions/stable/docs/', import.meta.url);
 const recordsDir = new URL(isNext ? '../docs/conformance/' : './versions/stable/conformance/', import.meta.url);
+const codeDir = isNext ? new URL('../', import.meta.url) : null;
 
 function docLinks() {
 	return {
@@ -41,7 +42,7 @@ export default defineConfig({
 			`${nextBase}/reference/conformance/xml-schema-validation/`,
 	},
 	integrations: [
-		conformancePages({ docsDir, recordsDir, ...(isNext ? nextConformance : stableConformance) }),
+		conformancePages({ docsDir, recordsDir, codeDir, ...(isNext ? nextConformance : stableConformance) }),
 		starlight({
 			title: 'saml-rs',
 			description: 'SAML 2.0 browser SSO, metadata, and Single Logout for Rust.',

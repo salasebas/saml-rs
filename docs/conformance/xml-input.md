@@ -22,6 +22,8 @@ limit is library policy.
 
 ### XML processor: browser binding receive operations
 
+Code: `src/flow.rs`, `src/browser/input.rs`, `src/xml/mod.rs`, `src/xml/dom.rs`
+
 The browser bindings decode the base64 or DEFLATE payload to bytes and read
 them as XML. SOAP envelopes and metadata reach the crate as Rust strings that
 the caller decoded.
@@ -33,6 +35,8 @@ the caller decoded.
 ## Library policies
 
 ### Resource limits
+
+Code: `src/xml/dom.rs`, `src/xml/dom/element.rs`
 
 The values are the defaults of `XmlLimits::default()`. Byte counts are UTF-8
 bytes. Attribute values and text are counted after entity and character
@@ -52,6 +56,8 @@ The namespace limit has no field of its own. It uses the value of
 `max_attributes_per_element`, so raising one raises the other.
 
 ### Character encoding
+
+Code: `src/xml/mod.rs`, `src/xml/dom/element.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |

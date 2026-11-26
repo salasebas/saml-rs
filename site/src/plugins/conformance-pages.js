@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,11 +9,12 @@ const indexPage = {
 	description: 'SAML conformance records by exchange and public API.',
 };
 
-export function conformancePages({ docsDir, recordsDir, pages, pagesOutsideRecords = {} }) {
+export function conformancePages({ docsDir, recordsDir, codeDir, pages, pagesOutsideRecords = {} }) {
 	const pagesDir = new URL('reference/conformance/', docsDir);
 
 	async function writePage(record) {
 		const source = await readFile(new URL(record, recordsDir), 'utf8');
+		if (codeDir) await checkCodePaths(record, source, codeDir);
 		const isIndex = record === indexRecord;
 		const page = toPage(record, source, isIndex ? indexPage : pages[record], pagesOutsideRecords);
 		const target = isIndex ? new URL('reference/conformance.md', docsDir) : new URL(record, pagesDir);
@@ -62,6 +63,23 @@ function recordFiles(entries, recordsDir, pages) {
 		);
 	}
 	return records;
+}
+
+async function checkCodePaths(record, source, codeDir) {
+	const srcDir = new URL('src/', codeDir);
+	for (const [line] of source.matchAll(/^Code:.*$/gm)) {
+		const files = Array.from(line.matchAll(/`([^`]+)`/g), ([, file]) => file);
+		if (files.length === 0) throw new Error(`${record} has a Code line without a path: ${line}`);
+		for (const file of files) {
+			const target = new URL(file, codeDir);
+			if (!target.href.startsWith(srcDir.href)) {
+				throw new Error(`${record} lists ${file} in a Code line, which is not under src/`);
+			}
+			await access(target).catch(() => {
+				throw new Error(`${record} lists ${file} in a Code line, which does not exist`);
+			});
+		}
+	}
 }
 
 function toPage(record, source, page, pagesOutsideRecords) {

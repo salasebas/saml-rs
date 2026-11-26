@@ -25,6 +25,8 @@ consent identifiers.
 
 ### Service provider: `StartSso::extension`
 
+Code: `src/sp/authn_request.rs`, `src/model/extension.rs`
+
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Write caller extensions in `Extensions` on an `AuthnRequest` only | Optional | Core §3.2.1 | `StartSso::extension` |
@@ -33,6 +35,8 @@ Single Logout writes its asynchronous marker in `Extensions` itself. See
 [asynchronous logout](single-logout.md#asynchronous-single-logout).
 
 ## Library policies
+
+Code: `src/model/status.rs`, `src/xml/status.rs`, `src/xml/write.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
