@@ -17,15 +17,22 @@ SAML 2.0 `IDPSSODescriptor` elements.
 - an `isDefault` that is not `true`, `false`, `1`, or `0`, such as
   `isDefault="yes"`
 
-In 0.8, the import accepted such metadata. An assertion consumer service with
-no readable `index` had no index, one whose `isDefault` was unreadable counted
-as unmarked and could become the default, and one with no `Location` was
-skipped. A malformed artifact resolution service failed only
-`IdpMetadata::artifact_resolution_services` and
-`IdpMetadata::artifact_resolution_service`.
+In 0.8, the import accepted such metadata:
 
-These cases import as in 0.8: an empty `Binding`, a `Binding` or `Location`
-that holds only whitespace, and an integer `index` outside 0 to 65535. The
-artifact resolution accessors still refuse such an endpoint.
+- An assertion consumer service with no readable `index` had no index.
+- One whose `isDefault` was unreadable counted as unmarked, so it could
+  become the default.
+- One with no `Binding` or no `Location` was skipped in a lookup for a
+  binding. When it was the default across bindings, the identity provider's
+  response failed.
+- One with `Location=""` was kept.
+- `IdpMetadata::artifact_resolution_services` failed for an artifact
+  resolution service with no `Binding`, `Location`, or `index`, or with an
+  `index` that was not a 16-bit integer. It did not read `isDefault`.
+
+The import accepts an endpoint with an empty `Binding`, a `Binding` or
+`Location` that holds only whitespace, or an integer `index` outside 0 to
+65535. The artifact resolution accessors return `SamlError::Invalid` for such
+an artifact resolution service.
 
 If a peer's metadata no longer imports, ask the peer to correct the endpoint.

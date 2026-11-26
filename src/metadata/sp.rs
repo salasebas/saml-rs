@@ -427,4 +427,38 @@ mod tests {
         }
         Ok(())
     }
+
+    #[test]
+    fn imported_endpoint_with_a_blank_field_or_an_index_out_of_range_stays_in_its_role(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let second = r#"<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/second" index="1"/>"#;
+        let out_of_range = sp_with_acs(&format!(
+            r#"<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/first" index="65536" isDefault="true"/>{second}"#
+        ))?;
+        assert_eq!(
+            out_of_range
+                .assertion_consumer_service_endpoint(Binding::Post)
+                .map(|endpoint| (endpoint.location, endpoint.index)),
+            Some(("https://sp.example.com/first".to_string(), None))
+        );
+
+        let blank_location = sp_with_acs(&format!(
+            r#"<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location=" &#x9; " index="0" isDefault="true"/>{second}"#
+        ))?;
+        assert_eq!(
+            blank_location
+                .assertion_consumer_location(Binding::Post)
+                .as_deref(),
+            Some("")
+        );
+
+        let blank_binding = sp_with_acs(&format!(
+            r#"<AssertionConsumerService Binding=" " Location="https://sp.example.com/first" index="0" isDefault="true"/>{second}"#
+        ))?;
+        assert!(matches!(
+            blank_binding.default_assertion_consumer_service_endpoint(),
+            Err(crate::error::SamlError::Invalid(_))
+        ));
+        Ok(())
+    }
 }
