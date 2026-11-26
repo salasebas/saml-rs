@@ -27,8 +27,9 @@ The statuses hold on builds with a crypto provider. A build without one sends
 only an unsigned `AuthnRequest` over HTTP-Redirect or HTTP-POST, because
 `SpConfigBuilder::build` refuses a signing policy and `start_sso` refuses
 HTTP-POST-SimpleSign and an identity provider whose metadata sets
-`WantAuthnRequestsSigned`. Each identity provider operation of this record
-returns `SamlError::Unsupported` there and writes no `Response`.
+`WantAuthnRequestsSigned`. Its identity provider writes no `Response`, and
+each of its operations in this record returns `SamlError::Unsupported` where
+it would sign one.
 
 ## Support
 
@@ -194,7 +195,8 @@ difference, these rows also cover the `Response` that `respond_sso_artifact`,
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Write `ID`, `Version` `2.0`, and `IssueInstant` on the `Response` and on the assertion | Mandatory | Core §2.3.3, §3.2.2, `StatusResponseType`, `AssertionType` | Always |
-| On a successful `Response` that is signed or carries an encrypted assertion, write the issuing identity provider's identifier as `Issuer`, with `Format` omitted | Mandatory | Profiles §4.1.4.2, E17 | Always |
+| Write `Issuer` on a successful `Response` that is signed or carries an encrypted assertion | Mandatory | Profiles §4.1.4.2, E17 | Always |
+| Write the issuing identity provider's identifier in each `Response` `Issuer`, with `Format` omitted (the profile also permits `entity`) | Mandatory | Profiles §4.1.4.2, E17 | Always |
 | On a signed `Response` over HTTP-POST or HTTP-POST-SimpleSign, write `Destination` as the assertion consumer service URL | Mandatory | Bindings §3.5.5.2, CS-01 §2.4 | Always |
 | Write every time value in UTC, and never a leap second | Mandatory | Core §1.3.3 | Always |
 | Match `InResponseTo`, on the `Response` and on the bearer `SubjectConfirmationData`, to the `AuthnRequest` `ID` | Mandatory | Core §3.2.2, Profiles §4.1.4.2, E26 | Always |
@@ -354,7 +356,7 @@ Code: `src/api/idp.rs`, `src/api/response_acs.rs`, `src/metadata/sp.rs`, `src/id
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Write `Issuer`, with `Format` omitted, on every `Response`, also on an error `Response` and on an unsigned one without an encrypted assertion | Reason not recorded. | Core §3.2.2, Profiles §4.1.4.2, E17 | Always |
+| Write `Issuer` on every `Response`, also on an error `Response` and on an unsigned one without an encrypted assertion | Reason not recorded. | Core §3.2.2, Profiles §4.1.4.2, E17 | Always |
 | Write `Destination` as the assertion consumer service URL also on an HTTP-POST `Response` whose only signatures are on its assertions | Core §3.2.2 makes a recipient discard a response whose present `Destination` names another location, which keeps a forwarded response from reaching an unintended recipient. | Core §3.2.2, Bindings §3.5.5.2 | Always |
 | Omit `InResponseTo` from the bearer `SubjectConfirmationData` of an unsolicited response | Profiles §4.1.4.3 has the service provider verify that an unsolicited response carries none, so a value would make it refuse the response. | Profiles §4.1.5 | Always |
 | Write the assertion `IssueInstant` as `Conditions` `NotBefore`, and end `Conditions` and the bearer `SubjectConfirmationData` at `IssueInstant` plus the issuance lifetime, 300 seconds by default | The window starts when the assertion exists and bounds how long a bearer assertion can be delivered and replayed, and five minutes leaves time for the browser to deliver it. | Core §2.5.1.2, Profiles §4.1.4.2, E26 | `IdpConfigBuilder::issuance_lifetime` |
