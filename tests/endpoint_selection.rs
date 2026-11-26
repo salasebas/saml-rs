@@ -211,6 +211,33 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         ),
         Err(SamlError::Invalid(_))
     ));
+    let respond_to = |selector: String| -> Result<_, Box<dyn std::error::Error>> {
+        let xml =
+            authn_request(IDP_SSO_FIRST).replace(" Version=", &format!("{selector} Version="));
+        let request = idp.receive_sso(
+            &unsupported_descriptor,
+            post_authn_request(&xml),
+            validation(),
+        )?;
+        Ok(idp
+            .respond_sso(
+                &unsupported_descriptor,
+                &request,
+                SsoAssertion::new(principal(), SystemTime::now()),
+                RespondSso::post(),
+            )
+            .and_then(|response| Ok(response.post_form()?.action().as_str().to_owned())))
+    };
+    for selector in [
+        format!(r#" ProtocolBinding="{}""#, Binding::Post.urn()),
+        format!(r#" AssertionConsumerServiceURL="{FIRST_ACS}""#),
+    ] {
+        assert_eq!(respond_to(selector)??, FIRST_ACS);
+    }
+    assert!(matches!(
+        respond_to(format!(r#" AssertionConsumerServiceURL="{DEFAULT_ACS}""#))?,
+        Err(SamlError::DestinationMismatch { .. })
+    ));
 
     let saml2_role = format!(
         r#"<SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{FIRST_ACS}" index="0"/></SPSSODescriptor>"#

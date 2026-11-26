@@ -27,12 +27,18 @@ In 0.8, the import accepted such metadata:
   response failed.
 - One with `Location=""` was kept.
 - `IdpMetadata::artifact_resolution_services` failed for an artifact
-  resolution service with no `Binding`, `Location`, or `index`, or with an
-  `index` that was not a 16-bit integer. It did not read `isDefault`.
+  resolution service whose `Binding`, `Location`, or `index` was missing or
+  empty after whitespace collapse, or whose `index` was not a 16-bit integer.
+  `ServiceProvider::resolve_artifact` then failed for every artifact of that
+  identity provider. The accessor did not read `isDefault`.
 
 The import accepts an endpoint with an empty `Binding`, a `Binding` or
 `Location` that holds only whitespace, or an integer `index` outside 0 to
-65535. The artifact resolution accessors return `SamlError::Invalid` for such
-an artifact resolution service.
+65535. The artifact resolution accessors return `SamlError::Invalid` for an
+artifact resolution service with such an `index`. They return one with such a
+`Binding` or `Location`, collapsed to an empty value, and
+`ServiceProvider::resolve_artifact` refuses only an artifact whose index
+names it. Code that read `binding()` or `location()` from
+`artifact_resolution_services` can now see an empty string.
 
 If a peer's metadata no longer imports, ask the peer to correct the endpoint.

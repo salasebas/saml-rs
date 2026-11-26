@@ -309,10 +309,47 @@ fn import_keeps_an_indexed_endpoint_with_a_blank_binding_or_location_or_an_index
         );
     }
 
+    for (fields, binding, location) in [
+        (
+            r#"Binding="" Location="https://peer.example.com/e" index="1""#,
+            "",
+            "https://peer.example.com/e",
+        ),
+        (
+            r#"Binding=" &#x9; " Location="https://peer.example.com/e" index="1""#,
+            "",
+            "https://peer.example.com/e",
+        ),
+        (
+            r#"Binding="BINDING" Location=" &#x9; " index="1""#,
+            SOAP,
+            "",
+        ),
+    ] {
+        SpDescriptor::from_metadata_xml(
+            entity_id.clone(),
+            &acs_metadata(fields),
+            MetadataTrustPolicy::Unverified,
+        )
+        .map_err(|error| format!("{fields}: {error}"))?;
+        let ars = ars_metadata(fields);
+        IdpDescriptor::from_metadata_xml(entity_id.clone(), &ars, MetadataTrustPolicy::Unverified)
+            .map_err(|error| format!("{fields}: {error}"))?;
+        assert_eq!(
+            saml_rs::metadata::IdpMetadata::from_xml(&ars)?
+                .artifact_resolution_services()?
+                .iter()
+                .map(|service| (service.index(), service.binding(), service.location()))
+                .collect::<Vec<_>>(),
+            [
+                (0, SOAP, "https://peer.example.com/ars"),
+                (1, binding, location)
+            ],
+            "{fields}"
+        );
+    }
+
     for fields in [
-        r#"Binding="" Location="https://peer.example.com/e" index="1""#,
-        r#"Binding=" &#x9; " Location="https://peer.example.com/e" index="1""#,
-        r#"Binding="BINDING" Location=" &#x9; " index="1""#,
         r#"Binding="BINDING" Location="https://peer.example.com/e" index="-1""#,
         r#"Binding="BINDING" Location="https://peer.example.com/e" index="65536""#,
     ] {

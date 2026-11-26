@@ -183,14 +183,16 @@ impl IdpMetadata {
     ///
     /// Each `index` is unique within its `IDPSSODescriptor`. An entity with
     /// several SAML 2.0 IdP roles can publish the same `index` in more than
-    /// one of them.
+    /// one of them. `Binding` and `Location` are returned after XML Schema
+    /// whitespace collapse, also when that leaves them empty.
+    /// [`ServiceProvider::resolve_artifact`](crate::ServiceProvider::resolve_artifact)
+    /// refuses an artifact whose index names an endpoint without the SOAP
+    /// binding or an absolute HTTP(S) location, and resolves the others.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when the `Binding` or `Location` of an
-    /// endpoint is empty after XML Schema whitespace collapse, when `index` is
-    /// not a 16-bit integer, or when two endpoints of one `IDPSSODescriptor`
-    /// share an `index`.
+    /// Returns [`SamlError::Invalid`] when `index` is not a 16-bit integer, or
+    /// when two endpoints of one `IDPSSODescriptor` share an `index`.
     pub fn artifact_resolution_services(
         &self,
     ) -> Result<Vec<ArtifactResolutionServiceEndpoint>, SamlError> {
@@ -279,7 +281,6 @@ fn artifact_resolution_service_from_value(
 fn required_artifact_attribute(value: &Value, name: &str) -> Result<String, SamlError> {
     value
         .get_str(&name.to_ascii_lowercase())
-        .filter(|text| !text.is_empty())
         .map(str::to_string)
         .ok_or_else(|| SamlError::Invalid(format!("ArtifactResolutionService is missing {name}")))
 }
