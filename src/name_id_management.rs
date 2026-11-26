@@ -264,6 +264,9 @@ impl StartedNameIdManagement {
     /// A present XML signature must cover the response and verify against the
     /// service provider's signing keys captured when the exchange started.
     ///
+    /// The caller's duties after the exchange, such as which identifier to
+    /// use next, are listed in `docs/conformance/name-id-management.md#after-the-exchange`.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError::StatusNotSuccess`] with the service provider's

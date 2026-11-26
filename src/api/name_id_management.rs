@@ -42,6 +42,8 @@ impl IdentityProvider {
     /// To end the principal's sessions before [`NameIdChange::Terminate`],
     /// send `LogoutRequest` first: a `LogoutRequest` must not follow the
     /// termination.
+    /// The caller's duties after the exchange, such as which identifier to
+    /// use next, are listed in `docs/conformance/name-id-management.md#after-the-exchange`.
     ///
     /// Post [`StartedNameIdManagement::request`] with the deployment's HTTP
     /// client, then call [`StartedNameIdManagement::finish`] with the SOAP
@@ -149,6 +151,9 @@ impl IdentityProvider {
     /// `ManageNameIDRequest` age policy, and stores the request `ID` for replay
     /// detection.
     ///
+    /// The caller's duties after the exchange, such as which identifier to
+    /// use next, are listed in `docs/conformance/name-id-management.md#after-the-exchange`.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError::MissingMetadata`] when this identity provider
@@ -198,6 +203,9 @@ impl IdentityProvider {
     /// identity provider does not recognize, pass an error status:
     /// [`Status::requester`] or [`Status::responder`], optionally with
     /// [`SubordinateStatusCode::unknown_principal`](crate::SubordinateStatusCode::unknown_principal).
+    ///
+    /// The caller's duties after the exchange, such as which identifier to
+    /// use next, are listed in `docs/conformance/name-id-management.md#after-the-exchange`.
     ///
     /// # Errors
     ///
