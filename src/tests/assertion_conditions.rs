@@ -1,5 +1,6 @@
 #![cfg(crypto)]
 
+mod condition_content;
 mod in_response_to;
 mod replay;
 mod session_evidence;
@@ -461,7 +462,10 @@ fn expect_unrecognized(
 ) -> Result<(), Box<dyn std::error::Error>> {
     match result {
         Err(error) => match error.downcast_ref::<SamlError>() {
-            Some(SamlError::UnrecognizedCondition { element }) if element == "Condition" => Ok(()),
+            Some(SamlError::UnrecognizedCondition {
+                element,
+                attribute: None,
+            }) if element == "Condition" => Ok(()),
             _ => Err(format!("expected UnrecognizedCondition, got {error}").into()),
         },
         Ok(_) => Err("expected UnrecognizedCondition".into()),
