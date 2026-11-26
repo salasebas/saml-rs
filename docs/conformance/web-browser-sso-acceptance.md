@@ -176,14 +176,16 @@ passes normalized DOM names to its HTTP-POST message reader.
   identity provider refuses for its signature policy, a `ProtocolBinding`
   the `Response` cannot use, content it cannot read, a repeated
   `NameIDPolicy`, or its age. `respond_sso_refusal` and
-  `respond_sso_refusal_artifact` send the error `Response`.
+  `respond_sso_refusal_artifact` build the error `Response` and return the
+  browser action that the application sends.
 - **Not supported:** an error `Response` to a request that fails a check made
   before its signature is verified: the `XmlPolicy` schema check and the
   protocol profile, which covers qualified attributes, elements in a
   foreign namespace, and a `Version` other than `2.0`. Nor to a request
-  whose signature does not verify: Core §3.2.1 recommends an error but
-  forbids relying on the content that names the requester and the `ID` to
-  answer. `receive_sso` returns the error, and the identity provider
+  whose decrypted requested `Subject` the `XmlPolicy` schema check refuses.
+  Nor to a request whose signature does not verify: Core §3.2.1 recommends
+  an error but forbids relying on the content that names the requester and
+  the `ID` to answer. `receive_sso` returns the error, and the identity provider
   application shows a local error page.
 
 ### Requested `BaseID`

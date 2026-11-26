@@ -339,11 +339,13 @@ policies for the `RelayState` of the request, and
 
 Code: `src/api/idp.rs`, `src/api/response_acs.rs`, `src/metadata/sp.rs`, `src/idp.rs`, `src/idp/login_response.rs`, `src/model/authn.rs`, `src/entity.rs`, `src/browser/outbound.rs`
 
+<a id="refusal-status-policies"></a>
+
 #### Status and errors
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Write top-level `Requester` for a request refused for its age, for a `ProtocolBinding` URI this identity provider does not support, for an `AssertionConsumerServiceURL` that is not an absolute HTTP(S) URL, or for a missing signature that only this identity provider requires | The fault lies in the request, which the service provider can send again fresh, signed, or with another binding or location. | Core §3.2.2.2, Profiles §4.1.4.1 | Always |
+| Write top-level `Requester` for a request refused for its age, for a `ProtocolBinding` URI other than HTTP-Redirect and SOAP that this identity provider does not support, for an `AssertionConsumerServiceURL` that is not an absolute HTTP(S) URL, or for a missing signature that only this identity provider requires | The fault lies in the request, which the service provider can send again fresh, signed, or with another binding or location. | Core §3.2.2.2, Profiles §4.1.4.1 | Always |
 | Add the subordinate `UnsupportedBinding` to the error `Response` to a request refused for its `ProtocolBinding` | It tells the service provider that the request asked for a response binding this identity provider cannot use. | Core §3.2.2.2 | Always |
 
 [crewjam/saml v0.6.3](https://github.com/crewjam/saml/blob/v0.6.3/identity_provider_error_response.go#L194-L206)
