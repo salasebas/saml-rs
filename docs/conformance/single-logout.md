@@ -291,7 +291,7 @@ Code: `src/model/logout.rs`, `src/model/subject.rs`, `src/model/outstanding_logo
 `Received<LogoutRequest>::matches_sp_session` checks one stored session
 against a request that `ServiceProvider::receive_slo` authenticated.
 `OutstandingLogout::try_new` records the same request for the
-[later-assertion check](web-browser-sso-acceptance.md#service-provider).
+[later-assertion check](web-browser-sso-acceptance.md#service-provider-outstanding-logout).
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |

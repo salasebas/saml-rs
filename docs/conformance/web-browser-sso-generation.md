@@ -230,7 +230,7 @@ keeps the rule that writes the assertion `ID` as the `SessionIndex`.
 
 [Metadata and replay](metadata-and-replay.md#typed-metadata-accessors) keeps
 the rules that choose the default of an indexed set and read `isDefault` as
-an `xs:boolean`. [SSO acceptance](web-browser-sso-acceptance.md#identity-provider)
+an `xs:boolean`. [SSO acceptance](web-browser-sso-acceptance.md#identity-provider-requested-assertion-consumer)
 keeps the rule that verifies a requested ACS URL or index against the service
 provider metadata.
 
