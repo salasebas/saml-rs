@@ -23,7 +23,7 @@ test('public install and SP guide describe the published API', async () => {
 test('Next describes the API and installation from main', async () => {
 	assert.match(await excerpt('next/start/install/'), /^cargo add saml-rs --git .* --branch main$/m);
 	assert.match(await excerpt('next/guides/service-provider-sso/'), /ServiceProvider::new\(/);
-	assert.ok((await page('next/guides/upgrade/')).includes('/tree/main/docs/migrations/0.8-to-0.9'));
+	assert.ok((await page('next/guides/upgrade/')).includes('/tree/main/docs/migrations/0.8.x-to-0.9.0'));
 });
 
 test('home and guide links stay in their version', async () => {

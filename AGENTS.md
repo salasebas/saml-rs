@@ -167,17 +167,19 @@ Add regression tests for security fixes.
 
 ## Docs And Releases
 
-- Do not hardcode future release versions in docs. This repository uses
-  release-plz and Conventional Commits to decide the next version.
+- Do not hardcode future release versions in prose. This repository uses
+  release-plz and Conventional Commits to decide the next version. The one
+  place that names the next release is the name of its migration directory.
 - The published crate is `saml-rs`, and Rust imports use `saml_rs`.
 - Do not edit `CHANGELOG.md` by hand. release-plz writes it from Conventional
   Commits on the release PR.
 - A caller-visible change updates `docs/migrations/` in the same change: what
   breaks, who must change, and how to upgrade. That includes a breaking change,
-  a new error, and a new exhaustive enum variant. Follow
+  a new error, and a new exhaustive enum variant. Add the guide as a topic file
+  in the directory of the upgrade it belongs to, named
+  `<current>.x-to-<next>.0`, and link it from that directory's `README.md`.
+  Name the file for what it covers, without an `unreleased-` prefix. Follow
   `docs/migrations/README.md`.
-  The last guide linked from that README covers the latest published minor.
-  An unreleased break is a new file, linked from that README.
   Compatible features are recorded by their Conventional Commit.
 
 ## Agent skills
