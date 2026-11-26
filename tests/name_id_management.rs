@@ -410,6 +410,32 @@ fn a_response_for_another_request_or_from_another_issuer_is_rejected() -> TestRe
 }
 
 #[test]
+fn a_present_response_destination_is_not_compared() -> TestResult {
+    let idp = identity_provider(Some(IDP_NIM_URL))?;
+    let sp = soap_service_provider()?;
+    let started = idp.start_name_id_management(
+        &sp,
+        &NameId::persistent("current-value")?,
+        &NameIdChange::Terminate,
+        StartNameIdManagement::new(),
+        authenticated(),
+    )?;
+    let request_id = attribute(&body(started.request().envelope())?, "ID")
+        .ok_or("request ID is missing")?
+        .to_string();
+    let response = sp_response(&request_id, SP_ENTITY_ID, &success_status())?;
+    let addressed = response.replacen(
+        " InResponseTo=",
+        r#" Destination="https://elsewhere.example.com/nameid" InResponseTo="#,
+        1,
+    );
+    assert_ne!(addressed, response);
+
+    started.finish(&addressed)?;
+    Ok(())
+}
+
+#[test]
 fn a_transient_identifier_is_not_managed() -> TestResult {
     let sp = soap_service_provider()?;
     let transient_default = IdentityProvider::new(

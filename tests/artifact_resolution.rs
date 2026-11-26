@@ -1245,6 +1245,40 @@ fn the_service_provider_reads_the_artifact_response_in_response_to_after_whitesp
 }
 
 #[test]
+fn the_service_provider_does_not_compare_a_present_artifact_response_destination(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
+    let channel = confidential();
+    let resolution = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        &artifact,
+        channel,
+        without_replay_cache(),
+    )?;
+    let answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        resolution.request().envelope(),
+        resolution.request().endpoint(),
+        &mut issued,
+        channel,
+    )?;
+    let envelope = answer.response().envelope();
+    let addressed = envelope.replacen(
+        " InResponseTo=",
+        r#" Destination="https://elsewhere.example.com/artifact" InResponseTo="#,
+        1,
+    );
+    assert_ne!(addressed, envelope);
+
+    let resolved = resolution.finish(&addressed)?;
+
+    assert!(resolved.xml().contains(WEB_SSO_MARKER));
+    Ok(())
+}
+
+#[test]
 fn a_non_entity_resolve_issuer_does_not_receive_the_message(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
