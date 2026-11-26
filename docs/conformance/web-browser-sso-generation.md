@@ -27,9 +27,8 @@ The statuses hold on builds with a crypto provider. A build without one sends
 only an unsigned `AuthnRequest` over HTTP-Redirect or HTTP-POST, because
 `SpConfigBuilder::build` refuses a signing policy and `start_sso` refuses
 HTTP-POST-SimpleSign and an identity provider whose metadata sets
-`WantAuthnRequestsSigned`. Its identity provider writes no `Response`, and
-each of its operations in this record returns `SamlError::Unsupported` where
-it would sign one.
+`WantAuthnRequestsSigned`. Its identity provider issues no `Response`,
+success or error.
 
 ## Support
 
