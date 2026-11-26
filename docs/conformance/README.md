@@ -22,4 +22,4 @@ See [Standards conformance](https://github.com/salasebas/saml-rs/blob/main/docs/
 | [XML schema validation](xml-schema-validation.md) | `SchemaValidator` on typed flows and explicit metadata imports |
 | [XML input limits and encoding](xml-input.md) | `XmlLimits`, the XML declaration, and the character encoding of received XML |
 | [Common message fields](common-message-fields.md) | `Consent`, `StatusDetail`, status code depth, and `Extensions` on every typed message |
-| [IdP and SP operational modes](idp-sp-operational-modes.md) | Supported exchanges, exchanges not implemented, unclaimed modes, and deployment duties |
+| [IdP and SP operational modes](idp-sp-operational-modes.md) | Each Conformance operational mode, the Table 2 feature matrix with a status for each role, what blocks each mode, and the exchanges not implemented |

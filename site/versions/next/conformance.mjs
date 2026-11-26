@@ -27,7 +27,7 @@ export const pages = {
 	'idp-sp-operational-modes.md': {
 		title: 'IdP and SP operational modes',
 		description:
-			'The inventory of Conformance Requirements Table 2 and §§3.3 to 3.7, 4, and 5, and of Tables 3 and 4 and the attribute profiles, with one disposition for each obligation.',
+			'Each Conformance operational mode, the Table 2 feature matrix with the status of each feature at the identity provider and the service provider, what blocks each mode, and the exchanges not implemented.',
 	},
 	'metadata-and-replay.md': {
 		title: 'Metadata and replay',

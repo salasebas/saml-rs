@@ -121,10 +121,13 @@ A record that writes `Library policy: <reason>.` in a `Level` cell has not
 moved to the template yet, and its rows keep that form until it does. The
 records move one at a time, as
 [Convert an old-form record](#convert-an-old-form-record) describes.
-[IdP and SP operational modes](conformance/idp-sp-operational-modes.md) is an
-inventory of the level that Conformance Table 2 sets for each operational
-mode, and a status cell cannot hold that level. It keeps its own layout
-until a layout that keeps each mode's level is chosen.
+[IdP and SP operational modes](conformance/idp-sp-operational-modes.md) has
+its own layout, because Conformance Table 2 gives each feature a level for
+each operational mode. It lists the modes, the Table 2 feature matrix with
+each mode's level and a status for each role, what blocks each mode, the
+requirements of Conformance §§3.3 to 5, and the exchanges not implemented.
+It takes each status from the record that owns the feature and restates
+none of that record's rules.
 
 ### Where a behaviour goes
 
@@ -172,6 +175,12 @@ actors. Two `Partial` cells can link to one entry when one gap explains both.
 
 A duty that only the application can perform does not make a feature
 `Partial`. Record it under **Application duties**.
+
+[IdP and SP operational modes](conformance/idp-sp-operational-modes.md)
+copies the statuses of the features that Conformance lists. A pull request
+that changes such a status, or what its Partial support entry says is
+missing, updates that record too: the cell, the mode counts, and what blocks
+each mode.
 
 #### Builds without a crypto provider
 
