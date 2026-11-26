@@ -930,31 +930,32 @@ fn storage_failures_fail_closed_without_releasing_an_unconsumed_artifact() -> Te
         ArtifactRelease::Withheld(ArtifactWithheld::DifferentPresenter)
     );
 
-    store.fail = FailurePoint::Lookup;
-    let lookup_failed = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        resolution.request().envelope(),
-        resolution.request().endpoint(),
-        &mut store,
-        channel,
-    );
-    assert!(matches!(
-        lookup_failed,
-        Err(SamlError::ArtifactStoreUnavailable { .. })
-    ));
-
-    store.fail = FailurePoint::Consume;
-    let consume_failed = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        resolution.request().envelope(),
-        resolution.request().endpoint(),
-        &mut store,
-        channel,
-    );
-    assert!(matches!(
-        consume_failed,
-        Err(SamlError::ArtifactStoreUnavailable { .. })
-    ));
+    for failure in [
+        FailurePoint::Lookup,
+        FailurePoint::Now,
+        FailurePoint::Consume,
+    ] {
+        store.fail = failure;
+        let failed = parties.idp.answer_artifact_resolve(
+            &parties.sp_metadata,
+            resolution.request().envelope(),
+            resolution.request().endpoint(),
+            &mut store,
+            channel,
+        )?;
+        assert_eq!(
+            failed.release(),
+            ArtifactRelease::Withheld(ArtifactWithheld::StoreUnavailable)
+        );
+        assert!(matches!(
+            failed.error(),
+            Some(SamlError::ArtifactStoreUnavailable { .. })
+        ));
+        assert!(matches!(
+            resolution.finish(failed.response().envelope()),
+            Err(SamlError::ArtifactNotReturned)
+        ));
+    }
 
     store.fail = FailurePoint::None;
     let recovered = parties.idp.answer_artifact_resolve(
@@ -1003,15 +1004,20 @@ fn poisoned_mutex_artifact_store_fails_closed() -> TestResult {
                 .issue_artifact(&parties.sp_metadata, &web_sso_response(), 0, store),
             Err(SamlError::ArtifactStoreUnavailable { .. })
         ));
+        let answer = parties.idp.answer_artifact_resolve(
+            &parties.sp_metadata,
+            resolution.request().envelope(),
+            resolution.request().endpoint(),
+            store,
+            channel,
+        )?;
+        assert_eq!(
+            answer.release(),
+            ArtifactRelease::Withheld(ArtifactWithheld::StoreUnavailable)
+        );
         assert!(matches!(
-            parties.idp.answer_artifact_resolve(
-                &parties.sp_metadata,
-                resolution.request().envelope(),
-                resolution.request().endpoint(),
-                store,
-                channel
-            ),
-            Err(SamlError::ArtifactStoreUnavailable { .. })
+            answer.error(),
+            Some(SamlError::ArtifactStoreUnavailable { .. })
         ));
     }
     Ok(())

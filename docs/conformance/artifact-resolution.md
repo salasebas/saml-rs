@@ -75,6 +75,8 @@ with a higher receive limit could accept. [OpenSAML 5.2.3 source release](https:
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Verify a present `ArtifactResolve` signature over the SOAP body message using the expected SP's signing keys before acting on the request | Mandatory | Core §3.2.1, §5.4.1–§5.4.2 | Always |
+| When a present signature on a `Version` `2.0` request with an `xs:NCName` `ID` does not verify, answer status `Requester` without the message and keep the artifact outstanding | Mandatory | Core §3.2.1, Profiles §5.3.2 | Always |
+| Add the second-level status `RequestDenied` to that answer | Recommended | Bindings §3.6.6, Core §3.2.2.2 | Always |
 | Answer an understood `ArtifactResolve` with status Success, and omit the message for an unauthorized presenter or an artifact that is not outstanding | Mandatory | Bindings §3.6.6, Core §3.5.3, Profiles §5.3.2 | Always |
 | Answer an empty `Artifact` as an artifact that is not outstanding | Mandatory | `ArtifactResolveType`, Core §3.5.3, Bindings §3.6.6 | Always |
 | Reject an unsupported major request version | Mandatory | Core §4.1.3.1 | Always |
@@ -88,7 +90,7 @@ with a higher receive limit could accept. [OpenSAML 5.2.3 source release](https:
 | Keep an outstanding artifact after withholding its message | Library policy: the intended recipient can still resolve it within its lifetime. | Core §3.5.3 | Always |
 | Release an outstanding artifact whose `EndpointIndex` this identity provider no longer publishes | Library policy: the index tells the receiver where to send the request, and the presenter, the receiving URL, and the stored entry are checked without it. | Bindings §3.6.4.2, Core §3.5.3 | Always |
 | Check the actual SOAP envelope before consuming the artifact | Library policy: keep the entry for retry if the response exceeds the [SOAP response size budget](#soap-response-size-budget). | Core §3.5.3, Bindings §3.2.2.1, E19 | Default `XmlLimits` |
-| Fail closed without releasing the message when the artifact store cannot verify or consume the entry | Library policy: releasing an unconsumed artifact would violate single-use enforcement across retries or concurrent nodes. | Core §3.5.3, Bindings §3.6.5.2 | Always |
+| Answer status Success without the message when the artifact store cannot look up, time, or consume the entry | Mandatory | Bindings §3.6.6, §3.6.5.2, Core §3.5.3, Profiles §5.3.2 | Always |
 | Withhold the message when a present `Destination`, after XML whitespace collapse, differs from the URL that received the request | Mandatory | Core §3.2.1, `RequestAbstractType`, XML Schema Part 2 §4.3.6 | `answer_artifact_resolve` `received_at` |
 | Reject a receiving URL that this identity provider does not publish as a SOAP `ArtifactResolutionService` | Library policy: the URL is caller input, and the restriction keeps the handler from naming an endpoint this identity provider does not operate. | Core §3.2.1 | Always |
 | Expire the artifact after the configured lifetime. The issuer should choose the shortest practical lifetime | Recommended | Core §3.5.3 | `ArtifactStore::lifetime`, `IssuedArtifacts::expire_after` |

@@ -133,8 +133,12 @@ If you adopt a shared `ArtifactStore` or share an
 for backend failures and poisoned locks. Custom `ArtifactStore` implementations
 return `SamlError::ArtifactStoreUnavailable { source }` directly when they
 cannot store, look up, or atomically consume an entry. Treat it as a
-server-side failure (such as HTTP 503): the identity provider never releases an
-unconsumed artifact when the store fails.
+server-side failure (such as HTTP 503) when issuing an artifact.
+`answer_artifact_resolve` does not return it: a store failure there gives an
+answer without the message, as
+[Send the ArtifactResponse for store and signature failures](artifact-resolve-answers.md#handle-a-failing-artifact-store)
+describes. The identity provider never releases an unconsumed artifact when
+the store fails.
 
 ## Report replay cache failures with `ReplayCacheUnavailable`
 
