@@ -83,5 +83,6 @@ Check the topics that affect your integration.
 - [Read metadata name identifier formats only in the metadata namespace](metadata-name-id-format-namespace.md)
 - [Give each published contact a detail](contact-person-detail.md)
 - [Use a non-SAML namespace for AuthnRequest extensions](extension-namespaces.md)
+- [Give AuthnRequests a ProviderName with visible text](provider-name-whitespace.md)
 
 [All migration guides](../README.md)

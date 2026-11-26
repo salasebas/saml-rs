@@ -93,10 +93,11 @@ impl StartSso {
 
     /// Set the requester's human-readable `ProviderName`. Omitted by default.
     ///
-    /// The name may be empty and may contain any character XML 1.0 allows.
+    /// The name may contain any character XML 1.0 allows.
     /// [`ServiceProvider::start_sso`](crate::ServiceProvider::start_sso) returns
     /// [`SamlError::Invalid`](crate::SamlError::Invalid) for a name with a
-    /// character XML 1.0 forbids.
+    /// character XML 1.0 forbids, and for a name that is empty or has only
+    /// spaces, tabs, carriage returns, and line feeds.
     pub fn provider_name(mut self, provider_name: impl Into<String>) -> Self {
         self.provider_name = Some(provider_name.into());
         self
