@@ -70,6 +70,18 @@ impl<'a> LoginResponseParseOptions<'a> {
     }
 }
 
+fn https_preferred_location(locations: Vec<String>) -> Result<String, SamlError> {
+    let first_https = locations.iter().position(|location| is_https(location));
+    locations
+        .into_iter()
+        .nth(first_https.unwrap_or(0))
+        .ok_or_else(|| SamlError::MissingMetadata("SingleSignOnService".into()))
+}
+
+fn is_https(location: &str) -> bool {
+    url::Url::parse(location).is_ok_and(|url| url.scheme() == "https")
+}
+
 impl Engine {
     pub fn from_metadata(xml: &str, setting: EntitySetting) -> Result<Self, SamlError> {
         Ok(Self::from_parsed_metadata(
@@ -124,10 +136,8 @@ impl Engine {
         if idp.metadata.want_authn_requests_signed() && !self.metadata.authn_requests_signed() {
             return Err(SamlError::AuthnRequestSigningRequired);
         }
-        let destination = idp
-            .metadata
-            .single_sign_on_location(binding)
-            .ok_or_else(|| SamlError::MissingMetadata("SingleSignOnService".into()))?;
+        let destination =
+            https_preferred_location(idp.metadata.single_sign_on_service_locations(binding))?;
         let uses_acs_index = options.assertion_consumer_service_index.is_some();
         let response_binding = options.response_binding.unwrap_or(Binding::Post);
         let acs_url = if uses_acs_index {

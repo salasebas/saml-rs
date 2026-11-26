@@ -17,6 +17,8 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Write every time value in UTC, and never a leap second | Mandatory | Core §1.3.3 | Always |
 | Write `Destination` on a signed request as the URL the user agent is sent to | Mandatory | Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4 | Always |
 | Write `Destination` on an unsigned request too | Library policy: without it, the identity provider cannot discard a request that reaches an endpoint other than the one the service provider chose. | Core §3.2.1 | Always |
+| Send the request to the first identity provider `SingleSignOnService` for the binding with an `https` `Location` | Library policy: an earlier `http` entry would otherwise hide an advertised `https` one. | Metadata §2.2.2, Profiles §4.1.3.3 | Always |
+| When no `SingleSignOnService` for the binding has an `https` `Location`, send the request to the first one, even an `http` one | Library policy: login keeps working with an identity provider that publishes only `http` endpoints, and a refusal would not move the exchange onto TLS. | Profiles §4.1.3.3 | Always |
 | Require `SigAlg` and `Signature` to send an `AuthnRequest` over SimpleSign | Library policy: choosing SimpleSign commits the SP to authenticating the request and binding any `RelayState` to it. | CS-01 §2.4, §2.7.2 | Always |
 | Sign the request, and publish `AuthnRequestsSigned="true"` in the service provider metadata | Optional | Profiles §4.1.4.1, Bindings §3.4.5.2, §3.5.5.2, Metadata §2.4.4, E7 | `SpValidationPolicy::authn_request_signing` |
 | Refuse to build an unsigned request when the identity provider publishes `WantAuthnRequestsSigned` as `true` or `1` | Library policy: E7 does not require the refusal, but the service provider can reasonably expect the identity provider to reject an unsigned request. | Metadata §2.4.3, E7 | `SpValidationPolicy::authn_request_signing` |
@@ -38,6 +40,10 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Require the qualifier to be an absolute URI reference of at most 1024 characters with collapsed whitespace | Library policy: the API uses the syntax of a SAML entity identifier for the requested namespace. | Core §3.4.1.1, §8.3.6 | Always |
 | Return an error when a qualifier is set and the requested format is `entity` | Library policy: no issued entity identifier can satisfy both request conditions. | Core §8.3.6, E15 | Always |
 | Write `AssertionConsumerServiceURL` and `ProtocolBinding` from the default endpoint of the response binding, unless an index is set | Library policy: the request then names its endpoint explicitly. | Core §3.4.1 | `StartSso::acs_index` |
+
+### Deployment duties for the request
+
+- Make the HTTP exchanges that carry the request over TLS: the service provider serves its redirect or form over `https`, and the identity provider publishes an `https` `SingleSignOnService`. Recommended, Profiles §4.1.3.3.
 
 ### Not implemented in the service provider request
 
@@ -144,6 +150,7 @@ The identity provider encrypts with the configured `AlgorithmPolicy` algorithms.
 | Read `isDefault` as an unqualified `xs:boolean`: `true`, `1`, `false`, or `0` with surrounding XML whitespace | Mandatory | `IndexedEndpointType` | Always |
 | Answer a request that names only a `ProtocolBinding` at the first SAML 2.0 service provider role that publishes that binding, at the endpoint the `isDefault` rule chooses among that role's endpoints of that binding | Library policy: the role default can use another binding, and the requested binding must be honored, so the default rule applies to that binding's endpoints. | Core §3.4.1, Profiles §4.1.3.5, Metadata §2.2.3 | Always |
 | Refuse a response binding that differs from the request's `ProtocolBinding` or from the binding of its indexed `AssertionConsumerService` | Mandatory | Profiles §4.1.3.5, Core §3.4.1 | Always |
+| Send the response to a request at the chosen `AssertionConsumerService` whether its `Location` is `http` or `https` | Mandatory | Core §3.4.1, Profiles §4.1.3.5 | Always |
 | Deliver an unsolicited response to the default `AssertionConsumerService`. Fail if that default is unsupported or incompatible with the selected response binding | Recommended | Profiles §4.1.5 | Always |
 | Read `WantAuthnRequestsSigned`, `AuthnRequestsSigned`, and `WantAssertionsSigned` as unqualified `xs:boolean`, and read an omitted one as false | Mandatory | Metadata §2.4.3, §2.4.4, `IDPSSODescriptorType`, `SPSSODescriptorType` | Always |
 | On the selected SAML 2.0 role, reject a signing flag qualified with the metadata namespace or carrying an invalid `xs:boolean` value, and ignore same-named foreign attributes | Mandatory | `IDPSSODescriptorType`, `SPSSODescriptorType`, `RoleDescriptorType` | Always |
@@ -159,6 +166,7 @@ The caller or the deployment handles these duties. The crate exposes the request
 - Return an error `Response` with no assertions when authentication fails, the requested principal is unrecognized, or identity provider policy prevents issuance. Mandatory, Core §3.4.1.4, Profiles §4.1.4.1, §4.1.4.2, E75.
 - Return an error `Response` with no assertions when the `NameIDPolicy` cannot be met, optionally with `InvalidNameIDPolicy`. Mandatory, Core §3.4.1.1.
 - Return an error `Response` when `NameIDPolicy` requests both the `entity` format and an `SPNameQualifier`. No issued entity identifier can satisfy both. Mandatory, Core §8.3.6, E15.
+- Make the HTTP requests that deliver the `Response` or its artifact over TLS: the service provider publishes `https` `AssertionConsumerService` locations, and the identity provider serves its form or redirect over `https`. Recommended, Profiles §4.1.3.5, E93.
 
 The assertion builder writes one assertion with one bearer `SubjectConfirmation`, one `AudienceRestriction` for the service provider, one `AuthnStatement`, and an `AttributeStatement` when the caller sets attributes. It does not write these optional forms:
 

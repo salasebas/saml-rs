@@ -556,6 +556,80 @@ fn sso_destination_matches_the_actual_published_receiving_endpoint(
     Ok(())
 }
 
+const PLAIN_IDP_SSO: &str = "http://idp.example.com/sso/plain";
+const SECOND_PLAIN_IDP_SSO: &str = "http://idp.example.com/sso/second-plain";
+const THIRD_IDP_SSO: &str = "https://idp.example.com/sso/third";
+
+fn started_sso_destination(
+    sp: &ServiceProvider,
+    idp: &IdentityProvider,
+) -> Result<(String, String), Box<dyn std::error::Error>> {
+    let (_, idp_descriptor) = descriptors(sp, idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let form = started.outbound.post_form()?;
+    let request = form.value("SAMLRequest").ok_or("missing SAMLRequest")?;
+    let xml = String::from_utf8(STANDARD.decode(request)?)?;
+    Ok((form.action().as_str().to_string(), xml))
+}
+
+#[test]
+fn start_sso_prefers_a_later_https_sso_endpoint_to_an_earlier_http_one(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with_default_acs()?;
+    let idp = idp_with_sso(PLAIN_IDP_SSO, &[IDP_SSO_SECOND, THIRD_IDP_SSO])?;
+    let (action, xml) = started_sso_destination(&sp, &idp)?;
+    assert_eq!(action, IDP_SSO_SECOND);
+    assert!(
+        xml.contains(&format!(r#"Destination="{IDP_SSO_SECOND}""#)),
+        "{xml}"
+    );
+    Ok(())
+}
+
+#[test]
+fn start_sso_sends_to_an_http_sso_endpoint_when_none_is_https(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with_default_acs()?;
+    let idp = idp_with_sso(PLAIN_IDP_SSO, &[SECOND_PLAIN_IDP_SSO])?;
+    let (action, xml) = started_sso_destination(&sp, &idp)?;
+    assert_eq!(action, PLAIN_IDP_SSO);
+    assert!(
+        xml.contains(&format!(r#"Destination="{PLAIN_IDP_SSO}""#)),
+        "{xml}"
+    );
+    Ok(())
+}
+
+#[test]
+fn respond_sso_posts_to_an_http_assertion_consumer_service(
+) -> Result<(), Box<dyn std::error::Error>> {
+    const PLAIN_ACS: &str = "http://sp.example.com/acs";
+    let sp = ServiceProvider::new(
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(PLAIN_ACS)?,
+        )
+        .credentials(signing_credentials())
+        .build()?,
+    );
+    let idp = idp_with_sso(IDP_SSO_FIRST, &[])?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let xml = authn_request(IDP_SSO_FIRST).replace(
+        " Version=",
+        &format!(r#" AssertionConsumerServiceURL="{PLAIN_ACS}" Version="#),
+    );
+    let received = idp.receive_sso(&sp_descriptor, post_authn_request(&xml), validation())?;
+
+    for outcome in [
+        SsoOutcome::from(SsoAssertion::new(principal(), SystemTime::now())),
+        SsoOutcome::Failure(Status::responder()),
+    ] {
+        let response = idp.respond_sso(&sp_descriptor, &received, outcome, RespondSso::post())?;
+        assert_eq!(response.post_form()?.action().as_str(), PLAIN_ACS);
+    }
+    Ok(())
+}
+
 const SECOND_ROLE_ACS: &str = "https://sp.example.com/acs/second-role";
 
 fn sp_with_roles(roles: &[String]) -> Result<SpDescriptor, SamlError> {

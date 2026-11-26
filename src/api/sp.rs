@@ -165,8 +165,14 @@ impl ServiceProvider {
 
     /// Start SP-initiated Web SSO.
     ///
+    /// The request goes to the identity provider's first `SingleSignOnService`
+    /// for the binding with an `https` `Location`. When none is `https`, it
+    /// goes to the first one for the binding, even an `http` one.
+    ///
     /// # Errors
     ///
+    /// Returns [`SamlError::MissingMetadata`] when the identity provider
+    /// publishes no `SingleSignOnService` for the binding.
     /// Returns [`SamlError`] when relay state is invalid, the IdP metadata
     /// cannot be parsed or trusted, the requested ACS is missing or conflicts
     /// with the selected binding, a requested authentication reference is not an absolute URI,
