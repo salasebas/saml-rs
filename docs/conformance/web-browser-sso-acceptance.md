@@ -1,5 +1,7 @@
 # Web Browser SSO acceptance
 
+<a id="web-browser-sso-acceptance-rules"></a>
+
 `ServiceProvider::finish_sso`, `accept_unsolicited_sso`, and their
 outstanding-logout variants `finish_sso_with_outstanding_logout` and
 `accept_unsolicited_sso_with_outstanding_logout` accept a Web Browser SSO
@@ -47,7 +49,8 @@ and refuses a signed one. Its identity provider refuses a signed
 | --- | --- | --- |
 | `Response` by HTTP-POST | Profiles §4.1.3.5, Bindings §3.5 | Supported |
 | `Response` by HTTP-POST-SimpleSign | CS-01 §2.4 | Supported |
-| `Response` by HTTP-Artifact | Profiles §4.1.3.5, Bindings §3.6 | Supported |
+| `Response` by HTTP-Artifact, with an XML signature on the `Response` or on each assertion of a successful one | Profiles §4.1.3.5, Bindings §3.6, E93 | Supported |
+| Successful `Response` by HTTP-Artifact without an XML signature | Profiles §4.1.3.5, §4.1.4.4, E93 | Not supported |
 | Unsolicited `Response` | Profiles §4.1.5 | Supported |
 | Selection of the identity provider by the `Issuer` of an unsolicited `Response` | Profiles §4.1.5, E17 | [Partial](#identity-provider-lookup-for-an-unsolicited-response) |
 | Error `Response` | Profiles §4.1.4.2, Core §3.2.2.2 | Supported |
@@ -55,7 +58,7 @@ and refuses a signed one. Its identity provider refuses a signed
 | `RelayState` with the `Response` | Bindings §3.5.3, CS-01 §2.3, Profiles §4.1.5 | Supported |
 | `InResponseTo` and `Destination` of the `Response` | Core §3.2.2 | Supported |
 | XML signature on the `Response` or on each assertion | Profiles §4.1.4.5, E26 | Supported |
-| SimpleSign `SigAlg` and `Signature` on the `Response` | CS-01 §2.4 to §2.6 | Supported |
+| SimpleSign `SigAlg` and `Signature` on the `Response` | CS-01 §2.4 to §2.6 | [Partial](#detached-signatures) |
 | Unsigned error `Response` | Core §3.2.2, Profiles §4.1.4.5, E26 | Supported |
 | `WantAssertionsSigned` in the service provider's metadata | Metadata §2.4.4, Profiles §4.1.6 | Supported |
 | Namespace names compared after normalizing the declaration value | Namespaces in XML 1.0 §2.3 | [Partial](#namespace-declarations-with-character-references) |
@@ -70,7 +73,7 @@ the algorithms that each build verifies and decrypts, and
 | --- | --- | --- |
 | Several assertions in one `Response`, with or without a bearer `SubjectConfirmation` | Profiles §4.1.4.2, E26 | Supported |
 | `EncryptedAssertion`, alone or beside plaintext assertions | Core §2.3.4, §3.3.3, Conformance §3.4 | Supported |
-| `EncryptedID` in an assertion `Subject` | Core §2.2.4, §2.4.1 | Supported |
+| `EncryptedID` that carries a `NameID`, in an assertion `Subject` | Core §2.2.4, §2.4.1 | Supported |
 | `EncryptedAttribute` | Core §2.7.3.2 | Supported |
 | `EncryptedID` that carries a `BaseID` or an `Assertion` | Core §2.2.4 | Not supported |
 | `NameID` in the assertion `Subject` | Core §2.2.3, §2.4.1 | Supported |
@@ -112,7 +115,8 @@ applying a logout to an assertion that arrives later.
 | `AuthnRequest` by HTTP-Artifact | Profiles §4.1.3.3, Bindings §3.6 | Not supported |
 | `RelayState` with the request | Bindings §3.4.3, §3.5.3, CS-01 §2.3 | Supported |
 | Unsigned `AuthnRequest` | Profiles §4.1.4.1 | Supported |
-| XML signature, HTTP-Redirect signature, or SimpleSign signature on the request | Profiles §4.1.4.1, Bindings §3.4.4.1, CS-01 §2.4 to §2.6 | Supported |
+| XML signature on the request | Profiles §4.1.4.1, Core §3.2.1 | Supported |
+| HTTP-Redirect or SimpleSign `SigAlg` and `Signature` on the request | Bindings §3.4.4.1, CS-01 §2.4 to §2.6 | [Partial](#detached-signatures) |
 | `WantAuthnRequestsSigned` in the identity provider's metadata | Metadata §2.4.3, E7 | Supported |
 | `AuthnRequestsSigned` in the service provider's metadata | Metadata §2.4.4, E7 | Supported |
 | Error `Response` to a request that the identity provider refuses | Profiles §4.1.4.1 | Supported |
@@ -122,7 +126,8 @@ applying a logout to an assertion that arrives later.
 | `RequestedAuthnContext` | Core §3.3.2.2.1, §3.4.1 | Supported |
 | `NameIDPolicy` | Core §3.4.1, §3.4.1.1 | Supported |
 | Requested `Subject` with a `NameID` | Core §3.4.1 | Supported |
-| Requested `Subject` with an `EncryptedID` | Core §2.2.4, §3.4.1, Conformance §3.4 | Supported |
+| Requested `Subject` with an `EncryptedID` that carries a `NameID` | Core §2.2.4, §3.4.1, Conformance §3.4 | Supported |
+| Requested `Subject` with an `EncryptedID` that carries a `BaseID` or an `Assertion` | Core §2.2.4, §3.4.1 | Not supported |
 | Requested `Subject` with a `BaseID` | Core §2.2.1, §3.4.1 | Not supported |
 | `SubjectConfirmation` in the requested `Subject` | Core §3.4.1, Profiles §4.1.4.1, E75 | Supported |
 | `AssertionConsumerServiceURL`, `AssertionConsumerServiceIndex`, and `ProtocolBinding` | Core §3.4.1, Profiles §4.1.4.1 | Supported |
@@ -136,6 +141,15 @@ applying a logout to an assertion that arrives later.
 has how `respond_sso` answers the request.
 
 ## Partial support
+
+### Detached signatures
+
+- **Supported:** the service provider verifies the `SigAlg` signature of a
+  SimpleSign `Response`, and the identity provider that of an HTTP-Redirect
+  or SimpleSign `AuthnRequest`.
+- **Not supported:** RSAwithSHA1 and DSAwithSHA1, which both bindings
+  require, depend on the crypto provider and its feature flags, as
+  [browser bindings](browser-bindings.md#detached-signatures) states.
 
 ### Identity provider lookup for an unsolicited `Response`
 
@@ -313,6 +327,9 @@ Code: `src/model/attribute_scope.rs`
 | Check the named attributes after acceptance against the assertion issuer's explicit policy or its unexpired registration-authority-signed metadata. Compare literal scopes case-sensitively | Mandatory | Subject Identifier §3.5.2, §4.2, saml2int SDP-SP17, E94 | Always |
 | Ignore regular expression declarations for authorization | Optional | saml2int SDP-SP17 | Always |
 
+Subject Identifier §4.2 requires this check of a relying party that consumes
+metadata.
+
 <a id="operator-diagnostics"></a>
 
 ### Service provider: error responses
@@ -365,21 +382,36 @@ them.
 
 ### Identity provider: `receive_sso` request fields
 
-Code: `src/api/idp.rs`, `src/model/authn.rs`, `src/model/extract.rs`, `src/xml/profile.rs`, `src/model/validation.rs`, `src/api/response_acs.rs`, `src/metadata/sp.rs`
+Code: `src/api/idp.rs`, `src/model/authn.rs`, `src/model/extract.rs`, `src/xml/profile.rs`, `src/model/validation.rs`
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Compare XML namespace names in an `AuthnRequest` after normalizing the declaration value | Mandatory | Namespaces in XML 1.0 §2.3, `AuthnRequestType` | Always |
 | Compare a present `Destination` with the receiving `SingleSignOnService` `Location` after collapsing XML whitespace. Require it on a signed request. `ResponseLocation` is unused | Mandatory | Core §3.2.1, Bindings §3.4.5.2, §3.5.5.2, CS-01 §2.4, Metadata §2.2.2, E41 | `SamlValidationContext::with_recipient_endpoint` |
-| Verify that a requested ACS URL or index used for delivery names the SP's assertion consumer. Collapse XML whitespace in a requested URL before comparing | Mandatory | Profiles §4.1.4.1, `AuthnRequestType`, XML Schema Part 2 §4.3.6 | Always |
 | Expose `ForceAuthn`, `IsPassive`, `RequestedAuthnContext`, the requested `Subject`, and `NameIDPolicy`. Presence never rejects the request, and the caller decides how to authenticate. A `Subject` with no identifier means the presenter | Optional | Core §3.4.1, §3.4.1.1, §3.4.1.4, E45, E75 | Always |
-| Read the `ID` with XML whitespace collapsed, and write that value as `InResponseTo` | Mandatory | `RequestAbstractType`, Core §3.2.2, XML Schema Part 2 §3.3.8, §4.3.6 | `AuthnRequest::id` |
+| Read the `ID` with XML whitespace collapsed. `respond_sso` writes that value as `InResponseTo` | Mandatory | `RequestAbstractType`, Core §3.2.2, XML Schema Part 2 §3.3.8, §4.3.6 | `AuthnRequest::id` |
 | Read `ForceAuthn`, `IsPassive`, and `AllowCreate` as `xs:boolean` and `AssertionConsumerServiceIndex` as `xs:unsignedShort`, with XML whitespace collapsed. Reject another value or a qualified attribute | Mandatory | `AuthnRequestType`, `NameIDPolicyType`, XML Schema Part 2 §3.2.2, §3.3.23, §4.3.6 | Always |
 | Reject a qualified `Format`, `SPNameQualifier`, or `AllowCreate` on `NameIDPolicy`, and a qualified `Format`, `NameQualifier`, `SPNameQualifier`, or `SPProvidedID` on the requested `NameID` | Mandatory | Core §2.2.2, §3.4.1.1, `NameIDType`, `NameIDPolicyType` | Always |
 
 [Baseline receipt](xml-schema-validation.md#baseline-receipt) keeps the policy
 that reads the `AuthnRequest` `IssueInstant` only in UTC, a leap second
 included.
+
+### Identity provider: requested assertion consumer
+
+Code: `src/api/response_acs.rs`, `src/metadata/sp.rs`
+
+`receive_sso` returns the requested URL and index without checking them
+against the service provider metadata.
+`respond_sso`, `respond_sso_refusal`, `respond_sso_artifact`, and
+`respond_sso_refusal_artifact` check them before they deliver the response.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Verify that a requested ACS URL or index used for delivery names the SP's assertion consumer. Collapse XML whitespace in a requested URL before comparing | Mandatory | Profiles §4.1.4.1, `AuthnRequestType`, XML Schema Part 2 §4.3.6 | Always |
+
+[SSO generation](web-browser-sso-generation.md#endpoint-selection) keeps how
+those operations choose the assertion consumer.
 
 ### Identity provider: `RequestedAuthnContext`
 
@@ -427,7 +459,7 @@ Code: `src/flow.rs`, `src/flow/embedded.rs`, `src/encrypted_elements.rs`, `src/c
 | Reject a response when an `EncryptedAssertion` or `EncryptedAttribute` does not decrypt, such as one encrypted for another recipient | A ciphertext the configured keys cannot decrypt can come from a missed key rollover, a wrong certificate, or an unsupported algorithm, and skipping it would complete a login from a response read only in part. | Conformance §3.4 | Always |
 | Reject an unsigned `Response` that mixes `Assertion` and `EncryptedAssertion` children when only the plaintext assertions are signed | Those signatures do not cover an encrypted sibling. | Core §3.3.3 | Always |
 | Reject a plaintext `Assertion`, `NameID`, or `Attribute` once its encrypted form is required | Encrypting a sibling leaves the plaintext element exposed. | Core §3.3.3, §2.4.1, §2.7.3 | `XmlEncryptionPolicy` fields `assertions`, `identifiers`, and `attributes` set to `EncryptAssertions`, `EncryptIdentifiers`, and `EncryptAttributes` |
-| Verify a signature that covers an `EncryptedID` or `EncryptedAttribute` before decrypting it under every other data-encryption algorithm too | On every supported binding an accepted assertion is covered by a verified signature, so decrypting first would only expose the decryption key to ciphertext no signature covers, and an AES-GCM tag does not show who encrypted. | Core §6.2, E93 | Always |
+| Verify a signature that covers an `EncryptedID` or `EncryptedAttribute` before decrypting it under every non-CBC data-encryption algorithm | On every supported binding an accepted assertion is covered by a verified signature, so decrypting first would only expose the decryption key to ciphertext no signature covers, and an AES-GCM tag does not show who encrypted. | Core §6.2, E93 | Always |
 | With several assertions, refuse an `EncryptedID` or `EncryptedAttribute` unless a `Response` signature or a SimpleSign detached signature authenticates the message | The nested decryption step learns only whether the `Response` is authenticated, not whether each assertion's own signature covers it. | Core §6.2, Profiles §4.1.4.5, E26, E93 | Always |
 | Reject an `EncryptedAssertion` whose plaintext is not one `Assertion`, and an `EncryptedID` or `EncryptedAttribute` whose plaintext is not one `NameID` or `Attribute` in the assertion namespace | The decrypted element takes the place of its wrapper, so the service provider reads it only by the rules of the plaintext element it replaces. | Core §2.3.4, §2.2.4, §2.7.3.2 | Always |
 
@@ -508,7 +540,7 @@ HTTP-POST-SimpleSign `Response`, as the error response rules do.
 
 ### Identity provider: `receive_sso` signatures and refusals
 
-Code: `src/api/idp.rs`, `src/browser/input.rs`, `src/model/authn.rs`
+Code: `src/api/idp.rs`, `src/browser/input.rs`, `src/model/authn.rs`, `src/model/validation.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
@@ -548,7 +580,7 @@ Code: `src/model/authn.rs`, `src/model/subject.rs`, `src/crypto/enc/decrypt.rs`
 | Duty | Level | Section |
 | --- | --- | --- |
 | Service provider: end the application session at the earliest `SessionNotOnOrAfter`, which `SsoSession::session_not_on_or_after` returns, unless the principal signs in again | Recommended | Profiles §4.1.4.3, E26 |
-| Service provider: in a saml2int deployment, check each scoped value against an issuer-specific policy before using it for account lookup or access, as `SsoSession::scoped_attribute_violations` does, and discard the values it reports or decline the login | Mandatory | saml2int SDP-SP17 |
+| Service provider: in a saml2int deployment, accept a scoped identifier only from an identity provider authorized to assert its scope, with `SsoSession::scoped_attribute_violations` or a policy set another way | Mandatory | saml2int SDP-SP17 |
 | Identity provider: treat the content of an unauthenticated `AuthnRequest` as advisory. `Received::authentication` reports `MessageAuthentication::Unauthenticated` when no verified signature covers the request | Mandatory | Profiles §4.1.4.1 |
 | Identity provider: read an absent `AllowCreate`, or an absent `NameIDPolicy`, as `false`. `NameIdCreationRequest::Unspecified` and a `None` policy report the absence | Mandatory | Core §3.4.1.1, E14 |
 | Identity provider: ignore `AllowCreate` in a request for the transient format | Recommended | Core §3.4.1.1, E14 |
@@ -578,10 +610,13 @@ decisions are in
 - Both roles: the identifier in a `BaseID`, and in an `EncryptedID` that
   carries a `BaseID` or an `Assertion`, as
   [identifiers](identifiers.md#not-supported) records. Decoding a `BaseID` in
-  a requested `Subject` is Optional, Core §3.4.1. The identity provider
-  reports one as `RequestedSubjectIdentifier::BaseId`.
-- Identity provider: an `AuthnRequest` by HTTP-Artifact, as
-  [HTTP-Artifact response](web-browser-sso-artifact.md#not-supported) records.
+  a requested `Subject` is Optional, Core §3.4.1, and the identity provider
+  reports one as `RequestedSubjectIdentifier::BaseId`. An `EncryptedID` that
+  carries a `BaseID` or an `Assertion` is Optional, Core §2.2.4.
+- Service provider: a successful `Response` by HTTP-Artifact without an XML
+  signature. Identity provider: an `AuthnRequest` by HTTP-Artifact. Both are
+  in the [HTTP-Artifact response](web-browser-sso-artifact.md#not-supported)
+  record.
 - Identity provider: reading `Conditions`, `Scoping`, and
   `AttributeConsumingServiceIndex` in a received request. Optional, Core
   §3.4.1, §3.4.1.2. `receive_sso` exposes none of them.
