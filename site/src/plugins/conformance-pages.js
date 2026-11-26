@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,11 +9,12 @@ const indexPage = {
 	description: 'SAML conformance records by exchange and public API.',
 };
 
-export function conformancePages({ docsDir, recordsDir, pages, pagesOutsideRecords = {} }) {
+export function conformancePages({ docsDir, recordsDir, codeDir, pages, pagesOutsideRecords = {} }) {
 	const pagesDir = new URL('reference/conformance/', docsDir);
 
 	async function writePage(record) {
 		const source = await readFile(new URL(record, recordsDir), 'utf8');
+		if (codeDir) await checkCodePaths(record, source, codeDir);
 		const isIndex = record === indexRecord;
 		const page = toPage(record, source, isIndex ? indexPage : pages[record], pagesOutsideRecords);
 		const target = isIndex ? new URL('reference/conformance.md', docsDir) : new URL(record, pagesDir);
@@ -62,6 +63,26 @@ function recordFiles(entries, recordsDir, pages) {
 		);
 	}
 	return records;
+}
+
+async function checkCodePaths(record, source, codeDir) {
+	const repoDir = fileURLToPath(codeDir);
+	const srcDir = path.join(repoDir, 'src', path.sep);
+	for (const [line, list] of source.matchAll(/^Code:(.*)$/gm)) {
+		for (const entry of list.split(',')) {
+			const file = entry.trim().match(/^`([^`]+)`$/)?.[1];
+			if (!file) throw new Error(`${record} has a Code line entry that is not one path in backticks: ${line}`);
+			const target = path.resolve(repoDir, file);
+			if (path.isAbsolute(file) || !target.startsWith(srcDir)) {
+				throw new Error(`${record} lists ${file} in a Code line, which is not a repository path under src/`);
+			}
+			const stats = await stat(target).catch((error) => {
+				if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+				throw new Error(`${record} lists ${file} in a Code line, which does not exist`);
+			});
+			if (!stats.isFile()) throw new Error(`${record} lists ${file} in a Code line, which is not a file`);
+		}
+	}
 }
 
 function toPage(record, source, page, pagesOutsideRecords) {

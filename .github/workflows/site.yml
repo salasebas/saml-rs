@@ -5,6 +5,7 @@ on:
     paths:
       - "site/**"
       - "docs/conformance/**"
+      - "src/**"
       - "vercel.json"
       - ".github/workflows/site.yml"
 

@@ -12,7 +12,7 @@ pnpm preview  # serves both versions from dist/
 
 Stable uses the existing public URLs. Edit `versions/stable/docs/` to correct a guide for the published crate. The first copy came from the `v0.8.0` tag. Edit `src/content/docs/` for API changes on `main`, which appear under `/next/`.
 
-The site generates conformance pages from `versions/stable/conformance/` for Stable and `../docs/conformance/` for Next. Edit the records in those directories. A `README.md` in the records directory supplies that version's conformance index. Each version keeps its record titles in `conformance.mjs` and its navigation in `sidebar.mjs` under `versions/`.
+The site generates conformance pages from `versions/stable/conformance/` for Stable and `../docs/conformance/` for Next. Edit the records in those directories. A `README.md` in the records directory supplies that version's conformance index. Each version keeps its record titles in `conformance.mjs` and its navigation in `sidebar.mjs` under `versions/`. The Next build fails when a `Code:` line in a record lists anything other than existing files under the repository's `src/`, each in backticks.
 
 Vercel builds both versions from `main` using `vercel.json` at the repository root. Each version has its own search index, sitemap, and `llms.txt`.
 

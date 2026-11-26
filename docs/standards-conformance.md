@@ -109,21 +109,47 @@ are, in this order:
    with one status for each actor.
 2. **Partial support.** For each `Partial` feature, what the crate supports
    and what it does not.
-3. **Rules.** One row for each behaviour the specification states.
+3. **Rules.** One row for each behaviour that the specification states and
+   the crate performs.
 4. **Library policies.** One row for each behaviour the crate adds.
-5. **Application duties.** What the specification asks for and only the
-   application can do.
-6. **Not supported.** What a caller does in place of a missing feature.
+5. **Application duties.** One row for each step of a supported feature that
+   the specification asks for and no crate API performs.
+6. **Not supported.** What a caller does in place of a feature the crate does
+   not implement.
 
-[Identity Provider Discovery](conformance/identity-provider-discovery.md)
-follows the template. The other records move to it one at a time. A record
-that writes `Library policy: <reason>.` in a `Level` cell has not moved yet,
-and its rows keep that form until it does.
+A record that writes `Library policy: <reason>.` in a `Level` cell has not
+moved to the template yet, and its rows keep that form until it does. The
+records move one at a time, as
+[Convert an old-form record](#convert-an-old-form-record) describes.
+[IdP and SP operational modes](conformance/idp-sp-operational-modes.md) is an
+inventory of the level that Conformance Table 2 sets for each operational
+mode, and a status cell cannot hold that level. It keeps its own layout
+until a layout that keeps each mode's level is chosen.
+
+### Where a behaviour goes
+
+A behaviour that the crate performs is a rule, or a library policy when the
+crate adds it. An optional behaviour stays a rule when the caller has to turn
+it on, and its `Option` names the setting. A step that the specification asks
+of the actor or the deployment, and that no crate API performs, is an
+application duty. When the crate builds a value and the application sends or
+stores it, building the value is a rule and sending it is a duty:
+`common_domain_cookie` builds the cookie, and the application writes it.
+
+A missing part of a feature that the crate implements goes under
+**Partial support**. A feature that the crate does not implement has a
+`Not supported` cell, whatever its level. It also gets an item under
+**Not supported** when the feature is Mandatory, when the caller does
+something in its place, or when another document defines it. The item gives
+the level and section when the specification sets a level. One item can
+cover several cells when it names the actor and each missing feature.
 
 ### Support statuses
 
 Take the features from the specification, so that a feature the crate lacks
-still has a row.
+still has a row. When no specification defines the record's behaviour, as
+for a callback that the crate offers, the record has no Support section, and
+its rows are library policies.
 
 - `Supported`: the crate implements the feature for this actor, on every
   build and for every form of the feature that the row names, and every
@@ -136,7 +162,7 @@ still has a row.
 - `—`: the specification gives this actor no part in the feature.
 
 A record uses more than one Support table when its exchanges have different
-actors.
+actors. Two `Partial` cells can link to one entry when one gap explains both.
 
 A duty that only the application can perform does not make a feature
 `Partial`. Record it under **Application duties**.
@@ -147,17 +173,73 @@ A duty that only the application can perform does not make a feature
 | --- | --- | --- | --- |
 | What the crate does | `Mandatory`, `Recommended`, or `Optional` | The section, erratum, or schema type that states the rule | The option that changes it, or `Always` |
 
+Group the rows under one ``### <Actor>: `<public_api>` `` heading for each
+actor and API. When the rows apply to every operation of a kind, name the
+kind in place of the API, as in
+`### XML processor: browser binding receive operations`. A level-four topic
+heading can split a long actor section.
+
 ### Library policy rows
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| What the crate does | One sentence: why the looser rule cannot be applied | The section that the policy exceeds or that leaves the point open, or `—` | The option that changes it, or `Always` |
+| What the crate does | One sentence: what the policy protects or keeps working | The section that the policy exceeds or that leaves the point open, or `—` | The option that changes it, or `Always` |
+
+The reason fits a policy in either direction. A policy stricter than the
+specification says what the looser input would break: an IP address has no
+subdomains, so it cannot scope a common domain. A policy that takes the
+looser path where the specification leaves the behaviour open says what
+keeps working: skipping one invalid stored entry keeps the rest of the
+history.
+
+Group the policies under the same ``### <Actor>: `<public_api>` `` headings as
+Rules. Add a heading of that form for an actor or API that has policies and
+no rules. One table with no heading is enough when the record has one actor
+and one API, or when each policy applies to every operation that handles
+what the policy names, such as every typed response that carries a
+`StatusCode`. Level-three topic headings can split that table when readers
+look up its parts separately, as in
+[XML input limits](conformance/xml-input.md#resource-limits).
 
 A policy without a reason says `Reason not recorded.` Such a row is an open
 question, not a decision. Report it rather than extend or defend it. When
 the evidence is ambiguous, check the schemas, related OASIS documents,
 errata, and the behaviour of other implementations before changing
 validation. An uncertain reading does not become a new rejection.
+
+### Notes
+
+A note is prose that no row can hold. It is one paragraph of at most three
+sentences, in the section it qualifies.
+
+- Between a heading and its table, a note states what every row shares, such
+  as the inputs that the rules cover or the defaults that the limits show.
+- Directly under a table, a note states how the record reads an unclear
+  clause, what another implementation does, or where another record keeps a
+  shared rule. Link another implementation's source at a named version.
+
+A note gives no reason for an implementation choice. A policy's reason is its
+`Reason` cell, and the pull request holds the rest. A note does not restate a
+row, its section, or the rustdoc. A behaviour that fits a row gets a row. A
+note links primary sources and code, not issues or pull requests.
+
+### Code lines
+
+A `Code:` line names the files under `src/` that perform the rows below it,
+as repository-relative paths in backticks, separated by commas:
+
+```markdown
+Code: `src/xml/dom.rs`, `src/xml/dom/element.rs`
+```
+
+Put one line directly under the record title when the same files perform
+every row of Rules and Library policies. Otherwise put one directly under each level-three heading in
+Rules and Library policies, and directly under `## Library policies` when its
+table has no heading. Find the files by reading the code that performs the
+rows, and leave out a file that only passes a call through. The site build
+fails when an entry is not one path in backticks, or names something other
+than an existing file under `src/`. The site workflow runs on every pull
+request that changes `src/`.
 
 ### Wording and links
 
@@ -171,6 +253,35 @@ record when its parts cover independently used flows or bindings. Preserve
 published URLs and section links when moving those parts. When a heading
 changes, keep its old link target with `<a id="old-anchor"></a>` above the
 new heading.
+
+### Convert an old-form record
+
+An old-form record mixes rules and policies in one table per section. It
+keeps caller duties and missing features in lists such as "Outside this
+flow" or "Not implemented", at the end or inside a section. To convert it:
+
+1. Write the Support table from the specification, one row for each feature,
+   before you move any row. Skip this step when no specification defines the
+   record's features.
+2. Sort every table row, list item, and paragraph by who performs it, as
+   [Where a behaviour goes](#where-a-behaviour-goes) describes, whatever its
+   old section or `Level` says. A row whose old actor is the application,
+   such as `IdP application`, is a duty. Split a row when the crate returns a
+   value and the application acts on it.
+3. Read the clause of each rule and give it a `Level` of `Mandatory`,
+   `Recommended`, or `Optional`. Move a qualifier, such as "capability" or
+   "for the session authority", into the heading or the row.
+4. Move each row whose `Level` starts with `Library policy` to Library
+   policies. Keep its reason, in one sentence, when it says what the policy
+   protects or keeps working. Write `Reason not recorded.` when it does not,
+   such as a reason that only names whom the specification binds.
+5. Turn each prose paragraph into a row when a row can hold it. Keep the rest
+   only as a [note](#notes): the limitation it observes, its normative
+   citation, and the implementation sources at their versions. Drop issue and
+   pull request links.
+6. Keep the anchor of each heading you rename or remove, with
+   `<a id="old-anchor"></a>` above the first heading that now holds its rows.
+7. Add the [`Code:` lines](#code-lines).
 
 ## Review checklist
 
