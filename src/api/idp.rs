@@ -258,8 +258,9 @@ impl IdentityProvider {
     /// `RequestedAuthnContext`,
     /// [`SsoAssertion::authn_instant`](crate::SsoAssertion::authn_instant) is
     /// later than the response `IssueInstant`,
-    /// or is before year 1, or the `NameId` does not strongly match the
-    /// request's `Subject` (see [`RequestedSubject`](crate::RequestedSubject)).
+    /// or is before year 1, or the issued `Subject` does not strongly match
+    /// the request's `Subject`, in its identifier or its
+    /// `SubjectConfirmation` (see [`RequestedSubject`](crate::RequestedSubject)).
     /// When `NameIDPolicy` requests an `SPNameQualifier`, a specific standard
     /// format requires the issued `NameId` to carry that qualifier. An omitted
     /// or `unspecified` format requires the identifier to belong to the
