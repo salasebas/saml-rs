@@ -169,6 +169,8 @@ Code: `src/api/name_id_management/redirect.rs`, `src/name_id_management/redirect
 | Set `Destination` to the `Location` of the peer endpoint | Mandatory | Bindings §3.4.5.2 | Always |
 | Send a caller-supplied `RelayState` with the request | Optional | Profiles §4.5.3.1, Bindings §3.4.3 | `StartNameIdManagement::relay_state` |
 
+<a id="received-request-content"></a>
+
 ### Identity provider and service provider: `receive_name_id_management`, `receive_name_id_management_redirect`
 
 Code: `src/name_id_management.rs`, `src/name_id_management/redirect.rs`, `src/model/status.rs`
@@ -301,6 +303,8 @@ either provider.
 | Require text-only content in a `NameID` that `EncryptedID` carries | Mandatory | `NameIDType` | Always |
 | With a crypto provider and decryption credentials, accept `NameID` or `EncryptedID`, whatever `XmlEncryptionPolicy::identifiers` says | Mandatory | Conformance §3.4 | `Credentials::with_decryption_credential` |
 | Accept `NewID` or `NewEncryptedID`, whichever form the identifier has, under the same conditions | Optional | Core §3.6.1, §3.6.3 | `Credentials::with_decryption_credential` |
+| Answer an `EncryptedID` that does not decrypt, including when this provider has no decryption key, or whose plaintext is not one text-only `NameID`, with an error status | Mandatory | Core §3.6.3 | `NameIdManagementRefusal::UndecryptableIdentifier` |
+| Add the subordinate `UnknownPrincipal` to that status | Optional | Core §3.6.3 | Always |
 | For a SAML-domain decryption error over SOAP, return a SAML error status in the response | Recommended | Bindings §3.2.2.1, §3.2.3.3, E19 | Always |
 
 The responder finds the key of each encrypted identifier by the
@@ -443,7 +447,8 @@ Code: `src/name_id_management/encryption.rs`, `src/name_id_management.rs`, `src/
 | Encrypt for a key of the responder role that publishes the receiving `ManageNameIDService`, or of the first such role when several do. Never use a key of another role | E62 declares a key for the entity acting in its own role, so another role's key may not reach the receiving endpoint. | Profiles §4.5.5, Metadata §2.4.1, E62, E68 | `StartNameIdManagement::identifier_encryption` |
 | Within that role, read the keys as for [SSO responses](web-browser-sso-generation.md#encryption) and use the first one the configured algorithms can use. Skip a key that does not load or that the crypto provider refuses | E68 lets the encrypting party use any key of the role, and OpenSAML 5.2.0 also skips a credential without a usable key transport. | Metadata §2.4.1.1, E68 | `AlgorithmPolicy::data_encryption`, `AlgorithmPolicy::key_encryption` |
 | Accept only a `NameID` as the `EncryptedID` plaintext, not a `BaseID` or an `Assertion` | The plaintext request offers only `NameID` beside `EncryptedID`, so another decrypted type has no plaintext form to manage. | Core §2.2.4, `ManageNameIDRequestType` | Always |
-| Answer an element that does not decrypt, including a missing key, or whose plaintext breaks the rules above, with `Requester` and `UnknownPrincipal` for `EncryptedID` and `Requester` for `NewEncryptedID` | Reason not recorded. | Core §3.6.2, §3.6.3, E19 | `NameIdManagementRefusal::UndecryptableIdentifier`, `NameIdManagementRefusal::UndecryptableNewIdentifier` |
+| Answer with top-level `Requester` an `EncryptedID` or `NewEncryptedID` that does not decrypt, including when this provider has no decryption key, or whose plaintext breaks the rules above | The generated metadata publishes an encryption certificate only for a decryption key this provider holds, so an identifier that does not decrypt was encrypted for another key or holds content the requester wrote, which Core §3.2.2.2 reports as `Requester`. | Core §3.2.2.2, §3.6.3, E19 | `NameIdManagementRefusal::UndecryptableIdentifier`, `NameIdManagementRefusal::UndecryptableNewIdentifier` |
+| Add no subordinate code to the answer for a `NewEncryptedID` | `UnknownPrincipal` reports that the identifier naming the principal is not recognized, and a new identifier names no principal yet. | Core §3.6.3 | `NameIdManagementRefusal::UndecryptableNewIdentifier` |
 
 [Shibboleth SP 3.6.0](https://codeberg.org/Shibboleth/cpp-sp/src/tag/3.6.0/shibsp/handler/impl/SAML2NameIDMgmt.cpp#L297-L393)
 answers the same decryption failures with the same status codes.

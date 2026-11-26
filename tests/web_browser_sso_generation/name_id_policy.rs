@@ -62,6 +62,56 @@ fn signed_browser_sso_issues_an_affiliation_qualified_persistent_name_id(
 }
 
 #[test]
+fn a_name_id_without_a_format_meets_a_policy_for_the_first_configured_format(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = ServiceProvider::new(
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS)?.with_default(),
+        )
+        .name_id_format(NameIdFormat::Persistent)
+        .credentials(signing_credentials())
+        .validation(signing_sp_validation())
+        .build()?,
+    );
+    let idp = IdentityProvider::new(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .name_id_format(NameIdFormat::Persistent)
+        .credentials(signing_credentials())
+        .validation(signed_authn_request_idp_validation())
+        .build()?,
+    );
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(NameId::new("opaque-7f3a"), SystemTime::now()),
+        RespondSso::post(),
+    )?;
+    let session = sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        Inbound::post(response.post_form()?.fields().to_vec()),
+        post_validation(&mut Default::default()),
+    )?;
+    assert_eq!(
+        session.name_id(),
+        Some(&NameId::new("opaque-7f3a").with_format(NameIdFormat::Persistent))
+    );
+    Ok(())
+}
+
+#[test]
 fn start_sso_rejects_a_relative_sp_name_qualifier() -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(SpValidationPolicy::default())?;
     let idp = idp_with(IdpValidationPolicy::default(), false)?;

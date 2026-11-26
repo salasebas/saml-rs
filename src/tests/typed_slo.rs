@@ -15,6 +15,9 @@ mod status_message;
 #[path = "typed_slo/name_id_strings.rs"]
 mod name_id_strings;
 
+#[path = "typed_slo/issue_instant.rs"]
+mod issue_instant;
+
 mod prefixes;
 mod session_matching;
 

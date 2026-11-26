@@ -349,8 +349,10 @@ impl IdentityProvider {
     /// Send a signed, correlated error response for a refused AuthnRequest.
     ///
     /// Pass the refusal from [`SamlError::AuthnRequestRefused`] and the same
-    /// SP descriptor used to receive the request. The response carries the
-    /// original RelayState and has no assertion. Its status is `Requester`,
+    /// SP descriptor used to receive the request. The response returns the
+    /// RelayState the request carried, or the one set with
+    /// [`RespondSso::relay_state`] when it carried none, and has no assertion.
+    /// Its status is `Requester`,
     /// with the subordinate code `UnsupportedBinding` for
     /// [`UnsupportedProtocolBinding`](crate::AuthnRequestRefusalReason::UnsupportedProtocolBinding).
     /// For [`VersionMismatch`](crate::AuthnRequestRefusalReason::VersionMismatch),
@@ -397,8 +399,8 @@ impl IdentityProvider {
     ///
     /// Returns [`SamlError`] when the descriptor or delivery endpoint cannot
     /// be used, the selected binding conflicts with the ACS, the caller sets
-    /// RelayState, the request `ID` is not an `xs:NCName`, or the response
-    /// cannot be created or signed.
+    /// RelayState for a request that carried one, the request `ID` is not an
+    /// `xs:NCName`, or the response cannot be created or signed.
     pub fn respond_sso_refusal(
         &self,
         sp: &SpDescriptor,
@@ -514,11 +516,6 @@ impl IdentityProvider {
                 (Some(request.message()), request.relay_state(), outcome)
             }
             SsoResponseTo::Refusal(refusal) => {
-                if options.relay_state.is_some() {
-                    return Err(SamlError::ProtocolProfile(
-                        "a refusal uses only the RelayState of its AuthnRequest".into(),
-                    ));
-                }
                 refusal_outcome = SsoOutcome::Failure(refusal.status.clone());
                 (
                     Some(&refusal.request),

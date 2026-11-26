@@ -582,7 +582,7 @@ Code: `src/api/idp.rs`, `src/browser/input.rs`, `src/model/authn.rs`, `src/model
 | Reject a SimpleSign `AuthnRequest` that carries only one of `Signature` and `SigAlg` | Either field signals a detached signature, which requires both fields to verify. | CS-01 §2.4, §2.5, §2.10 | Always |
 | Refuse an `AuthnRequest` with more than one `NameIDPolicy` | Core §3.4.1.1 binds the identity provider to the requested policy, and reading one of two policies, or neither, could issue an identifier that the other excludes. | `AuthnRequestType`, Core §3.2.1, §3.4.1.1 | Always |
 | Return no refusal data for an authenticated request that passes every refusal check and whose `ID` the replay cache already holds | `receive_sso` already returned the first copy for the application to answer, and Core §3.4.1.4 asks for one reply to a request. | Core §3.4.1.4 | `ReplayPolicy::RequireCache` |
-| Accept an `AuthnRequest` `IssueInstant` from now − `max_age` − past tolerance through now + future tolerance, inclusive. A positive `NotOnOrAfter` skew supplies the past tolerance, and a negative `NotBefore` skew supplies the future tolerance | Reason not recorded. | Core §1.3.3 | `SamlValidationContext::with_authn_request_age`, `RequestAgePolicy::Bounded` |
+| Accept an `AuthnRequest` `IssueInstant` from now − `max_age` − past tolerance through now + future tolerance, inclusive. A positive `NotOnOrAfter` skew supplies the past tolerance, and a negative `NotBefore` skew supplies the future tolerance | A signed request replayed after the replay cache drops its `ID` falls outside the window, so a cache that keeps each `ID` as long as the window lasts detects every replay. | Core §1.3.3 | `SamlValidationContext::with_authn_request_age`, `RequestAgePolicy::Bounded` |
 | Return an error, and no refusal data, for an unsigned request of a later major version that must be signed | Core §4.1.3.2 forbids the `Unsigned` refusal's `Requester` answer to a later major version, and a `VersionMismatch` answer would give refusal data for the content of a request that fails the signature policy. | Core §4.1.3.2, Profiles §4.1.4.1 | Always |
 | Return an error, and no refusal data, for a `Version` that is not `major.minor` | Such a value names no version, so the identity provider cannot tell whether a SAML 2.0 `Response` may answer it. | Core §4.1.3, §4.1.3.2 | Always |
 
@@ -621,7 +621,7 @@ Code: `src/model/authn_context.rs`
 
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
-| Read context references with XML whitespace collapsed, including relative references | Reason not recorded. | Core §1.3.2, XML Schema Part 2 §4.3.6 | `AuthnRequest::requested_authn_context` |
+| Read context references with XML whitespace collapsed, including relative references | An indented reference still matches the class the identity provider writes, and a request that names a relative one can still be answered, as no compared identity provider refuses one. | Core §1.3.2, XML Schema Part 2 §4.3.6 | `AuthnRequest::requested_authn_context` |
 
 ### Identity provider: requested `Subject`
 

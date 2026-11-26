@@ -427,7 +427,7 @@ Code: `src/api/slo.rs`, `src/api/peer.rs`, `src/logout/parsing.rs`, `src/flow.rs
 | Policy | Reason | Section | Option |
 | --- | --- | --- | --- |
 | Reject an `IssueInstant` that is not a UTC `xs:dateTime` | [Baseline receipt](xml-schema-validation.md#baseline-receipt) gives the reason. | Core §1.3.3 | Always |
-| Accept an `IssueInstant` with a leap second | Reason not recorded. | Core §1.3.3 | Always |
+| Accept an `IssueInstant` with a leap second | Core §1.3.3 forbids only writing one, `xs:dateTime` admits second 60, and no logout check compares `IssueInstant` with the clock, so a message from a peer whose clock wrote a leap second still completes the exchange. | Core §1.3.3, XML Schema Part 2 §D.1 | Always |
 | Reject a `LogoutRequest` `NotOnOrAfter` the runtime clock cannot represent, a leap second included | The expiration check fails closed on a value it cannot compare. | Core §1.3.3, §3.7.1 | Always |
 | Reject a supplied receiving URL that the local role descriptor does not publish for the binding and direction. For a SOAP response, only when it has `Destination` | The URL is caller input, and the restriction keeps a value derived from the request from naming an endpoint this party does not operate. | Core §3.2.1, §3.2.2 | `SamlValidationContext::with_recipient_endpoint` |
 | Without a supplied URL, reject several published URLs for the binding and direction when a `Destination` is compared. A SOAP message without `Destination` needs no unique local endpoint | The library is not told which endpoint received the message, and accepting any published one would not check the location that received it. | Core §3.2.1, §3.2.2 | `SamlValidationContext::with_recipient_endpoint` |

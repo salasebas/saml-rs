@@ -335,8 +335,7 @@ impl<Delivery> RespondSso<Delivery> {
     /// value unchanged, up to
     /// [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES),
     /// and setting one here returns [`SamlError::ProtocolProfile`](crate::SamlError::ProtocolProfile).
-    /// A refusal also returns that error when the caller sets RelayState and
-    /// the refused request carried none.
+    /// The same holds for the error response to a refused request.
     /// A value set here must not exceed
     /// [`MAX_RELAY_STATE_BYTES`](crate::MAX_RELAY_STATE_BYTES).
     pub fn relay_state(mut self, relay_state: RelayState) -> Self {
