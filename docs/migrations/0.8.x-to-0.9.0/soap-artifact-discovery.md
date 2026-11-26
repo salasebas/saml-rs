@@ -17,8 +17,9 @@ qualify `mustUnderstand="1"` with the SOAP 1.1 envelope namespace. Omit
 `soap:actor` to address the ultimate destination, or set it to
 `http://schemas.xmlsoap.org/soap/actor/next` to address the next SOAP node.
 Previously an unprefixed attribute could trigger the rejection, and the actor
-had no effect. Receivers now ignore headers addressed to other actors. Rust
-call sites stay the same.
+had no effect. Receivers now ignore headers addressed to other actors. If
+your peer sends `&#xA0;1`, have it send `1`. The receivers now treat a value
+padded with U+00A0 as optional. Rust call sites stay the same.
 
 ## Send a SOAP `Issuer` without surrounding whitespace
 
