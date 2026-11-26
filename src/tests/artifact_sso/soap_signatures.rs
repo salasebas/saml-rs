@@ -244,22 +244,54 @@ fn artifact_resolve_signature_failure_is_denied_and_stays_outstanding() -> TestR
         ),
         "{unsupported:?}"
     );
-    for (from, to) in [
-        ("Version=\"2.0\"", "Version=\"1.1\""),
-        ("Version=\"2.0\"", "Version=\"3.0\""),
-        ("ID=\"", "ID=\"a:"),
+    let older = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &sign_rsa(
+            &request.replacen("Version=\"2.0\"", "Version=\"1.1\"", 1),
+            IDP_KEY,
+        )?,
+        &EndpointUrl::try_new(RESOLUTION_URL)?,
+        &mut issued,
+        channel,
+    );
+    assert!(
+        matches!(older, Err(SamlError::ProtocolProfile(_))),
+        "{older:?}"
+    );
+    let request_id = crate::xml::protocol_element::parse_saml(
+        saml_rs::SoapBodyElement::from_envelope(request)?.xml(),
+    )?
+    .required_attr("ID")?;
+    for (from, to, in_response_to) in [
+        (
+            "Version=\"2.0\"",
+            "Version=\"3.0\"",
+            Some(request_id.as_str()),
+        ),
+        ("ID=\"", "ID=\"a:", None),
     ] {
-        let unanswerable = parties.idp.answer_artifact_resolve(
+        let denied = parties.idp.answer_artifact_resolve(
             &parties.sp_metadata,
             &sign_rsa(&request.replacen(from, to, 1), IDP_KEY)?,
             &EndpointUrl::try_new(RESOLUTION_URL)?,
             &mut issued,
             channel,
-        );
+        )?;
+        assert_eq!(denied.release(), ArtifactRelease::RequestDenied, "{to}");
+        let envelope = denied.response().envelope();
         assert!(
-            matches!(unanswerable, Err(SamlError::SignatureVerification { .. })),
-            "{to}: {unanswerable:?}"
+            envelope.contains(r#"<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Requester"><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:RequestDenied"/></samlp:StatusCode>"#),
+            "{to}: {envelope}"
         );
+        assert_eq!(
+            envelope.contains("InResponseTo="),
+            in_response_to.is_some(),
+            "{to}: {envelope}"
+        );
+        if let Some(id) = in_response_to {
+            assert!(envelope.contains(&format!(r#"InResponseTo="{id}""#)));
+        }
+        assert!(!envelope.contains(USER), "{to}");
     }
 
     let answer = parties.idp.answer_artifact_resolve(

@@ -96,7 +96,7 @@ Check the topics that affect your integration.
 - [Read the SSO session deadline as a `SystemTime`](session-deadline-system-time.md)
 - [Expect an answer for an empty artifact](empty-artifact.md)
 - [Remove artifacts of a retired resolution endpoint](artifact-endpoint-retirement.md)
-- [Send the ArtifactResponse for store and signature failures](artifact-resolve-answers.md)
+- [Send the ArtifactResponse for store, signature, and request failures](artifact-resolve-answers.md)
 - [Handle relative status codes in name identifier management responses](name-id-management-status.md)
 - [Set the signature prefix on `TemplatePolicy`](signature-placement.md)
 - [Answer malformed name identifier management requests](name-id-management-malformed-requests.md)

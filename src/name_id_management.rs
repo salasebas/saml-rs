@@ -10,14 +10,16 @@ use crate::error::SamlError;
 use crate::flow::MessageAuthentication;
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
-    EndpointUrl, MessageId, NameId, Received, ReplayKey, RequestVersionMismatch,
-    SamlValidationContext, Status, SubordinateStatusCode,
+    check_saml2_answer_allowed, EndpointUrl, MessageId, NameId, Received, ReplayKey,
+    RequestVersionMismatch, SamlValidationContext, Status, SubordinateStatusCode,
 };
 use crate::soap::{
-    read_soap_body, read_soap_status_response, SoapChannel, SoapRequest, SoapResponse,
+    read_soap_body, read_soap_status_response, RequestSignature, SoapChannel, SoapRequest,
+    SoapResponse,
 };
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::dom::is_xml_whitespace_char;
+use crate::xml::name::writable_in_response_to;
 use crate::xml::protocol_element::{
     issuer, issuer_format_is_entity, parse_saml_with_limits, SamlElement,
 };
@@ -120,6 +122,13 @@ pub enum NameIdManagementRefusal {
     /// and one `NewID`, `NewEncryptedID`, or `Terminate`, in schema order and
     /// with the content their types allow. The status is `Requester`.
     MalformedRequest,
+    /// The request signature did not verify. The status is `Requester` with
+    /// `RequestDenied`.
+    RequestDenied,
+    /// The request is signed, and this provider cannot verify the signature:
+    /// the build has no crypto provider, or the provider failed to start. The
+    /// status is `Responder`.
+    VerificationUnavailable,
 }
 
 pub(crate) enum Refusal {
@@ -127,6 +136,8 @@ pub(crate) enum Refusal {
     RequestAgeOutsideWindow,
     Undecryptable(Undecryptable),
     Malformed(SamlError),
+    Denied(SamlError),
+    Unverifiable(SamlError),
 }
 
 impl Refusal {
@@ -136,6 +147,8 @@ impl Refusal {
             Self::RequestAgeOutsideWindow => NameIdManagementRefusal::RequestAgeOutsideWindow,
             Self::Undecryptable(failure) => failure.reason,
             Self::Malformed(_) => NameIdManagementRefusal::MalformedRequest,
+            Self::Denied(_) => NameIdManagementRefusal::RequestDenied,
+            Self::Unverifiable(_) => NameIdManagementRefusal::VerificationUnavailable,
         }
     }
 
@@ -147,6 +160,10 @@ impl Refusal {
             {
                 Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal())
             }
+            Self::Denied(_) => {
+                Status::requester().with_subordinate(SubordinateStatusCode::request_denied())
+            }
+            Self::Unverifiable(_) => Status::responder(),
             Self::RequestAgeOutsideWindow | Self::Undecryptable(_) | Self::Malformed(_) => {
                 Status::requester()
             }
@@ -161,21 +178,26 @@ pub struct RefusedNameIdManagement<Response = SoapResponse> {
     reason: NameIdManagementRefusal,
     decryption_error: Option<Arc<SamlError>>,
     content_error: Option<Arc<SamlError>>,
+    signature_error: Option<Arc<SamlError>>,
 }
 
 impl<Response> RefusedNameIdManagement<Response> {
     pub(crate) fn new(response: Response, refusal: Refusal) -> Self {
         let reason = refusal.reason();
-        let (decryption_error, content_error) = match refusal {
-            Refusal::Undecryptable(failure) => (Some(Arc::new(failure.error)), None),
-            Refusal::Malformed(error) => (None, Some(Arc::new(error))),
-            Refusal::VersionMismatch(_) | Refusal::RequestAgeOutsideWindow => (None, None),
+        let (decryption_error, content_error, signature_error) = match refusal {
+            Refusal::Undecryptable(failure) => (Some(Arc::new(failure.error)), None, None),
+            Refusal::Malformed(error) => (None, Some(Arc::new(error)), None),
+            Refusal::Denied(error) | Refusal::Unverifiable(error) => {
+                (None, None, Some(Arc::new(error)))
+            }
+            Refusal::VersionMismatch(_) | Refusal::RequestAgeOutsideWindow => (None, None, None),
         };
         Self {
             response,
             reason,
             decryption_error,
             content_error,
+            signature_error,
         }
     }
 
@@ -205,6 +227,15 @@ impl<Response> RefusedNameIdManagement<Response> {
     /// The error stays local: the response carries only the SAML status.
     pub fn content_error(&self) -> Option<&SamlError> {
         self.content_error.as_deref()
+    }
+
+    /// Why the request signature did not verify, for
+    /// [`NameIdManagementRefusal::RequestDenied`], or why it could not be
+    /// verified, for [`NameIdManagementRefusal::VerificationUnavailable`].
+    ///
+    /// The error stays local: the response carries only the SAML status.
+    pub fn signature_error(&self) -> Option<&SamlError> {
+        self.signature_error.as_deref()
     }
 }
 
@@ -395,7 +426,7 @@ pub(crate) fn receive(
             ));
         }
     }
-    body.verify_signature_if_present(
+    let signature_refusal = match body.check_request_signature(
         request_envelope,
         &request,
         service_provider
@@ -404,7 +435,15 @@ pub(crate) fn receive(
             .x509_certificates(CertUse::Signing),
         service_provider.provider().setting.hmac_secret.as_ref(),
         idp.setting.xml_signatures,
-    )?;
+    ) {
+        RequestSignature::Accepted => None,
+        RequestSignature::Unverifiable(error) => Some(Refusal::Unverifiable(error)),
+        RequestSignature::Rejected(error) => Some(Refusal::Denied(error)),
+    };
+    if let Some(refusal) = signature_refusal {
+        check_saml2_answer_allowed(Some(&version))?;
+        return refused(idp, &id, refusal);
+    }
     if let Some(mismatch) = RequestVersionMismatch::for_request(&version)? {
         return refused(idp, &id, Refusal::VersionMismatch(mismatch));
     }
@@ -469,7 +508,7 @@ fn refused(
 
 fn response(
     idp: &LocalIdentityProvider<'_>,
-    in_response_to: &MessageId,
+    request_id: &MessageId,
     status: &Status,
 ) -> Result<SoapResponse, SamlError> {
     SoapResponse::try_new(&render_response(
@@ -478,7 +517,7 @@ fn response(
             id: &generate_id(),
             issuer: idp.entity_id,
             destination: None,
-            in_response_to: in_response_to.as_str(),
+            in_response_to: writable_in_response_to(request_id.as_str()),
             status,
         },
     )?)

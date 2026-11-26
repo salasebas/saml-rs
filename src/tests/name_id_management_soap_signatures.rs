@@ -95,6 +95,35 @@ fn sign_in_soap_body(
     Ok(bergshamra::sign(&DsigContext::new(keys), &envelope)?)
 }
 
+fn assert_denied(receipt: &NameIdManagementReceipt, in_response_to: Option<&str>) -> TestResult {
+    let NameIdManagementReceipt::Refused(refused) = receipt else {
+        return Err(format!("a request with a bad signature was accepted: {receipt:?}").into());
+    };
+    assert_eq!(refused.reason(), NameIdManagementRefusal::RequestDenied);
+    assert!(
+        matches!(
+            refused.signature_error(),
+            Some(SamlError::SignatureVerification { .. })
+        ),
+        "{refused:?}"
+    );
+    let envelope = refused.response().envelope();
+    let response =
+        crate::xml::protocol_element::parse_saml(SoapBodyElement::from_envelope(envelope)?.xml())?;
+    let id = response.required_attr("ID")?;
+    let issue_instant = response.required_attr("IssueInstant")?;
+    let in_response_to = in_response_to
+        .map(|id| format!(r#" InResponseTo="{id}""#))
+        .unwrap_or_default();
+    assert_eq!(
+        envelope,
+        format!(
+            r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><samlp:ManageNameIDResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{id}" Version="2.0" IssueInstant="{issue_instant}"{in_response_to}><saml:Issuer>{IDP}</saml:Issuer><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Requester"><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:RequestDenied"/></samlp:StatusCode></samlp:Status></samlp:ManageNameIDResponse></soap:Body></soap:Envelope>"#
+        )
+    );
+    Ok(())
+}
+
 #[test]
 fn soap_manage_name_id_request_checks_the_unqualified_id() -> TestResult {
     let (idp, sp, _) = providers()?;
@@ -192,12 +221,9 @@ fn soap_manage_name_id_request_verifies_the_sp_signature() -> TestResult {
         misplaced.envelope(),
         channel,
         SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::NoCache),
-    );
-    assert!(
-        matches!(result, Err(SamlError::SignatureVerification { .. })),
-        "{result:?}"
-    );
-    let request = saml_rs::SoapRequest::try_new(destination, &sign(&xml)?)?;
+    )?;
+    assert_denied(&result, Some("_request"))?;
+    let request = saml_rs::SoapRequest::try_new(destination.clone(), &sign(&xml)?)?;
     let mut cache = InMemoryReplayCache::with_clock(|| SystemTime::UNIX_EPOCH);
     fn validation(cache: &mut InMemoryReplayCache) -> SamlValidationContext<'_> {
         SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::RequireCache(cache))
@@ -208,9 +234,31 @@ fn soap_manage_name_id_request_verifies_the_sp_signature() -> TestResult {
         request.envelope(),
         channel,
         validation(&mut cache),
+    )?;
+    assert_denied(&result, Some("_request"))?;
+    let not_an_ncname = saml_rs::SoapRequest::try_new(
+        destination.clone(),
+        &sign(&xml.replacen(r#"ID="_request""#, r#"ID="1bad:request""#, 1))?,
+    )?;
+    let result = idp.receive_name_id_management(
+        &stale_sp,
+        not_an_ncname.envelope(),
+        channel,
+        SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::NoCache),
+    )?;
+    assert_denied(&result, None)?;
+    let older = saml_rs::SoapRequest::try_new(
+        destination,
+        &sign(&xml.replacen(r#"Version="2.0""#, r#"Version="1.1""#, 1))?,
+    )?;
+    let result = idp.receive_name_id_management(
+        &stale_sp,
+        older.envelope(),
+        channel,
+        SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::NoCache),
     );
     assert!(
-        matches!(result, Err(SamlError::SignatureVerification { .. })),
+        matches!(result, Err(SamlError::ProtocolProfile(_))),
         "{result:?}"
     );
     let receipt =

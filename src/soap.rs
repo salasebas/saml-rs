@@ -380,7 +380,43 @@ pub(crate) struct SoapBody {
     message_start: usize,
 }
 
+pub(crate) enum RequestSignature {
+    Accepted,
+    Unverifiable(SamlError),
+    Rejected(SamlError),
+}
+
 impl SoapBody {
+    pub(crate) fn check_request_signature(
+        &self,
+        envelope: &str,
+        message: &SamlElement,
+        signing_certificates: &[String],
+        hmac_secret: Option<&HmacSecret>,
+        profile: XmlSignatureProfile,
+    ) -> RequestSignature {
+        if !message
+            .children
+            .iter()
+            .any(|child| child.is(namespace::DSIG, "Signature"))
+        {
+            return RequestSignature::Accepted;
+        }
+        if let Err(error) = signature_verification_available() {
+            return RequestSignature::Unverifiable(error);
+        }
+        match self.verify_signature_if_present(
+            envelope,
+            message,
+            signing_certificates,
+            hmac_secret,
+            profile,
+        ) {
+            Ok(()) => RequestSignature::Accepted,
+            Err(error) => RequestSignature::Rejected(error),
+        }
+    }
+
     pub(crate) fn verify_signature_if_present(
         &self,
         envelope: &str,
@@ -419,9 +455,22 @@ fn verify_soap_body_signature(
     _hmac_secret: Option<&HmacSecret>,
     _profile: XmlSignatureProfile,
 ) -> Result<(), SamlError> {
-    Err(SamlError::Unsupported(
-        "signature verification requires a crypto provider feature".into(),
-    ))
+    Err(crypto_provider_required())
+}
+
+#[cfg(crypto)]
+fn signature_verification_available() -> Result<(), SamlError> {
+    crate::crypto::initialize_crypto_provider().map(|_| ())
+}
+
+#[cfg(not(crypto))]
+fn signature_verification_available() -> Result<(), SamlError> {
+    Err(crypto_provider_required())
+}
+
+#[cfg(not(crypto))]
+fn crypto_provider_required() -> SamlError {
+    SamlError::Unsupported("signature verification requires a crypto provider feature".into())
 }
 
 /// Read the single XML element of a SOAP 1.1 body.

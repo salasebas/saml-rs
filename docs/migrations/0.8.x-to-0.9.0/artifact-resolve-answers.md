@@ -1,10 +1,11 @@
-# Send the ArtifactResponse for store and signature failures
+# Send the ArtifactResponse for store, signature, and request failures
 
 `IdentityProvider::answer_artifact_resolve` returns an `AnsweredArtifact` when
-the artifact store fails and when a present request signature does not verify.
-Send its `response()` with HTTP 200, as for every other answer. Log
-`AnsweredArtifact::error()` to keep the cause. The message is not released in
-either case.
+the artifact store fails, when a present request signature does not verify or
+cannot be verified, and when the request is malformed. Send its `response()`
+with HTTP 200, as for every other answer. Log `AnsweredArtifact::error()` to
+keep the cause. The message is not released in any of these cases, and the
+artifact stays outstanding.
 
 ## Handle a failing artifact store
 
@@ -33,26 +34,51 @@ signature. It now verifies a present one, as
 [Update signing keys for SOAP artifact resolution](soap-artifact-signatures.md)
 describes. When the signature does not verify, the answer has status
 `Requester` with `RequestDenied` and no message. `release()` returns
-`ArtifactRelease::RequestDenied`, `error()` returns the verification error,
-such as `SamlError::SignatureVerification` or `SamlError::AlgorithmUnsupported`,
-and the artifact stays outstanding.
+`ArtifactRelease::RequestDenied`, and `error()` returns the verification
+error, such as `SamlError::SignatureVerification` or
+`SamlError::AlgorithmUnsupported`.
 
-These cases return the verification error instead, because the identity
-provider cannot send a correlated SAML 2.0 answer or the failure is its own:
+When the identity provider cannot verify a present signature, because the
+build has no crypto provider or the provider fails to start, the answer has
+status `Responder` and no message. `release()` returns
+`ArtifactRelease::VerificationUnavailable`, and `error()` returns
+`SamlError::Unsupported` or `SamlError::Crypto`.
 
-- A request whose `ID` is not an `xs:NCName` or whose `Version` is not `2.0`.
-- A build without a crypto provider, which returns `SamlError::Unsupported`.
-- A crypto provider that fails to initialize, which returns
-  `SamlError::Crypto`.
+A request whose `Version` has a major version below 2 returns
+`SamlError::ProtocolProfile` instead, even when its signature does not
+verify, because a SAML 2.0 answer would have a higher version than the
+request.
 
-A service provider that reads the denial with `ArtifactResolution::finish`
-gets `SamlError::StatusNotSuccess` with that status.
+A service provider that reads one of these answers with
+`ArtifactResolution::finish` gets `SamlError::StatusNotSuccess` with its
+status. An answer without `InResponseTo` gives
+`SamlError::InResponseToMismatch` instead.
+
+## Handle a malformed request
+
+In 0.8, `answer_artifact_resolve` returned `SamlError::ProtocolProfile` for a
+request without exactly one `Artifact` element, with a second `Issuer`, or
+without `ID`, `Version`, or a UTC `IssueInstant`, and you answered with a SOAP
+fault. It now answers these requests with status `Requester` and no message.
+`release()` returns `ArtifactRelease::MalformedRequest`, and `error()` returns
+the error that 0.8 returned.
+
+Two requests that 0.8 answered as usual now get the same `Requester` answer:
+
+- A request whose `ID` is not an `xs:NCName`, which 0.8 copied into
+  `InResponseTo`. See
+  [Handle requests whose `ID` cannot be written as `InResponseTo`](request-id-in-response-to.md).
+- A request whose `Version` is not a `major.minor` number, such as `2`, which
+  0.8 answered with `VersionMismatch`.
+
+An answer to a request whose `ID` is missing or not an `xs:NCName` has no
+`InResponseTo`.
 
 ## Update matches and derives
 
 In 0.8, `ArtifactRelease` had three variants. It is now `#[non_exhaustive]`
-and has the variant `RequestDenied`. Add a wildcard arm to an exhaustive
-`match`.
+and has the variants `RequestDenied`, `VerificationUnavailable`, and
+`MalformedRequest`. Add a wildcard arm to an exhaustive `match`.
 
 `AnsweredArtifact` no longer implements `Clone`, `PartialEq`, or `Eq`, because
 it can carry a `SamlError`. Compare `release()` and `response()` instead.

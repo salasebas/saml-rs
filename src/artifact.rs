@@ -7,20 +7,20 @@ pub use store::{ArtifactChannelRequirement, ArtifactStore, IssuedArtifact, Issue
 
 use crate::binding::sign_soap_message;
 use crate::config::{HmacSecret, IdpDescriptor, SpDescriptor, XmlSignatureProfile};
-use crate::constants::{namespace, status_code, CertUse};
+use crate::constants::{namespace, CertUse};
 use crate::entity::{generate_id, now_iso8601, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::IdpMetadata;
 use crate::model::{
-    EndpointUrl, ReplayKey, RequestVersionMismatch, SamlValidationContext, Status,
-    SubordinateStatusCode,
+    check_saml2_answer_allowed, EndpointUrl, ReplayKey, RequestVersionMismatch,
+    SamlValidationContext, Status, SubordinateStatusCode,
 };
 use crate::soap::{
     read_soap_body, read_soap_status_response, reject_processing_instructions,
-    MessageConfidentiality, SoapChannel, SoapRequest, SoapResponse,
+    MessageConfidentiality, RequestSignature, SoapChannel, SoapRequest, SoapResponse,
 };
 use crate::xml::fragment::standalone_element;
-use crate::xml::name::check_in_response_to;
+use crate::xml::name::{check_in_response_to, writable_in_response_to};
 use crate::xml::protocol_element::{
     issuer, issuer_format_is_entity, parse_saml, parse_saml_with_limits, PartyName, SamlElement,
 };
@@ -122,6 +122,17 @@ pub enum ArtifactRelease {
     /// `Requester` with `RequestDenied`, and the message is absent.
     /// [`AnsweredArtifact::error`] returns the verification error.
     RequestDenied,
+    /// The request is signed, and this identity provider cannot verify the
+    /// signature: the build has no crypto provider, or the provider failed to
+    /// start. The response status is `Responder`, and the message is absent.
+    /// [`AnsweredArtifact::error`] returns [`SamlError::Unsupported`] or
+    /// [`SamlError::Crypto`].
+    VerificationUnavailable,
+    /// The request does not have exactly one `Artifact` and at most one
+    /// `Issuer`, or lacks an `xs:NCName` `ID`, a `major.minor` `Version`, or
+    /// a UTC `IssueInstant`. The response status is `Requester`, and the
+    /// message is absent. [`AnsweredArtifact::error`] returns why.
+    MalformedRequest,
 }
 
 /// SOAP `ArtifactResponse` produced for one `ArtifactResolve`.
@@ -146,9 +157,13 @@ impl AnsweredArtifact {
     /// Error that kept the identity provider from acting on the request.
     ///
     /// Present for [`ArtifactWithheld::StoreUnavailable`], with the error the
-    /// [`ArtifactStore`] returned, and for [`ArtifactRelease::RequestDenied`],
-    /// with the signature verification error. Send [`Self::response`] in both
-    /// cases.
+    /// [`ArtifactStore`] returned, for [`ArtifactRelease::RequestDenied`],
+    /// with the signature verification error, for
+    /// [`ArtifactRelease::VerificationUnavailable`], with the error that kept
+    /// the signature from being verified, and for
+    /// [`ArtifactRelease::MalformedRequest`], with what the request lacks.
+    /// Send [`Self::response`] in every case. The response carries only its
+    /// status, not this error.
     pub fn error(&self) -> Option<&SamlError> {
         self.error.as_ref()
     }
@@ -378,7 +393,7 @@ fn prepare_entry<S: ArtifactStore + ?Sized>(
     answered(
         &prefixes,
         entity_id,
-        &request_id,
+        Some(&request_id),
         &Status::success(),
         Some(&message_xml),
         ArtifactRelease::Returned,
@@ -509,19 +524,23 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
             "SOAP body must be an ArtifactResolve".into(),
         ));
     }
-    let request = parse_saml_with_limits(&body.xml, setting.xml_limits)?;
+    let element = parse_saml_with_limits(&body.xml, setting.xml_limits)?;
+    check_saml2_answer_allowed(element.attr("Version"))?;
     let prefixes = Prefixes::of(setting)?;
-    #[cfg(crypto)]
-    if request
-        .children
-        .iter()
-        .any(|child| child.is(namespace::DSIG, "Signature"))
-    {
-        crate::crypto::initialize_crypto_provider()?;
-    }
-    if let Err(error) = body.verify_signature_if_present(
+    let refuse = |status: &Status, release, error| {
+        Ok(answered(
+            &prefixes,
+            &entity_id,
+            element.attr("ID").and_then(writable_in_response_to),
+            status,
+            None,
+            release,
+        )?
+        .caused_by(error))
+    };
+    match body.check_request_signature(
         request_envelope,
-        &request,
+        &element,
         presenter
             .metadata()
             .as_metadata()
@@ -529,29 +548,37 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
         presenter.provider().setting.hmac_secret.as_ref(),
         setting.xml_signatures,
     ) {
-        let request_id = match (&error, request.required_attr("ID"), request.attr("Version")) {
-            (SamlError::Unsupported(_), _, _) => return Err(error),
-            (_, Ok(id), Some("2.0")) if check_in_response_to(&id).is_ok() => id,
-            _ => return Err(error),
-        };
-        let denied = Status::requester()
-            .with_subordinate(SubordinateStatusCode::try_new(status_code::REQUEST_DENIED)?);
-        return Ok(answered(
-            &prefixes,
-            &entity_id,
-            &request_id,
-            &denied,
-            None,
-            ArtifactRelease::RequestDenied,
-        )?
-        .caused_by(error));
+        RequestSignature::Accepted => {}
+        RequestSignature::Unverifiable(error) => {
+            return refuse(
+                &Status::responder(),
+                ArtifactRelease::VerificationUnavailable,
+                error,
+            )
+        }
+        RequestSignature::Rejected(error) => {
+            return refuse(
+                &Status::requester().with_subordinate(SubordinateStatusCode::request_denied()),
+                ArtifactRelease::RequestDenied,
+                error,
+            )
+        }
     }
-    let request = parse_resolve(&request)?;
-    if let Some(mismatch) = RequestVersionMismatch::for_request(&request.version)? {
+    let request = match parse_resolve(&element) {
+        Ok(request) => request,
+        Err(error) => {
+            return refuse(
+                &Status::requester(),
+                ArtifactRelease::MalformedRequest,
+                error,
+            )
+        }
+    };
+    if let Some(mismatch) = request.version_mismatch {
         return answered(
             &prefixes,
             &entity_id,
-            &request.id,
+            Some(&request.id),
             &mismatch.status(),
             None,
             ArtifactRelease::VersionMismatch,
@@ -561,7 +588,7 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
         answered(
             &prefixes,
             &entity_id,
-            &request.id,
+            Some(&request.id),
             &Status::success(),
             None,
             ArtifactRelease::Withheld(reason),
@@ -609,7 +636,7 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     let response = answered(
         &prefixes,
         &entity_id,
-        &request.id,
+        Some(&request.id),
         &Status::success(),
         Some(entry.message_xml()),
         ArtifactRelease::Returned,
@@ -631,24 +658,28 @@ pub(crate) fn answer<S: ArtifactStore + ?Sized>(
 fn answered(
     prefixes: &Prefixes<'_>,
     issuer: &str,
-    in_response_to: &str,
+    in_response_to: Option<&str>,
     status: &Status,
     message_xml: Option<&str>,
     release: ArtifactRelease,
 ) -> Result<AnsweredArtifact, SamlError> {
-    check_in_response_to(in_response_to)?;
+    let xmlns_protocol = prefixes.xmlns_protocol();
+    let xmlns_assertion = prefixes.xmlns_assertion();
+    let id = generate_id();
+    let issue_instant = now_iso8601();
+    let mut attributes = vec![
+        (xmlns_protocol.as_str(), namespace::PROTOCOL),
+        (xmlns_assertion.as_str(), namespace::ASSERTION),
+        ("ID", id.as_str()),
+        ("Version", "2.0"),
+        ("IssueInstant", issue_instant.as_str()),
+    ];
+    if let Some(in_response_to) = in_response_to {
+        check_in_response_to(in_response_to)?;
+        attributes.push(("InResponseTo", in_response_to));
+    }
     let mut writer = XmlWriter::new();
-    writer.start(
-        &prefixes.protocol("ArtifactResponse"),
-        &[
-            (&prefixes.xmlns_protocol(), namespace::PROTOCOL),
-            (&prefixes.xmlns_assertion(), namespace::ASSERTION),
-            ("ID", generate_id().as_str()),
-            ("Version", "2.0"),
-            ("IssueInstant", now_iso8601().as_str()),
-            ("InResponseTo", in_response_to),
-        ],
-    );
+    writer.start(&prefixes.protocol("ArtifactResponse"), &attributes);
     writer.text_element(&prefixes.assertion("Issuer"), &[], issuer);
     writer.status(prefixes, status, None);
     if let Some(message_xml) = message_xml {
@@ -709,7 +740,7 @@ fn encode_artifact(
 
 struct ResolveRequest {
     id: String,
-    version: String,
+    version_mismatch: Option<RequestVersionMismatch>,
     destination: Option<String>,
     issuer: Option<PartyName>,
     artifact: String,
@@ -722,7 +753,8 @@ fn parse_resolve(element: &SamlElement) -> Result<ResolveRequest, SamlError> {
         ));
     }
     let id = element.required_attr("ID")?;
-    let version = element.required_attr("Version")?;
+    check_in_response_to(&id)?;
+    let version_mismatch = RequestVersionMismatch::for_request(&element.required_attr("Version")?)?;
     element.required_issue_instant()?;
     let artifact = element
         .children
@@ -745,7 +777,7 @@ fn parse_resolve(element: &SamlElement) -> Result<ResolveRequest, SamlError> {
     }
     Ok(ResolveRequest {
         id,
-        version,
+        version_mismatch,
         destination: element.attr("Destination").map(collapse_whitespace),
         issuer: issuer(element)?,
         artifact,

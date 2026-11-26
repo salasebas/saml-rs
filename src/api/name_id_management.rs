@@ -137,16 +137,25 @@ impl IdentityProvider {
     /// whose identifier and change do not follow `ManageNameIDRequestType`.
     /// Only a request authenticated as `sp`'s and at this identity provider's
     /// endpoint is refused this way: any other request returns an error.
-    /// Version, content, and age refusals come before replay detection, so a
-    /// repeated one is refused again. A decryption refusal comes after the
-    /// request `ID` is stored, so a repeated one returns
+    /// Signature, version, content, and age refusals come before replay
+    /// detection, so a repeated one is refused again. A decryption refusal
+    /// comes after the request `ID` is stored, so a repeated one returns
     /// [`SamlError::ReplayDetected`]. A configured
     /// [`SchemaValidator`](crate::SchemaValidator) that rejects the request
-    /// returns its error first.
+    /// returns its error first. A response to a request whose `ID` is not an
+    /// `xs:NCName` has no `InResponseTo`.
     ///
     /// `sp` is the service provider the deployment authenticated on
     /// `channel`. A present XML signature must cover the request and verify
-    /// against `sp`'s signing keys. `validation` selects the receiving endpoint
+    /// against `sp`'s signing keys. A request from `sp`, at this identity
+    /// provider's endpoint, whose signature does not verify is refused with
+    /// `Requester` and `RequestDenied`. One that this identity provider cannot
+    /// verify, because the build has no crypto provider or the provider fails
+    /// to start, is refused with `Responder`.
+    /// [`RefusedNameIdManagement::signature_error`](crate::RefusedNameIdManagement::signature_error)
+    /// returns the cause of either.
+    ///
+    /// `validation` selects the receiving endpoint
     /// that a present `Destination` must name when this identity provider
     /// publishes more than one. A request without `Destination` needs no
     /// selection. `validation` also applies its
@@ -170,10 +179,8 @@ impl IdentityProvider {
     /// [`SamlError::RecipientEndpointAmbiguous`] when the request has
     /// `Destination`, several SOAP `ManageNameIDService` locations are
     /// published, and `validation` names none.
-    /// A repeated request `ID` returns [`SamlError::ReplayDetected`]. A
-    /// request that would be refused returns [`SamlError::Invalid`] instead
-    /// when its `ID` is not an `xs:NCName`, because the response cannot name
-    /// it in `InResponseTo`. Returns [`SamlError::TimeWindowInvalid`] when
+    /// A repeated request `ID` returns [`SamlError::ReplayDetected`]. Returns
+    /// [`SamlError::TimeWindowInvalid`] when
     /// [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache) is
     /// selected and `validation` has no
     /// [`SamlValidationContext::with_replay_retention`]. An envelope that SOAP
@@ -198,7 +205,8 @@ impl IdentityProvider {
 
     /// Answer a received `ManageNameIDRequest` with `ManageNameIDResponse`.
     ///
-    /// Return the [`SoapResponse`] on the request's HTTP exchange.
+    /// Return the [`SoapResponse`] on the request's HTTP exchange. A response
+    /// to a request whose `ID` is not an `xs:NCName` has no `InResponseTo`.
     ///
     /// `status` is what the response reports. Pass [`Status::success`] after
     /// applying the change. After a [`NameIdChange::NewId`], send that value
@@ -217,9 +225,7 @@ impl IdentityProvider {
     /// from `sp`. Returns [`SamlError::UnsupportedBinding`] when the request
     /// arrived over HTTP-Redirect. Returns [`SamlError::Invalid`] when
     /// `status` has a subordinate code that is not an absolute URI, such as a
-    /// relative code read from a peer's response, or when the request `ID` is
-    /// not an `xs:NCName`, because the response cannot name it in
-    /// `InResponseTo`.
+    /// relative code read from a peer's response.
     ///
     /// # Examples
     ///
